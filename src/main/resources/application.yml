@@ -1,0 +1,201 @@
+spring:
+  application:
+    name: rag-agent-system
+
+  config:
+    import:
+      - optional:classpath:application.local.yml
+      - optional:classpath:application.prod.yml
+
+  threads:
+    virtual:
+      enabled: true  # JDK 21 virtual threads for all Spring MVC requests
+
+  # ── MySQL (auth: email whitelist, OTP codes, sessions) ────────────────────────
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:ragagent}?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:ragagent}
+    password: ${MYSQL_PASSWORD:ragagent}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none   # schema.sql manages the DDL
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  sql:
+    init:
+      mode: always                            # always run schema.sql on startup
+      schema-locations: classpath:schema.sql
+
+  ai:
+    # ── OpenAI ──────────────────────────────────────────────────────────────
+    openai:
+      # Fallback to "none" so Spring AI auto-configs pass key validation even when
+      # OPENAI_API_KEY is not set (e.g. when using a local LLM provider).
+      api-key: ${OPENAI_API_KEY:none}
+      # Chat/embedding/audio/image auto-configs excluded in RagAgentApplication.
+      # LlmProviderConfig builds the ChatModel based on llm.provider.
+
+    # ── Anthropic ────────────────────────────────────────────────────────────
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}
+      # Chat auto-config excluded in RagAgentApplication — managed by LlmProviderConfig.
+
+    # ── Weaviate Vector Store ─────────────────────────────────────────────────
+    vectorstore:
+      weaviate:
+        scheme: http
+        # Spring AI's WeaviateVectorStoreProperties has no separate port field —
+        # the port must be included in the host string.
+        host: ${WEAVIATE_HOST:localhost}:${WEAVIATE_PORT:8080}
+        api-key: ${WEAVIATE_API_KEY:}
+        object-class: RagDocuments
+        content-field-name: content
+        filter-field:
+          source: TEXT
+          category: TEXT
+
+    # ── RAG pipeline ─────────────────────────────────────────────────────────
+    rag:
+      chunk-size: 1000
+      chunk-overlap: 200
+      top-k: 5
+      similarity-threshold: 0.70
+
+    # ── MCP Server ────────────────────────────────────────────────────────────
+    # SSE endpoint: GET http://localhost:8081/mcp/sse
+    # Connect Claude Desktop by adding to claude_desktop_config.json:
+    #   { "mcpServers": { "rag-agent": { "url": "http://localhost:8081/mcp/sse" } } }
+    mcp:
+      server:
+        enabled: true
+        name: rag-agent-mcp-server
+        version: 1.0.0
+
+# ── LLM provider selector ────────────────────────────────────────────────────
+# Set llm.provider to one of: openai | anthropic | openrouter | local
+# Set the corresponding API key env var before starting.
+#
+#   openai     → OPENAI_API_KEY
+#   anthropic  → ANTHROPIC_API_KEY
+#   openrouter → OPENROUTER_API_KEY
+#   local      → no API key needed (Ollama / LM Studio / llama.cpp)
+llm:
+  provider: ${LLM_PROVIDER:openai}
+
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: https://api.openai.com
+    model: ${OPENAI_MODEL:gpt-4o}
+    temperature: 0.1
+
+  anthropic:
+    api-key: ${ANTHROPIC_API_KEY:}
+    base-url: https://api.anthropic.com
+    model: ${ANTHROPIC_MODEL:claude-opus-4-6}
+    max-tokens: 8096
+    temperature: 0.1
+
+  openrouter:
+    api-key: ${OPENROUTER_API_KEY:}
+    base-url: https://openrouter.ai/api/v1
+    # Any model available on OpenRouter, e.g. openai/gpt-4o, anthropic/claude-opus-4-6
+    model: ${OPENROUTER_MODEL:openai/gpt-4o}
+    temperature: 0.1
+    # Optional HTTP headers forwarded to OpenRouter
+    site-url: ${OPENROUTER_SITE_URL:http://localhost:8081}
+    site-name: ${OPENROUTER_SITE_NAME:rag-agent-system}
+
+  # ── Local LLM (Ollama / LM Studio / llama.cpp) ─────────────────────────────
+  # Works with any server that exposes an OpenAI-compatible /v1 endpoint.
+  # No API key is required.
+  #
+  # Spring AI appends /v1/chat/completions to this base URL, so do NOT include /v1.
+  #   Ollama    default: http://localhost:11434  (ollama serve)
+  #   LM Studio default: http://localhost:1234
+  local:
+    base-url: ${LOCAL_LLM_URL:http://localhost:11434}
+    # Model name as known to the local server, e.g. llama3, mistral, phi3
+    model: ${LOCAL_LLM_MODEL:llama3}
+    # Ollama embedding model — run: ollama pull nomic-embed-text
+    embedding-model: ${LOCAL_EMBEDDING_MODEL:nomic-embed-text}
+    temperature: 0.1
+
+server:
+  port: 8081
+
+# ── Resilience4j ─────────────────────────────────────────────────────────────
+resilience4j:
+  circuitbreaker:
+    instances:
+      retrieval:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        wait-duration-in-open-state: 5s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 80
+        slow-call-duration-threshold: 3s
+        record-exceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+      llm:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+
+  retry:
+    instances:
+      retrieval:
+        max-attempts: 3
+        wait-duration: 500ms
+        retry-exceptions:
+          - java.io.IOException
+      llm:
+        max-attempts: 2
+        wait-duration: 1s
+
+  timelimiter:
+    instances:
+      retrieval:
+        timeout-duration: 5s
+      llm:
+        timeout-duration: 30s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, circuitbreakers
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
+
+# ── Auth (email whitelist + OTP login, JWT tokens) ───────────────────────────
+# Set AUTH_ENABLED=false to disable login entirely (open access).
+auth:
+  enabled: ${AUTH_ENABLED:false}
+  otp-expiry-minutes: ${AUTH_OTP_EXPIRY_MINUTES:10}
+  jwt-secret: ${AUTH_JWT_SECRET:changeme-use-a-long-random-base64-string-in-production}
+  jwt-expiry-hours: ${AUTH_JWT_EXPIRY_HOURS:24}
+
+# ── Resend (transactional email) ──────────────────────────────────────────────
+resend:
+  api-key: ${RESEND_API_KEY:}
+  from-email: ${RESEND_FROM_EMAIL:noreply@example.com}
+
+logging:
+  level:
+    com.ragagent: DEBUG
+    org.springframework.ai: INFO
+    org.bsc.langgraph4j: DEBUG

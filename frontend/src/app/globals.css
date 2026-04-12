@@ -1,0 +1,49 @@
+/* Tailwind v4 — CSS-first configuration, no tailwind.config.js needed */
+@import "tailwindcss";
+
+/* Default color-scheme — overridden to dark by [data-theme="dark"] */
+:root {
+  color-scheme: light;
+}
+
+@theme {
+  /* Semantic surface colours */
+  --color-surface:        #ffffff;
+  --color-surface-raised: #f8fafc;
+  --color-border:         #e2e8f0;
+  --color-muted:          #94a3b8;
+
+  /* Dark-mode overrides applied via [data-theme="dark"] */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --radius-lg: 0.75rem;
+}
+
+/* Dark mode via data attribute set by layout.tsx */
+[data-theme="dark"] {
+  --color-surface:        #000000;
+  --color-surface-raised: #111111;
+  --color-border:         #2a2a2a;
+  --color-muted:          #888888;
+  color-scheme: dark;
+}
+
+html, body {
+  height: 100%;
+  background-color: var(--color-surface);
+  color: light-dark(#1e293b, #ffffff);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Smooth scrolling inside chat pane */
+.chat-scroll {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
