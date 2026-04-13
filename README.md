@@ -1,40 +1,45 @@
 # RAG Agent System
 
+![frontend](./image/frontend.png)
+
 ## Tech Stack
 
 ### Backend
-| Layer | Technology |
-|---|---|
-| Runtime | Java 21 (virtual threads) |
-| Framework | Spring Boot 3.5 |
-| AI orchestration | Spring AI 1.1 |
-| Agent graph | LangGraph4j 1.7 |
-| LLM providers | OpenAI / OpenRouter, Anthropic Claude |
-| Vector store | Weaviate |
-| Embeddings | Spring AI embedding abstraction |
-| Document parsing | Apache Tika (PDF, text, HTML) |
-| HTML scraping | Jsoup |
-| Circuit breaker | Resilience4j 2.2 |
-| Auth | OTP email (Resend) + JJWT stateless tokens |
-| Persistence | MySQL 8 + Spring Data JPA |
-| MCP server | Spring AI MCP WebMVC SSE transport |
-| API docs | SpringDoc OpenAPI (Swagger UI) |
+
+| Layer            | Technology                                 |
+| ---------------- | ------------------------------------------ |
+| Runtime          | Java 21 (virtual threads)                  |
+| Framework        | Spring Boot 3.5                            |
+| AI orchestration | Spring AI 1.1                              |
+| Agent graph      | LangGraph4j 1.7                            |
+| LLM providers    | OpenAI / OpenRouter, Anthropic Claude      |
+| Vector store     | Weaviate                                   |
+| Embeddings       | Spring AI embedding abstraction            |
+| Document parsing | Apache Tika (PDF, text, HTML)              |
+| HTML scraping    | Jsoup                                      |
+| Circuit breaker  | Resilience4j 2.2                           |
+| Auth             | OTP email (Resend) + JJWT stateless tokens |
+| Persistence      | MySQL 8 + Spring Data JPA                  |
+| MCP server       | Spring AI MCP WebMVC SSE transport         |
+| API docs         | SpringDoc OpenAPI (Swagger UI)             |
 
 ### Frontend
-| Layer | Technology |
-|---|---|
+
+| Layer     | Technology              |
+| --------- | ----------------------- |
 | Framework | Next.js 16 (App Router) |
-| Language | TypeScript 6 |
-| UI | React 19 |
-| State | Zustand 5 |
-| Styling | Tailwind CSS 4 |
+| Language  | TypeScript 6            |
+| UI        | React 19                |
+| State     | Zustand 5               |
+| Styling   | Tailwind CSS 4          |
 
 ### Infrastructure
-| Component | Technology |
-|---|---|
-| Vector DB | Weaviate (Docker) |
-| Relational DB | MySQL (Docker) |
-| Containerization | Docker Compose |
+
+| Component        | Technology        |
+| ---------------- | ----------------- |
+| Vector DB        | Weaviate (Docker) |
+| Relational DB    | MySQL (Docker)    |
+| Containerization | Docker Compose    |
 
 ---
 
@@ -106,12 +111,12 @@
 
 The LangGraph4j graph determines the execution path per query:
 
-| Route | Condition | Path |
-|---|---|---|
-| `RETRIEVE` | Query needs knowledge base context | analyzeQuery → retrieve → generate → END |
-| `RETRIEVE` (empty) | No matching documents found | analyzeQuery → retrieve → fallback → END |
-| `DIRECT` | Query answerable without retrieval | analyzeQuery → generate → END |
-| `FALLBACK` | Query out of scope / unsafe | analyzeQuery → fallback → END |
+| Route                | Condition                          | Path                                        |
+| -------------------- | ---------------------------------- | ------------------------------------------- |
+| `RETRIEVE`         | Query needs knowledge base context | analyzeQuery → retrieve → generate → END |
+| `RETRIEVE` (empty) | No matching documents found        | analyzeQuery → retrieve → fallback → END |
+| `DIRECT`           | Query answerable without retrieval | analyzeQuery → generate → END             |
+| `FALLBACK`         | Query out of scope / unsafe        | analyzeQuery → fallback → END             |
 
 ### Auth Flow
 
