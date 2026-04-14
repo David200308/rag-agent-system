@@ -74,7 +74,7 @@ services:
     image: mysql:latest
     container_name: ragagent-mysql
     ports:
-      - "3306:3306"
+      - "3307:3306"
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${MYSQL_DB:-ragagent}
