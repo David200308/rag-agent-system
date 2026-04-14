@@ -30,3 +30,25 @@ export async function GET(
     },
   });
 }
+
+/** DELETE /api/agent/conversations/[id] — delete a conversation */
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const cookieStore = await cookies();
+  const token = cookieStore.get("rag-session")?.value;
+
+  const { statusCode } = await request(
+    `${BACKEND}/api/v1/agent/conversations/${id}`,
+    {
+      method: "DELETE",
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    },
+  );
+
+  return new Response(null, { status: statusCode });
+}

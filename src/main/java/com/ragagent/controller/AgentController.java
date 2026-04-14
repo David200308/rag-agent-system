@@ -124,6 +124,20 @@ public class AgentController {
         return ResponseEntity.ok(messages);
     }
 
+    @DeleteMapping("/conversations/{conversationId}")
+    @Operation(summary = "Delete a conversation and all its messages (owner only)")
+    public ResponseEntity<Void> deleteConversation(
+            @PathVariable String conversationId,
+            HttpServletRequest httpRequest) {
+        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        try {
+            conversationService.deleteConversation(conversationId, email);
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        }
+    }
+
     // ── Ingestion ─────────────────────────────────────────────────────────────
 
     @PostMapping(value = "/ingest", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

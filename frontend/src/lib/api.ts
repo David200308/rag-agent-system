@@ -80,6 +80,10 @@ export async function updateKnowledgeSharing(source: string, emails: string[]): 
   });
 }
 
+export async function deleteConversation(backendId: string): Promise<void> {
+  await fetch(`/api/agent/conversations/${backendId}`, { method: "DELETE" });
+}
+
 export async function fetchConversations(): Promise<BackendConversation[]> {
   const res = await fetch("/api/agent/conversations");
   if (!res.ok) return [];

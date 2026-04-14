@@ -8,6 +8,7 @@ import { cn, formatTime } from "@/lib/utils";
 import { useChatStore } from "@/store/chatStore";
 import { Button } from "@/components/ui/Button";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { deleteConversation as apiDeleteConversation } from "@/lib/api";
 
 interface SidebarProps {
   onSelectConversation: (id: string) => void;
@@ -142,6 +143,9 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose }: Sideb
                 onClick={(e) => {
                   e.stopPropagation();
                   deleteConversation(c.id);
+                  // backendConversationId is the same as id after syncFromBackend
+                  const backendId = c.backendConversationId ?? c.id;
+                  apiDeleteConversation(backendId).catch(() => {/* fire-and-forget */});
                 }}
                 title="Delete"
               >

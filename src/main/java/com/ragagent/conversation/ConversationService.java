@@ -82,4 +82,21 @@ public class ConversationService {
     public List<Conversation> listConversations(String userEmail) {
         return conversationRepo.findByUserEmailOrderByUpdatedAtDesc(userEmail);
     }
+
+    /**
+     * Delete a conversation and all its messages.
+     * Only the owner may delete; throws if the caller is not the owner.
+     */
+    @Transactional
+    public void deleteConversation(String conversationId, String callerEmail) {
+        conversationRepo.findById(conversationId).ifPresent(c -> {
+            if (callerEmail != null && c.getUserEmail() != null
+                    && !c.getUserEmail().equalsIgnoreCase(callerEmail)) {
+                throw new SecurityException("Only the owner can delete this conversation.");
+            }
+            messageRepo.deleteByConversationId(conversationId);
+            conversationRepo.deleteById(conversationId);
+            log.info("[ConversationService] Deleted conversation id={} by {}", conversationId, callerEmail);
+        });
+    }
 }
