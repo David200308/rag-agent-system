@@ -48,10 +48,13 @@ public class EmbeddingConfig {
     }
 
     private EmbeddingModel buildOpenRouterEmbedding(LlmProperties.OpenRouterProps p) {
+        // Spring AI's OpenAiApi appends /v1/embeddings to baseUrl, so strip any
+        // trailing /v1 to avoid a double /v1 path (e.g. openrouter.ai/api/v1/v1/embeddings).
+        String baseUrl = p.getBaseUrl().replaceAll("/v1$", "");
         log.info("[EmbeddingConfig] OpenRouter embedding: baseUrl={} model={}",
-                p.getBaseUrl(), p.getEmbeddingModel());
+                baseUrl, p.getEmbeddingModel());
         var api = OpenAiApi.builder()
-                .baseUrl(p.getBaseUrl())
+                .baseUrl(baseUrl)
                 .apiKey(p.getApiKey())
                 .build();
         var options = OpenAiEmbeddingOptions.builder()
