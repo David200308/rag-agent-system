@@ -130,7 +130,7 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
       # Embeddings use Ollama (nomic-embed-text) running on the host.
       # Switch to EMBEDDING_PROVIDER=openai if you prefer OpenAI text-embedding-3-small.
-      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openrouter}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-4-6}
