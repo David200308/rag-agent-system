@@ -91,8 +91,13 @@ public class LlmProviderConfig {
         extraHeaders.add("HTTP-Referer", p.getSiteUrl());
         extraHeaders.add("X-Title", p.getSiteName());
 
+        // Spring AI's OpenAiApi appends /v1/chat/completions to baseUrl, so strip any
+        // trailing /v1 to avoid a double /v1 path (e.g. openrouter.ai/api/v1/v1/chat/completions).
+        String baseUrl = p.getBaseUrl().replaceAll("/v1$", "");
+        log.info("[LlmProviderConfig] OpenRouter baseUrl (normalized)={}", baseUrl);
+
         var api = OpenAiApi.builder()
-                .baseUrl(p.getBaseUrl())
+                .baseUrl(baseUrl)
                 .apiKey(p.getApiKey())
                 .headers(extraHeaders)
                 .build();
