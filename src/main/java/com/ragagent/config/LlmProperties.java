@@ -54,6 +54,7 @@ public class LlmProperties {
         private String apiKey  = "";
         private String baseUrl = "https://api.openai.com";
         private String model   = "gpt-4o";
+        private String embeddingModel = "text-embedding-3-small";
         private double temperature = 0.1;
 
         public String getApiKey()      { return apiKey; }
@@ -62,6 +63,8 @@ public class LlmProperties {
         public void   setBaseUrl(String v)  { this.baseUrl = v; }
         public String getModel()       { return model; }
         public void   setModel(String v)    { this.model = v; }
+        public String getEmbeddingModel()   { return embeddingModel; }
+        public void   setEmbeddingModel(String v) { this.embeddingModel = v; }
         public double getTemperature() { return temperature; }
         public void   setTemperature(double v) { this.temperature = v; }
     }
@@ -86,12 +89,13 @@ public class LlmProperties {
     }
 
     public static class OpenRouterProps {
-        private String apiKey      = "";
-        private String baseUrl     = "https://openrouter.ai/api/v1";
-        private String model       = "openai/gpt-4o";
-        private double temperature = 0.1;
-        private String siteUrl     = "";
-        private String siteName    = "rag-agent-system";
+        private String apiKey          = "";
+        private String baseUrl         = "https://openrouter.ai/api/v1";
+        private String model           = "openai/gpt-4o";
+        private String embeddingModel  = "openai/text-embedding-3-small";
+        private double temperature     = 0.1;
+        private String siteUrl         = "";
+        private String siteName        = "rag-agent-system";
 
         public String getApiKey()      { return apiKey; }
         public void   setApiKey(String v)   { this.apiKey = v; }
@@ -99,6 +103,8 @@ public class LlmProperties {
         public void   setBaseUrl(String v)  { this.baseUrl = v; }
         public String getModel()       { return model; }
         public void   setModel(String v)    { this.model = v; }
+        public String getEmbeddingModel()   { return embeddingModel; }
+        public void   setEmbeddingModel(String v) { this.embeddingModel = v; }
         public double getTemperature() { return temperature; }
         public void   setTemperature(double v) { this.temperature = v; }
         public String getSiteUrl()     { return siteUrl; }
