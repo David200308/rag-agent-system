@@ -6,6 +6,7 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.reader.tika.TikaDocumentReader;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -36,9 +37,12 @@ public class DocumentIngestionService {
 
     /**
      * Ingest a single file resource with optional metadata.
+     *
+     * @param replace when true, all existing chunks whose {@code source} metadata matches
+     *                the filename (or the explicit "source" value in metadata) are deleted first.
      */
-    public int ingest(Resource resource, Map<String, Object> metadata) {
-        log.info("[DocumentIngestionService] Ingesting: {}", resource.getFilename());
+    public int ingest(Resource resource, Map<String, Object> metadata, boolean replace) {
+        log.info("[DocumentIngestionService] Ingesting: {} replace={}", resource.getFilename(), replace);
 
         var reader   = new TikaDocumentReader(resource);
         var splitter = new TokenTextSplitter(chunkSize, chunkOverlap, 5, 10000, true);
@@ -56,6 +60,14 @@ public class DocumentIngestionService {
                     .toList();
         }
 
+        if (replace) {
+            // Use the explicit "source" override if provided, otherwise fall back to filename
+            String sourceKey = (metadata != null && metadata.containsKey("source"))
+                    ? (String) metadata.get("source")
+                    : resource.getFilename();
+            deleteBySource(sourceKey);
+        }
+
         vectorStore.add(chunks);
         log.info("[DocumentIngestionService] Ingested {} chunks from {}", chunks.size(),
                 resource.getFilename());
@@ -64,10 +76,16 @@ public class DocumentIngestionService {
 
     /**
      * Ingest plain text directly (e.g. from a web scrape or API response).
+     *
+     * @param replace when true, existing chunks with the same sourceId are deleted first.
      */
-    public int ingestText(String text, String sourceId, Map<String, Object> metadata) {
+    public int ingestText(String text, String sourceId, Map<String, Object> metadata, boolean replace) {
         var meta = metadata != null ? new java.util.HashMap<>(metadata) : new java.util.HashMap<String, Object>();
         meta.put("source", sourceId);
+
+        if (replace) {
+            deleteBySource(sourceId);
+        }
 
         var doc      = new Document(text, meta);
         var splitter = new TokenTextSplitter(chunkSize, chunkOverlap, 5, 10000, true);
@@ -76,5 +94,18 @@ public class DocumentIngestionService {
         vectorStore.add(chunks);
         log.info("[DocumentIngestionService] Ingested {} text chunks from {}", chunks.size(), sourceId);
         return chunks.size();
+    }
+
+    /**
+     * Delete all Weaviate chunks whose {@code source} metadata field equals the given value.
+     */
+    public void deleteBySource(String source) {
+        log.info("[DocumentIngestionService] Deleting existing chunks for source='{}'", source);
+        try {
+            var b = new FilterExpressionBuilder();
+            vectorStore.delete(b.eq("source", source).build());
+        } catch (Exception e) {
+            log.warn("[DocumentIngestionService] Delete-by-source failed for '{}': {}", source, e.getMessage());
+        }
     }
 }

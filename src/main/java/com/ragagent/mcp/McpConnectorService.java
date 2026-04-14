@@ -1,5 +1,6 @@
 package com.ragagent.mcp;
 
+import com.ragagent.knowledge.KnowledgeSourceService;
 import com.ragagent.rag.DocumentIngestionService;
 import com.ragagent.schema.UrlIngestionResult;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import java.util.Map;
 public class McpConnectorService {
 
     private final DocumentIngestionService ingestionService;
+    private final KnowledgeSourceService   knowledgeSourceService;
     private final RestClient.Builder       restClientBuilder;
 
     /**
@@ -33,6 +35,10 @@ public class McpConnectorService {
      * @param category optional metadata category tag (may be null)
      */
     public UrlIngestionResult fetchAndIngest(String url, String category) {
+        return fetchAndIngest(url, category, null);
+    }
+
+    public UrlIngestionResult fetchAndIngest(String url, String category, String ownerEmail) {
         log.info("[McpConnectorService] Fetching URL: {}", url);
 
         // ── 1. Fetch raw HTML ────────────────────────────────────────────────
@@ -60,7 +66,8 @@ public class McpConnectorService {
             meta.put("category", category);
         }
 
-        int chunks = ingestionService.ingestText(text, url, meta);
+        int chunks = ingestionService.ingestText(text, url, meta, false);
+        knowledgeSourceService.upsert(url, title.isBlank() ? url : title, category, chunks, ownerEmail);
         log.info("[McpConnectorService] Ingested {} chunks from {}", chunks, url);
 
         return new UrlIngestionResult("ingested", url, title, chunks);

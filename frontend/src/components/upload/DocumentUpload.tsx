@@ -21,6 +21,8 @@ export function DocumentUpload() {
   const [textInput, setTextInput] = useState("");
   const [textSource, setTextSource] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [replaceFiles, setReplaceFiles] = useState(false);
+  const [replaceText, setReplaceText] = useState(false);
 
   const fileMutation = useMutation({
     ...ingestFileMutationOptions(),
@@ -66,7 +68,7 @@ export function DocumentUpload() {
   const uploadAll = () => {
     files
       .filter((f) => f.status === "pending")
-      .forEach((f) => fileMutation.mutate({ file: f.file }));
+      .forEach((f) => fileMutation.mutate({ file: f.file, replace: replaceFiles }));
   };
 
   const removeFile = (file: File) =>
@@ -111,6 +113,18 @@ export function DocumentUpload() {
         </p>
         <p className="text-xs text-[--color-muted]">PDF, DOCX, HTML, TXT up to 50 MB each</p>
       </div>
+
+      {/* ── Replace toggle ── */}
+      <label className="flex cursor-pointer items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={replaceFiles}
+          onChange={(e) => setReplaceFiles(e.target.checked)}
+          className="h-4 w-4 rounded border-[--color-border] accent-gray-900 dark:accent-white"
+        />
+        <span>Replace existing chunks for the same source</span>
+        <span className="text-xs text-[--color-muted]">(deletes old vectors before re-ingesting)</span>
+      </label>
 
       {/* ── File list ── */}
       {files.length > 0 && (
@@ -180,8 +194,17 @@ export function DocumentUpload() {
           onChange={(e) => setTextInput(e.target.value)}
           className="w-full resize-none rounded-lg border border-[--color-border] bg-[--color-surface] px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
         />
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={replaceText}
+            onChange={(e) => setReplaceText(e.target.checked)}
+            className="h-4 w-4 rounded border-[--color-border] accent-gray-900 dark:accent-white"
+          />
+          <span>Replace existing chunks for this source</span>
+        </label>
         <Button
-          onClick={() => textMutation.mutate({ text: textInput, source: textSource || "manual-input" })}
+          onClick={() => textMutation.mutate({ text: textInput, source: textSource || "manual-input", replace: replaceText })}
           loading={textMutation.isPending}
           disabled={!textInput.trim()}
           className="w-full"

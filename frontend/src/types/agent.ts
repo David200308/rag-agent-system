@@ -73,6 +73,18 @@ export interface Conversation {
   updatedAt: Date;
 }
 
+/** Mirror of Java KnowledgeSource entity returned by GET /knowledge */
+export interface KnowledgeSourceEntry {
+  id: number;
+  source: string;
+  label: string | null;
+  category: string | null;
+  chunkCount: number;
+  ownerEmail: string | null;
+  ingestedAt: string;
+  shares: { id: number; sharedEmail: string }[];
+}
+
 /** Mirror of Java Conversation entity returned by GET /conversations */
 export interface BackendConversation {
   id: string;

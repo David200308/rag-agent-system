@@ -4,6 +4,8 @@ import com.ragagent.agent.RagAgentGraph;
 import com.ragagent.agent.state.AgentState;
 import com.ragagent.conversation.ConversationService;
 import com.ragagent.conversation.entity.ConversationMessage;
+import com.ragagent.knowledge.KnowledgeSourceService;
+import com.ragagent.knowledge.entity.KnowledgeSource;
 import com.ragagent.mcp.McpConnectorService;
 import com.ragagent.rag.DocumentIngestionService;
 import com.ragagent.schema.AgentRequest;
@@ -46,6 +48,7 @@ public class AgentController {
     private final DocumentIngestionService ingestionService;
     private final McpConnectorService      mcpConnectorService;
     private final ConversationService      conversationService;
+    private final KnowledgeSourceService   knowledgeSourceService;
 
     // ── Query ─────────────────────────────────────────────────────────────────
 
@@ -128,14 +131,20 @@ public class AgentController {
     public ResponseEntity<Map<String, Object>> ingest(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "source",   required = false) String source,
-            @RequestParam(value = "category", required = false) String category) throws Exception {
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "replace",  required = false, defaultValue = "false") boolean replace,
+            HttpServletRequest httpRequest) throws Exception {
 
         Map<String, Object> metadata = new HashMap<>();
         if (source   != null) metadata.put("source", source);
         if (category != null) metadata.put("category", category);
 
         Resource resource  = file.getResource();
-        int      chunkCount = ingestionService.ingest(resource, metadata);
+        int      chunkCount = ingestionService.ingest(resource, metadata, replace);
+
+        String ownerEmail = (String) httpRequest.getAttribute("authenticatedEmail");
+        String sourceKey = source != null ? source : file.getOriginalFilename();
+        knowledgeSourceService.upsert(sourceKey, file.getOriginalFilename(), category, chunkCount, ownerEmail);
 
         return ResponseEntity.ok(Map.of(
                 "status",     "ingested",
@@ -147,23 +156,26 @@ public class AgentController {
     @PostMapping("/ingest/url")
     @Operation(summary = "Fetch a URL and ingest its content into Weaviate")
     public ResponseEntity<UrlIngestionResult> ingestUrl(
-            @RequestBody Map<String, String> body) {
+            @RequestBody Map<String, String> body,
+            HttpServletRequest httpRequest) {
 
-        String url      = body.get("url");
-        String category = body.get("category");
+        String url        = body.get("url");
+        String category   = body.get("category");
+        String ownerEmail = (String) httpRequest.getAttribute("authenticatedEmail");
 
         if (url == null || url.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
 
-        UrlIngestionResult result = mcpConnectorService.fetchAndIngest(url, category);
+        UrlIngestionResult result = mcpConnectorService.fetchAndIngest(url, category, ownerEmail);
         return ResponseEntity.ok(result);
     }
 
     @PostMapping("/ingest/text")
     @Operation(summary = "Ingest plain text directly into Weaviate")
     public ResponseEntity<Map<String, Object>> ingestText(
-            @RequestBody Map<String, String> body) {
+            @RequestBody Map<String, String> body,
+            HttpServletRequest httpRequest) {
 
         String text     = body.getOrDefault("text", "");
         String sourceId = body.getOrDefault("source", "api-text-" + UUID.randomUUID());
@@ -173,12 +185,60 @@ public class AgentController {
                     .body(Map.of("error", "text field must not be empty"));
         }
 
-        int chunkCount = ingestionService.ingestText(text, sourceId, Map.of());
+        boolean replace = Boolean.parseBoolean(body.getOrDefault("replace", "false"));
+        String ownerEmail = (String) httpRequest.getAttribute("authenticatedEmail");
+        int chunkCount = ingestionService.ingestText(text, sourceId, Map.of(), replace);
+        knowledgeSourceService.upsert(sourceId, sourceId, null, chunkCount, ownerEmail);
         return ResponseEntity.ok(Map.of(
                 "status",     "ingested",
                 "source",     sourceId,
                 "chunkCount", chunkCount
         ));
+    }
+
+    // ── Knowledge management ──────────────────────────────────────────────────
+
+    @GetMapping("/knowledge")
+    @Operation(summary = "List knowledge sources accessible to the authenticated user")
+    public ResponseEntity<List<KnowledgeSource>> listKnowledge(HttpServletRequest httpRequest) {
+        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        return ResponseEntity.ok(knowledgeSourceService.listAccessible(email));
+    }
+
+    @DeleteMapping("/knowledge")
+    @Operation(summary = "Delete all chunks for a source (owner only)")
+    public ResponseEntity<Map<String, String>> deleteKnowledge(
+            @RequestParam("source") String source,
+            HttpServletRequest httpRequest) {
+        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        try {
+            knowledgeSourceService.delete(source, email);
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/knowledge/share")
+    @Operation(summary = "Update the shared-email list for a knowledge source (owner only)")
+    public ResponseEntity<Map<String, Object>> shareKnowledge(
+            @RequestBody Map<String, Object> body,
+            HttpServletRequest httpRequest) {
+        String email  = (String) httpRequest.getAttribute("authenticatedEmail");
+        String source = (String) body.get("source");
+        @SuppressWarnings("unchecked")
+        java.util.List<String> emails = (java.util.List<String>) body.getOrDefault("emails", java.util.List.of());
+        try {
+            var updated = knowledgeSourceService.updateSharing(source, emails, email);
+            return ResponseEntity.ok(Map.of(
+                    "source",       updated.getSource(),
+                    "sharedEmails", updated.sharedEmails()
+            ));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

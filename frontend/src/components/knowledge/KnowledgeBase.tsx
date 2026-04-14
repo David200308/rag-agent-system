@@ -1,24 +1,27 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   Upload, FileText, CheckCircle2, XCircle, X,
-  Link2, Globe, Trash2, Type,
+  Link2, Globe, Trash2, Type, Database, RefreshCw, Share2, Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ingestFileMutationOptions,
   ingestTextMutationOptions,
   ingestUrlMutationOptions,
+  fetchKnowledgeSources,
+  deleteKnowledgeSource,
+  updateKnowledgeSharing,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import type { IngestionResult, UrlIngestionResult } from "@/types/agent";
+import type { IngestionResult, KnowledgeSourceEntry, UrlIngestionResult } from "@/types/agent";
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
-type Tab = "files" | "text" | "url";
+type Tab = "files" | "text" | "url" | "manage";
 
 interface FileEntry {
   file: File;
@@ -42,6 +45,7 @@ interface UrlEntry {
 function FilesPanel() {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [replace, setReplace] = useState(false);
 
   const mutation = useMutation({
     ...ingestFileMutationOptions(),
@@ -74,7 +78,7 @@ function FilesPanel() {
   );
 
   const uploadAll = () =>
-    files.filter((f) => f.status === "pending").forEach((f) => mutation.mutate({ file: f.file }));
+    files.filter((f) => f.status === "pending").forEach((f) => mutation.mutate({ file: f.file, replace }));
 
   const remove = (file: File) => setFiles((prev) => prev.filter((f) => f.file !== file));
   const pending = files.filter((f) => f.status === "pending").length;
@@ -136,9 +140,20 @@ function FilesPanel() {
             </div>
           ))}
           {pending > 0 && (
-            <Button onClick={uploadAll} className="w-full">
-              Upload {pending} file{pending > 1 ? "s" : ""}
-            </Button>
+            <>
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={replace}
+                  onChange={(e) => setReplace(e.target.checked)}
+                  className="h-4 w-4 rounded border-[--color-border] accent-gray-900 dark:accent-white"
+                />
+                <span>Replace existing chunks for the same source</span>
+              </label>
+              <Button onClick={uploadAll} className="w-full">
+                Upload {pending} file{pending > 1 ? "s" : ""}
+              </Button>
+            </>
           )}
         </div>
       )}
@@ -149,6 +164,7 @@ function FilesPanel() {
 function TextPanel() {
   const [text, setText] = useState("");
   const [source, setSource] = useState("");
+  const [replace, setReplace] = useState(false);
 
   const mutation = useMutation({
     ...ingestTextMutationOptions(),
@@ -174,8 +190,17 @@ function TextPanel() {
         onChange={(e) => setText(e.target.value)}
         className="w-full resize-none rounded-lg border border-[--color-border] bg-[--color-surface] px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
       />
+      <label className="flex cursor-pointer items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={replace}
+          onChange={(e) => setReplace(e.target.checked)}
+          className="h-4 w-4 rounded border-[--color-border] accent-gray-900 dark:accent-white"
+        />
+        <span>Replace existing chunks for this source</span>
+      </label>
       <Button
-        onClick={() => mutation.mutate({ text, source: source || "manual-input" })}
+        onClick={() => mutation.mutate({ text, source: source || "manual-input", replace })}
         loading={mutation.isPending}
         disabled={!text.trim()}
         className="w-full"
@@ -347,12 +372,191 @@ function UrlStatusBadge({ status }: { status: UrlEntry["status"] }) {
   return <Badge variant="default">pending</Badge>;
 }
 
+function ShareRow({ entry, onSaved }: { entry: KnowledgeSourceEntry; onSaved: (emails: string[]) => void }) {
+  const [open, setOpen]           = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [emails, setEmails]       = useState<string[]>(entry.shares.map((s) => s.sharedEmail));
+  const [saving, setSaving]       = useState(false);
+
+  const addEmail = () => {
+    const trimmed = emailInput.trim().toLowerCase();
+    if (trimmed && !emails.includes(trimmed)) {
+      setEmails((prev) => [...prev, trimmed]);
+    }
+    setEmailInput("");
+  };
+
+  const removeEmail = (e: string) => setEmails((prev) => prev.filter((x) => x !== e));
+
+  const save = async () => {
+    setSaving(true);
+    await updateKnowledgeSharing(entry.source, emails);
+    setSaving(false);
+    setOpen(false);
+    onSaved(emails);
+  };
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 rounded p-1 text-xs text-[--color-muted] hover:bg-[--color-border]/50"
+        title="Manage sharing"
+      >
+        <Share2 className="h-3.5 w-3.5" />
+        {emails.length > 0 ? `Shared (${emails.length})` : "Share"}
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-2 rounded-lg border border-[--color-border] bg-[--color-surface] p-3">
+          <p className="text-xs font-medium">Share with (by email)</p>
+          <div className="flex gap-2">
+            <input
+              type="email"
+              placeholder="user@example.com"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addEmail())}
+              className="flex-1 rounded-md border border-[--color-border] bg-[--color-surface] px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
+            />
+            <button
+              onClick={addEmail}
+              className="rounded-md border border-[--color-border] p-1 text-[--color-muted] hover:bg-[--color-border]/50"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {emails.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {emails.map((e) => (
+                <span key={e} className="flex items-center gap-1 rounded-full border border-[--color-border] bg-[--color-surface-raised] px-2 py-0.5 text-xs">
+                  {e}
+                  <button onClick={() => removeEmail(e)} className="text-[--color-muted] hover:text-red-500">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setOpen(false)} className="text-xs text-[--color-muted] hover:underline">Cancel</button>
+            <button
+              onClick={save}
+              disabled={saving}
+              className="rounded-md bg-gray-900 px-3 py-1 text-xs text-white disabled:opacity-50 dark:bg-white dark:text-black"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ManagePanel() {
+  const [sources, setSources] = useState<KnowledgeSourceEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const data = await fetchKnowledgeSources();
+    setSources(data);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleDelete = async (source: string) => {
+    setDeleting(source);
+    await deleteKnowledgeSource(source);
+    setSources((prev) => prev.filter((s) => s.source !== source));
+    setDeleting(null);
+  };
+
+  const handleShareSaved = (source: string, emails: string[]) => {
+    setSources((prev) => prev.map((s) =>
+      s.source === source
+        ? { ...s, shares: emails.map((e, i) => ({ id: i, sharedEmail: e })) }
+        : s,
+    ));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-[--color-muted]">
+          Sources you own or that are shared with you.
+        </p>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="flex items-center gap-1 rounded-md p-1.5 text-[--color-muted] hover:bg-[--color-border]/50 disabled:opacity-50"
+          title="Refresh"
+        >
+          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-[--color-border] border-t-[--color-muted]" />
+        </div>
+      ) : sources.length === 0 ? (
+        <p className="py-10 text-center text-sm text-[--color-muted]">No sources ingested yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {sources.map((s) => (
+            <div
+              key={s.id}
+              className="space-y-1 rounded-lg border border-[--color-border] bg-[--color-surface-raised] px-3 py-2.5"
+            >
+              <div className="flex items-start gap-3">
+                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[--color-muted]" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{s.label ?? s.source}</p>
+                  <p className="truncate text-xs text-[--color-muted]">{s.source}</p>
+                  <p className="text-xs text-[--color-muted]">
+                    {s.chunkCount} chunks
+                    {s.category && <span> · <span className="font-medium">#{s.category}</span></span>}
+                    {" · "}{new Date(s.ingestedAt).toLocaleDateString()}
+                    {s.ownerEmail && <span> · by {s.ownerEmail}</span>}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleDelete(s.source)}
+                  disabled={deleting === s.source}
+                  className="mt-0.5 shrink-0 rounded p-1 text-[--color-muted] hover:bg-red-50 hover:text-red-500 disabled:opacity-40 dark:hover:bg-red-950"
+                  title="Delete from vector store (owner only)"
+                >
+                  {deleting === s.source ? (
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent inline-block" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </div>
+              <div className="pl-7">
+                <ShareRow entry={s} onSaved={(emails) => handleShareSaved(s.source, emails)} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── main component ────────────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: "files", label: "Files",  icon: <Upload className="h-3.5 w-3.5" /> },
-  { id: "text",  label: "Text",   icon: <Type   className="h-3.5 w-3.5" /> },
-  { id: "url",   label: "URL",    icon: <Globe  className="h-3.5 w-3.5" /> },
+  { id: "files",  label: "Files",   icon: <Upload   className="h-3.5 w-3.5" /> },
+  { id: "text",   label: "Text",    icon: <Type     className="h-3.5 w-3.5" /> },
+  { id: "url",    label: "URL",     icon: <Globe    className="h-3.5 w-3.5" /> },
+  { id: "manage", label: "Manage",  icon: <Database className="h-3.5 w-3.5" /> },
 ];
 
 export function KnowledgeBase() {
@@ -388,9 +592,10 @@ export function KnowledgeBase() {
 
       {/* Panel */}
       <div>
-        {tab === "files" && <FilesPanel />}
-        {tab === "text"  && <TextPanel />}
-        {tab === "url"   && <UrlPanel />}
+        {tab === "files"  && <FilesPanel />}
+        {tab === "text"   && <TextPanel />}
+        {tab === "url"    && <UrlPanel />}
+        {tab === "manage" && <ManagePanel />}
       </div>
     </div>
   );

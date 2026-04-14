@@ -30,6 +30,32 @@ CREATE TABLE IF NOT EXISTS conversations (
     INDEX idx_conv_email (user_email)
 );
 
+-- ── Knowledge source index ────────────────────────────────────────────────────
+-- Tracks every source that has been ingested into Weaviate.
+
+CREATE TABLE IF NOT EXISTS knowledge_sources (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    source      VARCHAR(512) NOT NULL UNIQUE,   -- the "source" metadata value
+    label       VARCHAR(512),                   -- human-friendly name (filename / URL title)
+    category    VARCHAR(128),
+    chunk_count INT          NOT NULL DEFAULT 0,
+    owner_email VARCHAR(255),                   -- uploader; NULL when auth is disabled
+    ingested_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_ks_source (source),
+    INDEX idx_ks_owner  (owner_email)
+);
+
+-- Tracks which additional users a knowledge source has been shared with.
+CREATE TABLE IF NOT EXISTS knowledge_source_shares (
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    source_id    BIGINT       NOT NULL,
+    shared_email VARCHAR(255) NOT NULL,
+    created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_source_email (source_id, shared_email),
+    CONSTRAINT fk_kss_source FOREIGN KEY (source_id)
+        REFERENCES knowledge_sources(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS conversation_messages (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
     conversation_id VARCHAR(36) NOT NULL,

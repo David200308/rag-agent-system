@@ -16,6 +16,7 @@ import type {
   BackendConversation,
   BackendMessage,
   IngestionResult,
+  KnowledgeSourceEntry,
   UrlIngestionResult,
 } from "@/types/agent";
 
@@ -49,6 +50,24 @@ export async function queryAgent(payload: AgentRequest): Promise<AgentResponse> 
   return postJson<AgentResponse>("/api/agent/query", payload);
 }
 
+export async function fetchKnowledgeSources(): Promise<KnowledgeSourceEntry[]> {
+  const res = await fetch("/api/agent/knowledge");
+  if (!res.ok) return [];
+  return res.json() as Promise<KnowledgeSourceEntry[]>;
+}
+
+export async function deleteKnowledgeSource(source: string): Promise<void> {
+  await fetch(`/api/agent/knowledge?source=${encodeURIComponent(source)}`, { method: "DELETE" });
+}
+
+export async function updateKnowledgeSharing(source: string, emails: string[]): Promise<void> {
+  await fetch("/api/agent/knowledge", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ source, emails }),
+  });
+}
+
 export async function fetchConversations(): Promise<BackendConversation[]> {
   const res = await fetch("/api/agent/conversations");
   if (!res.ok) return [];
@@ -65,19 +84,22 @@ export async function ingestFile(
   file: File,
   source?: string,
   category?: string,
+  replace = false,
 ): Promise<IngestionResult> {
   const form = new FormData();
   form.append("file", file);
   if (source)   form.append("source", source);
   if (category) form.append("category", category);
+  if (replace)  form.append("replace", "true");
   return postForm<IngestionResult>("/api/agent/ingest", form);
 }
 
 export async function ingestText(
   text: string,
   source: string,
+  replace = false,
 ): Promise<IngestionResult> {
-  return postJson<IngestionResult>("/api/agent/ingest-text", { text, source });
+  return postJson<IngestionResult>("/api/agent/ingest-text", { text, source, replace: String(replace) });
 }
 
 export async function ingestUrl(
@@ -116,10 +138,10 @@ export function agentQueryOptions(payload: AgentRequest) {
 export function ingestFileMutationOptions(): MutationOptions<
   IngestionResult,
   Error,
-  { file: File; source?: string; category?: string }
+  { file: File; source?: string; category?: string; replace?: boolean }
 > {
   return {
-    mutationFn: ({ file, source, category }) => ingestFile(file, source, category),
+    mutationFn: ({ file, source, category, replace }) => ingestFile(file, source, category, replace),
   };
 }
 
@@ -129,10 +151,10 @@ export function ingestFileMutationOptions(): MutationOptions<
 export function ingestTextMutationOptions(): MutationOptions<
   IngestionResult,
   Error,
-  { text: string; source: string }
+  { text: string; source: string; replace?: boolean }
 > {
   return {
-    mutationFn: ({ text, source }) => ingestText(text, source),
+    mutationFn: ({ text, source, replace }) => ingestText(text, source, replace),
   };
 }
 
