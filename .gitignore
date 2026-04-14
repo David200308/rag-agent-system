@@ -43,6 +43,13 @@ build/
 .env.*
 !.env.example
 !frontend/.env.local.example
+.env.prod
+
+# ── Docker secrets directory ──────────────────────────────────────────────────
+# secrets/* contains plaintext credentials for docker-compose.prod.yml.
+# Never commit these. The directory itself is tracked via secrets/.gitkeep.
+secrets/*
+!secrets/.gitkeep
 
 # ── Docker ────────────────────────────────────────────────────────────────────
 docker-compose.override.yml

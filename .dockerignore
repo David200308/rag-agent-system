@@ -1,0 +1,8 @@
+target/
+frontend/
+secrets/
+.git/
+.gitignore
+*.md
+.env
+.env.*

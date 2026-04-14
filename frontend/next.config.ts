@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
+
   // No rewrites needed — Next.js API routes (using undici) proxy to Spring Boot.
 
   /**

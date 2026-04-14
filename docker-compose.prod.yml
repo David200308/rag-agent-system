@@ -1,15 +1,57 @@
+# Production compose — uses Docker secrets for all sensitive values.
+#
+# Setup
+# ─────
+# 1. Create the secrets directory and populate each file:
+#
+#      mkdir -p secrets
+#      echo "strong-root-password"         > secrets/mysql_root_password
+#      echo "ragagent"                     > secrets/mysql_password
+#      echo "sk-..."                       > secrets/openai_api_key
+#      echo "$(openssl rand -base64 64)"   > secrets/auth_jwt_secret
+#      # ... (see full list below)
+#      chmod 600 secrets/*
+#
+# 2. Run:
+#      docker compose -f docker-compose.prod.yml up -d --build
+#
+# Secret files live in ./secrets/ which is git-ignored.
+# Each file name (lowercased) maps to the env var of the same name (uppercased).
+# docker-entrypoint.sh in the backend image handles the conversion.
+
 version: '3.8'
+
+# ── Secret definitions ────────────────────────────────────────────────────────
+secrets:
+  mysql_root_password:
+    file: ./secrets/mysql_root_password
+  mysql_password:
+    file: ./secrets/mysql_password
+  weaviate_api_key:
+    file: ./secrets/weaviate_api_key
+  openai_api_key:
+    file: ./secrets/openai_api_key
+  anthropic_api_key:
+    file: ./secrets/anthropic_api_key
+  openrouter_api_key:
+    file: ./secrets/openrouter_api_key
+  auth_jwt_secret:
+    file: ./secrets/auth_jwt_secret
+  resend_api_key:
+    file: ./secrets/resend_api_key
+  resend_from_email:
+    file: ./secrets/resend_from_email
 
 services:
 
-  # ── Vector store ──────────────────────────────────────────────────────────────
+  # ── Vector store ─────────────────────────────────────────────────────────────
   weaviate:
     image: semitechnologies/weaviate:latest
     container_name: weaviate
     ports:
       - "8080:8080"
       - "50051:50051"
-    restart: on-failure:0
+    restart: unless-stopped
     environment:
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
@@ -26,7 +68,8 @@ services:
       timeout: 5s
       retries: 10
 
-  # ── Relational DB (auth: whitelist, OTP, JWT) ─────────────────────────────────
+  # ── Relational DB ─────────────────────────────────────────────────────────────
+  # MySQL natively supports *_FILE env vars for its own password config.
   mysql:
     image: mysql:latest
     container_name: ragagent-mysql
@@ -34,19 +77,23 @@ services:
       - "3306:3306"
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
       MYSQL_DATABASE: ${MYSQL_DB:-ragagent}
       MYSQL_USER: ${MYSQL_USER:-ragagent}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ragagent}
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
+    secrets:
+      - mysql_root_password
+      - mysql_password
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "ragagent", "-pragagent"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${MYSQL_USER:-ragagent}", "-p$(cat /run/secrets/mysql_password)"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   # ── Spring Boot backend ───────────────────────────────────────────────────────
+  # docker-entrypoint.sh reads /run/secrets/* → env vars before the JVM starts.
   backend:
     build:
       context: .
@@ -60,36 +107,37 @@ services:
         condition: service_healthy
       weaviate:
         condition: service_healthy
+    secrets:
+      - mysql_password
+      - weaviate_api_key
+      - openai_api_key
+      - anthropic_api_key
+      - openrouter_api_key
+      - auth_jwt_secret
+      - resend_api_key
+      - resend_from_email
     environment:
-      # ── Database
+      # ── Non-secret config (safe to put inline) ──────────────────────────────
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DB: ${MYSQL_DB:-ragagent}
       MYSQL_USER: ${MYSQL_USER:-ragagent}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ragagent}
       # ── Weaviate
       WEAVIATE_HOST: weaviate
       WEAVIATE_PORT: 8080
-      WEAVIATE_API_KEY: ${WEAVIATE_API_KEY:-}
-      # ── LLM provider (openai | anthropic | openrouter | local)
+      # ── LLM
       LLM_PROVIDER: ${LLM_PROVIDER:-openai}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-4-6}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o}
       LOCAL_LLM_URL: ${LOCAL_LLM_URL:-http://host.docker.internal:11434}
       LOCAL_LLM_MODEL: ${LOCAL_LLM_MODEL:-llama3}
       LOCAL_EMBEDDING_MODEL: ${LOCAL_EMBEDDING_MODEL:-nomic-embed-text}
-      # ── Auth
-      AUTH_ENABLED: ${AUTH_ENABLED:-false}
-      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-changeme-use-a-long-random-base64-string-in-production}
+      # ── Auth (non-secret flags)
+      AUTH_ENABLED: ${AUTH_ENABLED:-true}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
       AUTH_OTP_EXPIRY_MINUTES: ${AUTH_OTP_EXPIRY_MINUTES:-10}
-      # ── Resend (email OTP)
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
-      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-noreply@example.com}
+      # ── Resend (RESEND_API_KEY + RESEND_FROM_EMAIL come from secrets)
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8081/actuator/health || exit 1"]
       interval: 15s
@@ -98,13 +146,15 @@ services:
       start_period: 60s
 
   # ── Next.js frontend ──────────────────────────────────────────────────────────
+  # No secrets needed — the frontend only talks to the backend, never directly
+  # to any external API.
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
         BACKEND_URL: http://backend:8081
-        AUTH_ENABLED: ${AUTH_ENABLED:-false}
+        AUTH_ENABLED: ${AUTH_ENABLED:-true}
         AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
     container_name: ragagent-frontend
     ports:
@@ -115,7 +165,7 @@ services:
         condition: service_healthy
     environment:
       BACKEND_URL: http://backend:8081
-      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      AUTH_ENABLED: ${AUTH_ENABLED:-true}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
 
 volumes:
