@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { MessageSquare } from "lucide-react";
-import { queryAgent, agentQueryOptions } from "@/lib/api";
+import { queryAgent } from "@/lib/api";
 import { useChatStore } from "@/store/chatStore";
 import { MessageBubble } from "./MessageBubble";
 import { MessageInput } from "./MessageInput";
@@ -16,12 +16,17 @@ interface ChatInterfaceProps {
 
 export function ChatInterface({ conversationId }: ChatInterfaceProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
-  const { conversations, addMessage } = useChatStore();
+  const { conversations, addMessage, setBackendConversationId } = useChatStore();
   const conversation = conversations.find((c) => c.id === conversationId);
 
   const mutation = useMutation({
     mutationFn: (req: AgentRequest) => queryAgent(req),
     onSuccess: (response) => {
+      // Capture the backend-assigned conversationId so subsequent turns link correctly
+      const backendId = response.metadata?.conversationId;
+      if (backendId && !conversation?.backendConversationId) {
+        setBackendConversationId(conversationId, backendId);
+      }
       addMessage(conversationId, {
         role: "assistant",
         content: response.answer,
@@ -56,6 +61,7 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       topK,
       conversationHistory: history,
       stream: false,
+      conversationId: conversation?.backendConversationId,
     });
   };
 

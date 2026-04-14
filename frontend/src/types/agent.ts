@@ -11,6 +11,7 @@ export interface AgentRequest {
   topK?: number;
   conversationHistory?: ConversationTurn[];
   stream: boolean;
+  conversationId?: string;
 }
 
 export interface SourceDocument {
@@ -35,6 +36,7 @@ export interface RunMetadata {
   durationMs: number;
   documentsRetrieved: number;
   modelUsed: string;
+  conversationId?: string;
 }
 
 export interface AgentResponse {
@@ -63,6 +65,8 @@ export interface ChatMessage {
 
 export interface Conversation {
   id: string;
+  /** UUID assigned by the Spring Boot backend — set after the first successful query. */
+  backendConversationId?: string;
   title: string;
   messages: ChatMessage[];
   createdAt: Date;

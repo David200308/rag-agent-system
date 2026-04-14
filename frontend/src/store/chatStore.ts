@@ -16,6 +16,7 @@ interface ChatState {
   deleteConversation: (id: string) => void;
   addMessage: (conversationId: string, message: Omit<ChatMessage, "id" | "timestamp">) => string;
   updateLastAssistantMessage: (conversationId: string, patch: Partial<ChatMessage>) => void;
+  setBackendConversationId: (conversationId: string, backendId: string) => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -90,6 +91,15 @@ export const useChatStore = create<ChatState>()(
             messages[lastIdx] = { ...messages[lastIdx]!, ...patch };
             return { ...c, messages };
           }),
+        })),
+
+      setBackendConversationId: (conversationId, backendId) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === conversationId
+              ? { ...c, backendConversationId: backendId }
+              : c,
+          ),
         })),
     }),
     {
