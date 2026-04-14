@@ -87,10 +87,11 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${MYSQL_USER:-ragagent}", "-p$(cat /run/secrets/mysql_password)"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u ${MYSQL_USER:-ragagent} -p\"$(cat /run/secrets/mysql_password)\" || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
 
   # ── Spring Boot backend ───────────────────────────────────────────────────────
   # docker-entrypoint.sh reads /run/secrets/* → env vars before the JVM starts.
