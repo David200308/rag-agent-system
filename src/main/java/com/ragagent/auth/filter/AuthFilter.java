@@ -68,6 +68,8 @@ public class AuthFilter extends OncePerRequestFilter {
             return;
         }
 
+        // Make the authenticated email available to controllers via request attribute
+        request.setAttribute("authenticatedEmail", email);
         chain.doFilter(request, response);
     }
 

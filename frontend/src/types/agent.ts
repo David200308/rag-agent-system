@@ -73,6 +73,24 @@ export interface Conversation {
   updatedAt: Date;
 }
 
+/** Mirror of Java Conversation entity returned by GET /conversations */
+export interface BackendConversation {
+  id: string;
+  userEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Mirror of Java ConversationMessage entity */
+export interface BackendMessage {
+  id: number;
+  conversationId: string;
+  role: "user" | "assistant";
+  content: string;
+  runId: string | null;
+  createdAt: string;
+}
+
 export interface IngestionResult {
   status: string;
   filename?: string;

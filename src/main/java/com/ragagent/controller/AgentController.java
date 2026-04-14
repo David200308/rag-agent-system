@@ -11,6 +11,7 @@ import com.ragagent.schema.AgentResponse;
 import com.ragagent.schema.UrlIngestionResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,14 +52,17 @@ public class AgentController {
     @PostMapping(value = "/query", consumes = MediaType.APPLICATION_JSON_VALUE,
                                    produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Run a query through the RAG agent pipeline")
-    public ResponseEntity<AgentResponse> query(@RequestBody @Valid AgentRequest request) {
+    public ResponseEntity<AgentResponse> query(@RequestBody @Valid AgentRequest request,
+                                               HttpServletRequest httpRequest) {
 
         String runId = UUID.randomUUID().toString();
         log.info("[AgentController] Received query runId={} query='{}'", runId, request.query());
 
+        String userEmail = (String) httpRequest.getAttribute("authenticatedEmail");
+
         // ── Resolve / create conversation ──────────────────────────────────
         String conversationId = conversationService.resolveConversation(
-                request.conversationId(), null /* userEmail from JWT when auth enabled */);
+                request.conversationId(), userEmail);
 
         conversationService.saveUserMessage(conversationId, request.query());
 
@@ -94,6 +98,17 @@ public class AgentController {
     }
 
     // ── Conversation history ──────────────────────────────────────────────────
+
+    @GetMapping("/conversations")
+    @Operation(summary = "List all conversations for the authenticated user")
+    public ResponseEntity<List<com.ragagent.conversation.entity.Conversation>> listConversations(
+            HttpServletRequest httpRequest) {
+        String userEmail = (String) httpRequest.getAttribute("authenticatedEmail");
+        if (userEmail == null) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(conversationService.listConversations(userEmail));
+    }
 
     @GetMapping("/conversations/{conversationId}")
     @Operation(summary = "Retrieve the full message history for a conversation")

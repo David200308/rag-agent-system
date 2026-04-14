@@ -53,7 +53,7 @@ public class LlmProperties {
     public static class OpenAiProps {
         private String apiKey  = "";
         private String baseUrl = "https://api.openai.com";
-        private String model   = "gpt-4o";
+        private String model   = "gpt-4o-mini";
         private String embeddingModel = "text-embedding-3-small";
         private double temperature = 0.1;
 
@@ -91,7 +91,7 @@ public class LlmProperties {
     public static class OpenRouterProps {
         private String apiKey          = "";
         private String baseUrl         = "https://openrouter.ai/api/v1";
-        private String model           = "openai/gpt-4o";
+        private String model           = "openai/gpt-4o-mini";
         private String embeddingModel  = "openai/text-embedding-3-small";
         private double temperature     = 0.1;
         private String siteUrl         = "";

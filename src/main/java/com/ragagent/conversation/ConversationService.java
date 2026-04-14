@@ -76,4 +76,10 @@ public class ConversationService {
     public List<ConversationMessage> getMessages(String conversationId) {
         return messageRepo.findByConversationIdOrderByCreatedAtAsc(conversationId);
     }
+
+    /** Return all conversations for a user, newest first. */
+    @Transactional(readOnly = true)
+    public List<Conversation> listConversations(String userEmail) {
+        return conversationRepo.findByUserEmailOrderByUpdatedAtDesc(userEmail);
+    }
 }

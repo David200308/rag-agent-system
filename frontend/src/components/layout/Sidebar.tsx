@@ -43,13 +43,14 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose }: Sideb
   return (
     <aside
       className={cn(
-        "flex h-full w-64 shrink-0 flex-col border-r border-[--color-border] bg-[--color-surface-raised]",
+        "flex h-full w-64 shrink-0 flex-col border-r border-[--color-border]",
         // Mobile: fixed overlay, slides in/out
         "fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-in-out",
         isOpen ? "translate-x-0" : "-translate-x-full",
         // Desktop: static in flow, always visible
         "sm:relative sm:translate-x-0 sm:transition-none",
       )}
+      style={{ backgroundColor: "var(--color-surface-raised)" }}
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[--color-border] px-3 py-3">

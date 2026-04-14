@@ -13,6 +13,8 @@ import { queryOptions, type MutationOptions } from "@tanstack/react-query";
 import type {
   AgentRequest,
   AgentResponse,
+  BackendConversation,
+  BackendMessage,
   IngestionResult,
   UrlIngestionResult,
 } from "@/types/agent";
@@ -45,6 +47,18 @@ async function postForm<T>(url: string, form: FormData): Promise<T> {
 
 export async function queryAgent(payload: AgentRequest): Promise<AgentResponse> {
   return postJson<AgentResponse>("/api/agent/query", payload);
+}
+
+export async function fetchConversations(): Promise<BackendConversation[]> {
+  const res = await fetch("/api/agent/conversations");
+  if (!res.ok) return [];
+  return res.json() as Promise<BackendConversation[]>;
+}
+
+export async function fetchConversationMessages(backendId: string): Promise<BackendMessage[]> {
+  const res = await fetch(`/api/agent/conversations/${backendId}`);
+  if (!res.ok) return [];
+  return res.json() as Promise<BackendMessage[]>;
 }
 
 export async function ingestFile(

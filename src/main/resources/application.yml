@@ -93,7 +93,7 @@ llm:
   openai:
     api-key: ${OPENAI_API_KEY:}
     base-url: https://api.openai.com
-    model: ${OPENAI_MODEL:gpt-4o}
+    model: ${OPENAI_MODEL:gpt-4o-mini}
     embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
     temperature: 0.1
 
@@ -107,8 +107,8 @@ llm:
   openrouter:
     api-key: ${OPENROUTER_API_KEY:}
     base-url: https://openrouter.ai/api/v1
-    # Any model available on OpenRouter, e.g. openai/gpt-4o, anthropic/claude-opus-4-6
-    model: ${OPENROUTER_MODEL:openai/gpt-4o}
+    # Any model available on OpenRouter, e.g. openai/gpt-4o-mini, anthropic/claude-opus-4-6
+    model: ${OPENROUTER_MODEL:openai/gpt-4o-mini}
     embedding-model: ${OPENROUTER_EMBEDDING_MODEL:openai/text-embedding-3-small}
     temperature: 0.1
     # Optional HTTP headers forwarded to OpenRouter

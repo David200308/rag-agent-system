@@ -136,24 +136,24 @@ if [ "$MODE" = "local" ]; then
   case "$LLM_PROVIDER" in
     openai)
       prompt OPENAI_API_KEY "OpenAI API key"   ""        true
-      prompt OPENAI_MODEL   "Model"            "gpt-4o"
+      prompt OPENAI_MODEL   "Model"            "gpt-4o-mini"
       ANTHROPIC_API_KEY=""; ANTHROPIC_MODEL="claude-opus-4-6"
-      OPENROUTER_API_KEY=""; OPENROUTER_MODEL="openai/gpt-4o"
+      OPENROUTER_API_KEY=""; OPENROUTER_MODEL="openai/gpt-4o-mini"
       LOCAL_LLM_URL="http://host.docker.internal:11434"
       LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
       ;;
     anthropic)
       prompt ANTHROPIC_API_KEY "Anthropic API key" "" true
       prompt ANTHROPIC_MODEL   "Model"             "claude-opus-4-6"
-      OPENAI_API_KEY=""; OPENAI_MODEL="gpt-4o"
-      OPENROUTER_API_KEY=""; OPENROUTER_MODEL="openai/gpt-4o"
+      OPENAI_API_KEY=""; OPENAI_MODEL="gpt-4o-mini"
+      OPENROUTER_API_KEY=""; OPENROUTER_MODEL="openai/gpt-4o-mini"
       LOCAL_LLM_URL="http://host.docker.internal:11434"
       LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
       ;;
     openrouter)
       prompt OPENROUTER_API_KEY "OpenRouter API key" "" true
-      prompt OPENROUTER_MODEL   "Model"              "openai/gpt-4o"
-      OPENAI_API_KEY=""; OPENAI_MODEL="gpt-4o"
+      prompt OPENROUTER_MODEL   "Model"              "openai/gpt-4o-mini"
+      OPENAI_API_KEY=""; OPENAI_MODEL="gpt-4o-mini"
       ANTHROPIC_API_KEY=""; ANTHROPIC_MODEL="claude-opus-4-6"
       LOCAL_LLM_URL="http://host.docker.internal:11434"
       LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
@@ -162,9 +162,9 @@ if [ "$MODE" = "local" ]; then
       prompt LOCAL_LLM_URL        "LLM base URL"      "http://host.docker.internal:11434"
       prompt LOCAL_LLM_MODEL      "Chat model"        "llama3"
       prompt LOCAL_EMBEDDING_MODEL "Embedding model"  "nomic-embed-text"
-      OPENAI_API_KEY=""; OPENAI_MODEL="gpt-4o"
+      OPENAI_API_KEY=""; OPENAI_MODEL="gpt-4o-mini"
       ANTHROPIC_API_KEY=""; ANTHROPIC_MODEL="claude-opus-4-6"
-      OPENROUTER_API_KEY=""; OPENROUTER_MODEL="openai/gpt-4o"
+      OPENROUTER_API_KEY=""; OPENROUTER_MODEL="openai/gpt-4o-mini"
       ;;
     *)
       echo -e "${RED}Unknown provider '$LLM_PROVIDER'. Expected: openai | anthropic | openrouter | local${NC}"
@@ -311,10 +311,10 @@ else
   case "$LLM_PROVIDER" in
     openai)
       prompt OPENAI_API_KEY "OpenAI API key" "" true
-      prompt OPENAI_MODEL   "Model"          "gpt-4o"
+      prompt OPENAI_MODEL   "Model"          "gpt-4o-mini"
       write_secret openai_api_key "$OPENAI_API_KEY"
       ANTHROPIC_MODEL="claude-opus-4-6"
-      OPENROUTER_MODEL="openai/gpt-4o"
+      OPENROUTER_MODEL="openai/gpt-4o-mini"
       LOCAL_LLM_URL="http://host.docker.internal:11434"
       LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
       ;;
@@ -322,16 +322,16 @@ else
       prompt ANTHROPIC_API_KEY "Anthropic API key" "" true
       prompt ANTHROPIC_MODEL   "Model"             "claude-opus-4-6"
       write_secret anthropic_api_key "$ANTHROPIC_API_KEY"
-      OPENAI_MODEL="gpt-4o"
-      OPENROUTER_MODEL="openai/gpt-4o"
+      OPENAI_MODEL="gpt-4o-mini"
+      OPENROUTER_MODEL="openai/gpt-4o-mini"
       LOCAL_LLM_URL="http://host.docker.internal:11434"
       LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
       ;;
     openrouter)
       prompt OPENROUTER_API_KEY "OpenRouter API key" "" true
-      prompt OPENROUTER_MODEL   "Model"              "openai/gpt-4o"
+      prompt OPENROUTER_MODEL   "Model"              "openai/gpt-4o-mini"
       write_secret openrouter_api_key "$OPENROUTER_API_KEY"
-      OPENAI_MODEL="gpt-4o"
+      OPENAI_MODEL="gpt-4o-mini"
       ANTHROPIC_MODEL="claude-opus-4-6"
       LOCAL_LLM_URL="http://host.docker.internal:11434"
       LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
@@ -340,7 +340,7 @@ else
       prompt LOCAL_LLM_URL         "LLM base URL"     "http://host.docker.internal:11434"
       prompt LOCAL_LLM_MODEL       "Chat model"       "llama3"
       prompt LOCAL_EMBEDDING_MODEL "Embedding model"  "nomic-embed-text"
-      OPENAI_MODEL="gpt-4o"; ANTHROPIC_MODEL="claude-opus-4-6"; OPENROUTER_MODEL="openai/gpt-4o"
+      OPENAI_MODEL="gpt-4o-mini"; ANTHROPIC_MODEL="claude-opus-4-6"; OPENROUTER_MODEL="openai/gpt-4o-mini"
       ;;
     *)
       echo -e "${RED}Unknown provider '$LLM_PROVIDER'. Expected: openai | anthropic | openrouter | local${NC}"
@@ -402,9 +402,9 @@ MYSQL_DB=$MYSQL_DB
 MYSQL_USER=$MYSQL_USER
 
 LLM_PROVIDER=$LLM_PROVIDER
-OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
 ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-opus-4-6}
-OPENROUTER_MODEL=${OPENROUTER_MODEL:-openai/gpt-4o}
+OPENROUTER_MODEL=${OPENROUTER_MODEL:-openai/gpt-4o-mini}
 LOCAL_LLM_URL=${LOCAL_LLM_URL:-http://host.docker.internal:11434}
 LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-llama3}
 LOCAL_EMBEDDING_MODEL=${LOCAL_EMBEDDING_MODEL:-nomic-embed-text}

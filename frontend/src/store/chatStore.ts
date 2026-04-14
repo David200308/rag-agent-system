@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { ChatMessage, Conversation } from "@/types/agent";
+import type { BackendConversation, BackendMessage, ChatMessage, Conversation } from "@/types/agent";
 import { randomId, deriveTitle } from "@/lib/utils";
 
 interface ChatState {
@@ -17,6 +17,14 @@ interface ChatState {
   addMessage: (conversationId: string, message: Omit<ChatMessage, "id" | "timestamp">) => string;
   updateLastAssistantMessage: (conversationId: string, patch: Partial<ChatMessage>) => void;
   setBackendConversationId: (conversationId: string, backendId: string) => void;
+  /**
+   * Replace the conversation list with data fetched from the backend.
+   * Called on app load when the user is authenticated.
+   */
+  syncFromBackend: (
+    backendConversations: BackendConversation[],
+    messagesByBackendId: Record<string, BackendMessage[]>,
+  ) => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -101,6 +109,36 @@ export const useChatStore = create<ChatState>()(
               : c,
           ),
         })),
+
+      syncFromBackend: (backendConversations, messagesByBackendId) => {
+        const synced: Conversation[] = backendConversations.map((bc) => {
+          const msgs = messagesByBackendId[bc.id] ?? [];
+          const chatMessages: ChatMessage[] = msgs.map((m) => ({
+            id: String(m.id),
+            role: m.role,
+            content: m.content,
+            timestamp: new Date(m.createdAt),
+          }));
+          const firstUserMsg = chatMessages.find((m) => m.role === "user");
+          return {
+            id: bc.id,           // use the backend UUID as the local id too
+            backendConversationId: bc.id,
+            title: firstUserMsg ? deriveTitle(firstUserMsg.content) : "Conversation",
+            messages: chatMessages,
+            createdAt: new Date(bc.createdAt),
+            updatedAt: new Date(bc.updatedAt),
+          };
+        });
+
+        set((s) => {
+          const keepActive = synced.some((c) => c.id === s.activeId);
+          return {
+            conversations: synced,
+            // Keep current selection if still valid; otherwise open the most recent
+            activeId: keepActive ? s.activeId : (synced[0]?.id ?? null),
+          };
+        });
+      },
     }),
     {
       name: "rag-chat-store",
