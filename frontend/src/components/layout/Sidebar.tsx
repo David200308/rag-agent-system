@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, MessageSquare, Trash2, BookOpen, LogOut } from "lucide-react";
+import { Plus, MessageSquare, Trash2, BookOpen, LogOut, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -11,9 +11,11 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 interface SidebarProps {
   onSelectConversation: (id: string) => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export function Sidebar({ onSelectConversation }: SidebarProps) {
+export function Sidebar({ onSelectConversation, isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router   = useRouter();
   const { conversations, activeId, newConversation, selectConversation, deleteConversation } =
@@ -39,7 +41,16 @@ export function Sidebar({ onSelectConversation }: SidebarProps) {
   };
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-[--color-border] bg-[--color-surface-raised]">
+    <aside
+      className={cn(
+        "flex h-full w-64 shrink-0 flex-col border-r border-[--color-border] bg-[--color-surface-raised]",
+        // Mobile: fixed overlay, slides in/out
+        "fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-in-out",
+        isOpen ? "translate-x-0" : "-translate-x-full",
+        // Desktop: static in flow, always visible
+        "sm:relative sm:translate-x-0 sm:transition-none",
+      )}
+    >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[--color-border] px-3 py-3">
         <span className="text-sm font-semibold">RAG Agent</span>
@@ -47,6 +58,16 @@ export function Sidebar({ onSelectConversation }: SidebarProps) {
           <ThemeToggle />
           <Button size="icon" variant="ghost" onClick={handleNew} title="New conversation">
             <Plus className="h-4 w-4" />
+          </Button>
+          {/* Close button — mobile only */}
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onClose}
+            title="Close menu"
+            className="sm:hidden"
+          >
+            <X className="h-4 w-4" />
           </Button>
         </div>
       </div>

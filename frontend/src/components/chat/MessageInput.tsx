@@ -87,7 +87,7 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
           </Button>
         </div>
       </div>
-      <p className="mt-1.5 text-center text-[10px] text-[--color-muted]">
+      <p className="mt-1.5 hidden text-center text-[10px] text-[--color-muted] sm:block">
         Enter to send · Shift+Enter for newline
       </p>
     </div>

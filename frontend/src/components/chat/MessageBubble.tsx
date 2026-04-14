@@ -42,7 +42,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       </div>
 
       {/* Bubble + metadata */}
-      <div className={cn("flex max-w-[75%] flex-col gap-2", isUser && "items-end")}>
+      <div className={cn("flex max-w-[85%] sm:max-w-[75%] flex-col gap-2", isUser && "items-end")}>
         {/* Text */}
         <div
           className={cn(

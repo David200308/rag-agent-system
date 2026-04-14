@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Menu } from "lucide-react";
 import { queryAgent } from "@/lib/api";
 import { useChatStore } from "@/store/chatStore";
 import { MessageBubble } from "./MessageBubble";
@@ -12,9 +12,10 @@ import type { AgentRequest } from "@/types/agent";
 
 interface ChatInterfaceProps {
   conversationId: string;
+  onMenuOpen?: () => void;
 }
 
-export function ChatInterface({ conversationId }: ChatInterfaceProps) {
+export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const { conversations, addMessage, setBackendConversationId } = useChatStore();
   const conversation = conversations.find((c) => c.id === conversationId);
@@ -69,6 +70,20 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
 
   return (
     <div className="flex h-full flex-col">
+      {/* Mobile header */}
+      <div className="flex items-center gap-3 border-b border-[--color-border] px-4 py-3 sm:hidden">
+        <button
+          onClick={onMenuOpen}
+          className="rounded-md p-1 text-[--color-muted] hover:bg-[--color-border]/50"
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <span className="truncate text-sm font-medium">
+          {conversation?.title ?? "Chat"}
+        </span>
+      </div>
+
       {/* Message list */}
       <div className="chat-scroll flex-1 overflow-y-auto px-4 py-6">
         {conversation.messages.length === 0 ? (
