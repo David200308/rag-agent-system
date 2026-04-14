@@ -36,6 +36,12 @@ public class GeneratorNode {
             provided, ground your answer strictly in those documents and cite them.
             If documents are irrelevant, say so rather than hallucinating.
             Be concise but complete.
+
+            IMPORTANT — formatting rules:
+            - Always respond in plain Markdown (paragraphs, bullet lists, numbered lists, tables).
+            - Use Markdown tables when comparing or summarising structured data.
+            - NEVER wrap your answer in JSON, code fences, or any structured data format
+              unless the user explicitly asks for JSON or code output.
             """;
 
     public Map<String, Object> process(AgentState state) {

@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   Upload, FileText, CheckCircle2, XCircle, X,
-  Link2, Globe, Trash2, Type, Database, RefreshCw, Share2, Plus,
+  Link2, Globe, Trash2, Type, Database, RefreshCw, Share2, Plus, Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -14,6 +14,7 @@ import {
   fetchKnowledgeSources,
   deleteKnowledgeSource,
   updateKnowledgeSharing,
+  updateKnowledgeSource,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -461,6 +462,64 @@ function ShareRow({ entry, onSaved }: { entry: KnowledgeSourceEntry; onSaved: (e
   );
 }
 
+function EditRow({ entry, onSaved }: { entry: KnowledgeSourceEntry; onSaved: (label: string, category: string) => void }) {
+  const [open, setOpen]       = useState(false);
+  const [label, setLabel]     = useState(entry.label ?? "");
+  const [category, setCategory] = useState(entry.category ?? "");
+  const [saving, setSaving]   = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    await updateKnowledgeSource(entry.source, label, category);
+    setSaving(false);
+    setOpen(false);
+    onSaved(label, category);
+  };
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 rounded p-1 text-xs text-[--color-muted] hover:bg-[--color-border]/50"
+        title="Edit label / category"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+        Edit
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-2 rounded-lg border border-[--color-border] bg-[--color-surface] p-3">
+          <p className="text-xs font-medium">Edit metadata</p>
+          <input
+            type="text"
+            placeholder="Label"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            className="w-full rounded-md border border-[--color-border] bg-[--color-surface] px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
+          />
+          <input
+            type="text"
+            placeholder="Category / tag"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="w-full rounded-md border border-[--color-border] bg-[--color-surface] px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
+          />
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setOpen(false)} className="text-xs text-[--color-muted] hover:underline">Cancel</button>
+            <button
+              onClick={save}
+              disabled={saving}
+              className="rounded-md bg-gray-900 px-3 py-1 text-xs text-white disabled:opacity-50 dark:bg-white dark:text-black"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ManagePanel() {
   const [sources, setSources] = useState<KnowledgeSourceEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -486,6 +545,14 @@ function ManagePanel() {
     setSources((prev) => prev.map((s) =>
       s.source === source
         ? { ...s, shares: emails.map((e, i) => ({ id: i, sharedEmail: e })) }
+        : s,
+    ));
+  };
+
+  const handleEditSaved = (source: string, label: string, category: string) => {
+    setSources((prev) => prev.map((s) =>
+      s.source === source
+        ? { ...s, label: label || null, category: category || null }
         : s,
     ));
   };
@@ -544,7 +611,8 @@ function ManagePanel() {
                   )}
                 </button>
               </div>
-              <div className="pl-7">
+              <div className="pl-7 flex gap-3">
+                <EditRow entry={s} onSaved={(label, category) => handleEditSaved(s.source, label, category)} />
                 <ShareRow entry={s} onSaved={(emails) => handleShareSaved(s.source, emails)} />
               </div>
             </div>

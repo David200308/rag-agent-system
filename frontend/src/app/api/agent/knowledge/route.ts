@@ -38,6 +38,26 @@ export async function DELETE(req: NextRequest) {
   return new Response(text || null, { status: statusCode });
 }
 
+/** PATCH /api/agent/knowledge — update label / category */
+export async function PATCH(req: NextRequest) {
+  const body = await req.text();
+  const { statusCode, headers, body: upstream } = await request(
+    `${BACKEND}/api/v1/agent/knowledge`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json", ...await authHeaders() },
+      body,
+    },
+  );
+  const responseBody = await upstream.text();
+  return new Response(responseBody, {
+    status: statusCode,
+    headers: {
+      "content-type": ([] as string[]).concat(headers["content-type"] ?? "application/json")[0] ?? "application/json",
+    },
+  });
+}
+
 /** PUT /api/agent/knowledge — update sharing */
 export async function PUT(req: NextRequest) {
   const body = await req.text();

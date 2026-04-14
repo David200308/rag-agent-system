@@ -60,6 +60,18 @@ export async function deleteKnowledgeSource(source: string): Promise<void> {
   await fetch(`/api/agent/knowledge?source=${encodeURIComponent(source)}`, { method: "DELETE" });
 }
 
+export async function updateKnowledgeSource(
+  source: string,
+  label: string,
+  category: string,
+): Promise<void> {
+  await fetch("/api/agent/knowledge", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ source, label, category }),
+  });
+}
+
 export async function updateKnowledgeSharing(source: string, emails: string[]): Promise<void> {
   await fetch("/api/agent/knowledge", {
     method: "PUT",

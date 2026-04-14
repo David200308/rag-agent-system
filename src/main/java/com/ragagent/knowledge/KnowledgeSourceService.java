@@ -67,6 +67,26 @@ public class KnowledgeSourceService {
     }
 
     /**
+     * Update label and/or category for a source.
+     * Only the owner may edit metadata.
+     */
+    @Transactional
+    public KnowledgeSource updateMetadata(String source, String label, String category, String callerEmail) {
+        KnowledgeSource ks = repo.findBySource(source)
+                .orElseThrow(() -> new IllegalArgumentException("Source not found: " + source));
+
+        if (callerEmail != null && ks.getOwnerEmail() != null
+                && !ks.getOwnerEmail().equalsIgnoreCase(callerEmail)) {
+            throw new SecurityException("Only the owner can edit this source.");
+        }
+
+        if (label    != null) ks.setLabel(label.isBlank()    ? null : label.trim());
+        if (category != null) ks.setCategory(category.isBlank() ? null : category.trim());
+
+        return repo.save(ks);
+    }
+
+    /**
      * Replace the shared-email list for a source.
      * Only the owner may change sharing.
      */

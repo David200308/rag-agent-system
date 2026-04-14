@@ -219,6 +219,28 @@ public class AgentController {
         }
     }
 
+    @PatchMapping("/knowledge")
+    @Operation(summary = "Update label / category for a knowledge source (owner only)")
+    public ResponseEntity<KnowledgeSource> updateKnowledge(
+            @RequestBody Map<String, Object> body,
+            HttpServletRequest httpRequest) {
+        String email    = (String) httpRequest.getAttribute("authenticatedEmail");
+        String source   = (String) body.get("source");
+        String label    = (String) body.get("label");
+        String category = (String) body.get("category");
+        if (source == null || source.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        try {
+            KnowledgeSource updated = knowledgeSourceService.updateMetadata(source, label, category, email);
+            return ResponseEntity.ok(updated);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
     @PutMapping("/knowledge/share")
     @Operation(summary = "Update the shared-email list for a knowledge source (owner only)")
     public ResponseEntity<Map<String, Object>> shareKnowledge(
