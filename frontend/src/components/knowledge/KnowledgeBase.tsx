@@ -389,11 +389,16 @@ function ShareRow({ entry, onSaved }: { entry: KnowledgeSourceEntry; onSaved: (e
   const removeEmail = (e: string) => setEmails((prev) => prev.filter((x) => x !== e));
 
   const save = async () => {
+    // Flush any email still typed in the input field before saving
+    const trimmed = emailInput.trim().toLowerCase();
+    const finalEmails = trimmed && !emails.includes(trimmed) ? [...emails, trimmed] : emails;
+    if (trimmed) setEmailInput("");
     setSaving(true);
-    await updateKnowledgeSharing(entry.source, emails);
+    await updateKnowledgeSharing(entry.source, finalEmails);
     setSaving(false);
     setOpen(false);
-    onSaved(emails);
+    setEmails(finalEmails);
+    onSaved(finalEmails);
   };
 
   return (
