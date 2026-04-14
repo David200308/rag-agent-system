@@ -131,8 +131,6 @@ services:
       # Embeddings use Ollama (nomic-embed-text) running on the host.
       # Switch to EMBEDDING_PROVIDER=openai if you prefer OpenAI text-embedding-3-small.
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
-      LOCAL_LLM_URL: ${LOCAL_LLM_URL:-http://host.docker.internal:11434}
-      LOCAL_EMBEDDING_MODEL: ${LOCAL_EMBEDDING_MODEL:-nomic-embed-text}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-4-6}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o}
