@@ -19,6 +19,10 @@ public class LlmProperties {
     @NotBlank
     private String provider = "openai";
 
+    // Optional: override which provider handles embeddings independently of the chat LLM.
+    // Defaults to null (inherits from provider). Set EMBEDDING_PROVIDER=local to use Ollama.
+    private String embeddingProvider;
+
     private OpenAiProps openai = new OpenAiProps();
     private AnthropicProps anthropic = new AnthropicProps();
     private OpenRouterProps openrouter = new OpenRouterProps();
@@ -28,6 +32,9 @@ public class LlmProperties {
 
     public String getProvider() { return provider; }
     public void setProvider(String provider) { this.provider = provider; }
+
+    public String getEmbeddingProvider() { return embeddingProvider; }
+    public void setEmbeddingProvider(String embeddingProvider) { this.embeddingProvider = embeddingProvider; }
 
     public OpenAiProps getOpenai() { return openai; }
     public void setOpenai(OpenAiProps openai) { this.openai = openai; }

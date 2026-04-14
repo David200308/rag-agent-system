@@ -10,18 +10,17 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.util.StringUtils;
 
 /**
  * Manually creates the {@link EmbeddingModel} used by Weaviate.
  *
- * Spring AI's OpenAI embedding auto-config is disabled in application.yml
- * ({@code spring.ai.openai.embedding.enabled=false}) so we can choose the
- * right endpoint based on {@code llm.provider}:
+ * Embedding provider is chosen by {@code EMBEDDING_PROVIDER} env var (falls back
+ * to {@code LLM_PROVIDER} if unset). OpenRouter and Anthropic have no embeddings API,
+ * so they always fall through to the OpenAI path.
  *
  *   local       → Ollama's OpenAI-compatible /v1/embeddings (no API key needed).
- *                 Default embedding model: nomic-embed-text
- *                 Override with LOCAL_EMBEDDING_MODEL env var.
- *   openrouter  → OpenRouter /v1/embeddings with OPENROUTER_API_KEY (text-embedding-3-small).
+ *                 Default model: nomic-embed-text. Override with LOCAL_EMBEDDING_MODEL.
  *   all others  → OpenAI text-embedding-3-small (requires OPENAI_API_KEY).
  */
 @Slf4j
@@ -32,10 +31,16 @@ public class EmbeddingConfig {
     @Bean
     @Primary
     public EmbeddingModel embeddingModel(LlmProperties props) {
-        return switch (props.getProvider().toLowerCase()) {
-            case "local"       -> buildLocalEmbedding(props.getLocal());
-            case "openrouter"  -> buildOpenRouterEmbedding(props.getOpenrouter());
-            default            -> buildOpenAiEmbedding(props.getOpenai());
+        // Use EMBEDDING_PROVIDER if set, otherwise fall back to LLM_PROVIDER.
+        // OpenRouter and Anthropic do not expose an embeddings API, so they fall
+        // through to the OpenAI embedding path. Use EMBEDDING_PROVIDER=local for Ollama.
+        String embeddingProvider = StringUtils.hasText(props.getEmbeddingProvider())
+                ? props.getEmbeddingProvider().toLowerCase()
+                : props.getProvider().toLowerCase();
+
+        return switch (embeddingProvider) {
+            case "local"  -> buildLocalEmbedding(props.getLocal());
+            default       -> buildOpenAiEmbedding(props.getOpenai());
         };
     }
 
@@ -48,18 +53,6 @@ public class EmbeddingConfig {
                 .build();
         var options = OpenAiEmbeddingOptions.builder()
                 .model(p.getEmbeddingModel())
-                .build();
-        return new OpenAiEmbeddingModel(api, MetadataMode.EMBED, options);
-    }
-
-    private EmbeddingModel buildOpenRouterEmbedding(LlmProperties.OpenRouterProps p) {
-        log.info("[EmbeddingConfig] OpenRouter embedding via {}", p.getBaseUrl());
-        var api = OpenAiApi.builder()
-                .baseUrl(p.getBaseUrl())
-                .apiKey(p.getApiKey())
-                .build();
-        var options = OpenAiEmbeddingOptions.builder()
-                .model("text-embedding-3-small")
                 .build();
         return new OpenAiEmbeddingModel(api, MetadataMode.EMBED, options);
     }

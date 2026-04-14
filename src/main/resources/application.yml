@@ -86,6 +86,9 @@ spring:
 #   local      → no API key needed (Ollama / LM Studio / llama.cpp)
 llm:
   provider: ${LLM_PROVIDER:openai}
+  # Override embedding provider independently. Defaults to llm.provider if unset.
+  # Use EMBEDDING_PROVIDER=local for Ollama, or leave unset to use OpenAI embeddings.
+  embedding-provider: ${EMBEDDING_PROVIDER:}
 
   openai:
     api-key: ${OPENAI_API_KEY:}

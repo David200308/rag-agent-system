@@ -127,7 +127,12 @@ services:
       WEAVIATE_HOST: weaviate
       WEAVIATE_PORT: 8080
       # ── LLM
-      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
+      # Embeddings use Ollama (nomic-embed-text) running on the host.
+      # Switch to EMBEDDING_PROVIDER=openai if you prefer OpenAI text-embedding-3-small.
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
+      LOCAL_LLM_URL: ${LOCAL_LLM_URL:-http://host.docker.internal:11434}
+      LOCAL_EMBEDDING_MODEL: ${LOCAL_EMBEDDING_MODEL:-nomic-embed-text}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-4-6}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o}
@@ -139,6 +144,8 @@ services:
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
       AUTH_OTP_EXPIRY_MINUTES: ${AUTH_OTP_EXPIRY_MINUTES:-10}
       # ── Resend (RESEND_API_KEY + RESEND_FROM_EMAIL come from secrets)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8081/actuator/health || exit 1"]
       interval: 15s
