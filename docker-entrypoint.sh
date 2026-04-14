@@ -14,7 +14,8 @@ if [ -d /run/secrets ]; then
     # Only set if the env var is not already present
     eval "existing=\${${var}:-}"
     if [ -z "$existing" ]; then
-      export "${var}=$(cat "$secret_file")"
+      val=$(cat "$secret_file")
+      eval "export ${var}=\$val"
     fi
   done
 fi
