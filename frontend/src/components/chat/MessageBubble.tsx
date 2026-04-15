@@ -3,6 +3,7 @@ import { cn, formatTime, formatDuration } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
 import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import { SourceCard } from "./SourceCard";
+import { useTimezone } from "@/hooks/useTimezone";
 import type { ChatMessage } from "@/types/agent";
 
 interface MessageBubbleProps {
@@ -24,6 +25,7 @@ const routeVariant = {
 } as const;
 
 export function MessageBubble({ message }: MessageBubbleProps) {
+  const { timezone } = useTimezone();
   const isUser = message.role === "user";
   const isError = message.role === "error";
 
@@ -104,7 +106,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
         {/* Timestamp */}
         <span className="text-[10px] text-[--color-muted]">
-          {formatTime(message.timestamp)}
+          {formatTime(message.timestamp, timezone)}
         </span>
       </div>
     </div>

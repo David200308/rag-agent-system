@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn, formatTime } from "@/lib/utils";
+import { useTimezone } from "@/hooks/useTimezone";
 import { useChatStore } from "@/store/chatStore";
 import { Button } from "@/components/ui/Button";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
@@ -26,6 +27,7 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
   const { conversations, activeId, newConversation, selectConversation, deleteConversation } =
     useChatStore();
 
+  const { timezone } = useTimezone();
   const [authEnabled, setAuthEnabled] = useState(false);
 
   useEffect(() => {
@@ -153,7 +155,7 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-medium">{c.title}</p>
                 <p className="text-[10px] text-[--color-muted]">
-                  {formatTime(c.updatedAt)} · {c.messages.length} msg
+                  {formatTime(c.updatedAt, timezone)} · {c.messages.length} msg
                 </p>
               </div>
               <Button

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Moon, Sun, Globe, Trash2, Plus, User, Shield } from "lucide-react";
+import { Moon, Sun, Globe, Trash2, Plus, User, Shield, Clock } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
+import { useTimezone } from "@/hooks/useTimezone";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { ResizableLayout } from "@/components/layout/ResizableLayout";
@@ -34,6 +35,7 @@ function SectionCard({ title, icon, children }: {
 
 export default function SettingsPage() {
   const { theme, toggle, mounted } = useTheme();
+  const { timezone, setTimezone, mounted: tzMounted } = useTimezone();
   const { selectConversation } = useChatStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -50,6 +52,15 @@ export default function SettingsPage() {
       })
       .catch(() => {});
   }, []);
+
+  // ── Timezone ─────────────────────────────────────────────────────────────────
+  const [tzSearch, setTzSearch] = useState("");
+  const allTimezones: string[] = typeof window !== "undefined"
+    ? Intl.supportedValuesOf("timeZone")
+    : [];
+  const filteredTz = tzSearch.trim()
+    ? allTimezones.filter((tz) => tz.toLowerCase().includes(tzSearch.toLowerCase()))
+    : allTimezones;
 
   // ── Web-fetch whitelist ───────────────────────────────────────────────────────
   const [whitelist, setWhitelist]   = useState<WebFetchWhitelistEntry[]>([]);
@@ -164,6 +175,38 @@ export default function SettingsPage() {
                 </button>
               )}
             </div>
+          </SectionCard>
+
+          {/* ── Timezone ─────────────────────────────────────────────────── */}
+          <SectionCard title="Timezone" icon={<Clock className="h-4 w-4" />}>
+            <p className="mb-3 text-xs text-[--color-muted]">
+              All timestamps are stored in UTC. Select your timezone to display
+              them in local time.
+            </p>
+            {tzMounted && (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  placeholder="Search timezone…"
+                  value={tzSearch}
+                  onChange={(e) => setTzSearch(e.target.value)}
+                  className="w-full rounded-lg border border-[--color-border] bg-[--color-surface-raised] px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
+                />
+                <select
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  size={6}
+                  className="w-full rounded-lg border border-[--color-border] bg-[--color-surface-raised] px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
+                >
+                  {filteredTz.map((tz) => (
+                    <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-[--color-muted]">
+                  Selected: <span className="font-mono">{timezone}</span>
+                </p>
+              </div>
+            )}
           </SectionCard>
 
           {/* ── Web-fetch whitelist ───────────────────────────────────────── */}

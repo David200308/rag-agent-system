@@ -71,6 +71,14 @@ CREATE TABLE IF NOT EXISTS conversation_shares (
 );
 
 -- ── Web-fetch domain whitelist ────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_preferences (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email      VARCHAR(255) NOT NULL,
+    timezone   VARCHAR(64)  NOT NULL DEFAULT 'UTC',
+    updated_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_up_email (email)
+);
+
 CREATE TABLE IF NOT EXISTS web_fetch_whitelist (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     domain     VARCHAR(253) NOT NULL,
