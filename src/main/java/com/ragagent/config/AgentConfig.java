@@ -1,5 +1,6 @@
 package com.ragagent.config;
 
+import com.ragagent.config.WebFetchProperties;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import org.springframework.ai.chat.client.ChatClient;
@@ -18,7 +19,7 @@ import org.springframework.context.annotation.Configuration;
  * the single bean that selects openai / anthropic / openrouter at startup.
  */
 @Configuration
-@EnableConfigurationProperties(LlmProperties.class)
+@EnableConfigurationProperties({LlmProperties.class, WebFetchProperties.class})
 public class AgentConfig {
 
     /**

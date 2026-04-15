@@ -233,6 +233,11 @@ RESEND_FROM_EMAIL=$RESEND_FROM_EMAIL
 
 # ── Weaviate ──────────────────────────────────────────────────────────────────
 WEAVIATE_API_KEY=$WEAVIATE_API_KEY
+
+# ── Web fetch ─────────────────────────────────────────────────────────────────
+WEB_FETCH_ENABLED=true
+WEB_FETCH_TIMEOUT=10
+WEB_FETCH_MAX_CHARS=50000
 EOF
 
   echo ""
@@ -412,6 +417,11 @@ LOCAL_EMBEDDING_MODEL=${LOCAL_EMBEDDING_MODEL:-nomic-embed-text}
 AUTH_ENABLED=$AUTH_ENABLED
 AUTH_JWT_EXPIRY_HOURS=$AUTH_JWT_EXPIRY_HOURS
 AUTH_OTP_EXPIRY_MINUTES=$AUTH_OTP_EXPIRY_MINUTES
+
+# ── Web fetch ─────────────────────────────────────────────────────────────────
+WEB_FETCH_ENABLED=true
+WEB_FETCH_TIMEOUT=10
+WEB_FETCH_MAX_CHARS=50000
 EOF
 
   chmod 600 "$PROD_ENV"

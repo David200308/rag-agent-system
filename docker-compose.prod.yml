@@ -144,6 +144,10 @@ services:
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
       AUTH_OTP_EXPIRY_MINUTES: ${AUTH_OTP_EXPIRY_MINUTES:-10}
       # ── Resend (RESEND_API_KEY + RESEND_FROM_EMAIL come from secrets)
+      # ── Web fetch
+      WEB_FETCH_ENABLED: ${WEB_FETCH_ENABLED:-true}
+      WEB_FETCH_TIMEOUT: ${WEB_FETCH_TIMEOUT:-10}
+      WEB_FETCH_MAX_CHARS: ${WEB_FETCH_MAX_CHARS:-50000}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

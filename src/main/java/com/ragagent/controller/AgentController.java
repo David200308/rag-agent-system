@@ -11,6 +11,8 @@ import com.ragagent.rag.DocumentIngestionService;
 import com.ragagent.schema.AgentRequest;
 import com.ragagent.schema.AgentResponse;
 import com.ragagent.schema.UrlIngestionResult;
+import com.ragagent.webfetch.WebFetchService;
+import com.ragagent.webfetch.entity.WebFetchWhitelist;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -49,6 +51,7 @@ public class AgentController {
     private final McpConnectorService      mcpConnectorService;
     private final ConversationService      conversationService;
     private final KnowledgeSourceService   knowledgeSourceService;
+    private final WebFetchService          webFetchService;
 
     // ── Query ─────────────────────────────────────────────────────────────────
 
@@ -136,6 +139,78 @@ public class AgentController {
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
         }
+    }
+
+    // ── Conversation share links ──────────────────────────────────────────────
+
+    /**
+     * Create or replace a share link for a conversation.
+     * Body: { "expireDays": 7 }  — omit or set null for no expiry.
+     */
+    @PostMapping("/conversations/{conversationId}/share")
+    @Operation(summary = "Create a shareable link for a conversation (owner only)")
+    public ResponseEntity<Map<String, Object>> createShare(
+            @PathVariable String conversationId,
+            @RequestBody(required = false) Map<String, Object> body,
+            HttpServletRequest httpRequest) {
+
+        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        Integer expireDays = null;
+        if (body != null && body.get("expireDays") instanceof Number n) {
+            expireDays = n.intValue();
+        }
+
+        try {
+            var share = conversationService.createShare(conversationId, email, expireDays);
+            return ResponseEntity.ok(shareToMap(share));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** Get the current share link for a conversation (owner only). */
+    @GetMapping("/conversations/{conversationId}/share")
+    @Operation(summary = "Get the current share link for a conversation (owner only)")
+    public ResponseEntity<Map<String, Object>> getShare(
+            @PathVariable String conversationId,
+            HttpServletRequest httpRequest) {
+
+        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        try {
+            var share = conversationService.getShare(conversationId, email);
+            return ResponseEntity.ok(shareToMap(share));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    /** Revoke (delete) the share link for a conversation (owner only). */
+    @DeleteMapping("/conversations/{conversationId}/share")
+    @Operation(summary = "Revoke the share link for a conversation (owner only)")
+    public ResponseEntity<Void> revokeShare(
+            @PathVariable String conversationId,
+            HttpServletRequest httpRequest) {
+
+        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        try {
+            conversationService.revokeShare(conversationId, email);
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    private Map<String, Object> shareToMap(com.ragagent.conversation.entity.ConversationShare share) {
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("token",          share.getToken());
+        result.put("conversationId", share.getConversationId());
+        result.put("expiresAt",      share.getExpiresAt());   // null = never expires
+        result.put("createdAt",      share.getCreatedAt());
+        return result;
     }
 
     // ── Ingestion ─────────────────────────────────────────────────────────────
@@ -274,6 +349,43 @@ public class AgentController {
             return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ── Web-fetch whitelist ───────────────────────────────────────────────────
+
+    @GetMapping("/web-fetch/whitelist")
+    @Operation(summary = "List all whitelisted domains for web fetch")
+    public ResponseEntity<List<WebFetchWhitelist>> listWebFetchWhitelist() {
+        return ResponseEntity.ok(webFetchService.listWhitelist());
+    }
+
+    @PostMapping("/web-fetch/whitelist")
+    @Operation(summary = "Add a domain to the web-fetch whitelist")
+    public ResponseEntity<WebFetchWhitelist> addWebFetchDomain(
+            @RequestBody Map<String, String> body,
+            HttpServletRequest httpRequest) {
+
+        String domain = body.get("domain");
+        if (domain == null || domain.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        try {
+            return ResponseEntity.ok(webFetchService.addDomain(domain, email));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @DeleteMapping("/web-fetch/whitelist/{domain}")
+    @Operation(summary = "Remove a domain from the web-fetch whitelist")
+    public ResponseEntity<Void> removeWebFetchDomain(@PathVariable String domain) {
+        try {
+            webFetchService.removeDomain(domain);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
         }
     }
 

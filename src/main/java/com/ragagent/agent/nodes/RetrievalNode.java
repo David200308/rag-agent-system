@@ -34,6 +34,13 @@ public class RetrievalNode {
         AgentRequest  request  = state.request().orElseThrow();
         QueryAnalysis analysis = state.queryAnalysis().orElseThrow();
 
+        // Safety guard: knowledge base search was disabled per-request.
+        // WebFetchNode should have already rerouted to DIRECT, but guard here too.
+        if (!request.isKnowledgeBaseEnabled()) {
+            log.info("[RetrievalNode] Knowledge base disabled for this request — skipping");
+            return Map.of();
+        }
+
         String query = analysis.refinedQuery();
         int    topK  = request.effectiveTopK();
 

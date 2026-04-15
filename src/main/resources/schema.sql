@@ -56,6 +56,29 @@ CREATE TABLE IF NOT EXISTS knowledge_source_shares (
         REFERENCES knowledge_sources(id) ON DELETE CASCADE
 );
 
+-- ── Conversation share links ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS conversation_shares (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    conversation_id VARCHAR(36)  NOT NULL,
+    token           VARCHAR(36)  NOT NULL,
+    owner_email     VARCHAR(255) NOT NULL,
+    expires_at      DATETIME,                          -- NULL = never expires
+    created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_share_token (token),
+    INDEX idx_share_conv (conversation_id),
+    CONSTRAINT fk_share_conv FOREIGN KEY (conversation_id)
+        REFERENCES conversations(id) ON DELETE CASCADE
+);
+
+-- ── Web-fetch domain whitelist ────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS web_fetch_whitelist (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    domain     VARCHAR(253) NOT NULL,
+    added_by   VARCHAR(255),
+    created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_wfw_domain (domain)
+);
+
 CREATE TABLE IF NOT EXISTS conversation_messages (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
     conversation_id VARCHAR(36) NOT NULL,

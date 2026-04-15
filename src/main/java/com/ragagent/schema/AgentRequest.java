@@ -48,7 +48,20 @@ public record AgentRequest(
 
         @Schema(description = "Optional conversation ID for persisted multi-turn sessions. "
                 + "Omit to start a new conversation; include to continue an existing one.")
-        String conversationId
+        String conversationId,
+
+        @Schema(description = "Optional list of URLs to fetch and include as context. "
+                + "Each URL must match a domain in the web-fetch whitelist.")
+        @jakarta.validation.constraints.Size(max = 5, message = "At most 5 URLs may be fetched per request")
+        List<String> fetchUrls,
+
+        @Schema(description = "Whether to search the knowledge base for this request. "
+                + "Defaults to true. Set false to answer from LLM knowledge (or fetched URLs) only.")
+        Boolean useKnowledgeBase,
+
+        @Schema(description = "Whether to fetch the provided URLs for this request. "
+                + "Defaults to true. Set false to ignore fetchUrls even if supplied.")
+        Boolean useWebFetch
 
 ) implements Serializable {
 
@@ -57,6 +70,16 @@ public record AgentRequest(
     /** Default topK when caller omits it. */
     public int effectiveTopK() {
         return topK != null ? topK : 5;
+    }
+
+    /** Returns true unless explicitly disabled. */
+    public boolean isKnowledgeBaseEnabled() {
+        return useKnowledgeBase == null || useKnowledgeBase;
+    }
+
+    /** Returns true unless explicitly disabled. */
+    public boolean isWebFetchEnabled() {
+        return useWebFetch == null || useWebFetch;
     }
 
     @Schema(description = "A single turn in the conversation history")
