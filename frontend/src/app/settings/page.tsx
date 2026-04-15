@@ -73,8 +73,9 @@ export default function SettingsPage() {
       const entry = await addWebFetchDomain(domain);
       setWhitelist((prev) => [...prev, entry].sort((a, b) => a.domain.localeCompare(b.domain)));
       setNewDomain("");
-    } catch {
-      setAddError("Failed to add domain. It may already be whitelisted.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setAddError(`Failed to add domain: ${msg}`);
     } finally {
       setAddLoading(false);
     }
