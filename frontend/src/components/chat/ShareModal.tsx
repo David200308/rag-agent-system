@@ -82,10 +82,10 @@ export function ShareModal({ conversationId, onClose }: ShareModalProps) {
   return (
     /* Backdrop */
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-md rounded-xl border border-[--color-border] bg-[--color-surface] shadow-xl">
+      <div className="w-full max-w-md rounded-xl border border-[--color-border] bg-[--color-surface-raised] shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[--color-border] px-5 py-4">
           <div className="flex items-center gap-2">
