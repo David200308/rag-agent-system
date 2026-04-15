@@ -245,14 +245,31 @@ EOF
 
   # ── Launch ─────────────────────────────────────────────────────────────────
   echo ""
-  if confirm "Run '$COMPOSE up --build' now?"; then
-    echo ""
-    cd "$SCRIPT_DIR"
-    $COMPOSE up --build
-  else
-    echo ""
-    echo -e "  Run manually: ${BOLD}$COMPOSE up --build${NC}"
-  fi
+  echo -e "  How would you like to start?"
+  echo -e "    ${BOLD}1${NC}) Build images from source  ${DIM}($COMPOSE up --build)${NC}"
+  echo -e "    ${BOLD}2${NC}) Start with existing images ${DIM}($COMPOSE up)${NC}"
+  echo -e "    ${BOLD}3${NC}) Skip — I'll start manually"
+  echo ""
+  printf "  Choice [1/2/3]: "
+  read -r launch_choice
+
+  echo ""
+  cd "$SCRIPT_DIR"
+  case "$launch_choice" in
+    1) $COMPOSE up --build ;;
+    2) $COMPOSE up ;;
+    3)
+      echo -e "  Run manually:"
+      echo -e "    Build:  ${BOLD}$COMPOSE up --build${NC}"
+      echo -e "    Start:  ${BOLD}$COMPOSE up${NC}"
+      ;;
+    *)
+      echo -e "  ${YELLOW}Invalid choice — skipping launch.${NC}"
+      echo -e "  Run manually:"
+      echo -e "    Build:  ${BOLD}$COMPOSE up --build${NC}"
+      echo -e "    Start:  ${BOLD}$COMPOSE up${NC}"
+      ;;
+  esac
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ── PROD MODE ─────────────────────────────────────────────────────────────────
@@ -431,15 +448,31 @@ EOF
 
   # ── Launch ─────────────────────────────────────────────────────────────────
   echo ""
-  if confirm "Run '$COMPOSE -f docker-compose.prod.yml up -d --build' now?"; then
-    echo ""
-    cd "$SCRIPT_DIR"
-    $COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build
-  else
-    echo ""
-    echo -e "  Run manually:"
-    echo -e "  ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build${NC}"
-  fi
+  echo -e "  How would you like to start?"
+  echo -e "    ${BOLD}1${NC}) Build images from source  ${DIM}($COMPOSE -f docker-compose.prod.yml up -d --build)${NC}"
+  echo -e "    ${BOLD}2${NC}) Start with existing images ${DIM}($COMPOSE -f docker-compose.prod.yml up -d)${NC}"
+  echo -e "    ${BOLD}3${NC}) Skip — I'll start manually"
+  echo ""
+  printf "  Choice [1/2/3]: "
+  read -r launch_choice
+
+  echo ""
+  cd "$SCRIPT_DIR"
+  case "$launch_choice" in
+    1) $COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build ;;
+    2) $COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d ;;
+    3)
+      echo -e "  Run manually:"
+      echo -e "    Build:  ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build${NC}"
+      echo -e "    Start:  ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d${NC}"
+      ;;
+    *)
+      echo -e "  ${YELLOW}Invalid choice — skipping launch.${NC}"
+      echo -e "  Run manually:"
+      echo -e "    Build:  ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build${NC}"
+      echo -e "    Start:  ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d${NC}"
+      ;;
+  esac
 fi
 
 echo ""
