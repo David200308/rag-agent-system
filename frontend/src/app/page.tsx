@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ResizableLayout } from "@/components/layout/ResizableLayout";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ChatInterface } from "@/components/chat/ChatInterface";
 import { useChatStore } from "@/store/chatStore";
@@ -20,7 +21,6 @@ export default function HomePage() {
         return;
       }
 
-      // Fetch messages for every conversation in parallel
       const messageEntries = await Promise.all(
         backendConversations.map(async (bc) => {
           const msgs = await fetchConversationMessages(bc.id);
@@ -28,7 +28,6 @@ export default function HomePage() {
         }),
       );
       const messagesByBackendId = Object.fromEntries(messageEntries);
-
       syncFromBackend(backendConversations, messagesByBackendId);
     }
 
@@ -41,8 +40,8 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Mobile backdrop */}
+    <>
+      {/* Mobile backdrop — fixed overlay, outside layout flow */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 sm:hidden"
@@ -50,13 +49,17 @@ export default function HomePage() {
         />
       )}
 
-      <Sidebar
-        onSelectConversation={handleSelect}
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
-
-      <main className="flex flex-1 flex-col overflow-hidden">
+      <ResizableLayout
+        sidebar={(width, onCollapse) => (
+          <Sidebar
+            onSelectConversation={handleSelect}
+            isOpen={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+            desktopWidth={width}
+            onCollapse={onCollapse}
+          />
+        )}
+      >
         {activeId ? (
           <ChatInterface
             conversationId={activeId}
@@ -67,7 +70,7 @@ export default function HomePage() {
             Select or create a conversation
           </div>
         )}
-      </main>
-    </div>
+      </ResizableLayout>
+    </>
   );
 }

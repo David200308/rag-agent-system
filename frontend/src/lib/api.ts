@@ -15,9 +15,11 @@ import type {
   AgentResponse,
   BackendConversation,
   BackendMessage,
+  ConversationShare,
   IngestionResult,
   KnowledgeSourceEntry,
   UrlIngestionResult,
+  WebFetchWhitelistEntry,
 } from "@/types/agent";
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
@@ -123,6 +125,45 @@ export async function ingestUrl(
   category?: string,
 ): Promise<UrlIngestionResult> {
   return postJson<UrlIngestionResult>("/api/agent/ingest-url", { url, category });
+}
+
+// ── Share link ────────────────────────────────────────────────────────────────
+
+export async function createShare(
+  conversationId: string,
+  expireDays: number | null,
+): Promise<ConversationShare> {
+  return postJson<ConversationShare>(
+    `/api/agent/conversations/${conversationId}/share`,
+    { expireDays },
+  );
+}
+
+export async function getShare(conversationId: string): Promise<ConversationShare | null> {
+  const res = await fetch(`/api/agent/conversations/${conversationId}/share`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`${res.status}`);
+  return res.json() as Promise<ConversationShare>;
+}
+
+export async function revokeShare(conversationId: string): Promise<void> {
+  await fetch(`/api/agent/conversations/${conversationId}/share`, { method: "DELETE" });
+}
+
+// ── Web-fetch whitelist ───────────────────────────────────────────────────────
+
+export async function fetchWebFetchWhitelist(): Promise<WebFetchWhitelistEntry[]> {
+  const res = await fetch("/api/agent/web-fetch/whitelist");
+  if (!res.ok) return [];
+  return res.json() as Promise<WebFetchWhitelistEntry[]>;
+}
+
+export async function addWebFetchDomain(domain: string): Promise<WebFetchWhitelistEntry> {
+  return postJson<WebFetchWhitelistEntry>("/api/agent/web-fetch/whitelist", { domain });
+}
+
+export async function removeWebFetchDomain(domain: string): Promise<void> {
+  await fetch(`/api/agent/web-fetch/whitelist/${encodeURIComponent(domain)}`, { method: "DELETE" });
 }
 
 // ── TanStack Query option factories ───────────────────────────────────────────

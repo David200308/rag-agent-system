@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { MessageSquare, Menu } from "lucide-react";
+import { MessageSquare, Menu, Share2 } from "lucide-react";
 import { queryAgent } from "@/lib/api";
 import { useChatStore } from "@/store/chatStore";
 import { MessageBubble } from "./MessageBubble";
 import { MessageInput } from "./MessageInput";
+import { ShareModal } from "./ShareModal";
 import { Spinner } from "@/components/ui/Spinner";
+import { Button } from "@/components/ui/Button";
 import type { AgentRequest } from "@/types/agent";
 
 interface ChatInterfaceProps {
@@ -17,6 +19,7 @@ interface ChatInterfaceProps {
 
 export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [showShare, setShowShare] = useState(false);
   const { conversations, addMessage, setBackendConversationId } = useChatStore();
   const conversation = conversations.find((c) => c.id === conversationId);
 
@@ -75,21 +78,37 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
 
   if (!conversation) return null;
 
+  const backendId = conversation?.backendConversationId ?? conversation?.id;
+
   return (
     <div className="flex h-full flex-col">
-      {/* Mobile header */}
-      <div className="flex items-center gap-3 border-b border-[--color-border] px-4 py-3 sm:hidden">
+      {/* Header — mobile hamburger + title + share button */}
+      <div className="flex items-center gap-2 border-b border-[--color-border] px-4 py-3">
         <button
           onClick={onMenuOpen}
-          className="rounded-md p-1 text-[--color-muted] hover:bg-[--color-border]/50"
+          className="rounded-md p-1 text-[--color-muted] hover:bg-[--color-border]/50 sm:hidden"
           aria-label="Open menu"
         >
           <Menu className="h-5 w-5" />
         </button>
-        <span className="truncate text-sm font-medium">
+        <span className="flex-1 truncate text-sm font-medium">
           {conversation?.title ?? "Chat"}
         </span>
+        {backendId && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowShare(true)}
+            title="Share conversation"
+          >
+            <Share2 className="h-4 w-4" />
+          </Button>
+        )}
       </div>
+
+      {showShare && backendId && (
+        <ShareModal conversationId={backendId} onClose={() => setShowShare(false)} />
+      )}
 
       {/* Message list */}
       <div className="chat-scroll flex-1 overflow-y-auto px-4 py-6">

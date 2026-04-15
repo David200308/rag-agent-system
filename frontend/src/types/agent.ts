@@ -106,6 +106,20 @@ export interface BackendMessage {
   createdAt: string;
 }
 
+export interface ConversationShare {
+  token: string;
+  conversationId: string;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface WebFetchWhitelistEntry {
+  id: number;
+  domain: string;
+  addedBy: string | null;
+  createdAt: string;
+}
+
 export interface IngestionResult {
   status: string;
   filename?: string;

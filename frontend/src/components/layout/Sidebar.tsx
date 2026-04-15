@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, MessageSquare, Trash2, BookOpen, LogOut, X } from "lucide-react";
+import { Plus, MessageSquare, Trash2, BookOpen, LogOut, PanelLeftClose, Settings, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -14,9 +14,13 @@ interface SidebarProps {
   onSelectConversation: (id: string) => void;
   isOpen?: boolean;
   onClose?: () => void;
+  /** Current desktop sidebar width in px — drives sm:w-[var(--sidebar-w)]. */
+  desktopWidth?: number;
+  /** Called when the user clicks the collapse button (desktop only). */
+  onCollapse?: () => void;
 }
 
-export function Sidebar({ onSelectConversation, isOpen = false, onClose }: SidebarProps) {
+export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktopWidth, onCollapse }: SidebarProps) {
   const pathname = usePathname();
   const router   = useRouter();
   const { conversations, activeId, newConversation, selectConversation, deleteConversation } =
@@ -44,14 +48,18 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose }: Sideb
   return (
     <aside
       className={cn(
+        // Mobile: fixed width overlay
         "flex h-full w-64 shrink-0 flex-col border-r border-[--color-border]",
-        // Mobile: fixed overlay, slides in/out
         "fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-in-out",
         isOpen ? "translate-x-0" : "-translate-x-full",
-        // Desktop: static in flow, always visible
-        "sm:relative sm:translate-x-0 sm:transition-none",
+        // Desktop: in-flow, width driven by CSS variable set below
+        "sm:relative sm:translate-x-0 sm:transition-none sm:w-[var(--sidebar-w)]",
       )}
-      style={{ backgroundColor: "var(--color-surface-raised)" }}
+      style={{
+        backgroundColor: "var(--color-surface-raised)",
+        // CSS variable consumed by sm:w-[var(--sidebar-w)] above
+        "--sidebar-w": `${desktopWidth ?? 256}px`,
+      } as React.CSSProperties}
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[--color-border] px-3 py-3">
@@ -61,6 +69,18 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose }: Sideb
           <Button size="icon" variant="ghost" onClick={handleNew} title="New conversation">
             <Plus className="h-4 w-4" />
           </Button>
+          {/* Collapse button — desktop only */}
+          {onCollapse && (
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={onCollapse}
+              title="Collapse sidebar"
+              className="hidden sm:flex"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
+          )}
           {/* Close button — mobile only */}
           <Button
             size="icon"
@@ -155,9 +175,21 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose }: Sideb
           ))
         )}
       </div>
-      {/* Footer — logout (only when auth is on) */}
-      {authEnabled && (
-        <div className="border-t border-[--color-border] px-3 py-2">
+      {/* Footer — settings + logout */}
+      <div className="border-t border-[--color-border] px-3 py-2 space-y-0.5">
+        <Link
+          href="/settings"
+          className={cn(
+            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors",
+            pathname === "/settings"
+              ? "bg-black text-white dark:bg-white dark:text-black"
+              : "text-[--color-muted] hover:bg-[--color-border]/50",
+          )}
+        >
+          <Settings className="h-3.5 w-3.5" />
+          Settings
+        </Link>
+        {authEnabled && (
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-[--color-muted]
@@ -166,8 +198,8 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose }: Sideb
             <LogOut className="h-3.5 w-3.5" />
             Sign out
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </aside>
   );
 }
