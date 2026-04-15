@@ -50,7 +50,12 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation?.messages.length]);
 
-  const handleSend = (query: string, topK: number) => {
+  const handleSend = (
+    query: string,
+    topK: number,
+    useKnowledgeBase: boolean,
+    useWebFetch: boolean,
+  ) => {
     const history = (conversation?.messages ?? [])
       .filter((m) => m.role !== "error")
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
@@ -63,6 +68,8 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
       conversationHistory: history,
       stream: false,
       conversationId: conversation?.backendConversationId,
+      useKnowledgeBase,
+      useWebFetch,
     });
   };
 

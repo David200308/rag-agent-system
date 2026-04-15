@@ -12,6 +12,9 @@ export interface AgentRequest {
   conversationHistory?: ConversationTurn[];
   stream: boolean;
   conversationId?: string;
+  fetchUrls?: string[];
+  useKnowledgeBase?: boolean;
+  useWebFetch?: boolean;
 }
 
 export interface SourceDocument {

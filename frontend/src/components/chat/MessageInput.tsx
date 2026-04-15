@@ -1,25 +1,52 @@
 "use client";
 
 import { useState, useRef, type KeyboardEvent } from "react";
-import { Send, Settings2 } from "lucide-react";
+import { Send, Settings2, Database, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 
 interface MessageInputProps {
-  onSend: (query: string, topK: number) => void;
+  onSend: (query: string, topK: number, useKnowledgeBase: boolean, useWebFetch: boolean) => void;
   disabled?: boolean;
+}
+
+interface ToggleChipProps {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  onToggle: () => void;
+}
+
+function ToggleChip({ icon, label, active, onToggle }: ToggleChipProps) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+        active
+          ? "border-gray-900 bg-gray-900 text-white dark:border-gray-100 dark:bg-gray-100 dark:text-black"
+          : "border-[--color-border] bg-transparent text-[--color-muted] hover:border-gray-400 hover:text-inherit",
+      )}
+    >
+      {icon}
+      {label}
+    </button>
+  );
 }
 
 export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
   const [text, setText] = useState("");
   const [topK, setTopK] = useState(5);
+  const [useKnowledgeBase, setUseKnowledgeBase] = useState(true);
+  const [useWebFetch, setUseWebFetch] = useState(true);
   const [showOptions, setShowOptions] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const submit = () => {
     const trimmed = text.trim();
     if (!trimmed || disabled) return;
-    onSend(trimmed, topK);
+    onSend(trimmed, topK, useKnowledgeBase, useWebFetch);
     setText("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
@@ -31,7 +58,6 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
     }
   };
 
-  // Auto-grow textarea
   const onInput = () => {
     const el = textareaRef.current;
     if (!el) return;
@@ -42,7 +68,8 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
   return (
     <div className="border-t border-[--color-border] bg-[--color-surface] p-4">
       {showOptions && (
-        <div className="mb-3 flex items-center gap-3 rounded-lg border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 text-sm">
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 text-sm">
+          {/* Top-K */}
           <label className="flex items-center gap-2 text-[--color-muted]">
             Top-K sources
             <input
@@ -54,6 +81,26 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
               className="w-16 rounded border border-[--color-border] bg-[--color-surface] px-2 py-0.5 text-center text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
             />
           </label>
+
+          {/* Divider */}
+          <span className="hidden h-4 w-px bg-[--color-border] sm:block" />
+
+          {/* Source toggles */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[--color-muted]">Sources:</span>
+            <ToggleChip
+              icon={<Database className="h-3 w-3" />}
+              label="Knowledge Base"
+              active={useKnowledgeBase}
+              onToggle={() => setUseKnowledgeBase((v) => !v)}
+            />
+            <ToggleChip
+              icon={<Globe className="h-3 w-3" />}
+              label="Web Fetch"
+              active={useWebFetch}
+              onToggle={() => setUseWebFetch((v) => !v)}
+            />
+          </div>
         </div>
       )}
 
