@@ -1,6 +1,9 @@
 /* Tailwind v4 — CSS-first configuration, no tailwind.config.js needed */
 @import "tailwindcss";
 
+/* Make dark: variant respond to [data-theme="dark"] on <html> */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* Default color-scheme — overridden to dark by [data-theme="dark"] */
 :root {
   color-scheme: light;
