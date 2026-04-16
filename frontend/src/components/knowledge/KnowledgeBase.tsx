@@ -520,6 +520,53 @@ function EditRow({ entry, onSaved }: { entry: KnowledgeSourceEntry; onSaved: (la
   );
 }
 
+function SourceCard({
+  s,
+  deleting,
+  onDelete,
+  onEditSaved,
+  onShareSaved,
+}: {
+  s: KnowledgeSourceEntry;
+  deleting: string | null;
+  onDelete: (source: string) => void;
+  onEditSaved: (source: string, label: string, category: string) => void;
+  onShareSaved: (source: string, emails: string[]) => void;
+}) {
+  return (
+    <div className="space-y-1 rounded-lg border border-[--color-border] bg-[--color-surface-raised] px-3 py-2.5">
+      <div className="flex items-start gap-3">
+        <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[--color-muted]" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{s.label ?? s.source}</p>
+          <p className="truncate text-xs text-[--color-muted]">{s.source}</p>
+          <p className="text-xs text-[--color-muted]">
+            {s.chunkCount} chunks
+            {" · "}{new Date(s.ingestedAt).toLocaleDateString()}
+            {s.ownerEmail && <span> · by {s.ownerEmail}</span>}
+          </p>
+        </div>
+        <button
+          onClick={() => onDelete(s.source)}
+          disabled={deleting === s.source}
+          className="mt-0.5 shrink-0 rounded p-1 text-[--color-muted] hover:bg-red-50 hover:text-red-500 disabled:opacity-40 dark:hover:bg-red-950"
+          title="Delete from vector store (owner only)"
+        >
+          {deleting === s.source ? (
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent inline-block" />
+          ) : (
+            <Trash2 className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </div>
+      <div className="pl-7 flex gap-3">
+        <EditRow entry={s} onSaved={(label, category) => onEditSaved(s.source, label, category)} />
+        <ShareRow entry={s} onSaved={(emails) => onShareSaved(s.source, emails)} />
+      </div>
+    </div>
+  );
+}
+
 function ManagePanel() {
   const [sources, setSources] = useState<KnowledgeSourceEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -557,6 +604,22 @@ function ManagePanel() {
     ));
   };
 
+  // Group sources by tag — untagged goes into a null bucket rendered last as "Other"
+  const grouped: Map<string | null, KnowledgeSourceEntry[]> = new Map();
+  for (const s of sources) {
+    const key = s.category?.trim() || null;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(s);
+  }
+  // Sort: named tags alphabetically first, then null ("Other") last
+  const tagOrder = [...grouped.keys()].sort((a, b) => {
+    if (a === null) return 1;
+    if (b === null) return -1;
+    return a.localeCompare(b);
+  });
+
+  const cardProps = { deleting, onDelete: handleDelete, onEditSaved: handleEditSaved, onShareSaved: handleShareSaved };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -580,41 +643,20 @@ function ManagePanel() {
       ) : sources.length === 0 ? (
         <p className="py-10 text-center text-sm text-[--color-muted]">No sources ingested yet.</p>
       ) : (
-        <div className="space-y-2">
-          {sources.map((s) => (
-            <div
-              key={s.id}
-              className="space-y-1 rounded-lg border border-[--color-border] bg-[--color-surface-raised] px-3 py-2.5"
-            >
-              <div className="flex items-start gap-3">
-                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[--color-muted]" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{s.label ?? s.source}</p>
-                  <p className="truncate text-xs text-[--color-muted]">{s.source}</p>
-                  <p className="text-xs text-[--color-muted]">
-                    {s.chunkCount} chunks
-                    {s.category && <span> · <span className="font-medium">#{s.category}</span></span>}
-                    {" · "}{new Date(s.ingestedAt).toLocaleDateString()}
-                    {s.ownerEmail && <span> · by {s.ownerEmail}</span>}
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleDelete(s.source)}
-                  disabled={deleting === s.source}
-                  className="mt-0.5 shrink-0 rounded p-1 text-[--color-muted] hover:bg-red-50 hover:text-red-500 disabled:opacity-40 dark:hover:bg-red-950"
-                  title="Delete from vector store (owner only)"
-                >
-                  {deleting === s.source ? (
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent inline-block" />
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5" />
-                  )}
-                </button>
+        <div className="space-y-5">
+          {tagOrder.map((tag) => (
+            <div key={tag ?? "__other__"} className="space-y-2">
+              {/* Group header */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-[--color-muted]">
+                  {tag ? `#${tag}` : "Other"}
+                </span>
+                <span className="h-px flex-1 bg-[--color-border]" />
               </div>
-              <div className="pl-7 flex gap-3">
-                <EditRow entry={s} onSaved={(label, category) => handleEditSaved(s.source, label, category)} />
-                <ShareRow entry={s} onSaved={(emails) => handleShareSaved(s.source, emails)} />
-              </div>
+              {/* Sources in group */}
+              {grouped.get(tag)!.map((s) => (
+                <SourceCard key={s.id} s={s} {...cardProps} />
+              ))}
             </div>
           ))}
         </div>

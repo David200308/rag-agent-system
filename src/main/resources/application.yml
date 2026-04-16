@@ -11,6 +11,11 @@ spring:
     virtual:
       enabled: true  # JDK 21 virtual threads for all Spring MVC requests
 
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
+
   # ── MySQL (auth: email whitelist, OTP codes, sessions) ────────────────────────
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:ragagent}?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useUnicode=true
