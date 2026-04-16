@@ -65,6 +65,12 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
 
     addMessage(conversationId, { role: "user", content: query });
 
+    // Extract http/https URLs from the query text (up to 5 per backend limit)
+    const urlPattern = /https?:\/\/[^\s"'<>]+/g;
+    const fetchUrls = useWebFetch
+      ? [...new Set(query.match(urlPattern) ?? [])].slice(0, 5)
+      : undefined;
+
     mutation.mutate({
       query,
       topK,
@@ -73,6 +79,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
       conversationId: conversation?.backendConversationId,
       useKnowledgeBase,
       useWebFetch,
+      fetchUrls,
     });
   };
 
