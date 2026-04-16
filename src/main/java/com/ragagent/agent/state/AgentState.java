@@ -32,7 +32,8 @@ public class AgentState extends org.bsc.langgraph4j.state.AgentState {
         "route",          Channels.base(() -> QueryAnalysis.Route.RETRIEVE.name()),
         "error",          Channels.<String>base((cur, upd) -> upd),
         "fallbackReason", Channels.<String>base((cur, upd) -> upd),
-        "runId",          Channels.<String>base((cur, upd) -> upd)
+        "runId",          Channels.<String>base((cur, upd) -> upd),
+        "userEmail",      Channels.<String>base((cur, upd) -> upd)
     );
 
     public AgentState(Map<String, Object> initData) {
@@ -72,5 +73,9 @@ public class AgentState extends org.bsc.langgraph4j.state.AgentState {
 
     public Optional<String> runId() {
         return value("runId");
+    }
+
+    public Optional<String> userEmail() {
+        return value("userEmail");
     }
 }

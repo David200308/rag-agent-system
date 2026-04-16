@@ -77,6 +77,9 @@ public class AgentController {
             Map<String, Object> initData = new HashMap<>();
             initData.put("request", request);
             initData.put("runId", runId);
+            if (userEmail != null) {
+                initData.put("userEmail", userEmail);
+            }
 
             // Invoke the compiled LangGraph
             var result = agentGraph.getGraph()

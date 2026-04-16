@@ -42,7 +42,9 @@ public class RagMcpService {
         int k = topK <= 0 ? 5 : Math.min(topK, 20);
         log.debug("[RagMcpService] MCP tool searchKnowledge query='{}' topK={}", query, k);
 
-        List<DocumentResult> results = retrievalService.retrieve(query, k, Map.of());
+        // MCP transport bypasses HTTP auth — no user context is available.
+        // Pass null for allowedSources so the vector search is unrestricted (same as auth-disabled mode).
+        List<DocumentResult> results = retrievalService.retrieve(query, k, Map.of(), null);
         if (results.isEmpty()) {
             return "No relevant documents found for: " + query;
         }

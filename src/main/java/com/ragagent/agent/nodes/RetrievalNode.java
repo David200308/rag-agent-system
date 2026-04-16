@@ -1,6 +1,7 @@
 package com.ragagent.agent.nodes;
 
 import com.ragagent.agent.state.AgentState;
+import com.ragagent.knowledge.KnowledgeSourceService;
 import com.ragagent.rag.RetrievalService;
 import com.ragagent.schema.AgentRequest;
 import com.ragagent.schema.DocumentResult;
@@ -11,6 +12,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Node 2 — Retrieval.
@@ -28,7 +31,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class RetrievalNode {
 
-    private final RetrievalService retrievalService;
+    private final RetrievalService     retrievalService;
+    private final KnowledgeSourceService knowledgeSourceService;
 
     public Map<String, Object> process(AgentState state) {
         AgentRequest  request  = state.request().orElseThrow();
@@ -41,13 +45,19 @@ public class RetrievalNode {
             return Map.of();
         }
 
-        String query = analysis.refinedQuery();
-        int    topK  = request.effectiveTopK();
+        String query     = analysis.refinedQuery();
+        int    topK      = request.effectiveTopK();
+        String userEmail = state.userEmail().orElse(null);
 
-        log.debug("[RetrievalNode] Retrieving top-{} docs for: {}", topK, query);
+        // Resolve the set of source IDs this caller is allowed to read.
+        // null means auth is disabled — no source restriction applied.
+        Set<String> allowedSources = resolveAllowedSources(userEmail);
+
+        log.debug("[RetrievalNode] Retrieving top-{} docs for: {} (user={}, allowedSources={})",
+                topK, query, userEmail, allowedSources == null ? "unrestricted" : allowedSources.size());
 
         List<DocumentResult> docs = retrievalService.retrieve(
-                query, topK, request.filters());
+                query, topK, request.filters(), allowedSources);
 
         log.info("[RetrievalNode] Retrieved {} documents", docs.size());
 
@@ -59,5 +69,19 @@ public class RetrievalNode {
         }
 
         return Map.of("documents", docs);
+    }
+
+    /**
+     * Returns the set of source IDs the caller may read, or {@code null} when auth is
+     * disabled (no restriction). An empty set means the user has no accessible sources.
+     */
+    private Set<String> resolveAllowedSources(String userEmail) {
+        if (userEmail == null) {
+            // Auth is disabled — allow unrestricted access (null = no filter).
+            return null;
+        }
+        return knowledgeSourceService.listAccessible(userEmail).stream()
+                .map(ks -> ks.getSource())
+                .collect(Collectors.toSet());
     }
 }

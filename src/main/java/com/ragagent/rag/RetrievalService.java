@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Service that queries Weaviate via Spring AI's {@link VectorStore} abstraction.
@@ -35,29 +36,35 @@ public class RetrievalService {
     /**
      * Retrieve the top-K most similar document chunks for {@code query}.
      *
-     * @param query   refined query string from the query-analyser
-     * @param topK    maximum number of results
-     * @param filters optional metadata filters (e.g. {"category": "ml"})
+     * @param query          refined query string from the query-analyser
+     * @param topK           maximum number of results
+     * @param filters        optional user-supplied metadata filters (e.g. {"category": "ml"})
+     * @param allowedSources when non-null, restricts results to chunks whose {@code source}
+     *                       metadata is in this set (security boundary). An empty set means
+     *                       the caller has no accessible sources — returns nothing.
      */
     @CircuitBreaker(name = "retrieval", fallbackMethod = "retrievalFallback")
     @Retry(name = "retrieval")
-    public List<DocumentResult> retrieve(String query, int topK, Map<String, String> filters) {
+    public List<DocumentResult> retrieve(String query, int topK,
+                                         Map<String, String> filters,
+                                         Set<String> allowedSources) {
         log.debug("[RetrievalService] Querying Weaviate — query='{}' topK={}", query, topK);
+
+        // Security guard: if the caller has no accessible sources, return nothing immediately.
+        if (allowedSources != null && allowedSources.isEmpty()) {
+            log.info("[RetrievalService] No accessible sources for caller — returning empty result");
+            return List.of();
+        }
 
         SearchRequest.Builder requestBuilder = SearchRequest.builder().query(query).topK(topK);
 
-        if (filters != null && !filters.isEmpty()) {
-            var b = new FilterExpressionBuilder();
-            // Build AND expression for all filter entries
-            var expressions = filters.entrySet().stream()
-                    .map(e -> b.eq(e.getKey(), e.getValue()))
-                    .toList();
-            if (!expressions.isEmpty()) {
-                var combined = expressions.stream()
-                        .reduce(b::and)
-                        .orElseThrow();
-                requestBuilder.filterExpression(combined.build());
-            }
+        var b = new FilterExpressionBuilder();
+        FilterExpressionBuilder.Op securityFilter = buildSourceFilter(b, allowedSources);
+        FilterExpressionBuilder.Op userFilter     = buildUserFilters(b, filters);
+
+        FilterExpressionBuilder.Op combined = and(b, securityFilter, userFilter);
+        if (combined != null) {
+            requestBuilder.filterExpression(combined.build());
         }
 
         List<Document> docs = vectorStore.similaritySearch(requestBuilder.build());
@@ -71,9 +78,42 @@ public class RetrievalService {
     /** Resilience4j fallback — returns empty list so the graph routes to FallbackNode. */
     public List<DocumentResult> retrievalFallback(String query, int topK,
                                                    Map<String, String> filters,
+                                                   Set<String> allowedSources,
                                                    Throwable ex) {
         log.error("[RetrievalService] Circuit-breaker fallback triggered: {}", ex.getMessage());
         return List.of();
+    }
+
+    /**
+     * Build an OR chain filtering by source (security boundary).
+     * Returns null when {@code allowedSources} is null (auth disabled — no restriction).
+     */
+    private FilterExpressionBuilder.Op buildSourceFilter(FilterExpressionBuilder b,
+                                                          Set<String> allowedSources) {
+        if (allowedSources == null) return null;
+        return allowedSources.stream()
+                .map(src -> (FilterExpressionBuilder.Op) b.eq("source", src))
+                .reduce(b::or)
+                .orElse(null);
+    }
+
+    /** Build an AND chain from user-supplied filters. Returns null when filters is empty. */
+    private FilterExpressionBuilder.Op buildUserFilters(FilterExpressionBuilder b,
+                                                         Map<String, String> filters) {
+        if (filters == null || filters.isEmpty()) return null;
+        return filters.entrySet().stream()
+                .map(e -> (FilterExpressionBuilder.Op) b.eq(e.getKey(), e.getValue()))
+                .reduce(b::and)
+                .orElse(null);
+    }
+
+    /** AND two nullable filter ops together. */
+    private FilterExpressionBuilder.Op and(FilterExpressionBuilder b,
+                                            FilterExpressionBuilder.Op left,
+                                            FilterExpressionBuilder.Op right) {
+        if (left  == null) return right;
+        if (right == null) return left;
+        return b.and(left, right);
     }
 
     private DocumentResult toDocumentResult(Document doc) {
