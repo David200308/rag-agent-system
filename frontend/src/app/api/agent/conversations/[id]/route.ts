@@ -52,3 +52,27 @@ export async function DELETE(
 
   return new Response(null, { status: statusCode });
 }
+
+/** PATCH /api/agent/conversations/[id]?action=archive|unarchive */
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const { searchParams } = new URL(req.url);
+  const action = searchParams.get("action"); // "archive" | "unarchive"
+  const cookieStore = await cookies();
+  const token = cookieStore.get("rag-session")?.value;
+
+  const { statusCode } = await request(
+    `${BACKEND}/api/v1/agent/conversations/${id}/${action}`,
+    {
+      method: "PATCH",
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    },
+  );
+
+  return new Response(null, { status: statusCode });
+}

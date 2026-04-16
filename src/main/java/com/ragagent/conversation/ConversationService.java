@@ -82,10 +82,32 @@ public class ConversationService {
         return messageRepo.findByConversationIdOrderByCreatedAtAsc(conversationId);
     }
 
-    /** Return all conversations for a user, newest first. */
+    /** Return non-archived conversations for a user, newest first. */
     @Transactional(readOnly = true)
     public List<Conversation> listConversations(String userEmail) {
-        return conversationRepo.findByUserEmailOrderByUpdatedAtDesc(userEmail);
+        return conversationRepo.findByUserEmailAndArchivedFalseOrderByUpdatedAtDesc(userEmail);
+    }
+
+    /** Return archived conversations for a user, newest first. */
+    @Transactional(readOnly = true)
+    public List<Conversation> listArchivedConversations(String userEmail) {
+        return conversationRepo.findByUserEmailAndArchivedTrueOrderByUpdatedAtDesc(userEmail);
+    }
+
+    /**
+     * Archive or unarchive a conversation.
+     * Only the owner may change archive state.
+     */
+    @Transactional
+    public Conversation setArchived(String conversationId, String callerEmail, boolean archived) {
+        Conversation conv = conversationRepo.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException("Conversation not found: " + conversationId));
+        if (callerEmail != null && conv.getUserEmail() != null
+                && !conv.getUserEmail().equalsIgnoreCase(callerEmail)) {
+            throw new SecurityException("Only the owner can archive this conversation.");
+        }
+        conv.setArchived(archived);
+        return conversationRepo.save(conv);
     }
 
     /**

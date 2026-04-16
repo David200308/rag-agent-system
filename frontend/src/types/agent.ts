@@ -72,6 +72,7 @@ export interface Conversation {
   backendConversationId?: string;
   title: string;
   messages: ChatMessage[];
+  archived?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -92,6 +93,7 @@ export interface KnowledgeSourceEntry {
 export interface BackendConversation {
   id: string;
   userEmail: string | null;
+  archived: boolean;
   createdAt: string;
   updatedAt: string;
 }

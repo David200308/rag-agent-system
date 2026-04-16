@@ -7,5 +7,7 @@ import java.util.List;
 
 public interface ConversationRepository extends JpaRepository<Conversation, String> {
 
-    List<Conversation> findByUserEmailOrderByUpdatedAtDesc(String userEmail);
+    List<Conversation> findByUserEmailAndArchivedFalseOrderByUpdatedAtDesc(String userEmail);
+
+    List<Conversation> findByUserEmailAndArchivedTrueOrderByUpdatedAtDesc(String userEmail);
 }

@@ -14,6 +14,8 @@ interface ChatState {
   newConversation: () => string;
   selectConversation: (id: string) => void;
   deleteConversation: (id: string) => void;
+  archiveConversation: (id: string) => void;
+  unarchiveConversation: (id: string) => void;
   addMessage: (conversationId: string, message: Omit<ChatMessage, "id" | "timestamp">) => string;
   updateLastAssistantMessage: (conversationId: string, patch: Partial<ChatMessage>) => void;
   setBackendConversationId: (conversationId: string, backendId: string) => void;
@@ -61,6 +63,21 @@ export const useChatStore = create<ChatState>()(
         set((s) => ({
           conversations: s.conversations.filter((c) => c.id !== id),
           activeId: s.activeId === id ? null : s.activeId,
+        })),
+
+      archiveConversation: (id) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === id ? { ...c, archived: true } : c,
+          ),
+          activeId: s.activeId === id ? null : s.activeId,
+        })),
+
+      unarchiveConversation: (id) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === id ? { ...c, archived: false } : c,
+          ),
         })),
 
       addMessage: (conversationId, message) => {
@@ -121,10 +138,11 @@ export const useChatStore = create<ChatState>()(
           }));
           const firstUserMsg = chatMessages.find((m) => m.role === "user");
           return {
-            id: bc.id,           // use the backend UUID as the local id too
+            id: bc.id,
             backendConversationId: bc.id,
             title: firstUserMsg ? deriveTitle(firstUserMsg.content) : "Conversation",
             messages: chatMessages,
+            archived: bc.archived ?? false,
             createdAt: new Date(bc.createdAt),
             updatedAt: new Date(bc.updatedAt),
           };

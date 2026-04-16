@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, MessageSquare, Trash2, BookOpen, LogOut, PanelLeftClose, Settings, X } from "lucide-react";
+import { Plus, MessageSquare, Trash2, BookOpen, LogOut, PanelLeftClose, Settings, X, Archive, ArchiveRestore, ChevronDown, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -9,7 +9,11 @@ import { useTimezone } from "@/hooks/useTimezone";
 import { useChatStore } from "@/store/chatStore";
 import { Button } from "@/components/ui/Button";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
-import { deleteConversation as apiDeleteConversation } from "@/lib/api";
+import {
+  deleteConversation as apiDeleteConversation,
+  archiveConversation as apiArchiveConversation,
+  unarchiveConversation as apiUnarchiveConversation,
+} from "@/lib/api";
 
 interface SidebarProps {
   onSelectConversation: (id: string) => void;
@@ -24,11 +28,15 @@ interface SidebarProps {
 export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktopWidth, onCollapse }: SidebarProps) {
   const pathname = usePathname();
   const router   = useRouter();
-  const { conversations, activeId, newConversation, selectConversation, deleteConversation } =
-    useChatStore();
+  const {
+    conversations, activeId,
+    newConversation, selectConversation, deleteConversation,
+    archiveConversation, unarchiveConversation,
+  } = useChatStore();
 
   const { timezone } = useTimezone();
   const [authEnabled, setAuthEnabled] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/config")
@@ -124,12 +132,13 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
 
       {/* Conversation list */}
       <div className="flex-1 overflow-y-auto px-2 py-1">
-        {conversations.length === 0 ? (
+        {/* Active conversations */}
+        {conversations.filter((c) => !c.archived).length === 0 ? (
           <p className="px-2 py-4 text-center text-xs text-[--color-muted]">
             No conversations yet
           </p>
         ) : (
-          conversations.map((c) => (
+          conversations.filter((c) => !c.archived).map((c) => (
             <div
               key={c.id}
               role="button"
@@ -158,23 +167,111 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
                   {formatTime(c.updatedAt, timezone)} · {c.messages.length} msg
                 </p>
               </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="ml-1 h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteConversation(c.id);
-                  // backendConversationId is the same as id after syncFromBackend
-                  const backendId = c.backendConversationId ?? c.id;
-                  apiDeleteConversation(backendId).catch(() => {/* fire-and-forget */});
-                }}
-                title="Delete"
-              >
-                <Trash2 className="h-3 w-3 text-red-400" />
-              </Button>
+              <div className="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    archiveConversation(c.id);
+                    const backendId = c.backendConversationId ?? c.id;
+                    apiArchiveConversation(backendId).catch(() => {});
+                  }}
+                  title="Archive"
+                >
+                  <Archive className="h-3 w-3 text-[--color-muted]" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteConversation(c.id);
+                    const backendId = c.backendConversationId ?? c.id;
+                    apiDeleteConversation(backendId).catch(() => {});
+                  }}
+                  title="Delete"
+                >
+                  <Trash2 className="h-3 w-3 text-red-400" />
+                </Button>
+              </div>
             </div>
           ))
+        )}
+
+        {/* Archived section */}
+        {conversations.filter((c) => c.archived).length > 0 && (
+          <div className="mt-2">
+            <button
+              onClick={() => setShowArchived((v) => !v)}
+              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[--color-muted] hover:bg-[--color-border]/40"
+            >
+              {showArchived
+                ? <ChevronDown className="h-3 w-3" />
+                : <ChevronRight className="h-3 w-3" />
+              }
+              <Archive className="h-3 w-3" />
+              Archived ({conversations.filter((c) => c.archived).length})
+            </button>
+
+            {showArchived && conversations.filter((c) => c.archived).map((c) => (
+              <div
+                key={c.id}
+                className="group flex w-full cursor-pointer items-start justify-between rounded-lg border border-transparent px-2 py-2 text-left opacity-60 hover:opacity-100 hover:bg-[--color-border]/40 transition-all"
+              >
+                <div
+                  className="min-w-0 flex-1"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => { selectConversation(c.id); onSelectConversation(c.id); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      selectConversation(c.id);
+                      onSelectConversation(c.id);
+                    }
+                  }}
+                >
+                  <p className="truncate text-xs font-medium">{c.title}</p>
+                  <p className="text-[10px] text-[--color-muted]">
+                    {formatTime(c.updatedAt, timezone)} · {c.messages.length} msg
+                  </p>
+                </div>
+                <div className="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      unarchiveConversation(c.id);
+                      const backendId = c.backendConversationId ?? c.id;
+                      apiUnarchiveConversation(backendId).catch(() => {});
+                    }}
+                    title="Unarchive"
+                  >
+                    <ArchiveRestore className="h-3 w-3 text-[--color-muted]" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteConversation(c.id);
+                      const backendId = c.backendConversationId ?? c.id;
+                      apiDeleteConversation(backendId).catch(() => {});
+                    }}
+                    title="Delete"
+                  >
+                    <Trash2 className="h-3 w-3 text-red-400" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
       {/* Footer — settings + logout */}

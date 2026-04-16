@@ -21,6 +21,9 @@ public class Conversation {
     @Column(name = "user_email")
     private String userEmail;
 
+    @Column(name = "archived", nullable = false)
+    private boolean archived = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 

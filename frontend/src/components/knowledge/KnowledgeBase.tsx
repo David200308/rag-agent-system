@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   Upload, FileText, CheckCircle2, XCircle, X,
-  Link2, Globe, Trash2, Type, Database, RefreshCw, Share2, Plus, Pencil,
+  Link2, Globe, Trash2, Type, Database, RefreshCw, Share2, Plus, Pencil, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -112,7 +112,7 @@ function FilesPanel() {
             />
           </label>
         </p>
-        <p className="text-xs text-[--color-muted]">PDF, DOCX, HTML, TXT up to 50 MB each</p>
+        <p className="text-xs text-[--color-muted]">PDF, DOCX, HTML, TXT up to 20 MB each</p>
       </div>
 
       {/* File list */}
@@ -523,12 +523,14 @@ function EditRow({ entry, onSaved }: { entry: KnowledgeSourceEntry; onSaved: (la
 function SourceCard({
   s,
   deleting,
+  isOwner,
   onDelete,
   onEditSaved,
   onShareSaved,
 }: {
   s: KnowledgeSourceEntry;
   deleting: string | null;
+  isOwner: boolean;
   onDelete: (source: string) => void;
   onEditSaved: (source: string, label: string, category: string) => void;
   onShareSaved: (source: string, emails: string[]) => void;
@@ -543,7 +545,7 @@ function SourceCard({
           <p className="text-xs text-[--color-muted]">
             {s.chunkCount} chunks
             {" · "}{new Date(s.ingestedAt).toLocaleDateString()}
-            {s.ownerEmail && <span> · by {s.ownerEmail}</span>}
+            {!isOwner && s.ownerEmail && <span> · by {s.ownerEmail}</span>}
           </p>
         </div>
         <button
@@ -561,21 +563,28 @@ function SourceCard({
       </div>
       <div className="pl-7 flex gap-3">
         <EditRow entry={s} onSaved={(label, category) => onEditSaved(s.source, label, category)} />
-        <ShareRow entry={s} onSaved={(emails) => onShareSaved(s.source, emails)} />
+        {isOwner && (
+          <ShareRow entry={s} onSaved={(emails) => onShareSaved(s.source, emails)} />
+        )}
       </div>
     </div>
   );
 }
 
 function ManagePanel() {
-  const [sources, setSources] = useState<KnowledgeSourceEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [sources, setSources]     = useState<KnowledgeSourceEntry[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [deleting, setDeleting]   = useState<string | null>(null);
+  const [currentEmail, setCurrentEmail] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const data = await fetchKnowledgeSources();
+    const [data, config] = await Promise.all([
+      fetchKnowledgeSources(),
+      fetch("/api/auth/config").then((r) => r.json() as Promise<{ email?: string }>),
+    ]);
     setSources(data);
+    setCurrentEmail(config.email ?? null);
     setLoading(false);
   }, []);
 
@@ -618,7 +627,16 @@ function ManagePanel() {
     return a.localeCompare(b);
   });
 
-  const cardProps = { deleting, onDelete: handleDelete, onEditSaved: handleEditSaved, onShareSaved: handleShareSaved };
+  // Fold state — all groups expanded by default
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+
+  const cardProps = { deleting, onDelete: handleDelete, onEditSaved: handleEditSaved, onShareSaved: handleShareSaved, currentEmail };
 
   return (
     <div className="space-y-4">
@@ -643,22 +661,49 @@ function ManagePanel() {
       ) : sources.length === 0 ? (
         <p className="py-10 text-center text-sm text-[--color-muted]">No sources ingested yet.</p>
       ) : (
-        <div className="space-y-5">
-          {tagOrder.map((tag) => (
-            <div key={tag ?? "__other__"} className="space-y-2">
-              {/* Group header */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-[--color-muted]">
-                  {tag ? `#${tag}` : "Other"}
-                </span>
-                <span className="h-px flex-1 bg-[--color-border]" />
+        <div className="space-y-3">
+          {tagOrder.map((tag) => {
+            const groupKey = tag ?? "__other__";
+            const isCollapsed = collapsed.has(groupKey);
+            const items = grouped.get(tag)!;
+            return (
+              <div key={groupKey}>
+                {/* Clickable group header */}
+                <button
+                  onClick={() => toggleGroup(groupKey)}
+                  className="flex w-full items-center gap-2 py-1 text-left"
+                >
+                  {isCollapsed
+                    ? <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[--color-muted]" />
+                    : <ChevronDown  className="h-3.5 w-3.5 shrink-0 text-[--color-muted]" />
+                  }
+                  <span className="text-xs font-semibold uppercase tracking-wide text-[--color-muted]">
+                    {tag ? `#${tag}` : "Other"}
+                  </span>
+                  <span className="text-xs text-[--color-muted]">({items.length})</span>
+                  <span className="h-px flex-1 bg-[--color-border]" />
+                </button>
+                {/* Sources — hidden when collapsed */}
+                {!isCollapsed && (
+                  <div className="mt-2 space-y-2">
+                    {items.map((s) => (
+                      <SourceCard
+                        key={s.id}
+                        s={s}
+                        {...cardProps}
+                        isOwner={
+                          // auth disabled (no email on either side) → treat as owner
+                          currentEmail === null ||
+                          s.ownerEmail === null ||
+                          s.ownerEmail.toLowerCase() === currentEmail.toLowerCase()
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-              {/* Sources in group */}
-              {grouped.get(tag)!.map((s) => (
-                <SourceCard key={s.id} s={s} {...cardProps} />
-              ))}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

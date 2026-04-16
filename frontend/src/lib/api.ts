@@ -86,6 +86,20 @@ export async function deleteConversation(backendId: string): Promise<void> {
   await fetch(`/api/agent/conversations/${backendId}`, { method: "DELETE" });
 }
 
+export async function archiveConversation(backendId: string): Promise<void> {
+  await fetch(`/api/agent/conversations/${backendId}?action=archive`, { method: "PATCH" });
+}
+
+export async function unarchiveConversation(backendId: string): Promise<void> {
+  await fetch(`/api/agent/conversations/${backendId}?action=unarchive`, { method: "PATCH" });
+}
+
+export async function fetchArchivedConversations(): Promise<BackendConversation[]> {
+  const res = await fetch("/api/agent/conversations/archived");
+  if (!res.ok) return [];
+  return res.json() as Promise<BackendConversation[]>;
+}
+
 export async function fetchConversations(): Promise<BackendConversation[]> {
   const res = await fetch("/api/agent/conversations");
   if (!res.ok) return [];

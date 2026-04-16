@@ -109,7 +109,7 @@ public class AgentController {
     // ── Conversation history ──────────────────────────────────────────────────
 
     @GetMapping("/conversations")
-    @Operation(summary = "List all conversations for the authenticated user")
+    @Operation(summary = "List active (non-archived) conversations for the authenticated user")
     public ResponseEntity<List<com.ragagent.conversation.entity.Conversation>> listConversations(
             HttpServletRequest httpRequest) {
         String userEmail = (String) httpRequest.getAttribute("authenticatedEmail");
@@ -117,6 +117,49 @@ public class AgentController {
             return ResponseEntity.status(401).build();
         }
         return ResponseEntity.ok(conversationService.listConversations(userEmail));
+    }
+
+    @GetMapping("/conversations/archived")
+    @Operation(summary = "List archived conversations for the authenticated user")
+    public ResponseEntity<List<com.ragagent.conversation.entity.Conversation>> listArchivedConversations(
+            HttpServletRequest httpRequest) {
+        String userEmail = (String) httpRequest.getAttribute("authenticatedEmail");
+        if (userEmail == null) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(conversationService.listArchivedConversations(userEmail));
+    }
+
+    @PatchMapping("/conversations/{conversationId}/archive")
+    @Operation(summary = "Archive a conversation (owner only)")
+    public ResponseEntity<Void> archiveConversation(
+            @PathVariable String conversationId,
+            HttpServletRequest httpRequest) {
+        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        try {
+            conversationService.setArchived(conversationId, email, true);
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @PatchMapping("/conversations/{conversationId}/unarchive")
+    @Operation(summary = "Unarchive a conversation (owner only)")
+    public ResponseEntity<Void> unarchiveConversation(
+            @PathVariable String conversationId,
+            HttpServletRequest httpRequest) {
+        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        try {
+            conversationService.setArchived(conversationId, email, false);
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @GetMapping("/conversations/{conversationId}")

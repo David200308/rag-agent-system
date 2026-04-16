@@ -25,10 +25,14 @@ CREATE TABLE IF NOT EXISTS otp_codes (
 CREATE TABLE IF NOT EXISTS conversations (
     id         VARCHAR(36)  PRIMARY KEY,          -- UUID
     user_email VARCHAR(255),                       -- nullable; populated when auth is enabled
+    archived   BOOLEAN      NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_conv_email (user_email)
 );
+
+-- Idempotent migration: add archived column to existing installations
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- ── Knowledge source index ────────────────────────────────────────────────────
 -- Tracks every source that has been ingested into Weaviate.
