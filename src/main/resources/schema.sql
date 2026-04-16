@@ -31,9 +31,6 @@ CREATE TABLE IF NOT EXISTS conversations (
     INDEX idx_conv_email (user_email)
 );
 
--- Idempotent migration: add archived column to existing installations
-ALTER TABLE conversations ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
-
 -- ── Knowledge source index ────────────────────────────────────────────────────
 -- Tracks every source that has been ingested into Weaviate.
 
