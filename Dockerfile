@@ -4,7 +4,9 @@ WORKDIR /app
 
 # Cache dependency downloads separately from source compilation
 COPY pom.xml .
-RUN mvn dependency:go-offline -B
+RUN mvn dependency:go-offline -B \
+    -Dmaven.wagon.http.retryHandler.count=3 \
+    -Dmaven.wagon.http.retryHandler.requestSentEnabled=true
 
 COPY src ./src
 RUN mvn package -DskipTests -B
