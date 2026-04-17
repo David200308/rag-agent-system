@@ -109,6 +109,18 @@ public class WebFetchService {
                 .anyMatch(w -> h.equals(w.getDomain()) || h.endsWith("." + w.getDomain()));
     }
 
+    /**
+     * Returns true if the URL's domain is present in the whitelist.
+     * Returns false for malformed URLs or unsupported schemes.
+     */
+    public boolean isUrlAllowed(String url) {
+        try {
+            return isAllowed(extractHost(url));
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
     private String extractHost(String url) {
         try {
             URI uri = new URI(url);

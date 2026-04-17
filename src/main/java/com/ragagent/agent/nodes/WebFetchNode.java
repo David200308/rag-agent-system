@@ -10,8 +10,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Node 1.5 — Web Fetch.
@@ -20,11 +23,18 @@ import java.util.Map;
  *
  * <ul>
  *   <li><b>useWebFetch</b> — if false (or global {@code web-fetch.enabled=false}),
- *       URL fetching is skipped even when fetchUrls are provided.</li>
+ *       URL fetching is skipped entirely.</li>
  *   <li><b>useKnowledgeBase</b> — if false, the route is forced to DIRECT so
  *       {@link RetrievalNode} is bypassed entirely. If URLs were also fetched,
  *       those docs are still available to the Generator via state.</li>
  * </ul>
+ *
+ * URL resolution order (all on the backend):
+ * <ol>
+ *   <li>Explicit {@code fetchUrls} provided by the caller.</li>
+ *   <li>URLs auto-extracted from the query text.</li>
+ * </ol>
+ * Duplicates are removed; at most 5 URLs are fetched (backend limit mirrors frontend).
  *
  * When at least one URL is successfully fetched and the current route is FALLBACK,
  * the route is promoted to RETRIEVE so the Generator is reached.
@@ -33,6 +43,10 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 public class WebFetchNode {
+
+    private static final Pattern URL_PATTERN =
+            Pattern.compile("https?://[^\\s\"'<>]+");
+    private static final int MAX_URLS = 5;
 
     private final WebFetchService     webFetchService;
     private final WebFetchProperties  props;
@@ -44,9 +58,11 @@ public class WebFetchNode {
 
         // ── Web fetch ──────────────────────────────────────────────────────────
         boolean webFetchEnabled = props.enabled() && request.isWebFetchEnabled();
-        List<String> urls = request.fetchUrls();
 
-        if (webFetchEnabled && urls != null && !urls.isEmpty()) {
+        // Merge explicit fetchUrls + URLs auto-extracted from the query text
+        List<String> urls = resolveUrls(request);
+
+        if (webFetchEnabled && !urls.isEmpty()) {
             List<DocumentResult> fetched = new ArrayList<>();
             for (String url : urls) {
                 try {
@@ -77,5 +93,43 @@ public class WebFetchNode {
         }
 
         return updates;
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Build the de-duplicated, whitelist-filtered URL list from explicit fetchUrls
+     * (if any) plus URLs auto-extracted from the query text. Capped at {@value #MAX_URLS}.
+     *
+     * URLs whose domain is not in the whitelist are dropped here with a WARN log
+     * so the fetch loop only ever sees pre-approved URLs.
+     */
+    private List<String> resolveUrls(AgentRequest request) {
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+
+        // 1. Explicit URLs from the caller
+        if (request.fetchUrls() != null) {
+            request.fetchUrls().forEach(u -> seen.add(u.strip()));
+        }
+
+        // 2. Auto-extract from query text
+        Matcher m = URL_PATTERN.matcher(request.query());
+        while (m.find()) {
+            // Strip trailing punctuation that may be part of the surrounding sentence
+            String url = m.group().replaceAll("[.,!?;:)]+$", "");
+            seen.add(url);
+        }
+
+        // 3. Whitelist check — drop non-whitelisted domains before fetching
+        List<String> allowed = new ArrayList<>();
+        for (String url : seen) {
+            if (webFetchService.isUrlAllowed(url)) {
+                allowed.add(url);
+                if (allowed.size() == MAX_URLS) break;
+            } else {
+                log.warn("[WebFetchNode] Skipping URL '{}': domain not in whitelist", url);
+            }
+        }
+        return allowed;
     }
 }

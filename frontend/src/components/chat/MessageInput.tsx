@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, type KeyboardEvent } from "react";
-import { Send, Settings2, Database, Globe } from "lucide-react";
+import { Send, Database, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 
@@ -40,7 +40,6 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
   const [topK, setTopK] = useState(5);
   const [useKnowledgeBase, setUseKnowledgeBase] = useState(true);
   const [useWebFetch, setUseWebFetch] = useState(true);
-  const [showOptions, setShowOptions] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const submit = () => {
@@ -67,8 +66,7 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
 
   return (
     <div className="border-t border-[--color-border] bg-[--color-surface] p-4">
-      {showOptions && (
-        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 text-sm">
+      <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 text-sm">
           {/* Top-K */}
           <label className="flex items-center gap-2 text-[--color-muted]">
             Top-K sources
@@ -102,7 +100,6 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
             />
           </div>
         </div>
-      )}
 
       <div className="flex items-end gap-2 rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 focus-within:border-gray-900 dark:focus-within:border-gray-100">
         <textarea
@@ -120,15 +117,6 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
           )}
         />
         <div className="flex shrink-0 items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowOptions((v) => !v)}
-            className={cn(showOptions && "text-[--color-brand-500]")}
-            title="Query options"
-          >
-            <Settings2 className="h-4 w-4" />
-          </Button>
           <Button size="icon" onClick={submit} disabled={!text.trim() || disabled}>
             <Send className="h-4 w-4" strokeWidth={2.5} />
           </Button>
