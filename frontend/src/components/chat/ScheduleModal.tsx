@@ -124,8 +124,11 @@ export function ScheduleModal({ conversationId, onClose }: ScheduleModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[--color-border] bg-[--color-surface] shadow-2xl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[--color-border] bg-white shadow-2xl dark:bg-neutral-900">
 
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[--color-border] px-4 py-3">
