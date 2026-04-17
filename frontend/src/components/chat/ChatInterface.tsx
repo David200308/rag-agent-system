@@ -98,14 +98,16 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
         </span>
         {backendId && (
           <>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowSchedule(true)}
-              title="Schedule messages"
-            >
-              <CalendarClock className="h-4 w-4" />
-            </Button>
+            {conversation?.backendConversationId && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowSchedule(true)}
+                title="Schedule messages"
+              >
+                <CalendarClock className="h-4 w-4" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -122,8 +124,8 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
         <ShareModal conversationId={backendId} onClose={() => setShowShare(false)} />
       )}
 
-      {showSchedule && backendId && (
-        <ScheduleModal conversationId={backendId} onClose={() => setShowSchedule(false)} />
+      {showSchedule && conversation?.backendConversationId && (
+        <ScheduleModal conversationId={conversation.backendConversationId} onClose={() => setShowSchedule(false)} />
       )}
 
       {/* Message list */}
