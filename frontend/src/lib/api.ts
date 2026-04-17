@@ -16,8 +16,11 @@ import type {
   BackendConversation,
   BackendMessage,
   ConversationShare,
+  CreateScheduleRequest,
   IngestionResult,
   KnowledgeSourceEntry,
+  ScheduledMessage,
+  UpdateScheduleRequest,
   UrlIngestionResult,
   WebFetchWhitelistEntry,
 } from "@/types/agent";
@@ -178,6 +181,35 @@ export async function addWebFetchDomain(domain: string): Promise<WebFetchWhiteli
 
 export async function removeWebFetchDomain(domain: string): Promise<void> {
   await fetch(`/api/agent/web-fetch/whitelist/${encodeURIComponent(domain)}`, { method: "DELETE" });
+}
+
+// ── Scheduled messages ────────────────────────────────────────────────────────
+
+export async function fetchSchedules(conversationId: string): Promise<ScheduledMessage[]> {
+  const res = await fetch(`/api/scheduler/schedules?conversationId=${encodeURIComponent(conversationId)}`);
+  if (!res.ok) return [];
+  return res.json() as Promise<ScheduledMessage[]>;
+}
+
+export async function createSchedule(payload: CreateScheduleRequest): Promise<ScheduledMessage> {
+  return postJson<ScheduledMessage>("/api/scheduler/schedules", payload);
+}
+
+export async function updateSchedule(id: number, payload: UpdateScheduleRequest): Promise<ScheduledMessage> {
+  const res = await fetch(`/api/scheduler/schedules/${id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status}: ${text}`);
+  }
+  return res.json() as Promise<ScheduledMessage>;
+}
+
+export async function deleteSchedule(id: number): Promise<void> {
+  await fetch(`/api/scheduler/schedules/${id}`, { method: "DELETE" });
 }
 
 // ── TanStack Query option factories ───────────────────────────────────────────

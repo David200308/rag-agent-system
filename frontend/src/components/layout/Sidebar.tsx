@@ -167,7 +167,7 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
                   {formatTime(c.updatedAt, timezone)} · {c.messages.length} msg
                 </p>
               </div>
-              <div className="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100">
+              <div className="ml-1 flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100">
                 <Button
                   size="icon"
                   variant="ghost"
@@ -239,7 +239,7 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
                     {formatTime(c.updatedAt, timezone)} · {c.messages.length} msg
                   </p>
                 </div>
-                <div className="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100">
+                <div className="ml-1 flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100">
                   <Button
                     size="icon"
                     variant="ghost"

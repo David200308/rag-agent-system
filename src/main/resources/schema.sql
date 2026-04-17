@@ -99,3 +99,22 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
     CONSTRAINT fk_conv_msg_conv FOREIGN KEY (conversation_id)
         REFERENCES conversations(id) ON DELETE CASCADE
 );
+
+-- ── Scheduled messages (managed by Go scheduler service) ─────────────────────
+CREATE TABLE IF NOT EXISTS scheduled_messages (
+    id                 BIGINT AUTO_INCREMENT PRIMARY KEY,
+    conversation_id    VARCHAR(36)  NOT NULL,
+    owner_email        VARCHAR(255) NOT NULL,
+    message            TEXT         NOT NULL,
+    cron_expr          VARCHAR(100) NOT NULL,        -- e.g. "0 8 * * 1"
+    top_k              INT          NOT NULL DEFAULT 5,
+    use_knowledge_base BOOLEAN      NOT NULL DEFAULT TRUE,
+    use_web_fetch      BOOLEAN      NOT NULL DEFAULT TRUE,
+    enabled            BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_sched_conv  (conversation_id),
+    INDEX idx_sched_email (owner_email),
+    CONSTRAINT fk_sched_conv FOREIGN KEY (conversation_id)
+        REFERENCES conversations(id) ON DELETE CASCADE
+);

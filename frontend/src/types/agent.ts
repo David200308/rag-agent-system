@@ -115,6 +115,48 @@ export interface ConversationShare {
   createdAt: string;
 }
 
+// ── Scheduled messages ────────────────────────────────────────────────────────
+
+export interface ScheduledMessage {
+  id: number;
+  conversationId: string;
+  ownerEmail: string;
+  message: string;
+  cronExpr: string;
+  topK: number;
+  useKnowledgeBase: boolean;
+  useWebFetch: boolean;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateScheduleRequest {
+  conversationId: string;
+  message: string;
+  cronMinute: string;
+  cronHour: string;
+  cronDay: string;
+  cronMonth: string;
+  cronWeekday: string;
+  topK: number;
+  useKnowledgeBase: boolean;
+  useWebFetch: boolean;
+}
+
+export interface UpdateScheduleRequest {
+  message?: string;
+  cronMinute?: string;
+  cronHour?: string;
+  cronDay?: string;
+  cronMonth?: string;
+  cronWeekday?: string;
+  topK?: number;
+  useKnowledgeBase?: boolean;
+  useWebFetch?: boolean;
+  enabled?: boolean;
+}
+
 export interface WebFetchWhitelistEntry {
   id: number;
   domain: string;

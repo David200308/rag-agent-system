@@ -104,6 +104,35 @@ services:
       retries: 8
       start_period: 60s
 
+  # ── Go scheduler microservice ─────────────────────────────────────────────────
+  scheduler:
+    build:
+      context: ./scheduler
+      dockerfile: Dockerfile
+    container_name: ragagent-scheduler
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    environment:
+      PORT: 8082
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-ragagent}
+      MYSQL_USER: ${MYSQL_USER:-ragagent}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ragagent}
+      BACKEND_URL: http://backend:8081
+      SCHEDULER_SERVICE_KEY: ${SCHEDULER_SERVICE_KEY:-scheduler-secret-key}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8082/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ── Next.js frontend ──────────────────────────────────────────────────────────
   frontend:
     build:
@@ -120,8 +149,11 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      scheduler:
+        condition: service_healthy
     environment:
       BACKEND_URL: http://backend:8081
+      SCHEDULER_URL: http://scheduler:8082
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
 

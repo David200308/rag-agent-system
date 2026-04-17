@@ -210,6 +210,11 @@ auth:
   jwt-secret: ${AUTH_JWT_SECRET:changeme-use-a-long-random-base64-string-in-production}
   jwt-expiry-hours: ${AUTH_JWT_EXPIRY_HOURS:24}
 
+# ── Go Scheduler microservice ────────────────────────────────────────────────
+# Shared service key used by the Go scheduler to authenticate trigger calls.
+scheduler:
+  service-key: ${SCHEDULER_SERVICE_KEY:scheduler-secret-key}
+
 # ── Resend (transactional email) ──────────────────────────────────────────────
 resend:
   api-key: ${RESEND_API_KEY:}

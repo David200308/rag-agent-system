@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { MessageSquare, Menu, Share2 } from "lucide-react";
+import { MessageSquare, Menu, Share2, CalendarClock } from "lucide-react";
 import { queryAgent } from "@/lib/api";
 import { useChatStore } from "@/store/chatStore";
 import { MessageBubble } from "./MessageBubble";
 import { MessageInput } from "./MessageInput";
 import { ShareModal } from "./ShareModal";
+import { ScheduleModal } from "./ScheduleModal";
 import { Spinner } from "@/components/ui/Spinner";
 import { Button } from "@/components/ui/Button";
 import type { AgentRequest } from "@/types/agent";
@@ -20,6 +21,7 @@ interface ChatInterfaceProps {
 export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [showShare, setShowShare] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
   const { conversations, addMessage, setBackendConversationId } = useChatStore();
   const conversation = conversations.find((c) => c.id === conversationId);
 
@@ -95,19 +97,33 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
           {conversation?.title ?? "Chat"}
         </span>
         {backendId && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowShare(true)}
-            title="Share conversation"
-          >
-            <Share2 className="h-4 w-4" />
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowSchedule(true)}
+              title="Schedule messages"
+            >
+              <CalendarClock className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowShare(true)}
+              title="Share conversation"
+            >
+              <Share2 className="h-4 w-4" />
+            </Button>
+          </>
         )}
       </div>
 
       {showShare && backendId && (
         <ShareModal conversationId={backendId} onClose={() => setShowShare(false)} />
+      )}
+
+      {showSchedule && backendId && (
+        <ScheduleModal conversationId={backendId} onClose={() => setShowSchedule(false)} />
       )}
 
       {/* Message list */}

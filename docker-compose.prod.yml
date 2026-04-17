@@ -9,6 +9,7 @@
 #      echo "ragagent"                     > secrets/mysql_password
 #      echo "sk-..."                       > secrets/openai_api_key
 #      echo "$(openssl rand -base64 64)"   > secrets/auth_jwt_secret
+#      echo "$(openssl rand -base64 32)"   > secrets/scheduler_service_key
 #      # ... (see full list below)
 #      chmod 600 secrets/*
 #
@@ -41,6 +42,8 @@ secrets:
     file: ./secrets/resend_api_key
   resend_from_email:
     file: ./secrets/resend_from_email
+  scheduler_service_key:
+    file: ./secrets/scheduler_service_key
 
 services:
 
@@ -93,6 +96,37 @@ services:
       retries: 10
       start_period: 30s
 
+  # ── Go scheduler microservice ─────────────────────────────────────────────────
+  scheduler:
+    build:
+      context: ./scheduler
+      dockerfile: Dockerfile
+    container_name: ragagent-scheduler
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    secrets:
+      - mysql_password
+      - scheduler_service_key
+    environment:
+      PORT: 8082
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-ragagent}
+      MYSQL_USER: ${MYSQL_USER:-ragagent}
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
+      BACKEND_URL: http://backend:8081
+      SCHEDULER_SERVICE_KEY_FILE: /run/secrets/scheduler_service_key
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8082/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   # ── Spring Boot backend ───────────────────────────────────────────────────────
   # docker-entrypoint.sh reads /run/secrets/* → env vars before the JVM starts.
   backend:
@@ -117,6 +151,7 @@ services:
       - auth_jwt_secret
       - resend_api_key
       - resend_from_email
+      - scheduler_service_key
     environment:
       # ── Non-secret config (safe to put inline) ──────────────────────────────
       MYSQL_HOST: mysql
@@ -158,8 +193,8 @@ services:
       start_period: 60s
 
   # ── Next.js frontend ──────────────────────────────────────────────────────────
-  # No secrets needed — the frontend only talks to the backend, never directly
-  # to any external API.
+  # No secrets needed — the frontend only talks to the backend/scheduler, never
+  # directly to any external API.
   frontend:
     build:
       context: ./frontend
@@ -175,8 +210,11 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      scheduler:
+        condition: service_healthy
     environment:
       BACKEND_URL: http://backend:8081
+      SCHEDULER_URL: http://scheduler:8082
       AUTH_ENABLED: ${AUTH_ENABLED:-true}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
 
