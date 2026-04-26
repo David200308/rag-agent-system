@@ -288,8 +288,12 @@ export async function fetchWorkflowRuns(workflowId: string): Promise<WorkflowRun
   return res.json() as Promise<WorkflowRun[]>;
 }
 
-export async function startWorkflowRun(workflowId: string, userInput: string): Promise<{ runId: string }> {
-  return postJson<{ runId: string }>(`/api/workflow/${workflowId}/runs`, { userInput });
+export async function startWorkflowRun(
+  workflowId: string,
+  userInput: string,
+  emailNotify = false,
+): Promise<{ runId: string }> {
+  return postJson<{ runId: string }>(`/api/workflow/${workflowId}/runs`, { userInput, emailNotify });
 }
 
 export async function fetchRunLogs(runId: string): Promise<WorkflowRunLog[]> {

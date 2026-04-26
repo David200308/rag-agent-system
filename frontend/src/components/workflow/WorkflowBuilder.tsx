@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -28,7 +28,7 @@ import {
   updateWorkflow,
   startWorkflowRun,
 } from "@/lib/api";
-import type { AgentPattern, TeamExecMode, Workflow, WorkflowAgent } from "@/types/agent";
+import type { AgentPattern, RunStatus, TeamExecMode, Workflow, WorkflowAgent } from "@/types/agent";
 import { cn } from "@/lib/utils";
 
 // ── Agent node visual ─────────────────────────────────────────────────────────
@@ -78,6 +78,11 @@ export function WorkflowBuilder({ workflow }: Props) {
   const [showRunInput,   setShowRunInput]   = useState(false);
   const [showRunsPanel,  setShowRunsPanel]  = useState(false);
   const [saving,         setSaving]         = useState(false);
+  const [browserNotify,  setBrowserNotify]  = useState(() =>
+    typeof window !== "undefined" && localStorage.getItem("workflow:notify:browser") === "true");
+  const [emailNotify,    setEmailNotify]    = useState(() =>
+    typeof window !== "undefined" && localStorage.getItem("workflow:notify:email") === "true");
+  const browserNotifyRef = useRef(browserNotify);
 
   // Load agents from backend
   useEffect(() => {
@@ -209,9 +214,37 @@ export function WorkflowBuilder({ workflow }: Props) {
     }
   }
 
+  function toggleBrowserNotify(enabled: boolean) {
+    if (enabled && typeof window !== "undefined" && Notification.permission !== "granted") {
+      Notification.requestPermission().then(p => {
+        const granted = p === "granted";
+        setBrowserNotify(granted);
+        browserNotifyRef.current = granted;
+        localStorage.setItem("workflow:notify:browser", String(granted));
+      });
+    } else {
+      setBrowserNotify(enabled);
+      browserNotifyRef.current = enabled;
+      localStorage.setItem("workflow:notify:browser", String(enabled));
+    }
+  }
+
+  function toggleEmailNotify(enabled: boolean) {
+    setEmailNotify(enabled);
+    localStorage.setItem("workflow:notify:email", String(enabled));
+  }
+
+  function handleRunComplete(output: string, status: RunStatus) {
+    if (!browserNotifyRef.current) return;
+    if (typeof window === "undefined" || Notification.permission !== "granted") return;
+    const title = status === "DONE" ? "Workflow completed" : "Workflow failed";
+    const body  = output ? output.slice(0, 100) + (output.length > 100 ? "…" : "") : status;
+    new Notification(title, { body, icon: "/favicon.ico" });
+  }
+
   async function handleRun() {
     if (!runInput.trim()) return;
-    const { runId: id } = await startWorkflowRun(workflow.id, runInput);
+    const { runId: id } = await startWorkflowRun(workflow.id, runInput, emailNotify);
     setRunId(id);
     setShowRunInput(false);
     setRunInput("");
@@ -258,7 +291,24 @@ export function WorkflowBuilder({ workflow }: Props) {
               placeholder="Describe the task for the agents…"
               className="w-full rounded-md border border-[--color-border] bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white resize-none"
             />
-            <div className="mt-3 flex justify-end gap-2">
+
+            {/* Notification preferences */}
+            <div className="mt-4 rounded-md border border-[--color-border] divide-y divide-[--color-border]">
+              <NotifyToggle
+                icon="🔔"
+                label="Browser notification"
+                checked={browserNotify}
+                onChange={toggleBrowserNotify}
+              />
+              <NotifyToggle
+                icon="✉"
+                label="Email notification"
+                checked={emailNotify}
+                onChange={toggleEmailNotify}
+              />
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
               <Button size="sm" variant="ghost" onClick={() => setShowRunInput(false)}>Cancel</Button>
               <Button size="sm" onClick={handleRun} disabled={!runInput.trim()}>
                 <Play className="h-3.5 w-3.5 mr-1" /> Start Run
@@ -310,9 +360,50 @@ export function WorkflowBuilder({ workflow }: Props) {
             workflowId={workflow.id}
             liveRunId={runId}
             onClose={() => setShowRunsPanel(false)}
+            onRunComplete={handleRunComplete}
           />
         )}
       </div>
     </div>
+  );
+}
+
+// ── Notification toggle row ───────────────────────────────────────────────────
+
+function NotifyToggle({
+  icon,
+  label,
+  checked,
+  onChange,
+}: {
+  icon: string;
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between px-3 py-2 cursor-pointer select-none">
+      <span className="flex items-center gap-2 text-xs text-[--color-fg]">
+        <span>{icon}</span>
+        <span>{label}</span>
+      </span>
+      {/* pill toggle */}
+      <span
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={cn(
+          "relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors cursor-pointer",
+          checked ? "bg-black dark:bg-white" : "bg-[--color-border]",
+        )}
+      >
+        <span
+          className={cn(
+            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white dark:bg-zinc-900 shadow transition-transform",
+            checked ? "translate-x-4" : "translate-x-0",
+          )}
+        />
+      </span>
+    </label>
   );
 }

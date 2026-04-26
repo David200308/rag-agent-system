@@ -1,5 +1,6 @@
 package com.ragagent.workflow;
 
+import com.ragagent.auth.service.EmailService;
 import com.ragagent.sandbox.SandboxService;
 import com.ragagent.webfetch.WebFetchService;
 import com.ragagent.workflow.entity.Workflow;
@@ -61,9 +62,13 @@ public class WorkflowRunService {
     private final SandboxService           sandboxService;
     private final WebFetchService          webFetchService;
     private final ChatClient               chatClient;
+    private final EmailService             emailService;
 
     /** Active SSE emitters keyed by runId. */
     private final ConcurrentHashMap<String, SseEmitter> emitters = new ConcurrentHashMap<>();
+
+    /** Runs that requested an email notification on completion. */
+    private final ConcurrentHashMap<String, Boolean> emailNotifyRuns = new ConcurrentHashMap<>();
 
     private final ExecutorService asyncPool = Executors.newVirtualThreadPerTaskExecutor();
 
@@ -72,11 +77,14 @@ public class WorkflowRunService {
     /**
      * Creates a WorkflowRun record and starts async execution. Returns the runId.
      */
-    public String startRun(String workflowId, String userInput, String ownerEmail) {
+    public String startRun(String workflowId, String userInput, String ownerEmail, boolean emailNotify) {
         WorkflowRun run = new WorkflowRun(UUID.randomUUID().toString(), workflowId, ownerEmail, userInput);
         run.setStatus(WorkflowRun.RunStatus.PENDING);
         runRepo.save(run);
-        log.info("[WorkflowRun] Starting run {} for workflow {}", run.getId(), workflowId);
+        if (emailNotify && ownerEmail != null && !ownerEmail.equals("anonymous")) {
+            emailNotifyRuns.put(run.getId(), true);
+        }
+        log.info("[WorkflowRun] Starting run {} for workflow {} (emailNotify={})", run.getId(), workflowId, emailNotify);
 
         asyncPool.submit(() -> executeRun(run));
         return run.getId();
@@ -211,7 +219,16 @@ public class WorkflowRunService {
 
         } finally {
             sandboxService.destroySandbox(containerId);
+            maybeSendCompletionEmail(run, workflow.getName());
         }
+    }
+
+    private void maybeSendCompletionEmail(WorkflowRun run, String workflowName) {
+        if (!emailNotifyRuns.remove(run.getId(), true)) return;
+        String to = run.getOwnerEmail();
+        if (to == null || to.equals("anonymous")) return;
+        asyncPool.submit(() -> emailService.sendWorkflowComplete(
+                to, workflowName, run.getStatus().name(), run.getFinalOutput()));
     }
 
     // ── Orchestrator pattern ──────────────────────────────────────────────────

@@ -160,8 +160,9 @@ public class WorkflowController {
         if (userInput == null || userInput.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "userInput required"));
         }
+        boolean emailNotify = Boolean.TRUE.equals(body.get("emailNotify"));
         String email = resolveEmail(req);
-        String runId = runService.startRun(workflowId, userInput, email);
+        String runId = runService.startRun(workflowId, userInput, email, emailNotify);
         return ResponseEntity.ok(Map.of("runId", runId));
     }
 

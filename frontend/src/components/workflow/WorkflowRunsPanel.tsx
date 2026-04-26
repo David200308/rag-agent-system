@@ -12,6 +12,7 @@ interface Props {
   workflowId: string;
   liveRunId: string | null;
   onClose: () => void;
+  onRunComplete?: (output: string, status: WorkflowRun["status"]) => void;
 }
 
 function statusIcon(status: WorkflowRun["status"]) {
@@ -38,7 +39,7 @@ function timeAgo(iso: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export function WorkflowRunsPanel({ workflowId, liveRunId, onClose }: Props) {
+export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplete }: Props) {
   const [runs,        setRuns]        = useState<WorkflowRun[]>([]);
   const [selectedId,  setSelectedId]  = useState<string | null>(liveRunId);
   const [loading,     setLoading]     = useState(false);
@@ -65,8 +66,9 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose }: Props) {
   }, [liveRunId, load]);
 
   // Refresh list when a run finishes
-  function handleRunDone() {
+  function handleRunDone(output: string, status: WorkflowRun["status"]) {
     setTimeout(load, 500);
+    onRunComplete?.(output, status);
   }
 
   return (
