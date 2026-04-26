@@ -158,6 +158,19 @@ CREATE TABLE IF NOT EXISTS workflow_run_logs (
         REFERENCES workflow_runs(id) ON DELETE CASCADE
 );
 
+-- ── Skills (agent context documents) ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS skills (
+    id          VARCHAR(36)   PRIMARY KEY,
+    owner_email VARCHAR(255),
+    name        VARCHAR(255)  NOT NULL,
+    file_name   VARCHAR(255),
+    file_type   VARCHAR(16),
+    size        BIGINT        NOT NULL DEFAULT 0,
+    content     LONGTEXT      NOT NULL,
+    created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_skill_owner (owner_email)
+);
+
 -- ── Schema migration: web_fetch_whitelist per-user isolation ─────────────────
 -- Existing databases: drops the old global unique constraint and adds the per-user
 -- one. On fresh installs these statements fail silently (continue-on-error=true).
