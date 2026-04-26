@@ -59,7 +59,7 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
     <aside
       className={cn(
         // Mobile: fixed width overlay
-        "flex h-full w-64 shrink-0 flex-col border-r border-[--color-border]",
+        "flex h-full w-72 shrink-0 flex-col border-r border-[--color-border]",
         "fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-in-out",
         isOpen ? "translate-x-0" : "-translate-x-full",
         // Desktop: in-flow, width driven by CSS variable set below
@@ -116,28 +116,6 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
           )}
         >
           <MessageSquare className="h-3.5 w-3.5" /> Chat
-        </Link>
-        <Link
-          href="/knowledge"
-          className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition-colors",
-            pathname === "/knowledge"
-              ? "bg-black text-white dark:bg-white dark:text-black"
-              : "text-[--color-muted] hover:bg-[--color-border]/50",
-          )}
-        >
-          <BookOpen className="h-3.5 w-3.5" /> Knowledge
-        </Link>
-        <Link
-          href="/skills"
-          className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition-colors",
-            pathname === "/skills"
-              ? "bg-black text-white dark:bg-white dark:text-black"
-              : "text-[--color-muted] hover:bg-[--color-border]/50",
-          )}
-        >
-          <Zap className="h-3.5 w-3.5" /> Skills
         </Link>
         <Link
           href="/workflow"
@@ -296,8 +274,32 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
           </div>
         )}
       </div>
-      {/* Footer — settings + logout */}
+      {/* Footer — knowledge, skills, settings, logout */}
       <div className="border-t border-[--color-border] px-3 py-2 space-y-0.5">
+        <Link
+          href="/knowledge"
+          className={cn(
+            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors",
+            pathname === "/knowledge"
+              ? "bg-black text-white dark:bg-white dark:text-black"
+              : "text-[--color-muted] hover:bg-[--color-border]/50",
+          )}
+        >
+          <BookOpen className="h-3.5 w-3.5" />
+          Knowledge
+        </Link>
+        <Link
+          href="/skills"
+          className={cn(
+            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors",
+            pathname === "/skills"
+              ? "bg-black text-white dark:bg-white dark:text-black"
+              : "text-[--color-muted] hover:bg-[--color-border]/50",
+          )}
+        >
+          <Zap className="h-3.5 w-3.5" />
+          Skills
+        </Link>
         <Link
           href="/settings"
           className={cn(

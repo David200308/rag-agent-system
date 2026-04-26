@@ -4,9 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const MIN_WIDTH     = 180;
+const MIN_WIDTH     = 200;
 const MAX_WIDTH     = 480;
-const DEFAULT_WIDTH = 256;
+const DEFAULT_WIDTH = 288;
 const WIDTH_KEY     = "rag-sidebar-width";
 const COLLAPSED_KEY = "rag-sidebar-collapsed";
 

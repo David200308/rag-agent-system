@@ -1,49 +1,35 @@
-import { readFile, writeFile, unlink } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import path from "node:path";
+import { request } from "undici";
+import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
-import type { Skill } from "@/types/agent";
 
-const DATA_DIR = path.join(process.cwd(), "data", "skills");
-const MANIFEST = path.join(DATA_DIR, "manifest.json");
+const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8081";
 
-async function readManifest(): Promise<Skill[]> {
-  try {
-    const raw = await readFile(MANIFEST, "utf-8");
-    return JSON.parse(raw) as Skill[];
-  } catch {
-    return [];
-  }
+async function authHeaders() {
+  const store = await cookies();
+  const token = store.get("rag-session")?.value;
+  return token ? { authorization: `Bearer ${token}` } : {};
 }
 
-async function writeManifest(skills: Skill[]) {
-  await writeFile(MANIFEST, JSON.stringify(skills, null, 2), "utf-8");
-}
+type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const contentPath = path.join(DATA_DIR, `${id}.txt`);
-  if (!existsSync(contentPath)) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
-  const content = await readFile(contentPath, "utf-8");
-  return new Response(content, { headers: { "content-type": "text/plain" } });
+  const { statusCode, body } = await request(
+    `${BACKEND}/api/v1/skills/${id}/content`,
+    { method: "GET", headers: await authHeaders() },
+  );
+  if (statusCode === 404) return Response.json({ error: "Not found" }, { status: 404 });
+  return new Response(await body.text(), {
+    status: statusCode,
+    headers: { "content-type": "text/plain" },
+  });
 }
 
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const skills = await readManifest();
-  const filtered = skills.filter((s) => s.id !== id);
-  await writeManifest(filtered);
-
-  const contentPath = path.join(DATA_DIR, `${id}.txt`);
-  if (existsSync(contentPath)) await unlink(contentPath).catch(() => {});
-
-  return new Response(null, { status: 204 });
+  const { statusCode } = await request(
+    `${BACKEND}/api/v1/skills/${id}`,
+    { method: "DELETE", headers: await authHeaders() },
+  );
+  return new Response(null, { status: statusCode });
 }
