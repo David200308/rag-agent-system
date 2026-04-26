@@ -8,6 +8,8 @@ import type { LogType, RunStatus, WorkflowRunLog } from "@/types/agent";
 interface Props {
   runId: string | null;
   onDone?: (output: string, status: RunStatus) => void;
+  /** Fill available height instead of capping at 16rem */
+  fill?: boolean;
 }
 
 const LOG_COLORS: Record<LogType, string> = {
@@ -28,7 +30,7 @@ const LOG_LABELS: Record<LogType, string> = {
   SYSTEM:       "· System",
 };
 
-export function WorkflowRunViewer({ runId, onDone }: Props) {
+export function WorkflowRunViewer({ runId, onDone, fill }: Props) {
   const [logs,      setLogs]      = useState<WorkflowRunLog[]>([]);
   const [status,    setStatus]    = useState<RunStatus | null>(null);
   const [output,    setOutput]    = useState<string | null>(null);
@@ -71,24 +73,26 @@ export function WorkflowRunViewer({ runId, onDone }: Props) {
   if (!runId) return null;
 
   return (
-    <div className="flex flex-col border-t border-[--color-border]">
+    <div className={cn("flex flex-col", fill ? "flex-1 overflow-hidden" : "border-t border-[--color-border]")}>
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2">
+      <div className="flex items-center gap-2 px-4 py-2 shrink-0">
         <StatusIcon status={status} />
         <span className="text-xs font-medium">
           {status === "RUNNING" ? "Running…" : status === "DONE" ? "Done" : status === "FAILED" ? "Failed" : "Pending"}
         </span>
         <span className="text-[10px] text-[--color-muted]">{logs.length} events</span>
-        <button
-          onClick={() => setExpanded(v => !v)}
-          className="ml-auto text-[--color-muted] hover:text-[--color-fg]"
-        >
-          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-        </button>
+        {!fill && (
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className="ml-auto text-[--color-muted] hover:text-[--color-fg]"
+          >
+            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </button>
+        )}
       </div>
 
-      {expanded && (
-        <div className="max-h-64 overflow-y-auto px-4 pb-4 space-y-1.5">
+      {(fill || expanded) && (
+        <div className={cn("overflow-y-auto px-4 pb-4 space-y-1.5", fill ? "flex-1" : "max-h-64")}>
           {logs.map((log, i) => (
             <LogEntry key={i} log={log} />
           ))}

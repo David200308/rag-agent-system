@@ -16,11 +16,11 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { Plus, Play, Save } from "lucide-react";
+import { Plus, Play, Save, History } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { PatternSelector } from "./PatternSelector";
 import { AgentConfigPanel } from "./AgentConfigPanel";
-import { WorkflowRunViewer } from "./WorkflowRunViewer";
+import { WorkflowRunsPanel } from "./WorkflowRunsPanel";
 import {
   fetchWorkflowAgents,
   upsertWorkflowAgent,
@@ -73,10 +73,11 @@ export function WorkflowBuilder({ workflow }: Props) {
   const [selectedId,   setSelectedId]   = useState<number | null>(null);
   const [pattern,      setPattern]      = useState<AgentPattern>(workflow.agentPattern);
   const [teamExecMode, setTeamExecMode] = useState<TeamExecMode | null>(workflow.teamExecMode);
-  const [runId,        setRunId]        = useState<string | null>(null);
-  const [runInput,     setRunInput]     = useState("");
-  const [showRunInput, setShowRunInput] = useState(false);
-  const [saving,       setSaving]       = useState(false);
+  const [runId,          setRunId]          = useState<string | null>(null);
+  const [runInput,       setRunInput]       = useState("");
+  const [showRunInput,   setShowRunInput]   = useState(false);
+  const [showRunsPanel,  setShowRunsPanel]  = useState(false);
+  const [saving,         setSaving]         = useState(false);
 
   // Load agents from backend
   useEffect(() => {
@@ -214,6 +215,7 @@ export function WorkflowBuilder({ workflow }: Props) {
     setRunId(id);
     setShowRunInput(false);
     setRunInput("");
+    setShowRunsPanel(true);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -234,6 +236,9 @@ export function WorkflowBuilder({ workflow }: Props) {
           <Button size="sm" variant="ghost" onClick={handleSavePositions} disabled={saving}>
             <Save className="h-3.5 w-3.5 mr-1" /> {saving ? "Saving…" : "Save Layout"}
           </Button>
+          <Button size="sm" variant="ghost" onClick={() => setShowRunsPanel(v => !v)}>
+            <History className="h-3.5 w-3.5 mr-1" /> Runs
+          </Button>
           <Button size="sm" onClick={() => setShowRunInput(true)}>
             <Play className="h-3.5 w-3.5 mr-1" /> Run
           </Button>
@@ -243,7 +248,7 @@ export function WorkflowBuilder({ workflow }: Props) {
       {/* Run input overlay */}
       {showRunInput && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="w-full max-w-md rounded-xl border border-[--color-border] bg-[--color-surface] p-6 shadow-xl mx-4">
+          <div className="w-full max-w-md rounded-xl border border-[--color-border] bg-white dark:bg-zinc-900 p-6 shadow-xl mx-4">
             <p className="mb-3 text-sm font-semibold">Enter workflow input</p>
             <textarea
               autoFocus
@@ -290,7 +295,7 @@ export function WorkflowBuilder({ workflow }: Props) {
           )}
         </div>
 
-        {selectedAgent && (
+        {selectedAgent && !showRunsPanel && (
           <AgentConfigPanel
             agent={selectedAgent}
             pattern={pattern}
@@ -299,10 +304,15 @@ export function WorkflowBuilder({ workflow }: Props) {
             onClose={() => setSelectedId(null)}
           />
         )}
-      </div>
 
-      {/* SSE run viewer */}
-      <WorkflowRunViewer runId={runId} />
+        {showRunsPanel && (
+          <WorkflowRunsPanel
+            workflowId={workflow.id}
+            liveRunId={runId}
+            onClose={() => setShowRunsPanel(false)}
+          />
+        )}
+      </div>
     </div>
   );
 }
