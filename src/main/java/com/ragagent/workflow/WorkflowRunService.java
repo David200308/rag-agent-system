@@ -138,10 +138,17 @@ public class WorkflowRunService {
         run.setStatus(WorkflowRun.RunStatus.RUNNING);
         runRepo.save(run);
 
+        emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM,
+                "Workflow started [pattern=" + workflow.getAgentPattern()
+                + ", agents=" + agents.size() + "]");
+
         boolean needsNetwork = agents.stream().anyMatch(a -> {
             List<String> tools = workflowService.parseTools(a);
             return tools.stream().anyMatch(t -> t.equalsIgnoreCase("CURL") || t.equalsIgnoreCase("NET"));
         });
+
+        emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM,
+                "Initializing sandbox" + (needsNetwork ? " (network enabled)…" : "…"));
 
         String containerId = needsNetwork
                 ? sandboxService.createSandboxWithNetwork(run.getId())
@@ -149,8 +156,7 @@ public class WorkflowRunService {
         run.setSandboxContainer(containerId);
         runRepo.save(run);
 
-        emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM,
-                "Workflow started [pattern=" + workflow.getAgentPattern() + "]");
+        emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "Sandbox ready.");
 
         try {
             String output = switch (workflow.getAgentPattern()) {
