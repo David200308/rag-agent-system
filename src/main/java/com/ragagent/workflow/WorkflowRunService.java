@@ -172,6 +172,16 @@ public class WorkflowRunService {
             emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "Workflow completed.");
             pushDoneEvent(run.getId(), "DONE", output);
 
+        } catch (SandboxService.SandboxStartupException ex) {
+            log.error("[WorkflowRun] Run {} — sandbox failed to start: {}", run.getId(), ex.getMessage());
+            run.setStatus(WorkflowRun.RunStatus.FAILED);
+            run.setFinishedAt(Instant.now());
+            runRepo.save(run);
+            emit(run.getId(), null, null, WorkflowRunLog.LogType.ERROR,
+                    "Sandbox failed to start — " + ex.getMessage()
+                    + ". Ensure the Docker socket is mounted and ragagent/sandbox:latest exists on the host.");
+            pushDoneEvent(run.getId(), "FAILED", ex.getMessage());
+
         } catch (SandboxService.SandboxKilledException ex) {
             log.warn("[WorkflowRun] Run {} killed by sandbox watchdog: {}", run.getId(), ex.getMessage());
             run.setStatus(WorkflowRun.RunStatus.FAILED);

@@ -166,8 +166,8 @@ public class SandboxService {
         } catch (Exception e) {
             slots.release();
             active.decrementAndGet();
-            log.warn("[Sandbox] Container creation failed for run {}: {}", runId, e.getMessage());
-            return null;
+            log.error("[Sandbox] Container creation failed for run {}: {}", runId, e.getMessage());
+            throw new SandboxStartupException("Sandbox failed to start: " + e.getMessage());
         }
     }
 
@@ -339,7 +339,13 @@ public class SandboxService {
                           "--workdir", "/workspace",
                           sandboxImage, "tail", "-f", "/dev/null");
 
-        String containerId = runProcess(cmd, 30).strip();
+        String output = runProcess(cmd, 30).strip();
+        // docker run -d prints exactly the 64-char container ID on success.
+        // Anything else is an error message (e.g., "Cannot connect to the Docker daemon").
+        if (output.isBlank() || output.length() < 12 || output.contains(" ")) {
+            throw new RuntimeException("docker run produced unexpected output: " + truncate(output, 200));
+        }
+        String containerId = output;
         log.info("[Sandbox] Created container {} for run {} (network={})",
                 shortId(containerId), runId, withNetwork);
         return containerId;
@@ -350,17 +356,26 @@ public class SandboxService {
                 .redirectErrorStream(true)
                 .start();
 
+        // Read output on a virtual thread so the readLine() loop cannot block
+        // the caller forever if the subprocess stalls without closing stdout
+        // (e.g., docker hanging while trying to reach an inaccessible daemon).
+        // destroyForcibly() closes the stream and unblocks the reader.
         StringBuilder output = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) output.append(line).append("\n");
-        }
+        Thread readerThread = Thread.ofVirtual().start(() -> {
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = r.readLine()) != null) output.append(line).append("\n");
+            } catch (IOException ignored) {}
+        });
 
         boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
         if (!finished) {
             process.destroyForcibly();
-            throw new RuntimeException("Command timed out after " + timeoutSeconds + "s");
+            readerThread.interrupt();
+            throw new RuntimeException("Command timed out after " + timeoutSeconds + "s: " + cmd.get(0));
         }
+
+        readerThread.join(2000); // drain any remaining buffered output
         return output.toString();
     }
 
@@ -388,6 +403,10 @@ public class SandboxService {
 
     public static class SandboxResourceException extends RuntimeException {
         public SandboxResourceException(String msg) { super(msg); }
+    }
+
+    public static class SandboxStartupException extends RuntimeException {
+        public SandboxStartupException(String msg) { super(msg); }
     }
 
     public static class SandboxKilledException extends RuntimeException {
