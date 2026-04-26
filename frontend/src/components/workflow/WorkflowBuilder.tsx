@@ -44,15 +44,15 @@ function AgentNodeCard({ data }: { data: { agent: WorkflowAgent; selected: boole
     <div
       onClick={onClick}
       className={cn(
-        "rounded-xl border-2 px-4 py-3 cursor-pointer shadow-sm min-w-[140px] max-w-[180px] transition-all",
+        "rounded-lg border-2 px-2.5 py-1.5 cursor-pointer shadow-sm w-[120px] transition-all",
         roleColors[agent.role],
         selected && "ring-2 ring-black dark:ring-white ring-offset-1",
       )}
     >
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-[--color-muted]">{agent.role}</p>
-      <p className="text-sm font-bold truncate">{agent.name}</p>
+      <p className="text-[9px] font-semibold uppercase tracking-wide text-[--color-muted]">{agent.role}</p>
+      <p className="text-xs font-bold truncate">{agent.name}</p>
       {agent.toolsJson && JSON.parse(agent.toolsJson).length > 0 && (
-        <p className="text-[10px] text-[--color-muted] mt-0.5 truncate">
+        <p className="text-[9px] text-[--color-muted] mt-0.5 truncate">
           {JSON.parse(agent.toolsJson).map((t: string) => t.toLowerCase()).join(", ")}
         </p>
       )}

@@ -233,6 +233,17 @@ export interface WorkflowDoneEvent {
   output: string;
 }
 
+// ── Skills ────────────────────────────────────────────────────────────────────
+
+export interface Skill {
+  id: string;
+  name: string;
+  fileName: string;
+  fileType: "txt" | "md" | "zip";
+  size: number;
+  createdAt: string;
+}
+
 export interface IngestionResult {
   status: string;
   filename?: string;

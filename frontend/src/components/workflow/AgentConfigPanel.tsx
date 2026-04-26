@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Save, Trash2 } from "lucide-react";
+import { X, Save, Trash2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { SANDBOX_TOOLS } from "@/types/agent";
-import type { AgentRole, WorkflowAgent } from "@/types/agent";
+import type { AgentRole, Skill, WorkflowAgent } from "@/types/agent";
+import { fetchSkills } from "@/lib/api";
+import { useSkillsStore } from "@/store/skillsStore";
 
 interface Props {
   agent: WorkflowAgent | null;
@@ -28,6 +30,14 @@ export function AgentConfigPanel({ agent, pattern, onSave, onDelete, onClose }: 
   const [tools,        setTools]        = useState<string[]>([]);
   const [saving,       setSaving]       = useState(false);
   const [deleting,     setDeleting]     = useState(false);
+  const [skills,       setSkills]       = useState<Skill[]>([]);
+  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
+
+  const { getAgentSkills, setAgentSkills } = useSkillsStore();
+
+  useEffect(() => {
+    fetchSkills().then(setSkills).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!agent) return;
@@ -35,6 +45,7 @@ export function AgentConfigPanel({ agent, pattern, onSave, onDelete, onClose }: 
     setRole(agent.role);
     setSystemPrompt(agent.systemPrompt ?? "");
     try { setTools(JSON.parse(agent.toolsJson ?? "[]")); } catch { setTools([]); }
+    setSelectedSkillIds(getAgentSkills(agent.id));
   }, [agent]);
 
   if (!agent) return null;
@@ -46,10 +57,17 @@ export function AgentConfigPanel({ agent, pattern, onSave, onDelete, onClose }: 
   async function handleSave() {
     setSaving(true);
     try {
+      if (agent) setAgentSkills(agent.id, selectedSkillIds);
       await onSave({ name, role, systemPrompt, tools });
     } finally {
       setSaving(false);
     }
+  }
+
+  function toggleSkill(id: string) {
+    setSelectedSkillIds((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+    );
   }
 
   async function handleDelete() {
@@ -105,6 +123,41 @@ export function AgentConfigPanel({ agent, pattern, onSave, onDelete, onClose }: 
             </div>
           </div>
         )}
+
+        {/* Skills */}
+        <div className="space-y-1.5">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-[--color-muted]">
+            <Zap className="h-3.5 w-3.5 text-amber-500" />
+            Skills
+          </label>
+          {skills.length === 0 ? (
+            <p className="text-[10px] text-[--color-muted]">
+              No skills uploaded. Add skills in the{" "}
+              <a href="/skills" className="underline hover:text-[--color-fg]">
+                Skills
+              </a>{" "}
+              section.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {skills.map((skill) => (
+                <button
+                  key={skill.id}
+                  onClick={() => toggleSkill(skill.id)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+                    selectedSkillIds.includes(skill.id)
+                      ? "border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                      : "border-[--color-border] text-[--color-muted] hover:border-amber-400",
+                  )}
+                >
+                  <Zap className="h-2.5 w-2.5" />
+                  {skill.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* System Prompt */}
         <div className="space-y-1">

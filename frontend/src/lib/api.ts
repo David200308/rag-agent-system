@@ -22,6 +22,7 @@ import type {
   IngestionResult,
   KnowledgeSourceEntry,
   ScheduledMessage,
+  Skill,
   UpdateScheduleRequest,
   UrlIngestionResult,
   WebFetchWhitelistEntry,
@@ -295,6 +296,31 @@ export async function fetchRunLogs(runId: string): Promise<WorkflowRunLog[]> {
   const res = await fetch(`/api/workflow/runs/${runId}/logs`);
   if (!res.ok) return [];
   return res.json() as Promise<WorkflowRunLog[]>;
+}
+
+// ── Skills API ────────────────────────────────────────────────────────────────
+
+export async function fetchSkills(): Promise<Skill[]> {
+  const res = await fetch("/api/skills");
+  if (!res.ok) return [];
+  return res.json() as Promise<Skill[]>;
+}
+
+export async function uploadSkill(file: File, name?: string): Promise<Skill> {
+  const form = new FormData();
+  form.append("file", file);
+  if (name) form.append("name", name);
+  return postForm<Skill>("/api/skills", form);
+}
+
+export async function deleteSkill(id: string): Promise<void> {
+  await fetch(`/api/skills/${id}`, { method: "DELETE" });
+}
+
+export async function fetchSkillContent(id: string): Promise<string> {
+  const res = await fetch(`/api/skills/${id}`);
+  if (!res.ok) return "";
+  return res.text();
 }
 
 // ── TanStack Query option factories ───────────────────────────────────────────
