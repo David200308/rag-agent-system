@@ -11,6 +11,8 @@
  */
 import { queryOptions, type MutationOptions } from "@tanstack/react-query";
 import type {
+  AgentPattern, AgentRole, TeamExecMode,
+  Workflow, WorkflowAgent, WorkflowRun, WorkflowRunLog,
   AgentRequest,
   AgentResponse,
   BackendConversation,
@@ -210,6 +212,89 @@ export async function updateSchedule(id: number, payload: UpdateScheduleRequest)
 
 export async function deleteSchedule(id: number): Promise<void> {
   await fetch(`/api/scheduler/schedules/${id}`, { method: "DELETE" });
+}
+
+// ── Workflow API ──────────────────────────────────────────────────────────────
+
+export async function fetchWorkflows(): Promise<Workflow[]> {
+  const res = await fetch("/api/workflow");
+  if (!res.ok) return [];
+  return res.json() as Promise<Workflow[]>;
+}
+
+export async function fetchWorkflow(id: string): Promise<Workflow | null> {
+  const res = await fetch(`/api/workflow/${id}`);
+  if (!res.ok) return null;
+  return res.json() as Promise<Workflow>;
+}
+
+export async function createWorkflow(payload: {
+  name: string;
+  description?: string;
+  agentPattern: AgentPattern;
+  teamExecMode?: TeamExecMode | null;
+}): Promise<Workflow> {
+  return postJson<Workflow>("/api/workflow", payload);
+}
+
+export async function updateWorkflow(id: string, patch: Partial<{
+  name: string;
+  description: string;
+  agentPattern: AgentPattern;
+  teamExecMode: TeamExecMode | null;
+}>): Promise<Workflow> {
+  const res = await fetch(`/api/workflow/${id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`${res.status}`);
+  return res.json() as Promise<Workflow>;
+}
+
+export async function deleteWorkflow(id: string): Promise<void> {
+  await fetch(`/api/workflow/${id}`, { method: "DELETE" });
+}
+
+// Agents
+export async function fetchWorkflowAgents(workflowId: string): Promise<WorkflowAgent[]> {
+  const res = await fetch(`/api/workflow/${workflowId}/agents`);
+  if (!res.ok) return [];
+  return res.json() as Promise<WorkflowAgent[]>;
+}
+
+export async function upsertWorkflowAgent(workflowId: string, agent: {
+  id?: number;
+  name: string;
+  role: AgentRole;
+  systemPrompt?: string;
+  tools?: string[];
+  orderIndex?: number;
+  posX?: number;
+  posY?: number;
+}): Promise<WorkflowAgent> {
+  return postJson<WorkflowAgent>(`/api/workflow/${workflowId}/agents`, agent);
+}
+
+export async function deleteWorkflowAgent(workflowId: string, agentId: number): Promise<void> {
+  await fetch(`/api/workflow/${workflowId}/agents/${agentId}`, { method: "DELETE" });
+}
+
+// Runs
+export async function fetchWorkflowRuns(workflowId: string): Promise<WorkflowRun[]> {
+  const res = await fetch(`/api/workflow/${workflowId}/runs`);
+  if (!res.ok) return [];
+  return res.json() as Promise<WorkflowRun[]>;
+}
+
+export async function startWorkflowRun(workflowId: string, userInput: string): Promise<{ runId: string }> {
+  return postJson<{ runId: string }>(`/api/workflow/${workflowId}/runs`, { userInput });
+}
+
+export async function fetchRunLogs(runId: string): Promise<WorkflowRunLog[]> {
+  const res = await fetch(`/api/workflow/runs/${runId}/logs`);
+  if (!res.ok) return [];
+  return res.json() as Promise<WorkflowRunLog[]>;
 }
 
 // ── TanStack Query option factories ───────────────────────────────────────────

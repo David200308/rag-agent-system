@@ -100,6 +100,64 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
         REFERENCES conversations(id) ON DELETE CASCADE
 );
 
+-- ── Workflow engine ──────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS workflows (
+    id             VARCHAR(36)   PRIMARY KEY,
+    name           VARCHAR(255)  NOT NULL,
+    description    VARCHAR(1000),
+    owner_email    VARCHAR(255),
+    agent_pattern  VARCHAR(20)   NOT NULL,   -- ORCHESTRATOR | TEAM
+    team_exec_mode VARCHAR(20),               -- PARALLEL | SEQUENTIAL (TEAM only)
+    created_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_wf_owner (owner_email)
+);
+
+CREATE TABLE IF NOT EXISTS workflow_agents (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workflow_id   VARCHAR(36)   NOT NULL,
+    role          VARCHAR(20)   NOT NULL,   -- MAIN | SUB | PEER
+    name          VARCHAR(255)  NOT NULL,
+    system_prompt TEXT,
+    tools_json    TEXT,                     -- JSON array of enabled tool names
+    order_index   INT           NOT NULL DEFAULT 0,
+    pos_x         DOUBLE        NOT NULL DEFAULT 0,
+    pos_y         DOUBLE        NOT NULL DEFAULT 0,
+    created_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_wa_workflow (workflow_id),
+    CONSTRAINT fk_wa_workflow FOREIGN KEY (workflow_id)
+        REFERENCES workflows(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS workflow_runs (
+    id               VARCHAR(36)  PRIMARY KEY,
+    workflow_id      VARCHAR(36)  NOT NULL,
+    owner_email      VARCHAR(255),
+    user_input       TEXT         NOT NULL,
+    status           VARCHAR(20)  NOT NULL DEFAULT 'PENDING',  -- PENDING | RUNNING | DONE | FAILED
+    sandbox_container VARCHAR(128),
+    final_output     TEXT,
+    started_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    finished_at      TIMESTAMP,
+    INDEX idx_wr_workflow (workflow_id),
+    CONSTRAINT fk_wr_workflow FOREIGN KEY (workflow_id)
+        REFERENCES workflows(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS workflow_run_logs (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    run_id      VARCHAR(36)   NOT NULL,
+    agent_id    BIGINT,
+    agent_name  VARCHAR(255),
+    log_type    VARCHAR(30)   NOT NULL,  -- TOOL_CALL | TOOL_RESULT | LLM_RESPONSE | DELEGATION | ERROR | SYSTEM
+    content     TEXT          NOT NULL,
+    created_at  TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    INDEX idx_wrl_run (run_id),
+    CONSTRAINT fk_wrl_run FOREIGN KEY (run_id)
+        REFERENCES workflow_runs(id) ON DELETE CASCADE
+);
+
 -- ── Scheduled messages (managed by Go scheduler service) ─────────────────────
 CREATE TABLE IF NOT EXISTS scheduled_messages (
     id                 BIGINT AUTO_INCREMENT PRIMARY KEY,

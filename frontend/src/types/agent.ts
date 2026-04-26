@@ -164,6 +164,75 @@ export interface WebFetchWhitelistEntry {
   createdAt: string;
 }
 
+// ── Workflow engine types ──────────────────────────────────────────────────
+
+export type AgentPattern = "ORCHESTRATOR" | "TEAM";
+export type TeamExecMode = "PARALLEL" | "SEQUENTIAL";
+export type AgentRole    = "MAIN" | "SUB" | "PEER";
+export type RunStatus    = "PENDING" | "RUNNING" | "DONE" | "FAILED";
+export type LogType      = "TOOL_CALL" | "TOOL_RESULT" | "LLM_RESPONSE" | "DELEGATION" | "ERROR" | "SYSTEM";
+
+export const SANDBOX_TOOLS = ["BASH", "CURL", "GIT", "GREP", "PYTHON", "NODE"] as const;
+export type SandboxTool = typeof SANDBOX_TOOLS[number];
+
+export interface Workflow {
+  id: string;
+  name: string;
+  description: string | null;
+  ownerEmail: string | null;
+  agentPattern: AgentPattern;
+  teamExecMode: TeamExecMode | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkflowAgent {
+  id: number;
+  workflowId: string;
+  role: AgentRole;
+  name: string;
+  systemPrompt: string | null;
+  toolsJson: string;       // JSON array string, parse client-side
+  orderIndex: number;
+  posX: number;
+  posY: number;
+  createdAt: string;
+}
+
+export interface WorkflowRun {
+  id: string;
+  workflowId: string;
+  ownerEmail: string | null;
+  userInput: string;
+  status: RunStatus;
+  sandboxContainer: string | null;
+  finalOutput: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface WorkflowRunLog {
+  id: number;
+  runId: string;
+  agentId: number | null;
+  agentName: string | null;
+  logType: LogType;
+  content: string;
+  createdAt: string;
+}
+
+export interface WorkflowRunEvent {
+  agentName: string;
+  logType: LogType;
+  content: string;
+  createdAt: string;
+}
+
+export interface WorkflowDoneEvent {
+  status: RunStatus;
+  output: string;
+}
+
 export interface IngestionResult {
   status: string;
   filename?: string;

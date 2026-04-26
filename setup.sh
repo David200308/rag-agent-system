@@ -250,6 +250,20 @@ EOF
   echo ""
   echo -e "  ${GREEN}✓${NC}  Written: .env"
 
+  # ── Sandbox image ──────────────────────────────────────────────────────────
+  header "Sandbox Image (for Workflow engine)"
+  echo -e "  ${DIM}The workflow engine runs agent tool calls inside an isolated Docker container.${NC}"
+  echo -e "  ${DIM}Build the sandbox image once with: docker build -f Dockerfile.sandbox -t ragagent/sandbox:latest .${NC}"
+  echo ""
+  if confirm "Build sandbox image now?"; then
+    echo -e "  Building ragagent/sandbox:latest …"
+    docker build -f "$SCRIPT_DIR/Dockerfile.sandbox" -t ragagent/sandbox:latest "$SCRIPT_DIR"
+    echo -e "  ${GREEN}✓${NC}  Sandbox image built."
+  else
+    echo -e "  ${YELLOW}Skipped.${NC} Build later: ${BOLD}docker build -f Dockerfile.sandbox -t ragagent/sandbox:latest .${NC}"
+    echo -e "  ${DIM}Set SANDBOX_ENABLED=false in .env to disable the sandbox entirely.${NC}"
+  fi
+
   # ── Launch ─────────────────────────────────────────────────────────────────
   echo ""
   echo -e "  How would you like to start?"

@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, MessageSquare, Trash2, BookOpen, LogOut, PanelLeftClose, Settings, X, Archive, ArchiveRestore, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, MessageSquare, Trash2, BookOpen, LogOut, PanelLeftClose, Settings, X, Archive, ArchiveRestore, ChevronDown, ChevronRight, Workflow } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -127,6 +127,17 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
           )}
         >
           <BookOpen className="h-3.5 w-3.5" /> Knowledge
+        </Link>
+        <Link
+          href="/workflow"
+          className={cn(
+            "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition-colors",
+            pathname.startsWith("/workflow")
+              ? "bg-black text-white dark:bg-white dark:text-black"
+              : "text-[--color-muted] hover:bg-[--color-border]/50",
+          )}
+        >
+          <Workflow className="h-3.5 w-3.5" /> Workflow
         </Link>
       </nav>
 

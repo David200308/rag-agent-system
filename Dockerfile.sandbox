@@ -1,0 +1,20 @@
+FROM ubuntu:22.04
+
+# Prevent interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash curl wget git grep sed awk find \
+    python3 python3-pip nodejs npm \
+    jq zip unzip ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user for safer execution
+RUN useradd -m -s /bin/bash sandbox
+RUN mkdir -p /workspace && chown sandbox:sandbox /workspace
+
+USER sandbox
+WORKDIR /workspace
+
+# Default: keep container alive (overridden by SandboxService)
+CMD ["tail", "-f", "/dev/null"]

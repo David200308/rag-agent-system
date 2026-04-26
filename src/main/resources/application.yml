@@ -135,6 +135,22 @@ llm:
     embedding-model: ${LOCAL_EMBEDDING_MODEL:nomic-embed-text}
     temperature: 0.1
 
+# ── Sandbox (Docker-based isolated execution for workflow agents) ─────────────
+# Set SANDBOX_ENABLED=false to disable Docker sandboxing (tool calls won't run).
+# Build the sandbox image: docker build -f Dockerfile.sandbox -t ragagent/sandbox:latest .
+sandbox:
+  enabled: ${SANDBOX_ENABLED:true}
+  image: ${SANDBOX_IMAGE:ragagent/sandbox:latest}
+  memory-limit: ${SANDBOX_MEMORY:512m}
+  cpu-quota: ${SANDBOX_CPU_QUOTA:50000}        # 50% of one core (100000 = 100%)
+  exec-timeout-seconds: ${SANDBOX_EXEC_TIMEOUT:30}
+  # Queue-based admission control
+  max-concurrent: ${SANDBOX_MAX_CONCURRENT:3}  # max simultaneous sandbox containers
+  queue-capacity: ${SANDBOX_QUEUE_CAPACITY:10} # max runs waiting; excess are rejected
+  # Host resource thresholds — rejects new runs if the host is too stressed
+  cpu-load-threshold: ${SANDBOX_CPU_THRESHOLD:0.90}       # reject if CPU > 90%
+  free-memory-threshold: ${SANDBOX_MEM_THRESHOLD:0.10}    # reject if free RAM < 10%
+
 # ── Web-fetch feature ────────────────────────────────────────────────────────
 # Controls the ability for agent queries to include live web page content.
 # The domain whitelist is managed entirely via the database:
