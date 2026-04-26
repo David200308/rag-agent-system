@@ -401,9 +401,10 @@ public class AgentController {
     // ── Web-fetch whitelist ───────────────────────────────────────────────────
 
     @GetMapping("/web-fetch/whitelist")
-    @Operation(summary = "List all whitelisted domains for web fetch")
-    public ResponseEntity<List<WebFetchWhitelist>> listWebFetchWhitelist() {
-        return ResponseEntity.ok(webFetchService.listWhitelist());
+    @Operation(summary = "List whitelisted domains for web fetch (scoped to the authenticated user)")
+    public ResponseEntity<List<WebFetchWhitelist>> listWebFetchWhitelist(HttpServletRequest httpRequest) {
+        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        return ResponseEntity.ok(webFetchService.listWhitelist(email));
     }
 
     @PostMapping("/web-fetch/whitelist")
@@ -425,10 +426,12 @@ public class AgentController {
     }
 
     @DeleteMapping("/web-fetch/whitelist/{domain}")
-    @Operation(summary = "Remove a domain from the web-fetch whitelist")
-    public ResponseEntity<Void> removeWebFetchDomain(@PathVariable String domain) {
+    @Operation(summary = "Remove a domain from the authenticated user's web-fetch whitelist")
+    public ResponseEntity<Void> removeWebFetchDomain(@PathVariable String domain,
+                                                      HttpServletRequest httpRequest) {
+        String email = (String) httpRequest.getAttribute("authenticatedEmail");
         try {
-            webFetchService.removeDomain(domain);
+            webFetchService.removeDomain(domain, email);
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();

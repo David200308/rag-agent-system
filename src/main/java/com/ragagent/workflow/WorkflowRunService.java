@@ -1,6 +1,7 @@
 package com.ragagent.workflow;
 
 import com.ragagent.sandbox.SandboxService;
+import com.ragagent.webfetch.WebFetchService;
 import com.ragagent.workflow.entity.Workflow;
 import com.ragagent.workflow.entity.WorkflowAgent;
 import com.ragagent.workflow.entity.WorkflowRun;
@@ -50,12 +51,15 @@ public class WorkflowRunService {
             Pattern.compile("<use_tool name=\"(\\w+)\">(.*?)</use_tool>", Pattern.DOTALL);
     private static final Pattern DELEGATE_PATTERN =
             Pattern.compile("<delegate to=\"([^\"]+)\">(.*?)</delegate>", Pattern.DOTALL);
+    private static final Pattern HTTP_URL_PATTERN =
+            Pattern.compile("https?://[^\\s\"'\\\\]+");
 
     private final WorkflowRunRepository    runRepo;
     private final WorkflowRunLogRepository logRepo;
     private final WorkflowAgentRepository  agentRepo;
     private final WorkflowService          workflowService;
     private final SandboxService           sandboxService;
+    private final WebFetchService          webFetchService;
     private final ChatClient               chatClient;
 
     /** Active SSE emitters keyed by runId. */
@@ -358,6 +362,16 @@ public class WorkflowRunService {
                 emit(run.getId(), agent.getId(), agent.getName(), WorkflowRunLog.LogType.TOOL_CALL,
                         "[" + toolName + "] " + command);
 
+                String blocked = validateNetworkCommand(command, run.getOwnerEmail());
+                if (blocked != null) {
+                    emit(run.getId(), agent.getId(), agent.getName(),
+                            WorkflowRunLog.LogType.TOOL_RESULT, blocked);
+                    messages.add(Map.of("role", "assistant", "content", llmResponse));
+                    messages.add(Map.of("role", "user", "content",
+                            "Tool result (" + toolName + "):\n" + blocked));
+                    continue;
+                }
+
                 String toolResult = sandboxService.exec(containerId, command);
 
                 emit(run.getId(), agent.getId(), agent.getName(), WorkflowRunLog.LogType.TOOL_RESULT,
@@ -460,5 +474,31 @@ public class WorkflowRunService {
 
     private String truncate(String s, int max) {
         return s != null && s.length() > max ? s.substring(0, max) + "…" : String.valueOf(s);
+    }
+
+    /**
+     * Returns a block message if the command contains curl/wget targeting a domain not in
+     * the owner's whitelist. Returns null if the command is allowed.
+     */
+    private String validateNetworkCommand(String command, String ownerEmail) {
+        if (!command.contains("curl") && !command.contains("wget")) {
+            return null;
+        }
+        List<String> urls = new ArrayList<>();
+        Matcher m = HTTP_URL_PATTERN.matcher(command);
+        while (m.find()) {
+            urls.add(m.group().replaceAll("[.,;)\\]]+$", ""));
+        }
+        if (urls.isEmpty()) {
+            return "[Blocked: curl/wget without a recognizable URL is not permitted]";
+        }
+        for (String url : urls) {
+            if (!webFetchService.isUrlAllowed(url, ownerEmail)) {
+                String host = url.replaceAll("^https?://([^/?#]+).*", "$1");
+                return "[Blocked: domain '" + host + "' is not in your web-fetch whitelist. "
+                        + "Add it in Settings → Web Fetch before using it in a workflow.]";
+            }
+        }
+        return null;
     }
 }

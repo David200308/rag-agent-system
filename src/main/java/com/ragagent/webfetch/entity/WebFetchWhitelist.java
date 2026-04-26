@@ -20,7 +20,7 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "web_fetch_whitelist",
-       uniqueConstraints = @UniqueConstraint(columnNames = "domain"))
+       uniqueConstraints = @UniqueConstraint(name = "uq_wfw_domain_user", columnNames = {"domain", "added_by"}))
 @Getter
 @Setter
 @NoArgsConstructor

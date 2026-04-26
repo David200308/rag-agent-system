@@ -53,6 +53,7 @@ public class WebFetchNode {
 
     public Map<String, Object> process(AgentState state) {
         AgentRequest request = state.request().orElseThrow();
+        String userEmail = state.userEmail().orElse(null);
 
         Map<String, Object> updates = new java.util.HashMap<>();
 
@@ -60,13 +61,13 @@ public class WebFetchNode {
         boolean webFetchEnabled = props.enabled() && request.isWebFetchEnabled();
 
         // Merge explicit fetchUrls + URLs auto-extracted from the query text
-        List<String> urls = resolveUrls(request);
+        List<String> urls = resolveUrls(request, userEmail);
 
         if (webFetchEnabled && !urls.isEmpty()) {
             List<DocumentResult> fetched = new ArrayList<>();
             for (String url : urls) {
                 try {
-                    fetched.add(webFetchService.fetch(url));
+                    fetched.add(webFetchService.fetch(url, userEmail));
                 } catch (Exception e) {
                     log.warn("[WebFetchNode] Skipping URL '{}': {}", url, e.getMessage());
                 }
@@ -97,37 +98,26 @@ public class WebFetchNode {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /**
-     * Build the de-duplicated, whitelist-filtered URL list from explicit fetchUrls
-     * (if any) plus URLs auto-extracted from the query text. Capped at {@value #MAX_URLS}.
-     *
-     * URLs whose domain is not in the whitelist are dropped here with a WARN log
-     * so the fetch loop only ever sees pre-approved URLs.
-     */
-    private List<String> resolveUrls(AgentRequest request) {
+    private List<String> resolveUrls(AgentRequest request, String userEmail) {
         LinkedHashSet<String> seen = new LinkedHashSet<>();
 
-        // 1. Explicit URLs from the caller
         if (request.fetchUrls() != null) {
             request.fetchUrls().forEach(u -> seen.add(u.strip()));
         }
 
-        // 2. Auto-extract from query text
         Matcher m = URL_PATTERN.matcher(request.query());
         while (m.find()) {
-            // Strip trailing punctuation that may be part of the surrounding sentence
             String url = m.group().replaceAll("[.,!?;:)]+$", "");
             seen.add(url);
         }
 
-        // 3. Whitelist check — drop non-whitelisted domains before fetching
         List<String> allowed = new ArrayList<>();
         for (String url : seen) {
-            if (webFetchService.isUrlAllowed(url)) {
+            if (webFetchService.isUrlAllowed(url, userEmail)) {
                 allowed.add(url);
                 if (allowed.size() == MAX_URLS) break;
             } else {
-                log.warn("[WebFetchNode] Skipping URL '{}': domain not in whitelist", url);
+                log.warn("[WebFetchNode] Skipping URL '{}': domain not in user whitelist", url);
             }
         }
         return allowed;

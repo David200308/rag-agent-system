@@ -15,4 +15,12 @@ public interface WebFetchWhitelistRepository extends JpaRepository<WebFetchWhite
     List<WebFetchWhitelist> findAllByOrderByDomainAsc();
 
     void deleteByDomain(String domain);
+
+    // ── Per-user queries ──────────────────────────────────────────────────────
+
+    List<WebFetchWhitelist> findAllByAddedByOrderByDomainAsc(String addedBy);
+
+    boolean existsByDomainAndAddedBy(String domain, String addedBy);
+
+    void deleteByDomainAndAddedBy(String domain, String addedBy);
 }

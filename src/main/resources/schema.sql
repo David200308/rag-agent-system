@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS web_fetch_whitelist (
     domain     VARCHAR(253) NOT NULL,
     added_by   VARCHAR(255),
     created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_wfw_domain (domain)
+    UNIQUE KEY uq_wfw_domain_user (domain, added_by)
 );
 
 CREATE TABLE IF NOT EXISTS conversation_messages (
@@ -157,6 +157,12 @@ CREATE TABLE IF NOT EXISTS workflow_run_logs (
     CONSTRAINT fk_wrl_run FOREIGN KEY (run_id)
         REFERENCES workflow_runs(id) ON DELETE CASCADE
 );
+
+-- ── Schema migration: web_fetch_whitelist per-user isolation ─────────────────
+-- Existing databases: drops the old global unique constraint and adds the per-user
+-- one. On fresh installs these statements fail silently (continue-on-error=true).
+ALTER TABLE web_fetch_whitelist DROP INDEX uq_wfw_domain;
+ALTER TABLE web_fetch_whitelist ADD UNIQUE KEY uq_wfw_domain_user (domain, added_by);
 
 -- ── Scheduled messages (managed by Go scheduler service) ─────────────────────
 CREATE TABLE IF NOT EXISTS scheduled_messages (
