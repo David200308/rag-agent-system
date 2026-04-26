@@ -15,6 +15,9 @@ RUN mvn package -DskipTests -B
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
+# Docker CLI — needed by SandboxService to spawn ephemeral sandbox containers
+RUN apk add --no-cache docker-cli
+
 COPY --from=build /app/target/*.jar app.jar
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

@@ -1,6 +1,7 @@
 package com.ragagent.sandbox;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -11,10 +12,7 @@ import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -26,9 +24,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  *  - Admission check: refuses new sandboxes if system CPU or free memory
  *    exceed configured thresholds (fail-fast instead of overloading the host)
  *
- * Callers receive a SandboxTicket. When the ticket's acquire() returns, a slot
- * is guaranteed and the container can be created. The ticket must be released
- * (via destroySandbox) to free the slot for the next queued run.
+ * Runtime watchdog:
+ *  - Polls docker stats every sandbox.watchdog.interval-seconds seconds
+ *  - Kills any container whose CPU% or memory% exceeds the configured limits
+ *  - Killed containers cause the next exec() call to throw SandboxKilledException,
+ *    which propagates up and fails the workflow run immediately
  */
 @Slf4j
 @Service
@@ -49,46 +49,79 @@ public class SandboxService {
     @Value("${sandbox.exec-timeout-seconds:30}")
     private int execTimeoutSeconds;
 
-    /** Maximum simultaneous sandbox containers. */
     @Value("${sandbox.max-concurrent:3}")
     private int maxConcurrent;
 
-    /** Maximum runs that can wait in the queue. Excess runs are rejected. */
     @Value("${sandbox.queue-capacity:10}")
     private int queueCapacity;
 
-    /** Reject new runs if system CPU load exceeds this fraction (0.0–1.0). */
     @Value("${sandbox.cpu-load-threshold:0.90}")
     private double cpuLoadThreshold;
 
-    /** Reject new runs if free physical memory falls below this fraction (0.0–1.0). */
     @Value("${sandbox.free-memory-threshold:0.10}")
     private double freeMemoryThreshold;
 
-    // ── Resource governance ───────────────────────────────────────────────────
+    // ── Watchdog config ───────────────────────────────────────────────────────
+
+    @Value("${sandbox.watchdog.enabled:true}")
+    private boolean watchdogEnabled;
+
+    /** How often the watchdog polls docker stats (seconds). */
+    @Value("${sandbox.watchdog.interval-seconds:10}")
+    private int watchdogIntervalSeconds;
+
+    /** Kill a container whose CPU usage exceeds this percentage (0–100). */
+    @Value("${sandbox.watchdog.cpu-percent-limit:80.0}")
+    private double watchdogCpuLimit;
+
+    /** Kill a container whose memory usage exceeds this percentage of its limit (0–100). */
+    @Value("${sandbox.watchdog.memory-percent-limit:90.0}")
+    private double watchdogMemoryLimit;
+
+    // ── Runtime state ─────────────────────────────────────────────────────────
 
     private Semaphore              slots;
-    private BlockingQueue<String>  waitQueue;   // queued runIds (for observability)
+    private BlockingQueue<String>  waitQueue;
     private final AtomicInteger    active  = new AtomicInteger(0);
     private final AtomicInteger    queued  = new AtomicInteger(0);
 
+    /** containerId → runId for every live sandbox container. */
+    private final ConcurrentHashMap<String, String> activeContainers = new ConcurrentHashMap<>();
+
+    /** containerId → kill reason for containers the watchdog terminated. */
+    private final ConcurrentHashMap<String, String> killedContainers = new ConcurrentHashMap<>();
+
+    private ScheduledExecutorService watchdogExecutor;
+
     @PostConstruct
     void init() {
-        slots     = new Semaphore(maxConcurrent, true);   // fair
+        slots     = new Semaphore(maxConcurrent, true);
         waitQueue = new ArrayBlockingQueue<>(queueCapacity);
         log.info("[Sandbox] max-concurrent={} queue-capacity={}", maxConcurrent, queueCapacity);
+
+        if (watchdogEnabled) {
+            watchdogExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "sandbox-watchdog");
+                t.setDaemon(true);
+                return t;
+            });
+            watchdogExecutor.scheduleAtFixedRate(
+                    this::checkContainerResources,
+                    watchdogIntervalSeconds, watchdogIntervalSeconds, TimeUnit.SECONDS);
+            log.info("[Sandbox] Watchdog started — interval={}s cpu-limit={}% mem-limit={}%",
+                    watchdogIntervalSeconds, watchdogCpuLimit, watchdogMemoryLimit);
+        }
+    }
+
+    @PreDestroy
+    void shutdown() {
+        if (watchdogExecutor != null) {
+            watchdogExecutor.shutdownNow();
+        }
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
 
-    /**
-     * Acquires a sandbox slot (blocking if at capacity, bounded by queue limit),
-     * then creates and starts a Docker container. Returns the container ID,
-     * or null if sandbox is disabled / Docker unavailable.
-     *
-     * Throws {@link SandboxQueueFullException} if the queue is already full.
-     * Throws {@link SandboxResourceException} if host resources are too strained.
-     */
     public String createSandbox(String runId) {
         return doCreate(runId, false);
     }
@@ -113,7 +146,6 @@ public class SandboxService {
         log.info("[Sandbox] run {} queued — active={} queued={}", runId, active.get(), queued.get());
 
         try {
-            // Block until a slot is available (fair ordering via semaphore)
             slots.acquire();
         } catch (InterruptedException e) {
             waitQueue.remove(runId);
@@ -128,7 +160,9 @@ public class SandboxService {
         log.info("[Sandbox] Slot acquired for run {} — active={} queued={}", runId, active.get(), queued.get());
 
         try {
-            return spawnContainer(runId, withNetwork);
+            String containerId = spawnContainer(runId, withNetwork);
+            activeContainers.put(containerId, runId);
+            return containerId;
         } catch (Exception e) {
             slots.release();
             active.decrementAndGet();
@@ -138,13 +172,23 @@ public class SandboxService {
     }
 
     /**
-     * Executes a shell command inside the container. Returns combined stdout+stderr.
-     * Returns an informative message if the container is unavailable.
+     * Executes a shell command inside the container.
+     *
+     * @throws SandboxKilledException if the watchdog terminated this container
+     *         due to excessive resource usage — callers should let this propagate
+     *         to fail the workflow run.
      */
     public String exec(String containerId, String command) {
         if (containerId == null || containerId.isBlank()) {
             return "[Sandbox unavailable — Docker not running or sandbox disabled]";
         }
+
+        String killReason = killedContainers.get(containerId);
+        if (killReason != null) {
+            throw new SandboxKilledException(
+                    "Sandbox forcibly terminated due to excessive resource usage: " + killReason);
+        }
+
         try {
             String output = runProcess(List.of("docker", "exec", containerId, "sh", "-c", command),
                     execTimeoutSeconds);
@@ -158,19 +202,17 @@ public class SandboxService {
     }
 
     /**
-     * Recycles the sandbox workspace after a workflow task completes:
-     * wipes /workspace and kills any stray background processes.
-     * The container stays alive so the same slot can be reused for a chained task.
-     * Call destroySandbox() when the entire run is done.
+     * Wipes /workspace and kills background processes so the container can be
+     * reused for a chained task without leaving stale state.
      */
     public void recycleSandbox(String containerId) {
         if (containerId == null || containerId.isBlank()) return;
         try {
-            // Kill any background processes started by agent tool calls
             exec(containerId, "pkill -9 -P 1 2>/dev/null || true");
-            // Wipe workspace contents (not the directory itself)
             exec(containerId, "rm -rf /workspace/* /workspace/.[!.]* 2>/dev/null || true");
             log.info("[Sandbox] Recycled container {} — workspace cleaned", shortId(containerId));
+        } catch (SandboxKilledException e) {
+            throw e; // let it propagate
         } catch (Exception e) {
             log.warn("[Sandbox] Recycle failed for {}: {}", containerId, e.getMessage());
         }
@@ -178,19 +220,69 @@ public class SandboxService {
 
     /**
      * Stops and removes the container, then releases the concurrency slot.
-     * No-op if containerId is null.
+     * Skips the docker rm if the watchdog already removed it.
      */
     public void destroySandbox(String containerId) {
         if (containerId == null || containerId.isBlank()) return;
+        activeContainers.remove(containerId);
+        boolean wasKilledByWatchdog = killedContainers.remove(containerId) != null;
+        if (!wasKilledByWatchdog) {
+            try {
+                runProcess(List.of("docker", "rm", "-f", containerId), 15);
+                log.info("[Sandbox] Destroyed container {}", shortId(containerId));
+            } catch (Exception e) {
+                log.warn("[Sandbox] Could not destroy container {}: {}", containerId, e.getMessage());
+            }
+        }
+        slots.release();
+        active.decrementAndGet();
+        log.info("[Sandbox] Slot released — active={} queued={}", active.get(), queued.get());
+    }
+
+    // ── Watchdog ──────────────────────────────────────────────────────────────
+
+    private void checkContainerResources() {
+        if (activeContainers.isEmpty()) return;
+
+        for (String containerId : activeContainers.keySet()) {
+            if (killedContainers.containsKey(containerId)) continue;
+
+            try {
+                String stats = runProcess(
+                        List.of("docker", "stats", "--no-stream",
+                                "--format", "{{.CPUPerc}}\t{{.MemPerc}}", containerId),
+                        10);
+
+                if (stats.isBlank()) continue;
+
+                String[] parts = stats.strip().split("\t");
+                if (parts.length < 2) continue;
+
+                double cpu = parsePercent(parts[0]);
+                double mem = parsePercent(parts[1]);
+
+                log.debug("[Watchdog] Container {} — cpu={}% mem={}%", shortId(containerId), cpu, mem);
+
+                if (cpu > watchdogCpuLimit) {
+                    killByWatchdog(containerId,
+                            "CPU %.1f%% exceeded limit %.1f%%".formatted(cpu, watchdogCpuLimit));
+                } else if (mem > watchdogMemoryLimit) {
+                    killByWatchdog(containerId,
+                            "memory %.1f%% exceeded limit %.1f%%".formatted(mem, watchdogMemoryLimit));
+                }
+            } catch (Exception e) {
+                log.debug("[Watchdog] Could not check container {}: {}", shortId(containerId), e.getMessage());
+            }
+        }
+    }
+
+    private void killByWatchdog(String containerId, String reason) {
+        log.warn("[Watchdog] Killing container {} — {}", shortId(containerId), reason);
+        killedContainers.put(containerId, reason);
         try {
-            runProcess(List.of("docker", "rm", "-f", containerId), 15);
-            log.info("[Sandbox] Destroyed container {}", shortId(containerId));
+            runProcess(List.of("docker", "rm", "-f", containerId), 10);
         } catch (Exception e) {
-            log.warn("[Sandbox] Could not destroy container {}: {}", containerId, e.getMessage());
-        } finally {
-            slots.release();
-            active.decrementAndGet();
-            log.info("[Sandbox] Slot released — active={} queued={}", active.get(), queued.get());
+            log.warn("[Watchdog] Failed to remove container {}: {}", shortId(containerId), e.getMessage());
         }
     }
 
@@ -272,6 +364,14 @@ public class SandboxService {
         return output.toString();
     }
 
+    private double parsePercent(String s) {
+        try {
+            return Double.parseDouble(s.strip().replace("%", ""));
+        } catch (NumberFormatException e) {
+            return 0.0;
+        }
+    }
+
     private String shortId(String id) {
         return id.length() > 12 ? id.substring(0, 12) : id;
     }
@@ -288,5 +388,9 @@ public class SandboxService {
 
     public static class SandboxResourceException extends RuntimeException {
         public SandboxResourceException(String msg) { super(msg); }
+    }
+
+    public static class SandboxKilledException extends RuntimeException {
+        public SandboxKilledException(String msg) { super(msg); }
     }
 }
