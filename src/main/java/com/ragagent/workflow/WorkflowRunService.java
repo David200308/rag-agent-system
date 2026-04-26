@@ -155,18 +155,24 @@ public class WorkflowRunService {
             return tools.stream().anyMatch(t -> t.equalsIgnoreCase("CURL") || t.equalsIgnoreCase("NET"));
         });
 
-        emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM,
-                "Initializing sandbox" + (needsNetwork ? " (network enabled)…" : "…"));
-
-        String containerId = needsNetwork
-                ? sandboxService.createSandboxWithNetwork(run.getId())
-                : sandboxService.createSandbox(run.getId());
-        run.setSandboxContainer(containerId);
-        runRepo.save(run);
-
-        emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "Sandbox ready.");
-
+        // containerId must be declared before the try so the finally block can always call destroySandbox.
+        // It is assigned inside the try — if sandbox creation throws, it stays null and destroySandbox is a no-op.
+        String containerId = null;
         try {
+            emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM,
+                    "Initializing sandbox" + (needsNetwork ? " (network enabled)…" : "…"));
+
+            java.util.function.Consumer<String> sandboxLog = msg ->
+                    emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "[Sandbox] " + msg);
+
+            containerId = needsNetwork
+                    ? sandboxService.createSandboxWithNetwork(run.getId(), sandboxLog)
+                    : sandboxService.createSandbox(run.getId(), sandboxLog);
+            run.setSandboxContainer(containerId);
+            runRepo.save(run);
+
+            emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "Sandbox ready.");
+
             String output = switch (workflow.getAgentPattern()) {
                 case ORCHESTRATOR -> executeOrchestrator(run, agents, containerId);
                 case TEAM         -> executeTeam(run, workflow, agents, containerId);
@@ -213,7 +219,6 @@ public class WorkflowRunService {
             run.setStatus(WorkflowRun.RunStatus.FAILED);
             run.setFinishedAt(Instant.now());
             runRepo.save(run);
-
             emit(run.getId(), null, null, WorkflowRunLog.LogType.ERROR, ex.getMessage());
             pushDoneEvent(run.getId(), "FAILED", ex.getMessage());
 

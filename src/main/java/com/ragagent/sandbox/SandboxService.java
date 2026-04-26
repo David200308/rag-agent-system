@@ -14,6 +14,7 @@ import java.lang.management.OperatingSystemMXBean;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 /**
  * Manages ephemeral Docker sandbox containers for workflow runs.
@@ -122,20 +123,22 @@ public class SandboxService {
 
     // ── Public API ────────────────────────────────────────────────────────────
 
-    public String createSandbox(String runId) {
-        return doCreate(runId, false);
+    public String createSandbox(String runId, Consumer<String> logger) {
+        return doCreate(runId, false, logger);
     }
 
-    public String createSandboxWithNetwork(String runId) {
-        return doCreate(runId, true);
+    public String createSandboxWithNetwork(String runId, Consumer<String> logger) {
+        return doCreate(runId, true, logger);
     }
 
-    private String doCreate(String runId, boolean withNetwork) {
+    private String doCreate(String runId, boolean withNetwork, Consumer<String> logger) {
         if (!enabled) {
             log.info("[Sandbox] Disabled — skipping container for run {}", runId);
+            logger.accept("Sandbox disabled — running without isolation.");
             return null;
         }
 
+        logger.accept("Checking host resources…");
         checkSystemResources(runId);
 
         if (!waitQueue.offer(runId)) {
@@ -143,6 +146,11 @@ public class SandboxService {
                     "Sandbox queue full (capacity=" + queueCapacity + "). Retry later.");
         }
         queued.incrementAndGet();
+
+        if (active.get() >= maxConcurrent) {
+            logger.accept("Waiting for a free sandbox slot (active=" + active.get()
+                    + "/" + maxConcurrent + ", queued=" + queued.get() + ")…");
+        }
         log.info("[Sandbox] run {} queued — active={} queued={}", runId, active.get(), queued.get());
 
         try {
@@ -158,9 +166,10 @@ public class SandboxService {
         queued.decrementAndGet();
         active.incrementAndGet();
         log.info("[Sandbox] Slot acquired for run {} — active={} queued={}", runId, active.get(), queued.get());
+        logger.accept("Slot acquired (active=" + active.get() + "/" + maxConcurrent + "). Spawning container…");
 
         try {
-            String containerId = spawnContainer(runId, withNetwork);
+            String containerId = spawnContainer(runId, withNetwork, logger);
             activeContainers.put(containerId, runId);
             return containerId;
         } catch (Exception e) {
@@ -322,30 +331,44 @@ public class SandboxService {
         }
     }
 
-    private String spawnContainer(String runId, boolean withNetwork) throws IOException, InterruptedException {
+    private String spawnContainer(String runId, boolean withNetwork, Consumer<String> logger)
+            throws IOException, InterruptedException {
         String shortRun = runId.substring(0, 8);
+        String name = withNetwork ? "ragagent-net-" + shortRun : "ragagent-sandbox-" + shortRun;
         List<String> cmd = withNetwork
                 ? List.of("docker", "run", "-d", "--rm",
-                          "--name", "ragagent-net-" + shortRun,
+                          "--name", name,
                           "--memory", memoryLimit,
                           "--cpu-quota", cpuQuota,
                           "--workdir", "/workspace",
                           sandboxImage, "tail", "-f", "/dev/null")
                 : List.of("docker", "run", "-d", "--rm",
-                          "--name", "ragagent-sandbox-" + shortRun,
+                          "--name", name,
                           "--memory", memoryLimit,
                           "--cpu-quota", cpuQuota,
                           "--network", "none",
                           "--workdir", "/workspace",
                           sandboxImage, "tail", "-f", "/dev/null");
 
-        String output = runProcess(cmd, 30).strip();
-        // docker run -d prints exactly the 64-char container ID on success.
-        // Anything else is an error message (e.g., "Cannot connect to the Docker daemon").
-        if (output.isBlank() || output.length() < 12 || output.contains(" ")) {
-            throw new RuntimeException("docker run produced unexpected output: " + truncate(output, 200));
-        }
-        String containerId = output;
+        logger.accept("docker run " + sandboxImage
+                + " [mem=" + memoryLimit + ", cpu-quota=" + cpuQuota
+                + ", network=" + (withNetwork ? "bridge" : "none") + "]");
+
+        String rawOutput = runProcess(cmd, 30);
+        log.debug("[Sandbox] docker run output for run {}: {}", runId, truncate(rawOutput.strip(), 300));
+
+        // docker run -d outputs the 64-char container ID as the last non-empty line.
+        // Preceding lines may be warnings (e.g., platform mismatch). We find the last
+        // line that looks like a hex container ID (≥12 chars, no whitespace).
+        String containerId = rawOutput.lines()
+                .map(String::strip)
+                .filter(l -> !l.isBlank() && l.length() >= 12 && l.matches("[0-9a-f]+"))
+                .reduce((first, second) -> second)
+                .orElseThrow(() -> new RuntimeException(
+                        "docker run produced no valid container ID. Output: " + truncate(rawOutput.strip(), 300)));
+
+        logger.accept("Container ready: " + shortId(containerId)
+                + " [image=" + sandboxImage + ", name=" + name + "]");
         log.info("[Sandbox] Created container {} for run {} (network={})",
                 shortId(containerId), runId, withNetwork);
         return containerId;
