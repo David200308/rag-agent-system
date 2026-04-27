@@ -123,12 +123,16 @@ public class WorkflowController {
         List<String> tools = body.get("tools") instanceof List<?> l
                 ? (List<String>) l : List.of();
 
+        @SuppressWarnings("unchecked")
+        List<String> skillIds = body.get("skillIds") instanceof List<?> s
+                ? (List<String>) s : List.of();
+
         int orderIndex = body.get("orderIndex") instanceof Number n ? n.intValue() : 0;
         double posX    = body.get("posX") instanceof Number n ? n.doubleValue() : 0;
         double posY    = body.get("posY") instanceof Number n ? n.doubleValue() : 0;
 
         WorkflowAgent saved = workflowService.upsertAgent(
-                workflowId, agentId, name, role, systemPrompt, tools, orderIndex, posX, posY);
+                workflowId, agentId, name, role, systemPrompt, tools, skillIds, orderIndex, posX, posY);
         return ResponseEntity.ok(saved);
     }
 

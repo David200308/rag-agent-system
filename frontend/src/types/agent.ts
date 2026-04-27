@@ -193,6 +193,7 @@ export interface WorkflowAgent {
   name: string;
   systemPrompt: string | null;
   toolsJson: string;       // JSON array string, parse client-side
+  skillIdsJson: string;   // JSON array string, parse client-side
   orderIndex: number;
   posX: number;
   posY: number;

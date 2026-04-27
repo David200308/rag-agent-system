@@ -211,7 +211,7 @@ export function WorkflowBuilder({ workflow }: Props) {
     setSelectedId(saved.id);
   }
 
-  async function handleSaveAgent(patch: Partial<WorkflowAgent> & { tools: string[] }) {
+  async function handleSaveAgent(patch: Partial<WorkflowAgent> & { tools: string[]; skillIds: string[] }) {
     if (!selectedAgent) return;
     const saved = await upsertWorkflowAgent(workflow.id, {
       id:           selectedAgent.id,
@@ -219,6 +219,7 @@ export function WorkflowBuilder({ workflow }: Props) {
       role:         patch.role ?? selectedAgent.role,
       systemPrompt: patch.systemPrompt ?? selectedAgent.systemPrompt ?? "",
       tools:        patch.tools,
+      skillIds:     patch.skillIds,
       orderIndex:   selectedAgent.orderIndex,
       posX:         selectedAgent.posX,
       posY:         selectedAgent.posY,

@@ -37,6 +37,10 @@ public class WorkflowAgent {
     @Column(name = "tools_json", columnDefinition = "TEXT")
     private String toolsJson = "[]";
 
+    /** JSON array of attached skill IDs, e.g. ["uuid1","uuid2"]. */
+    @Column(name = "skill_ids_json", columnDefinition = "TEXT")
+    private String skillIdsJson = "[]";
+
     @Column(name = "order_index", nullable = false)
     private int orderIndex = 0;
 

@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS workflow_agents (
     name          VARCHAR(255)  NOT NULL,
     system_prompt TEXT,
     tools_json    TEXT,                     -- JSON array of enabled tool names
+    skill_ids_json TEXT,                    -- JSON array of attached skill IDs
     order_index   INT           NOT NULL DEFAULT 0,
     pos_x         DOUBLE        NOT NULL DEFAULT 0,
     pos_y         DOUBLE        NOT NULL DEFAULT 0,

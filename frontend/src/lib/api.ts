@@ -270,6 +270,7 @@ export async function upsertWorkflowAgent(workflowId: string, agent: {
   role: AgentRole;
   systemPrompt?: string;
   tools?: string[];
+  skillIds?: string[];
   orderIndex?: number;
   posX?: number;
   posY?: number;

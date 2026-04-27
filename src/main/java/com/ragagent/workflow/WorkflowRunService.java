@@ -2,6 +2,7 @@ package com.ragagent.workflow;
 
 import com.ragagent.auth.service.EmailService;
 import com.ragagent.sandbox.SandboxService;
+import com.ragagent.skill.SkillService;
 import com.ragagent.webfetch.WebFetchService;
 import com.ragagent.workflow.entity.Workflow;
 import com.ragagent.workflow.entity.WorkflowAgent;
@@ -61,6 +62,7 @@ public class WorkflowRunService {
     private final WorkflowService          workflowService;
     private final SandboxService           sandboxService;
     private final WebFetchService          webFetchService;
+    private final SkillService             skillService;
     private final ChatClient               chatClient;
     private final EmailService             emailService;
 
@@ -256,6 +258,9 @@ public class WorkflowRunService {
         StringBuilder sb = new StringBuilder();
         sb.append(main.getSystemPrompt() != null ? main.getSystemPrompt() : "You are a helpful orchestrator agent.");
 
+        List<String> skillIds = workflowService.parseSkillIds(main);
+        sb.append(buildSkillSection(skillIds));
+
         List<String> tools = workflowService.parseTools(main);
         if (!tools.isEmpty()) {
             sb.append(buildToolSection(tools));
@@ -308,6 +313,7 @@ public class WorkflowRunService {
                 .map(agent -> CompletableFuture.supplyAsync(
                         () -> {
                             String sysPrompt = (agent.getSystemPrompt() != null ? agent.getSystemPrompt() : "")
+                                    + buildSkillSection(workflowService.parseSkillIds(agent))
                                     + buildToolSection(workflowService.parseTools(agent));
                             return runReActLoop(run, agent, sysPrompt, run.getUserInput(), containerId, List.of());
                         }, asyncPool))
@@ -331,6 +337,7 @@ public class WorkflowRunService {
         for (int i = 0; i < peers.size(); i++) {
             WorkflowAgent agent = peers.get(i);
             String sysPrompt = (agent.getSystemPrompt() != null ? agent.getSystemPrompt() : "")
+                    + buildSkillSection(workflowService.parseSkillIds(agent))
                     + buildToolSection(workflowService.parseTools(agent));
             currentInput = runReActLoop(run, agent, sysPrompt, currentInput, containerId, List.of());
             if (i < peers.size() - 1) {
@@ -387,6 +394,7 @@ public class WorkflowRunService {
                 String subResult;
                 if (subAgent != null) {
                     String subPrompt = (subAgent.getSystemPrompt() != null ? subAgent.getSystemPrompt() : "")
+                            + buildSkillSection(workflowService.parseSkillIds(subAgent))
                             + buildToolSection(workflowService.parseTools(subAgent));
                     subResult = runReActLoop(run, subAgent, subPrompt, delegatedTask, containerId, List.of());
                     sandboxService.recycleSandbox(containerId);  // clean workspace between delegations
@@ -461,6 +469,16 @@ public class WorkflowRunService {
 
                 When you have a final answer, respond normally without any XML tags.
                 """;
+    }
+
+    private String buildSkillSection(List<String> skillIds) {
+        if (skillIds == null || skillIds.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder("\n\n## Knowledge\n");
+        for (String id : skillIds) {
+            skillService.getContent(id).ifPresent(content ->
+                sb.append(content).append("\n\n"));
+        }
+        return sb.toString();
     }
 
     /** Flattens accumulated message pairs into a single user prompt string. */

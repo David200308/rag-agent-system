@@ -12,7 +12,7 @@ import { useSkillsStore } from "@/store/skillsStore";
 interface Props {
   agent: WorkflowAgent | null;
   pattern: "ORCHESTRATOR" | "TEAM";
-  onSave: (patch: Partial<WorkflowAgent> & { tools: string[] }) => Promise<void>;
+  onSave: (patch: Partial<WorkflowAgent> & { tools: string[]; skillIds: string[] }) => Promise<void>;
   onDelete: () => Promise<void>;
   onClose: () => void;
 }
@@ -33,7 +33,7 @@ export function AgentConfigPanel({ agent, pattern, onSave, onDelete, onClose }: 
   const [skills,       setSkills]       = useState<Skill[]>([]);
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
 
-  const { getAgentSkills, setAgentSkills } = useSkillsStore();
+  const { setAgentSkills } = useSkillsStore();
 
   useEffect(() => {
     fetchSkills().then(setSkills).catch(() => {});
@@ -45,7 +45,7 @@ export function AgentConfigPanel({ agent, pattern, onSave, onDelete, onClose }: 
     setRole(agent.role);
     setSystemPrompt(agent.systemPrompt ?? "");
     try { setTools(JSON.parse(agent.toolsJson ?? "[]")); } catch { setTools([]); }
-    setSelectedSkillIds(getAgentSkills(agent.id));
+    try { setSelectedSkillIds(JSON.parse(agent.skillIdsJson ?? "[]")); } catch { setSelectedSkillIds([]); }
   }, [agent]);
 
   if (!agent) return null;
@@ -58,7 +58,7 @@ export function AgentConfigPanel({ agent, pattern, onSave, onDelete, onClose }: 
     setSaving(true);
     try {
       if (agent) setAgentSkills(agent.id, selectedSkillIds);
-      await onSave({ name, role, systemPrompt, tools });
+      await onSave({ name, role, systemPrompt, tools, skillIds: selectedSkillIds });
     } finally {
       setSaving(false);
     }

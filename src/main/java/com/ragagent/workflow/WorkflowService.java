@@ -79,8 +79,8 @@ public class WorkflowService {
     @Transactional
     public WorkflowAgent upsertAgent(String workflowId, Long agentId, String name,
                                      WorkflowAgent.AgentRole role, String systemPrompt,
-                                     List<String> tools, int orderIndex,
-                                     double posX, double posY) {
+                                     List<String> tools, List<String> skillIds,
+                                     int orderIndex, double posX, double posY) {
         WorkflowAgent agent = agentId != null
                 ? agentRepo.findById(agentId).orElse(new WorkflowAgent())
                 : new WorkflowAgent();
@@ -98,6 +98,11 @@ public class WorkflowService {
         } catch (JsonProcessingException e) {
             agent.setToolsJson("[]");
         }
+        try {
+            agent.setSkillIdsJson(objectMapper.writeValueAsString(skillIds != null ? skillIds : List.of()));
+        } catch (JsonProcessingException e) {
+            agent.setSkillIdsJson("[]");
+        }
 
         return agentRepo.save(agent);
     }
@@ -112,6 +117,17 @@ public class WorkflowService {
         try {
             return objectMapper.readValue(
                     agent.getToolsJson() != null ? agent.getToolsJson() : "[]",
+                    List.class);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<String> parseSkillIds(WorkflowAgent agent) {
+        try {
+            return objectMapper.readValue(
+                    agent.getSkillIdsJson() != null ? agent.getSkillIdsJson() : "[]",
                     List.class);
         } catch (Exception e) {
             return List.of();
