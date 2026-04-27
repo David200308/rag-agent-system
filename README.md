@@ -9,10 +9,10 @@
 | Layer            | Technology                                 |
 | ---------------- | ------------------------------------------ |
 | Runtime          | Java 21 (virtual threads)                  |
-| Framework        | Spring Boot 3.5                            |
+| Framework        | Spring Boot 3.4.5                          |
 | AI orchestration | Spring AI 1.1                              |
 | Agent graph      | LangGraph4j 1.7                            |
-| LLM providers    | OpenAI / OpenRouter, Anthropic Claude      |
+| LLM providers    | OpenAI / OpenRouter / Anthropic / Local    |
 | Vector store     | Weaviate                                   |
 | Embeddings       | Spring AI embedding abstraction            |
 | Document parsing | Apache Tika (PDF, text, HTML)              |
@@ -35,11 +35,12 @@
 
 ### Infrastructure
 
-| Component        | Technology        |
-| ---------------- | ----------------- |
-| Vector DB        | Weaviate (Docker) |
-| Relational DB    | MySQL (Docker)    |
-| Containerization | Docker Compose    |
+| Component        | Technology                      |
+| ---------------- | ------------------------------- |
+| Vector DB        | Weaviate (Docker)               |
+| Relational DB    | MySQL (Docker)                  |
+| Scheduler        | Go microservice (cron jobs)     |
+| Containerization | Docker Compose                  |
 
 ---
 
@@ -52,11 +53,15 @@
 │   /upload    Document & URL ingestion                       │
 │   /knowledge Knowledge base browser                        │
 │   /mcp       MCP tool explorer                              │
+│   /skills    Skill library (upload & preview code files)    │
+│   /workflow  Workflow builder & run monitor                 │
+│   /settings  User & schedule settings                       │
+│   /share     Shared conversation view                       │
 │   /api       API proxy routes                               │
 └──────────────────────────┬──────────────────────────────────┘
                            │ HTTP / SSE (streaming)
 ┌──────────────────────────▼──────────────────────────────────┐
-│                   Spring Boot Backend                        │
+│                   Spring Boot Backend (:8081)                │
 │                                                             │
 │  AuthFilter (JWT)  ──►  AgentController                    │
 │                               │                             │
@@ -86,25 +91,22 @@
 │         │                  │                                 │
 │   ┌─────▼────┐      ┌──────▼──────┐                         │
 │   │ Weaviate │      │ OpenAI /    │                         │
-│   │ Vector   │      │ Anthropic   │                         │
-│   │ Store    │      │ Claude      │                         │
+│   │ Vector   │      │ Anthropic / │                         │
+│   │ Store    │      │ OpenRouter  │                         │
 │   └──────────┘      └─────────────┘                         │
 │                                                             │
-│  ┌─────────────────────┐  ┌──────────────────────────────┐  │
-│  │  Auth Module        │  │  MCP Server (SSE)            │  │
-│  │  OtpCode (MySQL)    │  │  Exposes RAG tools to        │  │
-│  │  EmailWhitelist     │  │  external MCP clients        │  │
-│  │  JWT tokens         │  │  (e.g. Claude Desktop)       │  │
-│  └─────────────────────┘  └──────────────────────────────┘  │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐ │
+│  │ Auth Module  │  │  MCP Server  │  │  Workflow Engine   │ │
+│  │ OTP + JWT    │  │  (SSE)       │  │  + Sandbox Service │ │
+│  └──────────────┘  └──────────────┘  └────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
-                           │
-             ┌─────────────┴──────────┐
-             │                        │
-      ┌──────▼──────┐         ┌───────▼──────┐
-      │  Weaviate   │         │    MySQL      │
-      │  (vectors)  │         │  (auth data,  │
-      │             │         │  conversations│
-      └─────────────┘         └──────────────┘
+          │                    │                   │
+  ┌───────▼──────┐   ┌────────▼────────┐  ┌───────▼───────┐
+  │  Weaviate    │   │     MySQL       │  │  Go Scheduler │
+  │  (vectors)   │   │  (auth, convos, │  │   (:8082)     │
+  │              │   │   workflows,    │  │  cron jobs    │
+  └──────────────┘   │   skills)       │  └───────────────┘
+                     └─────────────────┘
 ```
 
 ### Agent Graph Routing
@@ -117,6 +119,21 @@ The LangGraph4j graph determines the execution path per query:
 | `RETRIEVE` (empty) | No matching documents found        | analyzeQuery → retrieve → fallback → END |
 | `DIRECT`           | Query answerable without retrieval | analyzeQuery → generate → END             |
 | `FALLBACK`         | Query out of scope / unsafe        | analyzeQuery → fallback → END             |
+
+### Workflow Engine
+
+Workflows compose multiple AI agents into pipelines with two patterns:
+
+| Pattern        | Description                                               |
+| -------------- | --------------------------------------------------------- |
+| `ORCHESTRATOR` | One orchestrator agent routes tasks to specialist agents  |
+| `TEAM`         | Multiple agents run in `PARALLEL` or `SEQUENTIAL` order  |
+
+Each workflow run executes inside an ephemeral Docker sandbox (`SandboxService`) with CPU/memory resource limits and a watchdog that terminates runaway containers. Agents within a workflow can load user-uploaded **Skills** (code files) to extend their capabilities.
+
+### Scheduler
+
+A lightweight Go microservice (`:8082`) manages cron-scheduled workflow runs. It persists schedules in MySQL, loads them on startup, and triggers the Spring Boot backend on each tick.
 
 ### Auth Flow
 
