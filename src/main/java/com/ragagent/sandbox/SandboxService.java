@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -318,17 +320,47 @@ public class SandboxService {
                                 .formatted(cpuLoad * 100, cpuLoadThreshold * 100));
             }
 
-            long freePhys  = sunOs.getFreeMemorySize();
             long totalPhys = sunOs.getTotalMemorySize();
             if (totalPhys > 0) {
-                double freeRatio = (double) freePhys / totalPhys;
-                if (freeRatio < freeMemoryThreshold) {
-                    throw new SandboxResourceException(
-                            "Host free memory %.0f%% below threshold %.0f%% — try again later"
-                                    .formatted(freeRatio * 100, freeMemoryThreshold * 100));
+                // On Linux, MemFree is near-zero because the kernel fills it with buffer/cache.
+                // MemAvailable from /proc/meminfo is the correct metric — it includes reclaimable
+                // cache and is what the kernel itself uses to judge whether a new process can start.
+                long availableBytes = readMemAvailableBytes();
+                if (availableBytes < 0) {
+                    // Non-Linux fallback: use getFreeMemorySize()
+                    availableBytes = sunOs.getFreeMemorySize();
                 }
+                double availRatio = (double) availableBytes / totalPhys;
+                if (availRatio < freeMemoryThreshold) {
+                    throw new SandboxResourceException(
+                            "Host available memory %.0f%% below threshold %.0f%% — try again later"
+                                    .formatted(availRatio * 100, freeMemoryThreshold * 100));
+                }
+                log.debug("[Sandbox] Memory check passed — available={} MiB ({}%)",
+                        availableBytes / (1024 * 1024), (int)(availRatio * 100));
             }
         }
+    }
+
+    /**
+     * Reads MemAvailable from /proc/meminfo (Linux only).
+     * Returns bytes, or -1 if the file is unavailable (non-Linux or permission error).
+     *
+     * MemAvailable accounts for reclaimable buffer/cache and is the correct metric
+     * for "can we start a new process?" — unlike MemFree which ignores the cache.
+     */
+    private long readMemAvailableBytes() {
+        try {
+            for (String line : Files.readAllLines(Path.of("/proc/meminfo"))) {
+                if (line.startsWith("MemAvailable:")) {
+                    String[] parts = line.trim().split("\\s+");
+                    return Long.parseLong(parts[1]) * 1024L; // kB → bytes
+                }
+            }
+        } catch (Exception e) {
+            log.debug("[Sandbox] /proc/meminfo unavailable: {}", e.getMessage());
+        }
+        return -1;
     }
 
     private String spawnContainer(String runId, boolean withNetwork, Consumer<String> logger)
