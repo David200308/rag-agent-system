@@ -13,6 +13,7 @@ interface Props {
   liveRunId: string | null;
   onClose: () => void;
   onRunComplete?: (output: string, status: WorkflowRun["status"]) => void;
+  width?: number;
 }
 
 function statusIcon(status: WorkflowRun["status"]) {
@@ -39,7 +40,7 @@ function timeAgo(iso: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplete }: Props) {
+export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplete, width }: Props) {
   const [runs,        setRuns]        = useState<WorkflowRun[]>([]);
   const [selectedId,  setSelectedId]  = useState<string | null>(liveRunId);
   const [loading,     setLoading]     = useState(false);
@@ -72,7 +73,10 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
   }
 
   return (
-    <div className="flex w-80 flex-col border-l border-[--color-border] bg-[--color-surface]">
+    <div
+      className="flex flex-col border-[--color-border] bg-[--color-surface]"
+      style={{ width: width ?? 320, minWidth: width ?? 320 }}
+    >
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-[--color-border] px-4 py-3">
         <span className="text-sm font-semibold flex-1">Runs</span>

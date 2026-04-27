@@ -84,6 +84,15 @@ export function WorkflowBuilder({ workflow }: Props) {
     typeof window !== "undefined" && localStorage.getItem("workflow:notify:email") === "true");
   const browserNotifyRef = useRef(browserNotify);
 
+  const RUNS_MIN = 260;
+  const RUNS_MAX = 720;
+  const RUNS_DEFAULT = 320;
+  const [runsWidth,    setRunsWidth]    = useState(RUNS_DEFAULT);
+  const [runsDragging, setRunsDragging] = useState(false);
+  const runsWidthRef  = useRef(RUNS_DEFAULT);
+  const runsStartRef  = useRef<{ x: number; w: number } | null>(null);
+  runsWidthRef.current = runsWidth;
+
   // Load agents from backend
   useEffect(() => {
     fetchWorkflowAgents(workflow.id).then(a => {
@@ -131,6 +140,47 @@ export function WorkflowBuilder({ workflow }: Props) {
     () => agents.find(a => a.id === selectedId) ?? null,
     [agents, selectedId],
   );
+
+  // ── Runs panel resize ─────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const stored = localStorage.getItem("workflow-runs-width");
+    if (stored) {
+      const n = parseInt(stored, 10);
+      if (n >= RUNS_MIN && n <= RUNS_MAX) {
+        setRunsWidth(n);
+        runsWidthRef.current = n;
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!runsDragging) return;
+    const move = (clientX: number) => {
+      if (!runsStartRef.current) return;
+      const next = Math.min(RUNS_MAX, Math.max(RUNS_MIN,
+        runsStartRef.current.w + (runsStartRef.current.x - clientX),
+      ));
+      setRunsWidth(next);
+    };
+    const stop = () => {
+      setRunsDragging(false);
+      localStorage.setItem("workflow-runs-width", String(runsWidthRef.current));
+      runsStartRef.current = null;
+    };
+    const onMouseMove = (e: MouseEvent) => move(e.clientX);
+    const onTouchMove = (e: TouchEvent) => { if (e.touches[0]) move(e.touches[0].clientX); };
+    window.addEventListener("mousemove",  onMouseMove);
+    window.addEventListener("mouseup",    stop);
+    window.addEventListener("touchmove",  onTouchMove, { passive: true });
+    window.addEventListener("touchend",   stop);
+    return () => {
+      window.removeEventListener("mousemove",  onMouseMove);
+      window.removeEventListener("mouseup",    stop);
+      window.removeEventListener("touchmove",  onTouchMove);
+      window.removeEventListener("touchend",   stop);
+    };
+  }, [runsDragging]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -319,7 +369,7 @@ export function WorkflowBuilder({ workflow }: Props) {
       )}
 
       {/* Canvas + Config */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className={cn("flex flex-1 overflow-hidden", runsDragging && "select-none cursor-col-resize")}>
         <div className="relative flex-1">
           <ReactFlow
             nodes={nodes}
@@ -356,12 +406,27 @@ export function WorkflowBuilder({ workflow }: Props) {
         )}
 
         {showRunsPanel && (
-          <WorkflowRunsPanel
-            workflowId={workflow.id}
-            liveRunId={runId}
-            onClose={() => setShowRunsPanel(false)}
-            onRunComplete={handleRunComplete}
-          />
+          <>
+            {/* Draggable divider — same visual style as the sidebar handle */}
+            <div
+              className="group relative w-1 shrink-0 cursor-col-resize"
+              onMouseDown={e => { e.preventDefault(); runsStartRef.current = { x: e.clientX, w: runsWidthRef.current }; setRunsDragging(true); }}
+              onTouchStart={e => { if (e.touches[0]) { runsStartRef.current = { x: e.touches[0].clientX, w: runsWidthRef.current }; setRunsDragging(true); } }}
+              aria-hidden
+            >
+              <div className={cn(
+                "absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 rounded-full transition-colors duration-150",
+                runsDragging ? "bg-blue-500" : "bg-[--color-border] group-hover:bg-blue-400",
+              )} />
+            </div>
+            <WorkflowRunsPanel
+              workflowId={workflow.id}
+              liveRunId={runId}
+              onClose={() => setShowRunsPanel(false)}
+              onRunComplete={handleRunComplete}
+              width={runsWidth}
+            />
+          </>
         )}
       </div>
     </div>
