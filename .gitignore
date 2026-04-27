@@ -57,3 +57,17 @@ docker-compose.override.yml
 # ── Logs ─────────────────────────────────────────────────────────────────────
 *.log
 logs/
+
+# ── Python CLI (cli/) ─────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+agent_system.egg-info/
+cli/dist/
+cli/build/
+cli/.eggs/
+.venv/
+venv/
+env/

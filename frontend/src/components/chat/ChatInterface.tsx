@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { MessageSquare, Menu, Share2, CalendarClock } from "lucide-react";
-import { queryAgent } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import { queryAgent, createWorkflow } from "@/lib/api";
 import { useChatStore } from "@/store/chatStore";
 import { MessageBubble } from "./MessageBubble";
 import { MessageInput } from "./MessageInput";
@@ -11,14 +12,25 @@ import { ShareModal } from "./ShareModal";
 import { ScheduleModal } from "./ScheduleModal";
 import { Spinner } from "@/components/ui/Spinner";
 import { Button } from "@/components/ui/Button";
-import type { AgentRequest } from "@/types/agent";
+import type { AgentRequest, AgentPattern, TeamExecMode } from "@/types/agent";
 
 interface ChatInterfaceProps {
   conversationId: string;
   onMenuOpen?: () => void;
 }
 
+function parseKV(text: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  const regex = /(\w+)=(\S+)/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    result[match[1].toLowerCase()] = match[2];
+  }
+  return result;
+}
+
 export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps) {
+  const router = useRouter();
   const bottomRef = useRef<HTMLDivElement>(null);
   const [showShare, setShowShare] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -55,12 +67,44 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation?.messages.length]);
 
-  const handleSend = (
+  const handleSend = async (
     query: string,
     topK: number,
     useKnowledgeBase: boolean,
     useWebFetch: boolean,
   ) => {
+    if (query.startsWith("/workflow")) {
+      const kv = parseKV(query.slice("/workflow".length));
+      addMessage(conversationId, { role: "user", content: query });
+      if (!kv.name) {
+        addMessage(conversationId, {
+          role: "error",
+          content: "Usage: /workflow name=<name> [pattern=ORCHESTRATOR|TEAM] [mode=PARALLEL|SEQUENTIAL]",
+        });
+        return;
+      }
+      const agentPattern: AgentPattern =
+        kv.pattern?.toUpperCase() === "TEAM" ? "TEAM" : "ORCHESTRATOR";
+      const teamExecMode: TeamExecMode | null =
+        agentPattern === "TEAM"
+          ? kv.mode?.toUpperCase() === "SEQUENTIAL" ? "SEQUENTIAL" : "PARALLEL"
+          : null;
+      try {
+        const wf = await createWorkflow({ name: kv.name, agentPattern, teamExecMode });
+        addMessage(conversationId, {
+          role: "assistant",
+          content: `Workflow **${wf.name}** created (${agentPattern}${teamExecMode ? ` · ${teamExecMode}` : ""}). Opening…`,
+        });
+        router.push(`/workflow/${wf.id}`);
+      } catch (err) {
+        addMessage(conversationId, {
+          role: "error",
+          content: `Failed to create workflow: ${(err as Error).message}`,
+        });
+      }
+      return;
+    }
+
     const history = (conversation?.messages ?? [])
       .filter((m) => m.role !== "error")
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));

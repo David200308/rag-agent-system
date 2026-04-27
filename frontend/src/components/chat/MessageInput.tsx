@@ -108,7 +108,7 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
           onInput={onInput}
-          placeholder="Ask a question… (Shift+Enter for new line)"
+          placeholder="Ask a question… or /workflow name=x pattern=TEAM (Shift+Enter for new line)"
           rows={1}
           disabled={disabled}
           className={cn(
