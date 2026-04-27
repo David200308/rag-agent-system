@@ -8,6 +8,8 @@ import type { LogType, RunStatus, WorkflowRunLog } from "@/types/agent";
 interface Props {
   runId: string | null;
   onDone?: (output: string, status: RunStatus) => void;
+  /** Seed the status display so completed runs don't flash "Running…" on open */
+  initialStatus?: RunStatus;
   /** Fill available height instead of capping at 16rem */
   fill?: boolean;
 }
@@ -30,17 +32,31 @@ const LOG_LABELS: Record<LogType, string> = {
   SYSTEM:       "· System",
 };
 
-export function WorkflowRunViewer({ runId, onDone, fill }: Props) {
-  const [logs,      setLogs]      = useState<WorkflowRunLog[]>([]);
-  const [status,    setStatus]    = useState<RunStatus | null>(null);
-  const [output,    setOutput]    = useState<string | null>(null);
-  const [expanded,  setExpanded]  = useState(true);
-  const bottomRef = useRef<HTMLDivElement>(null);
+export function WorkflowRunViewer({ runId, onDone, initialStatus, fill }: Props) {
+  const [logs,     setLogs]     = useState<WorkflowRunLog[]>([]);
+  const [status,   setStatus]   = useState<RunStatus | null>(initialStatus ?? null);
+  const [output,   setOutput]   = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(true);
+  const bottomRef  = useRef<HTMLDivElement>(null);
+
+  // Keep onDone in a ref so it never appears in the SSE effect's dependency array.
+  // Without this, every parent re-render produces a new function reference, which
+  // tears down and restarts the SSE connection and causes the status to flicker
+  // between "Running…" and "Done/Failed" on every render cycle.
+  const onDoneRef = useRef(onDone);
+  useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
+
+  // Seed status from prop when the selected run changes.
+  useEffect(() => {
+    if (initialStatus) setStatus(initialStatus);
+  }, [runId, initialStatus]);
 
   useEffect(() => {
     if (!runId) return;
     setLogs([]);
-    setStatus("RUNNING");
+    // Only default to RUNNING if we don't already know the status.
+    // Completed runs receive their status via initialStatus, so we avoid the flash.
+    setStatus(s => s === "DONE" || s === "FAILED" ? s : "RUNNING");
     setOutput(null);
 
     const es = new EventSource(`/api/workflow/runs/${runId}/stream`);
@@ -54,17 +70,18 @@ export function WorkflowRunViewer({ runId, onDone, fill }: Props) {
       const data = JSON.parse(e.data) as { status: RunStatus; output: string };
       setStatus(data.status);
       setOutput(data.output);
-      onDone?.(data.output, data.status);
+      onDoneRef.current?.(data.output, data.status);
       es.close();
     });
 
     es.onerror = () => {
+      // Only flip to FAILED if still waiting — don't overwrite a known terminal state.
       setStatus(prev => prev === "RUNNING" ? "FAILED" : prev);
       es.close();
     };
 
     return () => es.close();
-  }, [runId, onDone]);
+  }, [runId]); // onDone intentionally excluded — accessed via ref above
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

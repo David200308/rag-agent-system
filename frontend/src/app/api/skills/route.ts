@@ -26,9 +26,15 @@ async function extractZipContent(zipBuffer: ArrayBuffer): Promise<string> {
     const { stdout } = await execAsync(
       `find "${tmpDir}" -type f \\( -name "*.txt" -o -name "*.md" \\) | sort`
     );
-    const files    = stdout.trim().split("\n").filter(Boolean);
-    const contents = await Promise.all(files.map(f => readFile(f, "utf-8").catch(() => "")));
-    return contents.join("\n\n");
+    const files = stdout.trim().split("\n").filter(Boolean);
+    const sections = await Promise.all(
+      files.map(async f => {
+        const rel     = path.relative(tmpDir, f);
+        const content = await readFile(f, "utf-8").catch(() => "");
+        return `<<< ${rel} >>>\n${content}`;
+      }),
+    );
+    return sections.join("\n\n");
   } finally {
     await execAsync(`rm -rf "${tmpDir}" "${zipPath}"`).catch(() => {});
   }

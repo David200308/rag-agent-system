@@ -128,7 +128,12 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
       {/* Log detail */}
       {selectedId && (
         <div className="flex flex-1 flex-col overflow-hidden border-t border-[--color-border]">
-          <WorkflowRunViewer runId={selectedId} onDone={handleRunDone} fill />
+          <WorkflowRunViewer
+          runId={selectedId}
+          initialStatus={runs.find(r => r.id === selectedId)?.status}
+          onDone={handleRunDone}
+          fill
+        />
         </div>
       )}
     </div>
