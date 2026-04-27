@@ -24,7 +24,7 @@ function parseKV(text: string): Record<string, string> {
   const regex = /(\w+)=(\S+)/g;
   let match;
   while ((match = regex.exec(text)) !== null) {
-    result[match[1].toLowerCase()] = match[2];
+    result[match[1]!.toLowerCase()] = match[2]!;
   }
   return result;
 }
