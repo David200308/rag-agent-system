@@ -178,6 +178,10 @@ services:
       AUTH_ENABLED: ${AUTH_ENABLED:-true}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
       AUTH_OTP_EXPIRY_MINUTES: ${AUTH_OTP_EXPIRY_MINUTES:-10}
+      # ── Passkey (WebAuthn)
+      AUTH_PASSKEY_RP_ID: ${AUTH_PASSKEY_RP_ID:-localhost}
+      AUTH_PASSKEY_RP_NAME: ${AUTH_PASSKEY_RP_NAME:-RAG Agent}
+      AUTH_PASSKEY_ORIGIN: ${AUTH_PASSKEY_ORIGIN:-http://localhost:3000}
       # ── Resend (RESEND_API_KEY + RESEND_FROM_EMAIL come from secrets)
       # ── Web fetch
       WEB_FETCH_ENABLED: ${WEB_FETCH_ENABLED:-true}
