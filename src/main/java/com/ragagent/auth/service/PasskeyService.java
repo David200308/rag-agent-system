@@ -221,7 +221,7 @@ public class PasskeyService implements CredentialRepository {
         // Use toJson() for fidelity, then strip nulls — the yubico library's custom serializers
         // bypass an external mapper's NON_NULL setting, so browserMapper.writeValueAsString()
         // was leaving `"transports": null` in place, which the WebAuthn API rejects.
-        return stripNulls(assertionRequest.getPublicKeyCredentialRequestOptions().toJson());
+        return stripNulls(assertionRequest.getPublicKeyCredentialRequestOptions().toCredentialsGetJson());
     }
 
     @Transactional
