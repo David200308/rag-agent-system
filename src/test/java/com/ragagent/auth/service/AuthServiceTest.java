@@ -30,7 +30,7 @@ class AuthServiceTest {
 
     // AuthProperties is a record (final) — instantiate directly
     private final AuthProperties authProperties =
-            new AuthProperties(true, 10, "test-jwt-secret-32-chars-xxxxxxxxx", 24);
+            new AuthProperties(true, 10, "test-jwt-secret-32-chars-xxxxxxxxx", 24, null);
 
     AuthService authService;
 
