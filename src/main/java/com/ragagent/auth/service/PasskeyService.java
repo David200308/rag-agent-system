@@ -1,5 +1,6 @@
 package com.ragagent.auth.service;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
@@ -38,10 +39,17 @@ public class PasskeyService implements CredentialRepository {
 
     private RelyingParty relyingParty;
 
-    // A standalone mapper configured for the Yubico library's Jackson-annotated types.
+    // Used for DB storage and deserialization — preserves all fields for round-trip fidelity.
     private final ObjectMapper passkeyMapper = new ObjectMapper()
             .registerModule(new Jdk8Module())
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+    // Used for the JSON sent to the browser. Strips null fields so the WebAuthn API
+    // doesn't reject e.g. `"transports": null` or `"timeout": null`.
+    private final ObjectMapper browserMapper = new ObjectMapper()
+            .registerModule(new Jdk8Module())
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
     private final SecureRandom random = new SecureRandom();
 
@@ -139,18 +147,20 @@ public class PasskeyService implements CredentialRepository {
                                 .build())
                         .build());
 
-        String optionsJson = options.toJson();
+        // Store the full JSON (nulls intact) for round-trip deserialization on finish.
+        String storageJson = options.toJson();
 
         challengeRepo.deleteByEmailAndType(email, "REGISTER");
         PasskeyChallenge challenge = new PasskeyChallenge();
         challenge.setEmail(email);
         challenge.setType("REGISTER");
-        challenge.setRequestJson(optionsJson);
+        challenge.setRequestJson(storageJson);
         challenge.setExpiresAt(Instant.now().plusSeconds(300));
         challengeRepo.save(challenge);
 
         log.info("[PasskeyService] Registration challenge issued for {}", email);
-        return optionsJson;
+        // Return null-stripped JSON so the browser WebAuthn API doesn't reject null fields.
+        return browserMapper.writeValueAsString(options);
     }
 
     @Transactional
@@ -216,8 +226,9 @@ public class PasskeyService implements CredentialRepository {
         challengeRepo.save(challenge);
 
         log.info("[PasskeyService] Authentication challenge issued for {}", email);
-        // Return only the PublicKeyCredentialRequestOptions portion for the browser
-        return passkeyMapper.writeValueAsString(
+        // Return null-stripped options for the browser; null fields like `transports: null`
+        // cause the WebAuthn API to throw "cannot be converted to a sequence".
+        return browserMapper.writeValueAsString(
                 assertionRequest.getPublicKeyCredentialRequestOptions());
     }
 
