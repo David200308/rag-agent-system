@@ -172,6 +172,30 @@ CREATE TABLE IF NOT EXISTS skills (
     INDEX idx_skill_owner (owner_email)
 );
 
+-- ── WebAuthn / Passkey ───────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS passkey_credentials (
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email          VARCHAR(255) NOT NULL,
+    credential_id  VARCHAR(512) NOT NULL UNIQUE,
+    public_key_cose TEXT        NOT NULL,
+    sign_count     BIGINT       NOT NULL DEFAULT 0,
+    user_handle    VARCHAR(512) NOT NULL,
+    created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_pk_email       (email),
+    INDEX idx_pk_user_handle (user_handle)
+);
+
+CREATE TABLE IF NOT EXISTS passkey_challenges (
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email        VARCHAR(255) NOT NULL,
+    type         VARCHAR(20)  NOT NULL,
+    request_json TEXT         NOT NULL,
+    expires_at   TIMESTAMP    NOT NULL,
+    created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_pkc_email_type (email, type)
+);
+
 -- ── Schema migration: web_fetch_whitelist per-user isolation ─────────────────
 -- Existing databases: drops the old global unique constraint and adds the per-user
 -- one. On fresh installs these statements fail silently (continue-on-error=true).

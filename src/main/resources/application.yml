@@ -226,6 +226,14 @@ auth:
   otp-expiry-minutes: ${AUTH_OTP_EXPIRY_MINUTES:10}
   jwt-secret: ${AUTH_JWT_SECRET:changeme-use-a-long-random-base64-string-in-production}
   jwt-expiry-hours: ${AUTH_JWT_EXPIRY_HOURS:24}
+  passkey:
+    # Must match the domain serving the app (no port, no scheme).
+    # For local dev: localhost. For production: yourdomain.com
+    rp-id: ${AUTH_PASSKEY_RP_ID:localhost}
+    rp-name: ${AUTH_PASSKEY_RP_NAME:RAG Agent}
+    # Full origin including scheme and port.
+    # For local dev: http://localhost:3000. For production: https://yourdomain.com
+    origin: ${AUTH_PASSKEY_ORIGIN:http://localhost:3000}
 
 # ── Go Scheduler microservice ────────────────────────────────────────────────
 # Shared service key used by the Go scheduler to authenticate trigger calls.

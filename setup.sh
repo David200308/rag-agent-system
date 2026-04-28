@@ -176,6 +176,10 @@ if [ "$MODE" = "local" ]; then
   header "Auth"
   AUTH_ENABLED=false; AUTH_JWT_SECRET=""; RESEND_API_KEY=""; RESEND_FROM_EMAIL="noreply@example.com"
 
+  AUTH_PASSKEY_RP_ID="localhost"
+  AUTH_PASSKEY_RP_NAME="RAG Agent"
+  AUTH_PASSKEY_ORIGIN="http://localhost:3000"
+
   if confirm "Enable email + OTP login?"; then
     AUTH_ENABLED=true
     AUTH_JWT_SECRET="$(openssl rand -base64 64 | tr -d '\n')"
@@ -230,6 +234,12 @@ AUTH_ENABLED=$AUTH_ENABLED
 AUTH_JWT_SECRET=$AUTH_JWT_SECRET
 AUTH_JWT_EXPIRY_HOURS=$AUTH_JWT_EXPIRY_HOURS
 AUTH_OTP_EXPIRY_MINUTES=$AUTH_OTP_EXPIRY_MINUTES
+
+# ── Passkey (WebAuthn) ────────────────────────────────────────────────────────
+# For local dev the defaults (localhost / http://localhost:3000) are used.
+AUTH_PASSKEY_RP_ID=$AUTH_PASSKEY_RP_ID
+AUTH_PASSKEY_RP_NAME=$AUTH_PASSKEY_RP_NAME
+AUTH_PASSKEY_ORIGIN=$AUTH_PASSKEY_ORIGIN
 
 # ── Resend ────────────────────────────────────────────────────────────────────
 RESEND_API_KEY=$RESEND_API_KEY
@@ -299,27 +309,10 @@ else
   require_cmd openssl
 
   SECRETS_DIR="$SCRIPT_DIR/secrets"
-
   PROD_ENV="$SCRIPT_DIR/.env.prod"
-  SKIP_PROMPTS=false
-
-  if [ -d "$SECRETS_DIR" ] && [ "$(ls -A "$SECRETS_DIR" 2>/dev/null | grep -v '\.gitkeep')" ]; then
-    echo ""
-    echo -e "  ${YELLOW}⚠  secrets/ already contains files.${NC}"
-    if confirm "Overwrite all secrets?"; then
-      SKIP_PROMPTS=false
-    else
-      # Reuse existing secrets — jump straight to launch if .env.prod also exists
-      if [ ! -f "$PROD_ENV" ]; then
-        echo -e "  ${RED}Error: secrets/ exists but .env.prod is missing.${NC}"
-        echo -e "  ${RED}Re-run setup and overwrite to regenerate both.${NC}"
-        exit 1
-      fi
-      SKIP_PROMPTS=true
-    fi
-  fi
-
   mkdir -p "$SECRETS_DIR"
+
+  # ── helpers ───────────────────────────────────────────────────────────────
 
   write_secret() {
     local name="$1" value="$2"
@@ -327,121 +320,204 @@ else
     chmod 600 "$SECRETS_DIR/$name"
   }
 
-  if [ "$SKIP_PROMPTS" = true ]; then
-    echo -e "  ${GREEN}✓${NC}  Using existing secrets and .env.prod"
-  else
+  # Read a value from an existing .env.prod; fall back to default.
+  read_prod() {
+    local key="$1" default="${2:-}"
+    if [ -f "$PROD_ENV" ]; then
+      local val
+      val=$(grep "^${key}=" "$PROD_ENV" 2>/dev/null | head -1 | sed "s/^${key}=//")
+      [ -n "$val" ] && { printf '%s' "$val"; return; }
+    fi
+    printf '%s' "$default"
+  }
+
+  # True if a secret file exists and is non-empty.
+  has_secret() { [ -s "$SECRETS_DIR/$1" ]; }
 
   # ── MySQL ──────────────────────────────────────────────────────────────────
   header "MySQL"
-  prompt MYSQL_ROOT_PASSWORD "Root password"  "" true
-  prompt MYSQL_DB            "Database name"  "ragagent"
-  prompt MYSQL_USER          "Database user"  "ragagent"
-  prompt MYSQL_PASSWORD      "User password"  "" true
-
-  write_secret mysql_root_password "$MYSQL_ROOT_PASSWORD"
-  write_secret mysql_password      "$MYSQL_PASSWORD"
+  UPDATE_MYSQL=true
+  if has_secret mysql_password; then
+    echo -e "  ${DIM}MySQL secrets are already configured.${NC}"
+    if ! confirm "Update MySQL settings?"; then UPDATE_MYSQL=false; fi
+  fi
+  if $UPDATE_MYSQL; then
+    prompt MYSQL_ROOT_PASSWORD "Root password" "" true
+    prompt MYSQL_DB            "Database name" "ragagent"
+    prompt MYSQL_USER          "Database user" "ragagent"
+    prompt MYSQL_PASSWORD      "User password" "" true
+    write_secret mysql_root_password "$MYSQL_ROOT_PASSWORD"
+    write_secret mysql_password      "$MYSQL_PASSWORD"
+  else
+    MYSQL_DB="$(read_prod MYSQL_DB ragagent)"
+    MYSQL_USER="$(read_prod MYSQL_USER ragagent)"
+    echo -e "  ${DIM}Keeping existing MySQL secrets.${NC}"
+  fi
 
   # ── LLM provider ──────────────────────────────────────────────────────────
   header "LLM Provider"
-  echo -e "  Options: ${BOLD}openai${NC} · anthropic · openrouter · local"
-  prompt LLM_PROVIDER "Provider" "openai"
-
-  # Blank placeholder secrets for unused providers (Docker requires all declared secrets to exist)
-  write_secret openai_api_key     ""
-  write_secret anthropic_api_key  ""
-  write_secret openrouter_api_key ""
-
-  case "$LLM_PROVIDER" in
-    openai)
-      prompt OPENAI_API_KEY "OpenAI API key" "" true
-      prompt OPENAI_MODEL   "Model"          "gpt-4o-mini"
-      write_secret openai_api_key "$OPENAI_API_KEY"
-      ANTHROPIC_MODEL="claude-opus-4-6"
-      OPENROUTER_MODEL="openai/gpt-4o-mini"
-      LOCAL_LLM_URL="http://host.docker.internal:11434"
-      LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
-      ;;
-    anthropic)
-      prompt ANTHROPIC_API_KEY "Anthropic API key" "" true
-      prompt ANTHROPIC_MODEL   "Model"             "claude-opus-4-6"
-      write_secret anthropic_api_key "$ANTHROPIC_API_KEY"
-      OPENAI_MODEL="gpt-4o-mini"
-      OPENROUTER_MODEL="openai/gpt-4o-mini"
-      LOCAL_LLM_URL="http://host.docker.internal:11434"
-      LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
-      ;;
-    openrouter)
-      prompt OPENROUTER_API_KEY "OpenRouter API key" "" true
-      prompt OPENROUTER_MODEL   "Model"              "openai/gpt-4o-mini"
-      write_secret openrouter_api_key "$OPENROUTER_API_KEY"
-      OPENAI_MODEL="gpt-4o-mini"
-      ANTHROPIC_MODEL="claude-opus-4-6"
-      LOCAL_LLM_URL="http://host.docker.internal:11434"
-      LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
-      ;;
-    local)
-      prompt LOCAL_LLM_URL         "LLM base URL"     "http://host.docker.internal:11434"
-      prompt LOCAL_LLM_MODEL       "Chat model"       "llama3"
-      prompt LOCAL_EMBEDDING_MODEL "Embedding model"  "nomic-embed-text"
-      OPENAI_MODEL="gpt-4o-mini"; ANTHROPIC_MODEL="claude-opus-4-6"; OPENROUTER_MODEL="openai/gpt-4o-mini"
-      ;;
-    *)
-      echo -e "${RED}Unknown provider '$LLM_PROVIDER'. Expected: openai | anthropic | openrouter | local${NC}"
-      exit 1
-      ;;
-  esac
-
-  # ── Auth ───────────────────────────────────────────────────────────────────
-  header "Auth"
-  AUTH_ENABLED=true; AUTH_JWT_EXPIRY_HOURS=24; AUTH_OTP_EXPIRY_MINUTES=10
-  RESEND_FROM_EMAIL="noreply@example.com"
-
-  AUTH_JWT_SECRET="$(openssl rand -base64 64 | tr -d '\n')"
-  echo -e "  ${DIM}JWT secret auto-generated.${NC}"
-  write_secret auth_jwt_secret "$AUTH_JWT_SECRET"
-
-  prompt AUTH_JWT_EXPIRY_HOURS   "JWT expiry (hours)"   "24"
-  prompt AUTH_OTP_EXPIRY_MINUTES "OTP expiry (minutes)" "10"
-
-  if confirm "Enable email + OTP login?"; then
-    AUTH_ENABLED=true
-    prompt RESEND_API_KEY    "Resend API key" "" true
-    prompt RESEND_FROM_EMAIL "From email"     "noreply@example.com"
-    write_secret resend_api_key    "$RESEND_API_KEY"
-    write_secret resend_from_email "$RESEND_FROM_EMAIL"
+  UPDATE_LLM=true
+  if has_secret openai_api_key || has_secret anthropic_api_key || has_secret openrouter_api_key; then
+    echo -e "  ${DIM}LLM provider already configured ($(read_prod LLM_PROVIDER openai)).${NC}"
+    if ! confirm "Update LLM provider settings?"; then UPDATE_LLM=false; fi
+  fi
+  if $UPDATE_LLM; then
+    echo -e "  Options: ${BOLD}openai${NC} · anthropic · openrouter · local"
+    prompt LLM_PROVIDER "Provider" "openai"
+    # Blank placeholders keep Docker happy when a provider's secret isn't used
+    write_secret openai_api_key     ""
+    write_secret anthropic_api_key  ""
+    write_secret openrouter_api_key ""
+    case "$LLM_PROVIDER" in
+      openai)
+        prompt OPENAI_API_KEY "OpenAI API key" "" true
+        prompt OPENAI_MODEL   "Model"          "gpt-4o-mini"
+        write_secret openai_api_key "$OPENAI_API_KEY"
+        ANTHROPIC_MODEL="claude-opus-4-6"
+        OPENROUTER_MODEL="openai/gpt-4o-mini"
+        LOCAL_LLM_URL="http://host.docker.internal:11434"
+        LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
+        ;;
+      anthropic)
+        prompt ANTHROPIC_API_KEY "Anthropic API key" "" true
+        prompt ANTHROPIC_MODEL   "Model"             "claude-opus-4-6"
+        write_secret anthropic_api_key "$ANTHROPIC_API_KEY"
+        OPENAI_MODEL="gpt-4o-mini"
+        OPENROUTER_MODEL="openai/gpt-4o-mini"
+        LOCAL_LLM_URL="http://host.docker.internal:11434"
+        LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
+        ;;
+      openrouter)
+        prompt OPENROUTER_API_KEY "OpenRouter API key" "" true
+        prompt OPENROUTER_MODEL   "Model"              "openai/gpt-4o-mini"
+        write_secret openrouter_api_key "$OPENROUTER_API_KEY"
+        OPENAI_MODEL="gpt-4o-mini"
+        ANTHROPIC_MODEL="claude-opus-4-6"
+        LOCAL_LLM_URL="http://host.docker.internal:11434"
+        LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
+        ;;
+      local)
+        prompt LOCAL_LLM_URL         "LLM base URL"    "http://host.docker.internal:11434"
+        prompt LOCAL_LLM_MODEL       "Chat model"      "llama3"
+        prompt LOCAL_EMBEDDING_MODEL "Embedding model" "nomic-embed-text"
+        OPENAI_MODEL="gpt-4o-mini"; ANTHROPIC_MODEL="claude-opus-4-6"; OPENROUTER_MODEL="openai/gpt-4o-mini"
+        ;;
+      *)
+        echo -e "${RED}Unknown provider '$LLM_PROVIDER'. Expected: openai | anthropic | openrouter | local${NC}"
+        exit 1
+        ;;
+    esac
   else
-    AUTH_ENABLED=false
-    write_secret resend_api_key    ""
-    write_secret resend_from_email ""
+    LLM_PROVIDER="$(read_prod LLM_PROVIDER openai)"
+    OPENAI_MODEL="$(read_prod OPENAI_MODEL gpt-4o-mini)"
+    ANTHROPIC_MODEL="$(read_prod ANTHROPIC_MODEL claude-opus-4-6)"
+    OPENROUTER_MODEL="$(read_prod OPENROUTER_MODEL openai/gpt-4o-mini)"
+    LOCAL_LLM_URL="$(read_prod LOCAL_LLM_URL http://host.docker.internal:11434)"
+    LOCAL_LLM_MODEL="$(read_prod LOCAL_LLM_MODEL llama3)"
+    LOCAL_EMBEDDING_MODEL="$(read_prod LOCAL_EMBEDDING_MODEL nomic-embed-text)"
+    echo -e "  ${DIM}Keeping existing LLM secrets.${NC}"
+  fi
+
+  # ── Auth ──────────────────────────────────────────────────────────────────
+  header "Auth"
+  UPDATE_AUTH=true
+  if has_secret auth_jwt_secret; then
+    echo -e "  ${DIM}Auth already configured (enabled: $(read_prod AUTH_ENABLED true)).${NC}"
+    if ! confirm "Update Auth settings?"; then UPDATE_AUTH=false; fi
+  fi
+  if $UPDATE_AUTH; then
+    AUTH_JWT_SECRET="$(openssl rand -base64 64 | tr -d '\n')"
+    echo -e "  ${DIM}JWT secret auto-generated.${NC}"
+    write_secret auth_jwt_secret "$AUTH_JWT_SECRET"
+    prompt AUTH_JWT_EXPIRY_HOURS   "JWT expiry (hours)"   "24"
+    prompt AUTH_OTP_EXPIRY_MINUTES "OTP expiry (minutes)" "10"
+    if confirm "Enable email + OTP login?"; then
+      AUTH_ENABLED=true
+      prompt RESEND_API_KEY    "Resend API key" "" true
+      prompt RESEND_FROM_EMAIL "From email"     "noreply@example.com"
+      write_secret resend_api_key    "$RESEND_API_KEY"
+      write_secret resend_from_email "$RESEND_FROM_EMAIL"
+    else
+      AUTH_ENABLED=false
+      write_secret resend_api_key    ""
+      write_secret resend_from_email ""
+    fi
+  else
+    AUTH_ENABLED="$(read_prod AUTH_ENABLED true)"
+    AUTH_JWT_EXPIRY_HOURS="$(read_prod AUTH_JWT_EXPIRY_HOURS 24)"
+    AUTH_OTP_EXPIRY_MINUTES="$(read_prod AUTH_OTP_EXPIRY_MINUTES 10)"
+    echo -e "  ${DIM}Keeping existing Auth secrets.${NC}"
+  fi
+
+  # ── Passkey (WebAuthn) ────────────────────────────────────────────────────
+  header "Passkey (WebAuthn)"
+  UPDATE_PASSKEY=true
+  if grep -q "^AUTH_PASSKEY_RP_ID=" "$PROD_ENV" 2>/dev/null; then
+    echo -e "  ${DIM}Passkey already configured (RP ID: $(read_prod AUTH_PASSKEY_RP_ID localhost)).${NC}"
+    if ! confirm "Update Passkey settings?"; then UPDATE_PASSKEY=false; fi
+  fi
+  if $UPDATE_PASSKEY; then
+    echo -e "  ${DIM}The RP ID must match the domain the app is served from (no scheme, no port).${NC}"
+    echo ""
+    prompt AUTH_PASSKEY_DOMAIN "Public domain (e.g. app.example.com)" ""
+    if [ -n "$AUTH_PASSKEY_DOMAIN" ]; then
+      AUTH_PASSKEY_RP_ID="$AUTH_PASSKEY_DOMAIN"
+      AUTH_PASSKEY_RP_NAME="RAG Agent"
+      AUTH_PASSKEY_ORIGIN="https://$AUTH_PASSKEY_DOMAIN"
+      echo -e "  ${DIM}RP ID:  $AUTH_PASSKEY_RP_ID${NC}"
+      echo -e "  ${DIM}Origin: $AUTH_PASSKEY_ORIGIN${NC}"
+    else
+      echo -e "  ${YELLOW}No domain entered — using localhost defaults.${NC}"
+      AUTH_PASSKEY_RP_ID="localhost"
+      AUTH_PASSKEY_RP_NAME="RAG Agent"
+      AUTH_PASSKEY_ORIGIN="http://localhost:3000"
+    fi
+  else
+    AUTH_PASSKEY_RP_ID="$(read_prod AUTH_PASSKEY_RP_ID localhost)"
+    AUTH_PASSKEY_RP_NAME="$(read_prod AUTH_PASSKEY_RP_NAME 'RAG Agent')"
+    AUTH_PASSKEY_ORIGIN="$(read_prod AUTH_PASSKEY_ORIGIN http://localhost:3000)"
+    echo -e "  ${DIM}Keeping existing Passkey config.${NC}"
   fi
 
   # ── Weaviate ───────────────────────────────────────────────────────────────
   header "Weaviate"
-  echo -e "  ${DIM}Leave blank for anonymous access (default).${NC}"
-  prompt WEAVIATE_API_KEY "Weaviate API key" "" true
-  write_secret weaviate_api_key "$WEAVIATE_API_KEY"
+  UPDATE_WEAVIATE=true
+  if has_secret weaviate_api_key; then
+    echo -e "  ${DIM}Weaviate already configured.${NC}"
+    if ! confirm "Update Weaviate API key?"; then UPDATE_WEAVIATE=false; fi
+  fi
+  if $UPDATE_WEAVIATE; then
+    echo -e "  ${DIM}Leave blank for anonymous access.${NC}"
+    prompt WEAVIATE_API_KEY "Weaviate API key" "" true
+    write_secret weaviate_api_key "$WEAVIATE_API_KEY"
+  else
+    echo -e "  ${DIM}Keeping existing Weaviate secret.${NC}"
+  fi
 
   # ── Scheduler ──────────────────────────────────────────────────────────────
-  SCHEDULER_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
-  write_secret scheduler_service_key "$SCHEDULER_SERVICE_KEY"
-  echo -e "  ${DIM}Scheduler service key auto-generated.${NC}"
+  # Only generate a new key on first setup; re-generating would break the running
+  # Go scheduler until it is restarted with the new key.
+  if ! has_secret scheduler_service_key; then
+    SCHEDULER_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
+    write_secret scheduler_service_key "$SCHEDULER_SERVICE_KEY"
+    echo ""
+    echo -e "  ${DIM}Scheduler service key auto-generated.${NC}"
+  fi
 
   # ── Summary ────────────────────────────────────────────────────────────────
   echo ""
-  echo -e "  ${GREEN}✓${NC}  Secrets written to secrets/ (chmod 600)"
+  echo -e "  ${GREEN}✓${NC}  Secrets in secrets/ (chmod 600)"
   echo -e "  ${DIM}"
   ls "$SECRETS_DIR" | grep -v '\.gitkeep' | while read -r f; do
     size=$(wc -c < "$SECRETS_DIR/$f")
     if [ "$size" -gt 0 ]; then
       echo "     secrets/$f  (${size}B)"
     else
-      echo "     secrets/$f  ${DIM}(empty — unused provider)${NC}${DIM}"
+      echo "     secrets/$f  (empty — unused provider)"
     fi
   done
   echo -e "  ${NC}"
 
-  # Non-secret config that still needs to go somewhere for the prod compose
-  # Write a minimal .env for non-sensitive overrides (LLM_PROVIDER, model names, etc.)
   cat > "$PROD_ENV" <<EOF
 # Non-secret config for docker-compose.prod.yml — generated by setup.sh $(date)
 # Pass with: $COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build
@@ -461,6 +537,11 @@ AUTH_ENABLED=$AUTH_ENABLED
 AUTH_JWT_EXPIRY_HOURS=$AUTH_JWT_EXPIRY_HOURS
 AUTH_OTP_EXPIRY_MINUTES=$AUTH_OTP_EXPIRY_MINUTES
 
+# ── Passkey (WebAuthn) ────────────────────────────────────────────────────────
+AUTH_PASSKEY_RP_ID=$AUTH_PASSKEY_RP_ID
+AUTH_PASSKEY_RP_NAME=$AUTH_PASSKEY_RP_NAME
+AUTH_PASSKEY_ORIGIN=$AUTH_PASSKEY_ORIGIN
+
 # ── Web fetch ─────────────────────────────────────────────────────────────────
 WEB_FETCH_ENABLED=true
 WEB_FETCH_TIMEOUT=10
@@ -469,8 +550,6 @@ EOF
 
   chmod 600 "$PROD_ENV"
   echo -e "  ${GREEN}✓${NC}  Non-secret config written: .env.prod"
-
-  fi # end SKIP_PROMPTS=false block
 
   # ── Sandbox image ──────────────────────────────────────────────────────────
   header "Sandbox Image (for Workflow engine)"

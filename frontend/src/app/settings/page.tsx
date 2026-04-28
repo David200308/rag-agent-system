@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Moon, Sun, Globe, Trash2, Plus, User, Shield, Clock } from "lucide-react";
+import { Moon, Sun, Globe, Trash2, Plus, User, Shield, Clock, KeyRound } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useTimezone } from "@/hooks/useTimezone";
 import { Button } from "@/components/ui/Button";
@@ -16,6 +16,8 @@ import {
 } from "@/lib/api";
 import type { WebFetchWhitelistEntry } from "@/types/agent";
 import { cn } from "@/lib/utils";
+import { startRegistration } from "@simplewebauthn/browser";
+import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
 
 function SectionCard({ title, icon, children }: {
   title: string;
@@ -52,6 +54,75 @@ export default function SettingsPage() {
       })
       .catch(() => {});
   }, []);
+
+  // ── Passkey ──────────────────────────────────────────────────────────────────
+  const [hasPasskey, setHasPasskey]           = useState<boolean | null>(null);
+  const [passkeyLoading, setPasskeyLoading]   = useState(false);
+  const [passkeyError, setPasskeyError]       = useState<string | null>(null);
+  const [passkeySuccess, setPasskeySuccess]   = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!authEnabled || !email) return;
+    fetch(`/api/auth/passkey/status?email=${encodeURIComponent(email)}`)
+      .then((r) => r.json())
+      .then((d: { hasPasskey?: boolean }) => setHasPasskey(d.hasPasskey ?? false))
+      .catch(() => setHasPasskey(false));
+  }, [authEnabled, email]);
+
+  async function handleSetupPasskey() {
+    setPasskeyLoading(true);
+    setPasskeyError(null);
+    setPasskeySuccess(null);
+    try {
+      const beginRes = await fetch("/api/user/passkey/register/begin", { method: "POST" });
+      if (!beginRes.ok) {
+        const d = (await beginRes.json()) as { error?: string };
+        throw new Error(d.error ?? "Failed to start passkey setup");
+      }
+      const optionsJSON = (await beginRes.json()) as PublicKeyCredentialCreationOptionsJSON;
+
+      const registration = await startRegistration({ optionsJSON });
+
+      const finishRes = await fetch("/api/user/passkey/register/finish", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ response: registration }),
+      });
+      if (!finishRes.ok) {
+        const d = (await finishRes.json()) as { error?: string };
+        throw new Error(d.error ?? "Passkey registration failed");
+      }
+      setHasPasskey(true);
+      setPasskeySuccess("Passkey set up successfully.");
+    } catch (err) {
+      if (err instanceof Error && err.name === "NotAllowedError") {
+        setPasskeyError("Setup was cancelled or timed out.");
+      } else {
+        setPasskeyError(err instanceof Error ? err.message : "Setup failed");
+      }
+    } finally {
+      setPasskeyLoading(false);
+    }
+  }
+
+  async function handleRemovePasskey() {
+    setPasskeyLoading(true);
+    setPasskeyError(null);
+    setPasskeySuccess(null);
+    try {
+      const res = await fetch("/api/user/passkey", { method: "DELETE" });
+      if (!res.ok) {
+        const d = (await res.json()) as { error?: string };
+        throw new Error(d.error ?? "Failed to remove passkey");
+      }
+      setHasPasskey(false);
+      setPasskeySuccess("Passkey removed.");
+    } catch (err) {
+      setPasskeyError(err instanceof Error ? err.message : "Removal failed");
+    } finally {
+      setPasskeyLoading(false);
+    }
+  }
 
   // ── Timezone ─────────────────────────────────────────────────────────────────
   const [tzSearch, setTzSearch] = useState("");
@@ -143,6 +214,52 @@ export default function SettingsPage() {
               )}
             </div>
           </SectionCard>
+
+          {/* ── Passkey ──────────────────────────────────────────────────── */}
+          {authEnabled && email && (
+            <SectionCard title="Passkey" icon={<KeyRound className="h-4 w-4" />}>
+              <p className="mb-4 text-xs text-[--color-muted]">
+                Set up a passkey (Face ID, Touch ID, or hardware key) so you can
+                sign in without an email code.
+              </p>
+
+              {hasPasskey === null ? (
+                <div className="flex items-center gap-2 text-xs text-[--color-muted]">
+                  <Spinner className="h-4 w-4" /> Checking…
+                </div>
+              ) : hasPasskey ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-0.5 text-xs text-green-600 dark:text-green-400">
+                      <Shield className="h-3 w-3" /> Passkey configured
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleRemovePasskey}
+                    loading={passkeyLoading}
+                    className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Remove passkey
+                  </Button>
+                </div>
+              ) : (
+                <Button size="sm" onClick={handleSetupPasskey} loading={passkeyLoading}>
+                  <KeyRound className="h-3.5 w-3.5" />
+                  Set up passkey
+                </Button>
+              )}
+
+              {passkeyError && (
+                <p className="mt-3 text-xs text-red-500">{passkeyError}</p>
+              )}
+              {passkeySuccess && (
+                <p className="mt-3 text-xs text-green-600 dark:text-green-400">{passkeySuccess}</p>
+              )}
+            </SectionCard>
+          )}
 
           {/* ── Appearance ───────────────────────────────────────────────── */}
           <SectionCard title="Appearance" icon={<Sun className="h-4 w-4" />}>
