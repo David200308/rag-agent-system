@@ -226,6 +226,10 @@ auth:
   otp-expiry-minutes: ${AUTH_OTP_EXPIRY_MINUTES:10}
   jwt-secret: ${AUTH_JWT_SECRET:changeme-use-a-long-random-base64-string-in-production}
   jwt-expiry-hours: ${AUTH_JWT_EXPIRY_HOURS:24}
+  # Shared static secret for agent-openapi gateway (never expires, unlike JWT).
+  # Generate once: openssl rand -hex 32
+  # Set on both sides: AUTH_GATEWAY_KEY=<same value>  INTERNAL_KEY=<same value>
+  gateway-key: ${AUTH_GATEWAY_KEY:}
 
 # ── Go Scheduler microservice ────────────────────────────────────────────────
 # Shared service key used by the Go scheduler to authenticate trigger calls.

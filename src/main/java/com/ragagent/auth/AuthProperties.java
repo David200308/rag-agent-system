@@ -16,5 +16,6 @@ public record AuthProperties(
         boolean enabled,
         int otpExpiryMinutes,
         String jwtSecret,
-        int jwtExpiryHours
+        int jwtExpiryHours,
+        String gatewayKey   // shared static secret for agent-openapi; null = disabled
 ) {}

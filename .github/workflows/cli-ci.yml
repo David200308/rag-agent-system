@@ -1,0 +1,38 @@
+name: CLI CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cli/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cli/**'
+
+jobs:
+  build-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+
+      - name: Vet
+        working-directory: cli
+        run: go vet ./...
+
+      - name: Build
+        working-directory: cli
+        run: go build -v ./...
+
+      - name: Test
+        working-directory: cli
+        run: go test -v -race ./...
