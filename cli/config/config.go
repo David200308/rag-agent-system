@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 )
 
-const defaultBaseURL = "http://localhost:8081"
+const defaultURL = "http://localhost:8888"
 
 type file struct {
-	BaseURL string  `json:"base_url"`
-	Token   *string `json:"token"`
-	Email   *string `json:"email"`
+	URL   string  `json:"url"`
+	KeyID string  `json:"key_id"`
+	Email *string `json:"email"`
 }
 
 func configPath() string {
@@ -22,14 +22,14 @@ func configPath() string {
 func load() file {
 	data, err := os.ReadFile(configPath())
 	if err != nil {
-		return file{BaseURL: defaultBaseURL}
+		return file{URL: defaultURL}
 	}
 	var f file
 	if err := json.Unmarshal(data, &f); err != nil {
-		return file{BaseURL: defaultBaseURL}
+		return file{URL: defaultURL}
 	}
-	if f.BaseURL == "" {
-		f.BaseURL = defaultBaseURL
+	if f.URL == "" {
+		f.URL = defaultURL
 	}
 	return f
 }
@@ -43,15 +43,12 @@ func save(f file) error {
 	return os.WriteFile(p, data, 0600)
 }
 
-func BaseURL() string {
-	return load().BaseURL
+func URL() string {
+	return load().URL
 }
 
-func Token() string {
-	if t := load().Token; t != nil {
-		return *t
-	}
-	return ""
+func KeyID() string {
+	return load().KeyID
 }
 
 func Email() string {
@@ -61,15 +58,15 @@ func Email() string {
 	return ""
 }
 
-func SetBaseURL(u string) error {
+func SetURL(u string) error {
 	f := load()
-	f.BaseURL = u
+	f.URL = u
 	return save(f)
 }
 
-func SetToken(t string) error {
+func SetKeyID(id string) error {
 	f := load()
-	f.Token = &t
+	f.KeyID = id
 	return save(f)
 }
 
@@ -81,7 +78,6 @@ func SetEmail(e string) error {
 
 func ClearAuth() error {
 	f := load()
-	f.Token = nil
 	f.Email = nil
 	return save(f)
 }

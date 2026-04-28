@@ -49,7 +49,7 @@ func init() {
 		Use:   "list",
 		Short: "List your conversations",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			raw, err := api.Get("/api/v1/agent/conversations")
+			raw, err := api.SignedGet("/v1/conversations")
 			if err != nil {
 				return err
 			}
@@ -80,7 +80,7 @@ func init() {
 		Short: "Show message history for a conversation",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			raw, err := api.Get("/api/v1/agent/conversations/" + args[0])
+			raw, err := api.SignedGet("/v1/conversations/" + args[0])
 			if err != nil {
 				return err
 			}
@@ -117,7 +117,7 @@ func init() {
 				body["conversationId"] = convID
 			}
 			fmt.Fprintln(os.Stderr, d("Querying agent…"))
-			raw, err := api.Post("/api/v1/agent/query", body)
+			raw, err := api.SignedPost("/v1/agent/query", body)
 			if err != nil {
 				return err
 			}
@@ -158,7 +158,7 @@ func init() {
 				fmt.Println("Aborted.")
 				return nil
 			}
-			if _, err := api.Delete("/api/v1/agent/conversations/" + args[0]); err != nil {
+			if _, err := api.SignedDelete("/v1/conversations/" + args[0]); err != nil {
 				return err
 			}
 			fmt.Printf("%s Deleted conversation %s\n", g("✓"), b(args[0]))

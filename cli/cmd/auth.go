@@ -1,8 +1,9 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"cli/api"
 	"cli/config"
@@ -36,7 +37,7 @@ func init() {
 }
 
 func doLogin(email string) error {
-	if _, err := api.Post("/api/v1/auth/request-otp", map[string]string{"email": email}); err != nil {
+	if _, err := api.Post("/v1/auth/request-otp", map[string]string{"email": email}); err != nil {
 		return err
 	}
 	if err := config.SetEmail(email); err != nil {
@@ -56,26 +57,31 @@ func doLogout() error {
 }
 
 func doStatus() error {
-	if config.Token() == "" {
-		fmt.Println(y("Not logged in."))
-		return fmt.Errorf("not authenticated")
+	keyID := config.KeyID()
+	home, _ := os.UserHomeDir()
+	keyPath := filepath.Join(home, ".config", "agent-system", "signing_key")
+
+	_, keyErr := os.Stat(keyPath)
+	hasKey := keyErr == nil
+
+	if !hasKey || keyID == "" {
+		fmt.Println(y("Not ready."))
+		if !hasKey {
+			fmt.Printf("  Signing key missing — run: %s\n", c("agent-system keygen"))
+		}
+		if keyID == "" {
+			fmt.Printf("  Key ID not set    — run: %s\n", c("agent-system config --key-id <id>"))
+		}
+		return fmt.Errorf("not configured")
 	}
-	raw, err := api.Get("/api/v1/auth/validate")
-	if err != nil {
-		return err
+
+	em := config.Email()
+	if em == "" {
+		em = "(not set)"
 	}
-	var res struct {
-		Valid bool   `json:"valid"`
-		Email string `json:"email"`
-	}
-	if err := json.Unmarshal(raw, &res); err != nil {
-		return err
-	}
-	if res.Valid {
-		fmt.Printf("%s Logged in as %s\n", g("✓"), b(res.Email))
-		return nil
-	}
-	fmt.Println(y("Session expired.") + " Please log in again.")
-	_ = config.ClearAuth()
-	return fmt.Errorf("session expired")
+	fmt.Printf("%s Ready\n", g("✓"))
+	fmt.Printf("  email   : %s\n", c(em))
+	fmt.Printf("  key_id  : %s\n", c(keyID))
+	fmt.Printf("  gateway : %s\n", c(config.URL()))
+	return nil
 }

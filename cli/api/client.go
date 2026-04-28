@@ -23,14 +23,11 @@ func do(method, path string, body any) (json.RawMessage, error) {
 		r = bytes.NewReader(data)
 	}
 
-	req, err := http.NewRequest(method, config.BaseURL()+path, r)
+	req, err := http.NewRequest(method, config.URL()+path, r)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if tok := config.Token(); tok != "" {
-		req.Header.Set("Authorization", "Bearer "+tok)
-	}
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -43,10 +40,7 @@ func do(method, path string, body any) (json.RawMessage, error) {
 		return nil, err
 	}
 
-	switch resp.StatusCode {
-	case 401:
-		return nil, fmt.Errorf("not authenticated — run: agent-system login <email>")
-	case 204:
+	if resp.StatusCode == 204 {
 		return json.RawMessage("{}"), nil
 	}
 	if resp.StatusCode >= 400 {
@@ -58,6 +52,4 @@ func do(method, path string, body any) (json.RawMessage, error) {
 	return json.RawMessage(b), nil
 }
 
-func Get(path string) (json.RawMessage, error)            { return do("GET", path, nil) }
 func Post(path string, body any) (json.RawMessage, error) { return do("POST", path, body) }
-func Delete(path string) (json.RawMessage, error)         { return do("DELETE", path, nil) }

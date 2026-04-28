@@ -34,8 +34,10 @@ func init() {
 			pubB64 := base64.StdEncoding.EncodeToString(pub)
 			fmt.Printf("%s Private key saved to %s\n\n", g("✓"), b(keyPath))
 			fmt.Printf("%s\n%s\n\n", b("Public key (register in agent-openapi/keys.json):"), c(pubB64))
-			fmt.Printf("Add to keys.json:\n")
-			fmt.Printf(`  {"id": "my-key", "public_key": "%s"}`+"\n", pubB64)
+			fmt.Printf("1. Add to agent-openapi/keys.json:\n")
+			fmt.Printf(`   {"id": "my-key", "public_key": "%s", "email": "you@example.com"}`+"\n\n", pubB64)
+			fmt.Printf("2. Tell the CLI which key ID to use:\n")
+			fmt.Printf("   %s\n", b("agent-system config --key-id my-key"))
 			return nil
 		},
 	})

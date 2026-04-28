@@ -23,6 +23,32 @@ func New(backendURL, internalKey string) *Handler {
 	}
 }
 
+// proxyPublic forwards a request without adding auth headers (for public endpoints like OTP).
+func (h *Handler) proxyPublic(w http.ResponseWriter, r *http.Request, backendPath string) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, `{"error":"failed to read body"}`, http.StatusBadRequest)
+		return
+	}
+	req, err := http.NewRequest(r.Method, h.backendURL+backendPath, bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := h.client.Do(req)
+	if err != nil {
+		http.Error(w, `{"error":"backend unavailable"}`, http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	if ct := resp.Header.Get("Content-Type"); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body) //nolint:errcheck
+}
+
 func (h *Handler) proxy(w http.ResponseWriter, r *http.Request, backendPath string) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {

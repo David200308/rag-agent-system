@@ -54,7 +54,7 @@ func init() {
 		Use:   "list",
 		Short: "List your workflows",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			raw, err := api.Get("/api/v1/workflow")
+			raw, err := api.SignedGet("/v1/workflow")
 			if err != nil {
 				return err
 			}
@@ -82,7 +82,7 @@ func init() {
 		Short: "Show workflow details including agents",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			raw, err := api.Get("/api/v1/workflow/" + args[0])
+			raw, err := api.SignedGet("/v1/workflow/" + args[0])
 			if err != nil {
 				return err
 			}
@@ -93,7 +93,7 @@ func init() {
 			fmt.Printf("\n%s\n%s\n", b(wf.Name), d(wf.Description))
 			fmt.Printf("Pattern: %s   Mode: %s\n\n", y(wf.AgentPattern), c(wf.TeamExecMode))
 
-			agRaw, err := api.Get("/api/v1/workflow/" + args[0] + "/agents")
+			agRaw, err := api.SignedGet("/v1/workflow/" + args[0] + "/agents")
 			if err != nil {
 				return err
 			}
@@ -127,7 +127,7 @@ func init() {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			notify, _ := cmd.Flags().GetBool("notify")
 			fmt.Fprintln(os.Stderr, d("Starting run…"))
-			raw, err := api.Post("/api/v1/workflow/"+args[0]+"/runs", map[string]any{
+			raw, err := api.SignedPost("/v1/workflow/"+args[0]+"/runs", map[string]any{
 				"userInput":   args[1],
 				"emailNotify": notify,
 			})
@@ -153,7 +153,7 @@ func init() {
 		Short: "List recent runs for a workflow",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			raw, err := api.Get("/api/v1/workflow/" + args[0] + "/runs")
+			raw, err := api.SignedGet("/v1/workflow/" + args[0] + "/runs")
 			if err != nil {
 				return err
 			}
@@ -181,7 +181,7 @@ func init() {
 		Short: "Show logs for a completed workflow run",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			raw, err := api.Get("/api/v1/workflow/runs/" + args[0] + "/logs")
+			raw, err := api.SignedGet("/v1/workflow/runs/" + args[0] + "/logs")
 			if err != nil {
 				return err
 			}

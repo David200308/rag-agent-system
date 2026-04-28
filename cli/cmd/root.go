@@ -46,28 +46,41 @@ func init() {
 		Use:   "config",
 		Short: "Show or update CLI configuration",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			u, _ := cmd.Flags().GetString("base-url")
-			if u != "" {
-				if err := config.SetBaseURL(u); err != nil {
+			changed := false
+
+			if u, _ := cmd.Flags().GetString("url"); u != "" {
+				if err := config.SetURL(u); err != nil {
 					return err
 				}
-				fmt.Println(g("base_url set to") + " " + b(u))
+				fmt.Println(g("url set to") + " " + b(u))
+				changed = true
+			}
+			if id, _ := cmd.Flags().GetString("key-id"); id != "" {
+				if err := config.SetKeyID(id); err != nil {
+					return err
+				}
+				fmt.Println(g("key_id set to") + " " + b(id))
+				changed = true
+			}
+			if changed {
 				return nil
 			}
+
 			em := config.Email()
 			if em == "" {
 				em = "(not set)"
 			}
-			tok := "(not set)"
-			if config.Token() != "" {
-				tok = "(set)"
+			keyID := config.KeyID()
+			if keyID == "" {
+				keyID = "(not set)"
 			}
-			fmt.Printf("base_url : %s\n", c(config.BaseURL()))
-			fmt.Printf("email    : %s\n", c(em))
-			fmt.Printf("token    : %s\n", c(tok))
+			fmt.Printf("url    : %s\n", c(config.URL()))
+			fmt.Printf("key_id : %s\n", c(keyID))
+			fmt.Printf("email  : %s\n", c(em))
 			return nil
 		},
 	}
-	cfgCmd.Flags().String("base-url", "", "Set the backend URL")
+	cfgCmd.Flags().String("url", "", "Set the agent-openapi gateway URL")
+	cfgCmd.Flags().String("key-id", "", "Set the Ed25519 key ID (must match keys.json)")
 	rootCmd.AddCommand(cfgCmd)
 }
