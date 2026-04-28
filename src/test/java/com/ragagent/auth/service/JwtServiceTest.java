@@ -16,8 +16,7 @@ class JwtServiceTest {
                 true,
                 10,
                 "test-secret-key-that-is-at-least-32-characters-long",
-                24,
-                null
+                24
         );
         jwtService = new JwtService(props);
     }
@@ -62,7 +61,7 @@ class JwtServiceTest {
     void validate_expiredToken_returnsNull() {
         // Token signed with 0-hour expiry should be instantly expired
         AuthProperties shortProps = new AuthProperties(true, 10,
-                "test-secret-key-that-is-at-least-32-characters-long", 0, null);
+                "test-secret-key-that-is-at-least-32-characters-long", 0);
         JwtService shortLived = new JwtService(shortProps);
         String token = shortLived.generate("user@example.com");
         // Token expires immediately (0 hours = 0 ms), so validation should return null

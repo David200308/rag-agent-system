@@ -58,28 +58,7 @@ public class AuthFilter extends OncePerRequestFilter {
                                     FilterChain chain)
             throws ServletException, IOException {
 
-        // ── Gateway key path (agent-openapi service-to-service auth) ──────────
-        // If X-Gateway-Key is present, validate it against auth.gateway-key.
-        // On success, trust X-Key-Owner as the authenticated identity (no JWT needed).
-        String gatewayKey = request.getHeader("X-Gateway-Key");
-        if (gatewayKey != null) {
-            String configured = authProperties.gatewayKey();
-            if (configured != null && !configured.isBlank() && configured.equals(gatewayKey)) {
-                String owner = request.getHeader("X-Key-Owner");
-                if (owner != null && !owner.isBlank()) {
-                    request.setAttribute("authenticatedEmail", owner);
-                    chain.doFilter(request, response);
-                    return;
-                }
-            }
-            log.warn("[AuthFilter] Rejected request with invalid X-Gateway-Key on {}", request.getRequestURI());
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json");
-            response.getWriter().write(objectMapper.writeValueAsString(Map.of("error", "Unauthorized")));
-            return;
-        }
-
-        // ── Normal JWT path ───────────────────────────────────────────────────
+        // ── JWT path ──────────────────────────────────────────────────────────
         String token = extractToken(request);
         String email = (token != null) ? authService.validateToken(token) : null;
 
