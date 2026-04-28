@@ -16,7 +16,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { Plus, Play, Save, History } from "lucide-react";
+import { Plus, Play, Save, History, Download, Upload, FileJson } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { PatternSelector } from "./PatternSelector";
 import { AgentConfigPanel } from "./AgentConfigPanel";
@@ -28,8 +28,28 @@ import {
   updateWorkflow,
   startWorkflowRun,
 } from "@/lib/api";
-import type { AgentPattern, RunStatus, TeamExecMode, Workflow, WorkflowAgent } from "@/types/agent";
+import type { AgentPattern, AgentRole, RunStatus, TeamExecMode, Workflow, WorkflowAgent } from "@/types/agent";
 import { cn } from "@/lib/utils";
+
+// ── Flow JSON schema ──────────────────────────────────────────────────────────
+
+interface FlowAgentJson {
+  name: string;
+  role: AgentRole;
+  systemPrompt: string;
+  tools: string[];
+  skillIds: string[];
+  orderIndex: number;
+  posX: number;
+  posY: number;
+}
+
+interface FlowJson {
+  name: string;
+  agentPattern: AgentPattern;
+  teamExecMode: TeamExecMode | null;
+  agents: FlowAgentJson[];
+}
 
 // ── Agent node visual ─────────────────────────────────────────────────────────
 
@@ -83,6 +103,11 @@ export function WorkflowBuilder({ workflow }: Props) {
   const [emailNotify,    setEmailNotify]    = useState(() =>
     typeof window !== "undefined" && localStorage.getItem("workflow:notify:email") === "true");
   const browserNotifyRef = useRef(browserNotify);
+  const [showJsonEditor, setShowJsonEditor] = useState(false);
+  const [jsonText,       setJsonText]       = useState("");
+  const [jsonError,      setJsonError]      = useState<string | null>(null);
+  const [importing,      setImporting]      = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const RUNS_MIN = 260;
   const RUNS_MAX = 720;
@@ -293,6 +318,107 @@ export function WorkflowBuilder({ workflow }: Props) {
     new Notification(title, { body, icon: "/favicon.ico" });
   }
 
+  function buildFlowJson(): FlowJson {
+    return {
+      name: workflow.name,
+      agentPattern: pattern,
+      teamExecMode: teamExecMode,
+      agents: agents.map(a => ({
+        name: a.name,
+        role: a.role,
+        systemPrompt: a.systemPrompt ?? "",
+        tools: JSON.parse(a.toolsJson ?? "[]"),
+        skillIds: JSON.parse(a.skillIdsJson ?? "[]"),
+        orderIndex: a.orderIndex,
+        posX: a.posX,
+        posY: a.posY,
+      })),
+    };
+  }
+
+  function handleDownloadJson() {
+    const json = buildFlowJson();
+    const blob = new Blob([JSON.stringify(json, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${workflow.name.replace(/\s+/g, "-").toLowerCase()}-flow.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleOpenJsonEditor() {
+    setJsonText(JSON.stringify(buildFlowJson(), null, 2));
+    setJsonError(null);
+    setShowJsonEditor(true);
+  }
+
+  async function applyFlowJson(raw: string) {
+    let parsed: FlowJson;
+    try {
+      parsed = JSON.parse(raw) as FlowJson;
+    } catch {
+      setJsonError("Invalid JSON — could not parse.");
+      return;
+    }
+    if (!parsed.agentPattern || !Array.isArray(parsed.agents)) {
+      setJsonError("Missing required fields: agentPattern, agents[]");
+      return;
+    }
+    setImporting(true);
+    setJsonError(null);
+    try {
+      // Delete existing agents
+      for (const a of agents) {
+        await deleteWorkflowAgent(workflow.id, a.id);
+      }
+      // Update workflow pattern
+      await updateWorkflow(workflow.id, {
+        agentPattern: parsed.agentPattern,
+        teamExecMode: parsed.teamExecMode ?? null,
+      });
+      setPattern(parsed.agentPattern);
+      setTeamExecMode(parsed.teamExecMode ?? null);
+      // Create new agents
+      const created: WorkflowAgent[] = [];
+      for (const agentDef of parsed.agents) {
+        const saved = await upsertWorkflowAgent(workflow.id, {
+          name: agentDef.name,
+          role: agentDef.role,
+          systemPrompt: agentDef.systemPrompt,
+          tools: agentDef.tools,
+          skillIds: agentDef.skillIds ?? [],
+          orderIndex: agentDef.orderIndex,
+          posX: agentDef.posX,
+          posY: agentDef.posY,
+        });
+        created.push(saved);
+      }
+      setAgents(created);
+      syncNodes(created);
+      setSelectedId(null);
+      setShowJsonEditor(false);
+    } catch (err) {
+      setJsonError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function handleFileImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const text = ev.target?.result as string;
+      setJsonText(text);
+      setJsonError(null);
+      setShowJsonEditor(true);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
   async function handleRun() {
     if (!runInput.trim()) return;
     const { runId: id } = await startWorkflowRun(workflow.id, runInput, emailNotify);
@@ -320,6 +446,22 @@ export function WorkflowBuilder({ workflow }: Props) {
           <Button size="sm" variant="ghost" onClick={handleSavePositions} disabled={saving}>
             <Save className="h-3.5 w-3.5 mr-1" /> {saving ? "Saving…" : "Save Layout"}
           </Button>
+          <Button size="sm" variant="ghost" onClick={handleDownloadJson} title="Download flow as JSON">
+            <Download className="h-3.5 w-3.5 mr-1" /> JSON
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => fileInputRef.current?.click()} title="Import flow from JSON file">
+            <Upload className="h-3.5 w-3.5 mr-1" /> Import
+          </Button>
+          <Button size="sm" variant="ghost" onClick={handleOpenJsonEditor} title="View / edit flow JSON">
+            <FileJson className="h-3.5 w-3.5" />
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={handleFileImport}
+          />
           <Button size="sm" variant="ghost" onClick={() => setShowRunsPanel(v => !v)}>
             <History className="h-3.5 w-3.5 mr-1" /> Runs
           </Button>
@@ -364,6 +506,43 @@ export function WorkflowBuilder({ workflow }: Props) {
               <Button size="sm" onClick={handleRun} disabled={!runInput.trim()}>
                 <Play className="h-3.5 w-3.5 mr-1" /> Start Run
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* JSON editor modal */}
+      {showJsonEditor && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="flex flex-col w-full max-w-2xl max-h-[80vh] rounded-xl border border-[--color-border] bg-white dark:bg-zinc-900 shadow-xl mx-4">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[--color-border]">
+              <p className="text-sm font-semibold">Flow JSON</p>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="ghost" onClick={handleDownloadJson}>
+                  <Download className="h-3.5 w-3.5 mr-1" /> Download
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowJsonEditor(false)}>Close</Button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden p-4">
+              <textarea
+                value={jsonText}
+                onChange={e => { setJsonText(e.target.value); setJsonError(null); }}
+                spellCheck={false}
+                className="w-full h-full min-h-[320px] font-mono text-xs rounded-md border border-[--color-border] bg-transparent px-3 py-2 focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white resize-none"
+              />
+            </div>
+            {jsonError && (
+              <p className="px-5 pb-2 text-xs text-red-500">{jsonError}</p>
+            )}
+            <div className="px-5 py-3 border-t border-[--color-border] flex items-center justify-between gap-2">
+              <p className="text-xs text-[--color-muted]">Importing will replace all current agents.</p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setShowJsonEditor(false)}>Cancel</Button>
+                <Button size="sm" onClick={() => applyFlowJson(jsonText)} disabled={importing}>
+                  {importing ? "Importing…" : "Import & Apply"}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

@@ -309,7 +309,8 @@ function ManagePanel({
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{skill.name}</p>
               <p className="text-[10px] text-[--color-muted]">
-                {skill.fileName} · {skill.fileType.toUpperCase()} ·{" "}
+                <span className="font-mono select-all">{skill.id}</span>
+                {" · "}{skill.fileName} · {skill.fileType.toUpperCase()} ·{" "}
                 {new Date(skill.createdAt).toLocaleDateString()}
               </p>
             </div>
