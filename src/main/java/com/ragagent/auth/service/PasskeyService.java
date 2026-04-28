@@ -1,8 +1,9 @@
 package com.ragagent.auth.service;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.ragagent.auth.PasskeyProperties;
 import com.ragagent.auth.entity.PasskeyChallenge;
@@ -39,17 +40,9 @@ public class PasskeyService implements CredentialRepository {
 
     private RelyingParty relyingParty;
 
-    // Used for DB storage and deserialization — preserves all fields for round-trip fidelity.
     private final ObjectMapper passkeyMapper = new ObjectMapper()
             .registerModule(new Jdk8Module())
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-
-    // Used for the JSON sent to the browser. Strips null fields so the WebAuthn API
-    // doesn't reject e.g. `"transports": null` or `"timeout": null`.
-    private final ObjectMapper browserMapper = new ObjectMapper()
-            .registerModule(new Jdk8Module())
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
     private final SecureRandom random = new SecureRandom();
 
@@ -159,8 +152,7 @@ public class PasskeyService implements CredentialRepository {
         challengeRepo.save(challenge);
 
         log.info("[PasskeyService] Registration challenge issued for {}", email);
-        // Return null-stripped JSON so the browser WebAuthn API doesn't reject null fields.
-        return browserMapper.writeValueAsString(options);
+        return stripNulls(storageJson);
     }
 
     @Transactional
@@ -226,10 +218,10 @@ public class PasskeyService implements CredentialRepository {
         challengeRepo.save(challenge);
 
         log.info("[PasskeyService] Authentication challenge issued for {}", email);
-        // Return null-stripped options for the browser; null fields like `transports: null`
-        // cause the WebAuthn API to throw "cannot be converted to a sequence".
-        return browserMapper.writeValueAsString(
-                assertionRequest.getPublicKeyCredentialRequestOptions());
+        // Use toJson() for fidelity, then strip nulls — the yubico library's custom serializers
+        // bypass an external mapper's NON_NULL setting, so browserMapper.writeValueAsString()
+        // was leaving `"transports": null` in place, which the WebAuthn API rejects.
+        return stripNulls(assertionRequest.getPublicKeyCredentialRequestOptions().toJson());
     }
 
     @Transactional
@@ -295,5 +287,32 @@ public class PasskeyService implements CredentialRepository {
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
         return new ByteArray(bytes).getBase64Url();
+    }
+
+    /**
+     * Parses a JSON string and removes all null-valued fields at every depth.
+     * The yubico library's classes use @JsonValue / toJson() internally, so they
+     * bypass an external ObjectMapper's NON_NULL include setting. Post-processing
+     * the raw toJson() output is the only reliable way to keep null fields out of
+     * the response sent to the browser WebAuthn API.
+     */
+    private String stripNulls(String json) throws Exception {
+        JsonNode root = passkeyMapper.readTree(json);
+        stripNullsNode(root);
+        return passkeyMapper.writeValueAsString(root);
+    }
+
+    private static void stripNullsNode(JsonNode node) {
+        if (node.isObject()) {
+            ObjectNode obj = (ObjectNode) node;
+            java.util.List<String> nullKeys = new java.util.ArrayList<>();
+            obj.fields().forEachRemaining(e -> {
+                if (e.getValue().isNull()) nullKeys.add(e.getKey());
+                else stripNullsNode(e.getValue());
+            });
+            nullKeys.forEach(obj::remove);
+        } else if (node.isArray()) {
+            node.forEach(PasskeyService::stripNullsNode);
+        }
     }
 }
