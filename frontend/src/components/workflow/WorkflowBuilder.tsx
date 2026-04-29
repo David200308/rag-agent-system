@@ -433,41 +433,43 @@ export function WorkflowBuilder({ workflow }: Props) {
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar */}
-      <div className="flex items-center gap-3 border-b border-[--color-border] px-4 py-3">
-        <PatternSelector
-          pattern={pattern}
-          teamExecMode={teamExecMode}
-          onChange={handlePatternChange}
-        />
-        <div className="ml-auto flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={addAgent}>
-            <Plus className="h-3.5 w-3.5 mr-1" /> Add Agent
-          </Button>
-          <Button size="sm" variant="ghost" onClick={handleSavePositions} disabled={saving}>
-            <Save className="h-3.5 w-3.5 mr-1" /> {saving ? "Saving…" : "Save Layout"}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={handleDownloadJson} title="Download flow as JSON">
-            <Download className="h-3.5 w-3.5 mr-1" /> JSON
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => fileInputRef.current?.click()} title="Import flow from JSON file">
-            <Upload className="h-3.5 w-3.5 mr-1" /> Import
-          </Button>
-          <Button size="sm" variant="ghost" onClick={handleOpenJsonEditor} title="View / edit flow JSON">
-            <FileJson className="h-3.5 w-3.5" />
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json,application/json"
-            className="hidden"
-            onChange={handleFileImport}
+      <div className="overflow-x-auto border-b border-[--color-border]">
+        <div className="flex min-w-max items-center gap-3 px-4 py-3">
+          <PatternSelector
+            pattern={pattern}
+            teamExecMode={teamExecMode}
+            onChange={handlePatternChange}
           />
-          <Button size="sm" variant="ghost" onClick={() => setShowRunsPanel(v => !v)}>
-            <History className="h-3.5 w-3.5 mr-1" /> Runs
-          </Button>
-          <Button size="sm" onClick={() => setShowRunInput(true)}>
-            <Play className="h-3.5 w-3.5 mr-1" /> Run
-          </Button>
+          <div className="ml-auto flex items-center gap-2 pl-2">
+            <Button size="sm" variant="ghost" onClick={addAgent}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Add Agent
+            </Button>
+            <Button size="sm" variant="ghost" onClick={handleSavePositions} disabled={saving}>
+              <Save className="h-3.5 w-3.5 mr-1" /> {saving ? "Saving…" : "Save Layout"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={handleDownloadJson} title="Download flow as JSON">
+              <Download className="h-3.5 w-3.5 mr-1" /> JSON
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => fileInputRef.current?.click()} title="Import flow from JSON file">
+              <Upload className="h-3.5 w-3.5 mr-1" /> Import
+            </Button>
+            <Button size="sm" variant="ghost" onClick={handleOpenJsonEditor} title="View / edit flow JSON">
+              <FileJson className="h-3.5 w-3.5" />
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={handleFileImport}
+            />
+            <Button size="sm" variant="ghost" onClick={() => setShowRunsPanel(v => !v)}>
+              <History className="h-3.5 w-3.5 mr-1" /> Runs
+            </Button>
+            <Button size="sm" onClick={() => setShowRunInput(true)}>
+              <Play className="h-3.5 w-3.5 mr-1" /> Run
+            </Button>
+          </div>
         </div>
       </div>
 

@@ -80,7 +80,13 @@ export function AgentConfigPanel({ agent, pattern, onSave, onDelete, onClose }: 
   }
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-[--color-border] bg-[--color-surface-raised]">
+    <aside className={cn(
+      "flex flex-col bg-[--color-surface-raised]",
+      // Mobile: fixed bottom sheet
+      "fixed inset-x-0 bottom-0 z-50 max-h-[70vh] rounded-t-xl border-t border-[--color-border]",
+      // Desktop: inline right panel
+      "sm:relative sm:inset-auto sm:z-auto sm:h-full sm:max-h-none sm:w-80 sm:shrink-0 sm:rounded-none sm:border-l sm:border-t-0",
+    )}>
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[--color-border] px-4 py-3">
         <span className="text-sm font-semibold">Configure Agent</span>
