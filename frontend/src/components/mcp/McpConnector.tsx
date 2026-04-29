@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { CheckCircle2, Link2Off, AlertCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -144,25 +144,31 @@ function ConnectorCard({
   );
 }
 
-// ── main component ────────────────────────────────────────────────────────────
+// ── OAuth result banner (isolated so useSearchParams is inside Suspense) ─────
 
-export function McpConnector() {
-  const searchParams  = useSearchParams();
-  const [status, setStatus]       = useState<Status>({});
-  const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
-  const [banner, setBanner]       = useState<{ type: "success" | "error"; msg: string } | null>(null);
+function OAuthBanner({ onBanner }: { onBanner: (b: { type: "success" | "error"; msg: string } | null) => void }) {
+  const searchParams = useSearchParams();
 
-  // Read ?connected= or ?error= params set by the OAuth callback redirect
   useEffect(() => {
     const connected = searchParams.get("connected");
     const error     = searchParams.get("error");
-    if (connected) setBanner({ type: "success", msg: `${connected} connected successfully.` });
-    if (error)     setBanner({ type: "error",   msg: `OAuth failed: ${error.replace(/_/g, " ")}.` });
+    if (connected) onBanner({ type: "success", msg: `${connected} connected successfully.` });
+    if (error)     onBanner({ type: "error",   msg: `OAuth failed: ${error.replace(/_/g, " ")}.` });
     if (connected || error) {
-      // Clean URL without re-render loop
       window.history.replaceState(null, "", "/mcp");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  return null;
+}
+
+// ── main component ────────────────────────────────────────────────────────────
+
+function McpConnectorInner() {
+  const [status, setStatus]         = useState<Status>({});
+  const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
+  const [banner, setBanner]         = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   const fetchStatus = async () => {
     try {
@@ -193,6 +199,10 @@ export function McpConnector() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-6">
+      <Suspense fallback={null}>
+        <OAuthBanner onBanner={setBanner} />
+      </Suspense>
+
       <div>
         <h1 className="text-xl font-semibold">Connectors</h1>
         <p className="mt-1 text-sm text-[--color-muted]">
@@ -229,5 +239,13 @@ export function McpConnector() {
         ))}
       </div>
     </div>
+  );
+}
+
+export function McpConnector() {
+  return (
+    <Suspense fallback={null}>
+      <McpConnectorInner />
+    </Suspense>
   );
 }
