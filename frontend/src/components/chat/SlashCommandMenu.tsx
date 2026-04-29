@@ -63,11 +63,11 @@ export function SlashCommandMenu({
   return (
     <div
       ref={listRef}
-      className="absolute bottom-full left-0 right-0 z-50 mb-1 max-h-64 overflow-y-auto rounded-xl border border-[--color-border] bg-[--color-surface] shadow-xl"
+      className="absolute bottom-full left-0 right-0 z-50 mb-1 max-h-64 overflow-y-auto rounded-xl border border-[--color-border] bg-white shadow-xl dark:bg-zinc-900"
     >
       {matchedBuiltins.length > 0 && (
         <>
-          <p className="sticky top-0 bg-[--color-surface] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[--color-muted]">
+          <p className="sticky top-0 bg-white dark:bg-zinc-900 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[--color-muted]">
             Commands
           </p>
           {matchedBuiltins.map((item, i) => (
@@ -100,7 +100,7 @@ export function SlashCommandMenu({
         <>
           <p
             className={cn(
-              "sticky top-0 bg-[--color-surface] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[--color-muted]",
+              "sticky top-0 bg-white dark:bg-zinc-900 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[--color-muted]",
               matchedBuiltins.length > 0 && "border-t border-[--color-border]",
             )}
           >

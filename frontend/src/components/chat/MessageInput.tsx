@@ -110,7 +110,7 @@ function SkillPickerDropdown({
   return (
     <div
       ref={ref}
-      className="absolute bottom-full right-0 z-50 mb-1 w-56 overflow-hidden rounded-xl border border-[--color-border] bg-[--color-surface] shadow-xl"
+      className="absolute bottom-full right-0 z-50 mb-1 w-56 overflow-hidden rounded-xl border border-[--color-border] bg-white shadow-xl dark:bg-zinc-900"
     >
       <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[--color-muted]">
         Attach Skills
