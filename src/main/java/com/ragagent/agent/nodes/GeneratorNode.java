@@ -2,6 +2,9 @@ package com.ragagent.agent.nodes;
 
 import com.ragagent.agent.state.AgentState;
 import com.ragagent.config.LlmProperties;
+import com.ragagent.connector.GoogleDocsAgentTool;
+import com.ragagent.connector.GoogleSheetsAgentTool;
+import com.ragagent.connector.GoogleSlidesAgentTool;
 import com.ragagent.schema.AgentRequest;
 import com.ragagent.schema.AgentResponse;
 import com.ragagent.schema.DocumentResult;
@@ -9,6 +12,8 @@ import com.ragagent.schema.QueryAnalysis;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.tool.ToolCallbackProvider;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -28,8 +33,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class GeneratorNode {
 
-    private final ChatClient chatClient;
-    private final LlmProperties llmProperties;
+    private final ChatClient           chatClient;
+    private final LlmProperties        llmProperties;
+    private final GoogleDocsAgentTool   googleDocsTool;
+    private final GoogleSheetsAgentTool googleSheetsTool;
+    private final GoogleSlidesAgentTool googleSlidesTool;
 
     private static final String SYSTEM_PROMPT = """
             You are a helpful, accurate AI assistant. When source documents are
@@ -52,14 +60,31 @@ public class GeneratorNode {
         List<DocumentResult> docs = state.documents();
 
         String userPrompt = buildPrompt(request.query(), analysis, docs);
+        String userEmail  = state.userEmail().orElse(null);
 
         log.debug("[GeneratorNode] Generating answer (docs={})", docs.size());
 
-        String answer = chatClient.prompt()
-                .system(SYSTEM_PROMPT)
-                .user(userPrompt)
-                .call()
-                .content();
+        // Inject per-request email so Google tools know which token to use
+        googleDocsTool.setCurrentEmail(userEmail);
+        googleSheetsTool.setCurrentEmail(userEmail);
+        googleSlidesTool.setCurrentEmail(userEmail);
+        String answer;
+        try {
+            ToolCallbackProvider tools = MethodToolCallbackProvider.builder()
+                    .toolObjects(googleDocsTool, googleSheetsTool, googleSlidesTool)
+                    .build();
+
+            answer = chatClient.prompt()
+                    .system(SYSTEM_PROMPT)
+                    .user(userPrompt)
+                    .tools(tools)
+                    .call()
+                    .content();
+        } finally {
+            googleDocsTool.clearCurrentEmail();
+            googleSheetsTool.clearCurrentEmail();
+            googleSlidesTool.clearCurrentEmail();
+        }
 
         AgentResponse response = new AgentResponse(
                 answer,

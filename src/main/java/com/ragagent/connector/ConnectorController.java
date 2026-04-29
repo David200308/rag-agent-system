@@ -26,7 +26,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ConnectorController {
 
-    private final ConnectorService connectorService;
+    private final ConnectorService   connectorService;
+    private final GoogleDocsService  googleDocsService;
+    private final GoogleSheetsService googleSheetsService;
+    private final GoogleSlidesService googleSlidesService;
 
     @GetMapping("/{provider}/auth-url")
     public ResponseEntity<Map<String, String>> authUrl(
@@ -66,5 +69,57 @@ public class ConnectorController {
         String email = (String) request.getAttribute("authenticatedEmail");
         connectorService.disconnect(provider, email);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * POST /api/v1/connectors/google/docs
+     * Body: { "title": "...", "content": "..." }
+     * Creates a Google Doc and returns { "url": "https://docs.google.com/..." }
+     */
+    @PostMapping("/google/docs")
+    public ResponseEntity<Map<String, String>> createGoogleDoc(
+            @RequestBody Map<String, String> body,
+            HttpServletRequest request) {
+
+        String email   = (String) request.getAttribute("authenticatedEmail");
+        String title   = body.getOrDefault("title", "Exported Document");
+        String content = body.get("content");
+
+        if (content == null || content.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String url = googleDocsService.createDocument(title, content, email);
+        return ResponseEntity.ok(Map.of("url", url));
+    }
+
+    /** POST /api/v1/connectors/google/sheets — { title, content } → { url } */
+    @PostMapping("/google/sheets")
+    public ResponseEntity<Map<String, String>> createGoogleSheet(
+            @RequestBody Map<String, String> body,
+            HttpServletRequest request) {
+
+        String email   = (String) request.getAttribute("authenticatedEmail");
+        String title   = body.getOrDefault("title", "Exported Spreadsheet");
+        String content = body.get("content");
+        if (content == null || content.isBlank()) return ResponseEntity.badRequest().build();
+
+        String url = googleSheetsService.createSpreadsheet(title, content, email);
+        return ResponseEntity.ok(Map.of("url", url));
+    }
+
+    /** POST /api/v1/connectors/google/slides — { title, content } → { url } */
+    @PostMapping("/google/slides")
+    public ResponseEntity<Map<String, String>> createGoogleSlides(
+            @RequestBody Map<String, String> body,
+            HttpServletRequest request) {
+
+        String email   = (String) request.getAttribute("authenticatedEmail");
+        String title   = body.getOrDefault("title", "Exported Presentation");
+        String content = body.get("content");
+        if (content == null || content.isBlank()) return ResponseEntity.badRequest().build();
+
+        String url = googleSlidesService.createPresentation(title, content, email);
+        return ResponseEntity.ok(Map.of("url", url));
     }
 }
