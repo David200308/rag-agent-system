@@ -77,7 +77,7 @@ public class GeneratorNode {
             answer = chatClient.prompt()
                     .system(SYSTEM_PROMPT)
                     .user(userPrompt)
-                    .tools(tools)
+                    .toolCallbacks(tools)
                     .call()
                     .content();
         } finally {
