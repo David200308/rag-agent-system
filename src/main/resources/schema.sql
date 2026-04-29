@@ -196,6 +196,32 @@ CREATE TABLE IF NOT EXISTS passkey_challenges (
     INDEX idx_pkc_email_type (email, type)
 );
 
+-- ── External connector OAuth tokens ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS connector_tokens (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    owner_email   VARCHAR(255) NOT NULL,
+    provider      VARCHAR(50)  NOT NULL,
+    access_token  TEXT         NOT NULL,
+    refresh_token TEXT,
+    token_type    VARCHAR(50)  NOT NULL DEFAULT 'Bearer',
+    scope         TEXT,
+    expires_at    DATETIME,
+    created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_ct_email_provider (owner_email, provider)
+);
+
+CREATE TABLE IF NOT EXISTS connector_oauth_states (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    state       VARCHAR(64)  NOT NULL,
+    owner_email VARCHAR(255),
+    provider    VARCHAR(50)  NOT NULL,
+    expires_at  DATETIME     NOT NULL,
+    created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_cos_state (state),
+    INDEX idx_cos_state (state)
+);
+
 -- ── Schema migration: web_fetch_whitelist per-user isolation ─────────────────
 -- Existing databases: drops the old global unique constraint and adds the per-user
 -- one. On fresh installs these statements fail silently (continue-on-error=true).

@@ -46,6 +46,7 @@ public class AuthFilter extends OncePerRequestFilter {
         return path.startsWith("/api/v1/auth/")
             || path.startsWith("/api/v1/share/")
             || path.startsWith("/api/v1/scheduler/")   // service-key auth, not JWT
+            || path.startsWith("/api/v1/connectors/")  // OAuth state handles security
             || path.startsWith("/actuator/")
             || path.startsWith("/v3/api-docs")
             || path.startsWith("/swagger-ui")

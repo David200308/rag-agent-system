@@ -44,6 +44,14 @@ secrets:
     file: ./secrets/resend_from_email
   scheduler_service_key:
     file: ./secrets/scheduler_service_key
+  google_client_id:
+    file: ./secrets/google_client_id
+  google_client_secret:
+    file: ./secrets/google_client_secret
+  figma_client_id:
+    file: ./secrets/figma_client_id
+  figma_client_secret:
+    file: ./secrets/figma_client_secret
 
 services:
 
@@ -152,6 +160,10 @@ services:
       - resend_api_key
       - resend_from_email
       - scheduler_service_key
+      - google_client_id
+      - google_client_secret
+      - figma_client_id
+      - figma_client_secret
     environment:
       # ── Non-secret config (safe to put inline) ──────────────────────────────
       MYSQL_HOST: mysql
@@ -187,6 +199,8 @@ services:
       WEB_FETCH_ENABLED: ${WEB_FETCH_ENABLED:-true}
       WEB_FETCH_TIMEOUT: ${WEB_FETCH_TIMEOUT:-10}
       WEB_FETCH_MAX_CHARS: ${WEB_FETCH_MAX_CHARS:-50000}
+      # ── Connectors (GOOGLE_CLIENT_ID/SECRET + FIGMA_CLIENT_ID/SECRET come from secrets)
+      CONNECTOR_CALLBACK_BASE_URL: ${CONNECTOR_CALLBACK_BASE_URL:-http://localhost:3000}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:

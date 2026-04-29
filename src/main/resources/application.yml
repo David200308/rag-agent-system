@@ -235,6 +235,23 @@ auth:
     # For local dev: http://localhost:3000. For production: https://yourdomain.com
     origin: ${AUTH_PASSKEY_ORIGIN:http://localhost:3000}
 
+# ── External connectors (Google Workspace + Figma OAuth) ─────────────────────
+# Register OAuth apps at:
+#   Google: https://console.cloud.google.com/apis/credentials
+#   Figma:  https://www.figma.com/developers/apps
+#
+# Redirect URI to register (must match CONNECTOR_CALLBACK_BASE_URL):
+#   {CONNECTOR_CALLBACK_BASE_URL}/api/connectors/google/callback
+#   {CONNECTOR_CALLBACK_BASE_URL}/api/connectors/figma/callback
+connectors:
+  callback-base-url: ${CONNECTOR_CALLBACK_BASE_URL:http://localhost:3000}
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
+    client-secret: ${GOOGLE_CLIENT_SECRET:}
+  figma:
+    client-id: ${FIGMA_CLIENT_ID:}
+    client-secret: ${FIGMA_CLIENT_SECRET:}
+
 # ── Go Scheduler microservice ────────────────────────────────────────────────
 # Shared service key used by the Go scheduler to authenticate trigger calls.
 scheduler:
