@@ -1,10 +1,24 @@
-import { Bot, User, AlertTriangle, Zap, Search, ArrowRight } from "lucide-react";
+import { Bot, User, AlertTriangle, Zap, Search, ArrowRight, ExternalLink, FileText, Table2, Presentation } from "lucide-react";
 import { cn, formatTime, formatDuration } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
 import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import { SourceCard } from "./SourceCard";
 import { useTimezone } from "@/hooks/useTimezone";
 import type { ChatMessage } from "@/types/agent";
+
+type WorkspaceLink = { url: string; label: string; icon: React.ReactNode; color: string };
+
+function extractWorkspaceLinks(content: string): WorkspaceLink[] {
+  const urlRegex = /https:\/\/(?:docs|sheets|slides)\.google\.com\/[^\s)>\]"']+/g;
+  const matches = content.match(urlRegex) ?? [];
+  return matches.map((url) => {
+    if (url.includes("docs.google.com"))
+      return { url, label: "Open in Google Docs",   icon: <FileText className="h-4 w-4" />,     color: "text-blue-600 dark:text-blue-400" };
+    if (url.includes("sheets.google.com"))
+      return { url, label: "Open in Google Sheets", icon: <Table2 className="h-4 w-4" />,       color: "text-green-600 dark:text-green-400" };
+    return   { url, label: "Open in Google Slides", icon: <Presentation className="h-4 w-4" />, color: "text-orange-500 dark:text-orange-400" };
+  });
+}
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -28,6 +42,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const { timezone } = useTimezone();
   const isUser = message.role === "user";
   const isError = message.role === "error";
+  const workspaceLinks = (!isUser && !isError) ? extractWorkspaceLinks(message.content) : [];
 
   return (
     <div className={cn("flex gap-3", isUser && "flex-row-reverse")}>
@@ -62,6 +77,25 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             <MarkdownContent content={message.content} />
           )}
         </div>
+
+        {/* Google Workspace tool-call cards */}
+        {workspaceLinks.length > 0 && (
+          <div className="flex flex-col gap-1.5 w-full">
+            {workspaceLinks.map((link) => (
+              <a
+                key={link.url}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 text-sm transition-colors hover:bg-[--color-surface] group"
+              >
+                <span className={link.color}>{link.icon}</span>
+                <span className="flex-1 font-medium truncate">{link.label}</span>
+                <ExternalLink className="h-3.5 w-3.5 text-[--color-muted] group-hover:text-inherit transition-colors shrink-0" />
+              </a>
+            ))}
+          </div>
+        )}
 
         {/* Route + fallback badges */}
         {message.routeDecision && (

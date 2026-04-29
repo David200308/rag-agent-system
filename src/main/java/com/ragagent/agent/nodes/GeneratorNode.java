@@ -40,12 +40,28 @@ public class GeneratorNode {
     private final GoogleSlidesAgentTool googleSlidesTool;
 
     private static final String SYSTEM_PROMPT = """
-            You are a helpful, accurate AI assistant. When source documents are
-            provided, ground your answer strictly in those documents and cite them.
-            If documents are irrelevant, say so rather than hallucinating.
+            You are a helpful, accurate AI assistant with access to Google Workspace tools.
+
+            GOOGLE WORKSPACE TOOLS — you have these tools available and MUST call them when relevant:
+            - writeToGoogleDocs:   call when the user asks to write, save, or export text or \
+            conversation content to Google Docs
+            - writeToGoogleSheets: call when the user asks to save tabular data or tables to Google Sheets
+            - writeToGoogleSlides: call when the user asks to create a presentation in Google Slides
+
+            CRITICAL RULES for Google Workspace requests:
+            1. When the user asks to write to Google Docs, Sheets, or Slides, you MUST call the \
+            appropriate tool directly.
+            2. Do NOT give manual instructions like "go to Google Docs and paste". \
+            Do NOT explain how to do it manually. Just call the tool with the content.
+            3. When the user refers to "this conversation", "the content generated before", \
+            "what was said above", or similar phrases, extract the full relevant text from the \
+            Conversation History section of the prompt and pass it as the content to the tool.
+
+            When source documents are provided, ground your answer strictly in those documents
+            and cite them. If documents are irrelevant, say so rather than hallucinating.
             Be concise but complete.
 
-            IMPORTANT — formatting rules:
+            FORMATTING (when not calling a tool):
             - Always respond in plain Markdown (paragraphs, bullet lists, numbered lists, tables).
             - Use Markdown tables when comparing or summarising structured data.
             - NEVER wrap your answer in JSON, code fences, or any structured data format
@@ -59,7 +75,7 @@ public class GeneratorNode {
         QueryAnalysis analysis = state.queryAnalysis().orElseThrow();
         List<DocumentResult> docs = state.documents();
 
-        String userPrompt = buildPrompt(request.query(), analysis, docs);
+        String userPrompt = buildPrompt(request.query(), analysis, docs, request.conversationHistory());
         String userEmail  = state.userEmail().orElse(null);
 
         log.debug("[GeneratorNode] Generating answer (docs={})", docs.size());
@@ -112,9 +128,22 @@ public class GeneratorNode {
 
     private String buildPrompt(String query,
                                QueryAnalysis analysis,
-                               List<DocumentResult> docs) {
+                               List<DocumentResult> docs,
+                               List<AgentRequest.ConversationTurn> history) {
+        StringBuilder sb = new StringBuilder();
+
+        if (history != null && !history.isEmpty()) {
+            sb.append("## Conversation History\n");
+            for (AgentRequest.ConversationTurn turn : history) {
+                sb.append("**").append("user".equals(turn.role()) ? "User" : "Assistant").append(":** ");
+                sb.append(turn.content()).append("\n\n");
+            }
+            sb.append("\n");
+        }
+
         if (docs.isEmpty()) {
-            return "Answer the following from your own knowledge:\n\n" + query;
+            sb.append("## Current Question\n").append(query);
+            return sb.toString();
         }
 
         String context = docs.stream()
@@ -122,7 +151,6 @@ public class GeneratorNode {
                         d.source(), d.score(), d.content()))
                 .collect(Collectors.joining("\n\n"));
 
-        // Multi-hop: guide the model through sub-questions if present
         String subQSection = analysis.subQuestions() != null && !analysis.subQuestions().isEmpty()
                 ? "\n\nConsider these sub-questions:\n" +
                   analysis.subQuestions().stream()
@@ -130,15 +158,17 @@ public class GeneratorNode {
                           .collect(Collectors.joining("\n"))
                 : "";
 
-        return """
+        sb.append("""
                ## Context Documents
                %s
 
-               ## User Question
+               ## Current Question
                %s%s
 
                Answer using the context above. Cite sources inline as [Source: <name>].
-               """.formatted(context, query, subQSection);
+               """.formatted(context, query, subQSection));
+
+        return sb.toString();
     }
 
     private String resolveModelName() {
