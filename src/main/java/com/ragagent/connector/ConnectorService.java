@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
@@ -117,6 +118,11 @@ public class ConnectorService {
         token.setExpiresAt(tr.expiresIn() != null
                 ? LocalDateTime.now().plusSeconds(tr.expiresIn()) : null);
 
+        // Migrate any anonymous token that was stored before auth was properly wired
+        if (!ownerEmail.isEmpty()) {
+            tokenRepo.findByOwnerEmailAndProvider("", provider).ifPresent(tokenRepo::delete);
+        }
+
         tokenRepo.save(token);
         log.info("[ConnectorService] Stored {} token for {}", provider, ownerEmail);
     }
@@ -134,10 +140,15 @@ public class ConnectorService {
         return status;
     }
 
+    @Transactional
     public void disconnect(String provider, String ownerEmail) {
         validateProvider(provider);
         String email = ownerEmail != null ? ownerEmail : "";
         tokenRepo.deleteByOwnerEmailAndProvider(email, provider);
+        // Also remove any anonymous token stored before auth was properly wired
+        if (!email.isEmpty()) {
+            tokenRepo.deleteByOwnerEmailAndProvider("", provider);
+        }
         log.info("[ConnectorService] Disconnected {} for {}", provider, email);
     }
 
