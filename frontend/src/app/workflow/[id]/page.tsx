@@ -2,15 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Menu } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { WorkflowBuilder } from "@/components/workflow/WorkflowBuilder";
 import { fetchWorkflow } from "@/lib/api";
 import type { Workflow } from "@/types/agent";
+import { useWorkflowSidebar } from "../WorkflowSidebarContext";
 
 export default function WorkflowDetailPage() {
   const { id }   = useParams<{ id: string }>();
   const router   = useRouter();
+  const openSidebar = useWorkflowSidebar();
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [loading,  setLoading]  = useState(true);
 
@@ -42,6 +44,13 @@ export default function WorkflowDetailPage() {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-[--color-border] px-4 py-3">
+        <button
+          onClick={openSidebar}
+          className="rounded-md p-1 text-[--color-muted] hover:bg-[--color-border]/50 sm:hidden"
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
         <Button size="icon" variant="ghost" onClick={() => router.push("/workflow")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>

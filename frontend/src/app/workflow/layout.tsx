@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ResizableLayout } from "@/components/layout/ResizableLayout";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { useRouter } from "next/navigation";
+import { WorkflowSidebarContext } from "./WorkflowSidebarContext";
 
 export default function WorkflowLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -17,22 +18,24 @@ export default function WorkflowLayout({ children }: { children: React.ReactNode
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      <ResizableLayout
-        sidebar={(width, onCollapse) => (
-          <Sidebar
-            onSelectConversation={id => {
-              router.push(`/?conv=${id}`);
-              setSidebarOpen(false);
-            }}
-            isOpen={sidebarOpen}
-            onClose={() => setSidebarOpen(false)}
-            desktopWidth={width}
-            onCollapse={onCollapse}
-          />
-        )}
-      >
-        {children}
-      </ResizableLayout>
+      <WorkflowSidebarContext.Provider value={() => setSidebarOpen(true)}>
+        <ResizableLayout
+          sidebar={(width, onCollapse) => (
+            <Sidebar
+              onSelectConversation={id => {
+                router.push(`/?conv=${id}`);
+                setSidebarOpen(false);
+              }}
+              isOpen={sidebarOpen}
+              onClose={() => setSidebarOpen(false)}
+              desktopWidth={width}
+              onCollapse={onCollapse}
+            />
+          )}
+        >
+          {children}
+        </ResizableLayout>
+      </WorkflowSidebarContext.Provider>
     </>
   );
 }

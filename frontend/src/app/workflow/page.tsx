@@ -2,15 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Network, Users, Trash2, ArrowRight } from "lucide-react";
+import { Plus, Network, Users, Trash2, ArrowRight, Menu } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { PatternSelector } from "@/components/workflow/PatternSelector";
 import { createWorkflow, deleteWorkflow, fetchWorkflows } from "@/lib/api";
 import type { AgentPattern, TeamExecMode, Workflow } from "@/types/agent";
 import { cn } from "@/lib/utils";
+import { useWorkflowSidebar } from "./WorkflowSidebarContext";
 
 export default function WorkflowListPage() {
   const router = useRouter();
+  const openSidebar = useWorkflowSidebar();
   const [workflows,   setWorkflows]   = useState<Workflow[]>([]);
   const [creating,    setCreating]    = useState(false);
   const [showNew,     setShowNew]     = useState(false);
@@ -46,9 +48,18 @@ export default function WorkflowListPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold">Workflows</h1>
-          <p className="text-xs text-[--color-muted] mt-0.5">Multi-agent pipelines with sandbox execution</p>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openSidebar}
+            className="rounded-md p-1 text-[--color-muted] hover:bg-[--color-border]/50 sm:hidden"
+            aria-label="Open menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div>
+            <h1 className="text-lg font-bold">Workflows</h1>
+            <p className="text-xs text-[--color-muted] mt-0.5">Multi-agent pipelines with sandbox execution</p>
+          </div>
         </div>
         <Button size="sm" onClick={() => setShowNew(true)}>
           <Plus className="h-3.5 w-3.5 mr-1" /> New Workflow
@@ -130,7 +141,7 @@ function WorkflowCard({ workflow, onOpen, onDelete }: {
             : `Team · ${workflow.teamExecMode === "SEQUENTIAL" ? "Sequential" : "Parallel"}`}
         </p>
       </div>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
         <Button
           size="icon"
           variant="ghost"

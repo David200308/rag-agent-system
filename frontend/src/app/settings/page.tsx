@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Moon, Sun, Globe, Trash2, Plus, User, Shield, Clock, KeyRound } from "lucide-react";
+import { Moon, Sun, Globe, Trash2, Plus, User, Shield, Clock, KeyRound, Menu } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useTimezone } from "@/hooks/useTimezone";
 import { Button } from "@/components/ui/Button";
@@ -192,6 +192,17 @@ export default function SettingsPage() {
           />
         )}
       >
+      <div className="flex h-full flex-col">
+        <div className="flex items-center gap-2 border-b border-[--color-border] px-4 py-3 sm:hidden">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="rounded-md p-1 text-[--color-muted] hover:bg-[--color-border]/50"
+            aria-label="Open menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <span className="text-sm font-medium">Settings</span>
+        </div>
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
           <h1 className="text-xl font-semibold">Settings</h1>
@@ -390,6 +401,7 @@ export default function SettingsPage() {
           </SectionCard>
         </div>
       </main>
+      </div>
     </ResizableLayout>
   </>
   );
