@@ -7,7 +7,13 @@ export async function GET(
   { params }: { params: Promise<{ provider: string }> },
 ) {
   const { provider } = await params;
-  const { searchParams, origin } = new URL(req.url);
+  const { searchParams } = new URL(req.url);
+
+  // Use the Host header so the redirect goes back to whatever hostname the
+  // browser actually used (avoids 0.0.0.0 when Next.js runs in Docker).
+  const protocol = req.headers.get("x-forwarded-proto") ?? "http";
+  const host     = req.headers.get("host") ?? "localhost:3000";
+  const baseUrl  = `${protocol}://${host}`;
 
   const error = searchParams.get("error");
   const code  = searchParams.get("code");
@@ -15,7 +21,7 @@ export async function GET(
 
   if (error || !code || !state) {
     return NextResponse.redirect(
-      new URL(`/mcp?error=${encodeURIComponent(error ?? "oauth_cancelled")}`, origin),
+      `${baseUrl}/mcp?error=${encodeURIComponent(error ?? "oauth_cancelled")}`,
     );
   }
 
@@ -29,12 +35,12 @@ export async function GET(
     if (!res.ok) {
       const text = await res.text();
       console.error(`[connector/callback] exchange failed: ${res.status} ${text}`);
-      return NextResponse.redirect(new URL("/mcp?error=exchange_failed", origin));
+      return NextResponse.redirect(`${baseUrl}/mcp?error=exchange_failed`);
     }
   } catch (err) {
     console.error("[connector/callback] exchange error:", err);
-    return NextResponse.redirect(new URL("/mcp?error=exchange_failed", origin));
+    return NextResponse.redirect(`${baseUrl}/mcp?error=exchange_failed`);
   }
 
-  return NextResponse.redirect(new URL(`/mcp?connected=${provider}`, origin));
+  return NextResponse.redirect(`${baseUrl}/mcp?connected=${provider}`);
 }
