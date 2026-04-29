@@ -15,6 +15,7 @@ export interface AgentRequest {
   fetchUrls?: string[];
   useKnowledgeBase?: boolean;
   useWebFetch?: boolean;
+  skillIds?: string[];
 }
 
 export interface SourceDocument {

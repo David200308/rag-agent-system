@@ -72,6 +72,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
     topK: number,
     useKnowledgeBase: boolean,
     useWebFetch: boolean,
+    skillIds: string[],
   ) => {
     if (query.startsWith("/workflow")) {
       const kv = parseKV(query.slice("/workflow".length));
@@ -119,6 +120,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
       conversationId: conversation?.backendConversationId,
       useKnowledgeBase,
       useWebFetch,
+      skillIds: skillIds.length > 0 ? skillIds : undefined,
     });
   };
 
