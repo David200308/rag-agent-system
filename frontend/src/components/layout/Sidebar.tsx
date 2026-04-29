@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, MessageSquare, Trash2, BookOpen, LogOut, PanelLeftClose, Settings, X, Archive, ArchiveRestore, ChevronDown, ChevronRight, Workflow, Zap } from "lucide-react";
+import { Plus, MessageSquare, Trash2, BookOpen, LogOut, PanelLeftClose, Settings, X, Archive, ArchiveRestore, ChevronDown, ChevronRight, Workflow, Zap, Cable } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -287,6 +287,18 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
         >
           <BookOpen className="h-3.5 w-3.5" />
           Knowledge
+        </Link>
+        <Link
+          href="/mcp"
+          className={cn(
+            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors",
+            pathname === "/mcp"
+              ? "bg-black text-white dark:bg-white dark:text-black"
+              : "text-[--color-muted] hover:bg-[--color-border]/50",
+          )}
+        >
+          <Cable className="h-3.5 w-3.5" />
+          MCP
         </Link>
         <Link
           href="/skills"
