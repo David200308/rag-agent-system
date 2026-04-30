@@ -46,6 +46,8 @@ public class WebFetchNode {
 
     private static final Pattern URL_PATTERN =
             Pattern.compile("https?://[^\\s\"'<>]+");
+    private static final Pattern GOOGLE_WORKSPACE_PATTERN =
+            Pattern.compile("https?://(?:docs|sheets|slides)\\.google\\.com/");
     private static final int MAX_URLS = 5;
 
     private final WebFetchService     webFetchService;
@@ -113,6 +115,10 @@ public class WebFetchNode {
 
         List<String> allowed = new ArrayList<>();
         for (String url : seen) {
+            if (GOOGLE_WORKSPACE_PATTERN.matcher(url).find()) {
+                log.debug("[WebFetchNode] Skipping Google Workspace URL '{}': handled by agent tools", url);
+                continue;
+            }
             if (webFetchService.isUrlAllowed(url, userEmail)) {
                 allowed.add(url);
                 if (allowed.size() == MAX_URLS) break;
