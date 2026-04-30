@@ -30,10 +30,10 @@ public class ConnectorService {
     private static final List<String> GOOGLE_SCOPES = List.of(
             "openid",
             "https://www.googleapis.com/auth/userinfo.email",
-            "https://www.googleapis.com/auth/documents.readonly",
-            "https://www.googleapis.com/auth/spreadsheets.readonly",
-            "https://www.googleapis.com/auth/presentations.readonly",
-            "https://www.googleapis.com/auth/drive.readonly"
+            "https://www.googleapis.com/auth/documents",
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/presentations",
+            "https://www.googleapis.com/auth/drive.file"
     );
 
     private final ConnectorProperties          props;

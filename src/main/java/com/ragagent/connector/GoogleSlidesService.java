@@ -91,6 +91,62 @@ public class GoogleSlidesService {
         return url;
     }
 
+    /**
+     * Read the text content of an existing Google Slides presentation.
+     *
+     * @param presUrl    the browser URL or presentation ID
+     * @param ownerEmail user whose token to use
+     * @return slide-by-slide text content
+     */
+    public String readPresentation(String presUrl, String ownerEmail) {
+        String email  = ownerEmail != null ? ownerEmail : "";
+        String token  = resolveAccessToken(email);
+        String presId = extractPresId(presUrl);
+
+        PresentationContent pres = restClientBuilder.build()
+                .get()
+                .uri(SLIDES_BASE + "/" + presId)
+                .header("Authorization", "Bearer " + token)
+                .retrieve()
+                .body(PresentationContent.class);
+
+        if (pres == null) throw new IllegalStateException("Empty response from Slides API");
+
+        StringBuilder sb = new StringBuilder();
+        if (pres.title() != null) sb.append("# ").append(pres.title()).append("\n\n");
+
+        if (pres.slides() != null) {
+            int slideNum = 1;
+            for (SlideContent slide : pres.slides()) {
+                sb.append("## Slide ").append(slideNum++).append("\n");
+                if (slide.pageElements() != null) {
+                    for (PageElement el : slide.pageElements()) {
+                        if (el.shape() != null && el.shape().text() != null
+                                && el.shape().text().textElements() != null) {
+                            for (TextElement te : el.shape().text().textElements()) {
+                                if (te.textRun() != null && te.textRun().content() != null) {
+                                    String text = te.textRun().content().stripTrailing();
+                                    if (!text.isBlank()) sb.append(text).append("\n");
+                                }
+                            }
+                        }
+                    }
+                }
+                sb.append("\n");
+            }
+        }
+
+        log.info("[GoogleSlidesService] Read presentation {} ({} chars)", presId, sb.length());
+        return sb.toString();
+    }
+
+    private static String extractPresId(String input) {
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("/presentation/d/([a-zA-Z0-9_-]+)")
+                .matcher(input);
+        return m.find() ? m.group(1) : input.trim();
+    }
+
     public boolean isConnected(String ownerEmail) {
         String email = ownerEmail != null ? ownerEmail : "";
         return tokenRepo.findByOwnerEmailAndProvider(email, "google").isPresent();
@@ -239,6 +295,30 @@ public class GoogleSlidesService {
     }
 
     // ── DTOs ─────────────────────────────────────────────────────────────────
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record PresentationContent(
+            @JsonProperty("title")  String             title,
+            @JsonProperty("slides") List<SlideContent> slides
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record SlideContent(@JsonProperty("pageElements") List<PageElement> pageElements) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record PageElement(@JsonProperty("shape") Shape shape) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record Shape(@JsonProperty("text") TextContent text) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record TextContent(@JsonProperty("textElements") List<TextElement> textElements) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record TextElement(@JsonProperty("textRun") TextRun textRun) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record TextRun(@JsonProperty("content") String content) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record CreatePresentationResponse(

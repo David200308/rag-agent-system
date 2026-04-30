@@ -97,6 +97,67 @@ public class GoogleSheetsService {
         return url;
     }
 
+    /**
+     * Read the contents of an existing Google Sheet.
+     *
+     * @param sheetUrl   the browser URL or spreadsheet ID
+     * @param ownerEmail user whose token to use
+     * @return all cell values formatted as a tab-separated table
+     */
+    public String readSpreadsheet(String sheetUrl, String ownerEmail) {
+        String email   = ownerEmail != null ? ownerEmail : "";
+        String token   = resolveAccessToken(email);
+        String sheetId = extractSheetId(sheetUrl);
+
+        // Fetch sheet metadata to discover sheet names
+        SpreadsheetMeta meta = restClientBuilder.build()
+                .get()
+                .uri(SHEETS_BASE + "/" + sheetId + "?fields=properties.title,sheets.properties")
+                .header("Authorization", "Bearer " + token)
+                .retrieve()
+                .body(SpreadsheetMeta.class);
+
+        if (meta == null) throw new IllegalStateException("Empty response from Sheets API");
+
+        StringBuilder sb = new StringBuilder();
+        if (meta.properties() != null && meta.properties().title() != null) {
+            sb.append("# ").append(meta.properties().title()).append("\n\n");
+        }
+
+        List<String> sheetNames = (meta.sheets() != null)
+                ? meta.sheets().stream()
+                        .map(s -> s.properties() != null ? s.properties().title() : "Sheet1")
+                        .toList()
+                : List.of("Sheet1");
+
+        for (String name : sheetNames) {
+            ValueRange range = restClientBuilder.build()
+                    .get()
+                    .uri(SHEETS_BASE + "/" + sheetId + "/values/" + name)
+                    .header("Authorization", "Bearer " + token)
+                    .retrieve()
+                    .body(ValueRange.class);
+
+            if (range == null || range.values() == null || range.values().isEmpty()) continue;
+
+            sb.append("## ").append(name).append("\n");
+            for (List<Object> row : range.values()) {
+                sb.append(String.join("\t", row.stream().map(Object::toString).toList())).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        log.info("[GoogleSheetsService] Read sheet {} ({} chars)", sheetId, sb.length());
+        return sb.toString();
+    }
+
+    private static String extractSheetId(String input) {
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("/spreadsheets/d/([a-zA-Z0-9_-]+)")
+                .matcher(input);
+        return m.find() ? m.group(1) : input.trim();
+    }
+
     public boolean isConnected(String ownerEmail) {
         String email = ownerEmail != null ? ownerEmail : "";
         return tokenRepo.findByOwnerEmailAndProvider(email, "google").isPresent();
@@ -158,6 +219,21 @@ public class GoogleSheetsService {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record CreateSheetResponse(@JsonProperty("spreadsheetId") String spreadsheetId) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record SpreadsheetMeta(
+            @JsonProperty("properties") SheetProperties properties,
+            @JsonProperty("sheets")     List<SheetEntry> sheets
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record SheetProperties(@JsonProperty("title") String title) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record SheetEntry(@JsonProperty("properties") SheetProperties properties) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record ValueRange(@JsonProperty("values") List<List<Object>> values) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record RefreshResponse(

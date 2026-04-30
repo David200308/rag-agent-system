@@ -93,6 +93,52 @@ public class GoogleDocsService {
         return url;
     }
 
+    /**
+     * Reads the plain-text content of an existing Google Doc.
+     *
+     * @param docUrl     the browser URL or document ID of the Google Doc
+     * @param ownerEmail the user whose token to use
+     * @return the document title and body text concatenated
+     */
+    public String readDocument(String docUrl, String ownerEmail) {
+        String email  = ownerEmail != null ? ownerEmail : "";
+        String token  = resolveAccessToken(email);
+        String docId  = extractDocId(docUrl);
+
+        DocContent doc = restClientBuilder.build()
+                .get()
+                .uri(DOCS_BASE + "/" + docId)
+                .header("Authorization", "Bearer " + token)
+                .retrieve()
+                .body(DocContent.class);
+
+        if (doc == null) throw new IllegalStateException("Empty response from Google Docs API");
+
+        StringBuilder sb = new StringBuilder();
+        if (doc.title() != null) sb.append("# ").append(doc.title()).append("\n\n");
+        if (doc.body() != null && doc.body().content() != null) {
+            for (StructuralElement el : doc.body().content()) {
+                if (el.paragraph() != null && el.paragraph().elements() != null) {
+                    for (ParagraphElement pe : el.paragraph().elements()) {
+                        if (pe.textRun() != null && pe.textRun().content() != null) {
+                            sb.append(pe.textRun().content());
+                        }
+                    }
+                }
+            }
+        }
+        log.info("[GoogleDocsService] Read doc {} ({} chars)", docId, sb.length());
+        return sb.toString();
+    }
+
+    private static String extractDocId(String input) {
+        // Accept a full URL like https://docs.google.com/document/d/{id}/edit or bare ID
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("/document/d/([a-zA-Z0-9_-]+)")
+                .matcher(input);
+        return m.find() ? m.group(1) : input.trim();
+    }
+
     /** Returns true if the user has a valid (possibly refreshable) Google token. */
     public boolean isConnected(String ownerEmail) {
         String email = ownerEmail != null ? ownerEmail : "";
@@ -158,6 +204,37 @@ public class GoogleDocsService {
     record CreateDocResponse(
             @JsonProperty("documentId") String documentId,
             @JsonProperty("title")      String title
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record DocContent(
+            @JsonProperty("title") String title,
+            @JsonProperty("body")  DocBody body
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record DocBody(
+            @JsonProperty("content") List<StructuralElement> content
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record StructuralElement(
+            @JsonProperty("paragraph") Paragraph paragraph
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record Paragraph(
+            @JsonProperty("elements") List<ParagraphElement> elements
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record ParagraphElement(
+            @JsonProperty("textRun") TextRun textRun
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record TextRun(
+            @JsonProperty("content") String content
     ) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)

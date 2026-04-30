@@ -46,4 +46,21 @@ public class GoogleSheetsAgentTool {
             return "Could not write to Google Sheets: " + e.getMessage();
         }
     }
+
+    @Tool(description = """
+            Read the contents of an existing Google Sheets spreadsheet.
+            Use this when the user provides a docs.google.com/spreadsheets URL and asks to read,
+            summarise, or analyse the spreadsheet data.
+            Pass the full URL or spreadsheet ID. Returns all sheet data as tab-separated text.
+            """)
+    public String readGoogleSheet(String sheetUrl) {
+        String email = CURRENT_EMAIL.get();
+        log.info("[GoogleSheetsAgentTool] Reading sheet '{}' for '{}'", sheetUrl, email);
+        try {
+            String content = googleSheetsService.readSpreadsheet(sheetUrl, email);
+            return content.isBlank() ? "The spreadsheet appears to be empty." : content;
+        } catch (IllegalStateException e) {
+            return "Could not read Google Sheet: " + e.getMessage();
+        }
+    }
 }

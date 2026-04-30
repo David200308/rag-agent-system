@@ -49,4 +49,27 @@ public class GoogleDocsAgentTool {
             return "Could not write to Google Docs: " + e.getMessage();
         }
     }
+
+    /**
+     * Reads the content of an existing Google Doc by URL or document ID.
+     *
+     * @param docUrl the full Google Docs URL or bare document ID
+     * @return the document title and plain-text body
+     */
+    @Tool(description = """
+            Read the content of an existing Google Docs document.
+            Use this when the user provides a Google Docs URL (docs.google.com/document/...) and
+            asks to read, summarise, analyse, or use the content of that document.
+            Pass the full URL or document ID. Returns the document title and full text.
+            """)
+    public String readGoogleDoc(String docUrl) {
+        String email = CURRENT_EMAIL.get();
+        log.info("[GoogleDocsAgentTool] Reading doc '{}' for user '{}'", docUrl, email);
+        try {
+            String content = googleDocsService.readDocument(docUrl, email);
+            return content.isBlank() ? "The document appears to be empty." : content;
+        } catch (IllegalStateException e) {
+            return "Could not read Google Doc: " + e.getMessage();
+        }
+    }
 }

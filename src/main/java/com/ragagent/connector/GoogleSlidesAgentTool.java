@@ -46,4 +46,21 @@ public class GoogleSlidesAgentTool {
             return "Could not write to Google Slides: " + e.getMessage();
         }
     }
+
+    @Tool(description = """
+            Read the text content of an existing Google Slides presentation.
+            Use this when the user provides a docs.google.com/presentation URL and asks to read,
+            summarise, or use the content of that presentation.
+            Pass the full URL or presentation ID. Returns slide-by-slide text content.
+            """)
+    public String readGoogleSlide(String presUrl) {
+        String email = CURRENT_EMAIL.get();
+        log.info("[GoogleSlidesAgentTool] Reading presentation '{}' for '{}'", presUrl, email);
+        try {
+            String content = googleSlidesService.readPresentation(presUrl, email);
+            return content.isBlank() ? "The presentation appears to be empty." : content;
+        } catch (IllegalStateException e) {
+            return "Could not read Google Slides: " + e.getMessage();
+        }
+    }
 }
