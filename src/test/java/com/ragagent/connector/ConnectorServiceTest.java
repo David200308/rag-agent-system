@@ -24,10 +24,12 @@ class ConnectorServiceTest {
     @Mock ConnectorTokenRepository      tokenRepo;
     @Mock ConnectorOAuthStateRepository stateRepo;
     @Mock RestClient.Builder            restClientBuilder;
+    @Mock TelegramService               telegramService;
 
     private final ConnectorProperties props = new ConnectorProperties(
             new ConnectorProperties.Google("g-client-id", "g-client-secret"),
             new ConnectorProperties.Figma("f-client-id",  "f-client-secret"),
+            null,
             "https://app.example.com"
     );
 
@@ -35,7 +37,7 @@ class ConnectorServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ConnectorService(props, tokenRepo, stateRepo, restClientBuilder);
+        service = new ConnectorService(props, tokenRepo, stateRepo, restClientBuilder, telegramService);
     }
 
     // ── getStatus ─────────────────────────────────────────────────────────────

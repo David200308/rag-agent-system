@@ -23,6 +23,7 @@ class GoogleDocsServiceTest {
     private final ConnectorProperties props = new ConnectorProperties(
             new ConnectorProperties.Google("g-client-id", "g-secret"),
             new ConnectorProperties.Figma("f-client-id",  "f-secret"),
+            null,
             "https://app.example.com"
     );
 
