@@ -5,6 +5,7 @@ import com.ragagent.config.LlmProperties;
 import com.ragagent.connector.GoogleDocsAgentTool;
 import com.ragagent.connector.GoogleSheetsAgentTool;
 import com.ragagent.connector.GoogleSlidesAgentTool;
+import com.ragagent.connector.TelegramAgentTool;
 import com.ragagent.schema.AgentRequest;
 import com.ragagent.schema.AgentResponse;
 import com.ragagent.schema.DocumentResult;
@@ -33,14 +34,15 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class GeneratorNode {
 
-    private final ChatClient           chatClient;
-    private final LlmProperties        llmProperties;
+    private final ChatClient            chatClient;
+    private final LlmProperties         llmProperties;
     private final GoogleDocsAgentTool   googleDocsTool;
     private final GoogleSheetsAgentTool googleSheetsTool;
     private final GoogleSlidesAgentTool googleSlidesTool;
+    private final TelegramAgentTool     telegramTool;
 
     private static final String SYSTEM_PROMPT = """
-            You are a helpful, accurate AI assistant with access to Google Workspace tools.
+            You are a helpful, accurate AI assistant with access to Google Workspace and Telegram tools.
 
             GOOGLE WORKSPACE TOOLS — you have these tools available and MUST call them when relevant:
             - readGoogleDoc:       call when the user provides a docs.google.com/document URL
@@ -50,6 +52,11 @@ public class GeneratorNode {
             conversation content to Google Docs
             - writeToGoogleSheets: call when the user asks to save tabular data or tables to Google Sheets
             - writeToGoogleSlides: call when the user asks to create a presentation in Google Slides
+
+            TELEGRAM TOOL:
+            - sendTelegramMessage: call when the user says "send this to my Telegram", \
+            "message me on Telegram", "notify me via Telegram", or similar phrases. \
+            Pass the message content the user wants to receive.
 
             CRITICAL RULES for Google Workspace requests:
             1. When the user provides any docs.google.com URL, you MUST call the matching read tool \
@@ -85,14 +92,15 @@ public class GeneratorNode {
 
         log.debug("[GeneratorNode] Generating answer (docs={})", docs.size());
 
-        // Inject per-request email so Google tools know which token to use
+        // Inject per-request email so tools know which token to use
         googleDocsTool.setCurrentEmail(userEmail);
         googleSheetsTool.setCurrentEmail(userEmail);
         googleSlidesTool.setCurrentEmail(userEmail);
+        telegramTool.setCurrentEmail(userEmail);
         String answer;
         try {
             ToolCallbackProvider tools = MethodToolCallbackProvider.builder()
-                    .toolObjects(googleDocsTool, googleSheetsTool, googleSlidesTool)
+                    .toolObjects(googleDocsTool, googleSheetsTool, googleSlidesTool, telegramTool)
                     .build();
 
             answer = chatClient.prompt()
@@ -105,6 +113,7 @@ public class GeneratorNode {
             googleDocsTool.clearCurrentEmail();
             googleSheetsTool.clearCurrentEmail();
             googleSlidesTool.clearCurrentEmail();
+            telegramTool.clearCurrentEmail();
         }
 
         AgentResponse response = new AgentResponse(

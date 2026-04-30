@@ -40,11 +40,17 @@ public class ConnectorService {
     private final ConnectorTokenRepository     tokenRepo;
     private final ConnectorOAuthStateRepository stateRepo;
     private final RestClient.Builder           restClientBuilder;
+    private final TelegramService              telegramService;
 
     // ── Auth URL generation ───────────────────────────────────────────────────
 
     public String getAuthUrl(String provider, String ownerEmail) {
         validateProvider(provider);
+
+        // Telegram uses a bot deep-link — TelegramService manages its own link token
+        if ("telegram".equals(provider)) {
+            return telegramService.generateAuthUrl(ownerEmail);
+        }
 
         String state       = UUID.randomUUID().toString().replace("-", "");
         String callbackUrl = callbackUrl(provider);
@@ -135,8 +141,9 @@ public class ConnectorService {
                 .stream().map(ConnectorToken::getProvider).collect(Collectors.toSet());
 
         Map<String, Boolean> status = new LinkedHashMap<>();
-        status.put("google", connected.contains("google"));
-        status.put("figma",  connected.contains("figma"));
+        status.put("google",   connected.contains("google"));
+        status.put("figma",    connected.contains("figma"));
+        status.put("telegram", telegramService.isConnected(email));
         return status;
     }
 
@@ -144,6 +151,10 @@ public class ConnectorService {
     public void disconnect(String provider, String ownerEmail) {
         validateProvider(provider);
         String email = ownerEmail != null ? ownerEmail : "";
+        if ("telegram".equals(provider)) {
+            telegramService.disconnect(email);
+            return;
+        }
         tokenRepo.deleteByOwnerEmailAndProvider(email, provider);
         // Also remove any anonymous token stored before auth was properly wired
         if (!email.isEmpty()) {
@@ -198,7 +209,7 @@ public class ConnectorService {
     }
 
     private void validateProvider(String provider) {
-        if (!Set.of("google", "figma").contains(provider)) {
+        if (!Set.of("google", "figma", "telegram").contains(provider)) {
             throw new IllegalArgumentException("Unknown provider: " + provider);
         }
     }

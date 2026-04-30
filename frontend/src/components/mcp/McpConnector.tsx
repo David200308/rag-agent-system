@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
-import { CheckCircle2, Link2Off, AlertCircle } from "lucide-react";
+import { useEffect, useRef, useState, Suspense } from "react";
+import { CheckCircle2, Link2Off, AlertCircle, Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
@@ -12,9 +12,11 @@ type Status = Record<string, boolean>;
 
 interface Connector {
   id: string;
-  provider: string;   // "google" | "figma"
+  provider: string;   // "google" | "figma" | "telegram"
   name: string;
   description: string;
+  /** When true the connect flow opens a new tab instead of a full-page redirect */
+  newTab?: boolean;
   icon: React.ReactNode;
 }
 
@@ -78,6 +80,22 @@ const CONNECTORS: Connector[] = [
       </svg>
     ),
   },
+  {
+    id: "telegram",
+    provider: "telegram",
+    name: "Telegram",
+    description: "Receive messages from the agent directly in your Telegram account.",
+    newTab: true,
+    icon: (
+      <svg viewBox="0 0 48 48" className="h-8 w-8" fill="none">
+        <circle cx="24" cy="24" r="24" fill="#29B6F6" />
+        <path
+          d="M10.5 23.5l6.5 2.5 2.5 7.5 3.5-3.5 7 5 7-17.5-26.5 6zm8 3.5l10-7-7.5 8.5"
+          fill="#fff"
+        />
+      </svg>
+    ),
+  },
 ];
 
 // ── connector card ────────────────────────────────────────────────────────────
@@ -88,12 +106,14 @@ function ConnectorCard({
   onConnect,
   onDisconnect,
   loading,
+  waiting,
 }: {
   connector: Connector;
   connected: boolean;
   onConnect: () => void;
   onDisconnect: () => void;
   loading: boolean;
+  waiting?: boolean;
 }) {
   return (
     <div
@@ -129,6 +149,11 @@ function ConnectorCard({
             <Link2Off className="h-3.5 w-3.5" />
             Disconnect
           </button>
+        ) : waiting ? (
+          <span className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs text-blue-600 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Waiting…
+          </span>
         ) : (
           <Button
             size="sm"
@@ -168,7 +193,9 @@ function OAuthBanner({ onBanner }: { onBanner: (b: { type: "success" | "error"; 
 function McpConnectorInner() {
   const [status, setStatus]         = useState<Status>({});
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
+  const [waitingMap, setWaitingMap] = useState<Record<string, boolean>>({});
   const [banner, setBanner]         = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const pollRef                     = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchStatus = async () => {
     try {
@@ -179,12 +206,63 @@ function McpConnectorInner() {
 
   useEffect(() => { fetchStatus(); }, []);
 
+  // Clean up any poll on unmount
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
   const setLoading = (provider: string, val: boolean) =>
     setLoadingMap((prev) => ({ ...prev, [provider]: val }));
 
-  const handleConnect = (provider: string) => {
-    // Full-page redirect → OAuth provider → callback → /mcp?connected=provider
-    window.location.href = `/api/connectors/${provider}/connect`;
+  const setWaiting = (provider: string, val: boolean) =>
+    setWaitingMap((prev) => ({ ...prev, [provider]: val }));
+
+  const startPolling = (provider: string) => {
+    setWaiting(provider, true);
+    let attempts = 0;
+    const MAX_ATTEMPTS = 60; // 2 minutes at 2s intervals
+
+    pollRef.current = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await fetch("/api/connectors/status", { cache: "no-store" });
+        if (res.ok) {
+          const s = await res.json() as Status;
+          setStatus(s);
+          if (s[provider]) {
+            clearInterval(pollRef.current!);
+            pollRef.current = null;
+            setWaiting(provider, false);
+            setBanner({ type: "success", msg: `${provider} connected successfully.` });
+          }
+        }
+      } catch { /* ignore */ }
+
+      if (attempts >= MAX_ATTEMPTS) {
+        clearInterval(pollRef.current!);
+        pollRef.current = null;
+        setWaiting(provider, false);
+      }
+    }, 2000);
+  };
+
+  const handleConnect = async (connector: Connector) => {
+    if (connector.newTab) {
+      // Telegram-style: fetch the auth URL then open in a new tab and poll for connection
+      setLoading(connector.provider, true);
+      try {
+        const res = await fetch(`/api/connectors/${connector.provider}/connect-url`);
+        if (!res.ok) throw new Error("Failed to get connect URL");
+        const { authUrl } = await res.json() as { authUrl: string };
+        window.open(authUrl, "_blank", "noopener,noreferrer");
+        startPolling(connector.provider);
+      } catch {
+        setBanner({ type: "error", msg: `Failed to start ${connector.name} connection.` });
+      } finally {
+        setLoading(connector.provider, false);
+      }
+    } else {
+      // Standard OAuth: full-page redirect → OAuth provider → callback → /mcp?connected=provider
+      window.location.href = `/api/connectors/${connector.provider}/connect`;
+    }
   };
 
   const handleDisconnect = async (provider: string) => {
@@ -233,7 +311,8 @@ function McpConnectorInner() {
             connector={c}
             connected={!!status[c.provider]}
             loading={!!loadingMap[c.provider]}
-            onConnect={() => handleConnect(c.provider)}
+            waiting={!!waitingMap[c.provider]}
+            onConnect={() => handleConnect(c)}
             onDisconnect={() => handleDisconnect(c.provider)}
           />
         ))}

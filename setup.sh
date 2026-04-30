@@ -203,9 +203,9 @@ if [ "$MODE" = "local" ]; then
   SCHEDULER_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
   echo -e "  ${DIM}Scheduler service key auto-generated.${NC}"
 
-  # ── Connectors (Google Workspace + Figma OAuth) ───────────────────────────
+  # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ──────────────
   header "Connectors (optional)"
-  echo -e "  ${DIM}Connect Google Workspace (Docs, Sheets, Slides) and Figma to the knowledge base.${NC}"
+  echo -e "  ${DIM}Connect Google Workspace (Docs, Sheets, Slides), Figma, and Telegram to the agent.${NC}"
   echo -e "  ${DIM}Leave blank to skip — connectors can be configured later in .env.${NC}"
   echo ""
   echo -e "  Google OAuth app → https://console.cloud.google.com/apis/credentials"
@@ -224,6 +224,16 @@ if [ "$MODE" = "local" ]; then
   if confirm "Configure Figma connector?"; then
     prompt FIGMA_CLIENT_ID     "Figma Client ID"     "" false
     prompt FIGMA_CLIENT_SECRET "Figma Client Secret" "" true
+  fi
+  echo ""
+  echo -e "  Telegram Bot → https://t.me/BotFather (send /newbot)"
+  echo -e "  ${DIM}After setup, register the webhook:${NC}"
+  echo -e "  ${DIM}  POST https://api.telegram.org/bot<TOKEN>/setWebhook?url=http://localhost:8081/api/v1/connectors/telegram/webhook${NC}"
+  echo ""
+  TELEGRAM_BOT_TOKEN=""; TELEGRAM_BOT_USERNAME=""
+  if confirm "Configure Telegram bot?"; then
+    prompt TELEGRAM_BOT_TOKEN    "Bot token (from BotFather)" "" true
+    prompt TELEGRAM_BOT_USERNAME "Bot username (without @)"   ""
   fi
   CONNECTOR_CALLBACK_BASE_URL="http://localhost:3000"
 
@@ -280,13 +290,17 @@ WEB_FETCH_ENABLED=true
 WEB_FETCH_TIMEOUT=10
 WEB_FETCH_MAX_CHARS=50000
 
-# ── Connectors (Google Workspace + Figma OAuth) ───────────────────────────────
-# Google: https://console.cloud.google.com/apis/credentials
-# Figma:  https://www.figma.com/developers/apps
+# ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ───────────────
+# Google:   https://console.cloud.google.com/apis/credentials
+# Figma:    https://www.figma.com/developers/apps
+# Telegram: https://t.me/BotFather
+# Register webhook: POST https://api.telegram.org/bot<TOKEN>/setWebhook?url=<BACKEND_URL>/api/v1/connectors/telegram/webhook
 GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
 FIGMA_CLIENT_ID=$FIGMA_CLIENT_ID
 FIGMA_CLIENT_SECRET=$FIGMA_CLIENT_SECRET
+TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
+TELEGRAM_BOT_USERNAME=$TELEGRAM_BOT_USERNAME
 CONNECTOR_CALLBACK_BASE_URL=$CONNECTOR_CALLBACK_BASE_URL
 EOF
 
@@ -537,9 +551,9 @@ else
     echo -e "  ${DIM}Scheduler service key auto-generated.${NC}"
   fi
 
-  # ── Connectors (Google Workspace + Figma OAuth) ───────────────────────────
+  # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ──────────────
   header "Connectors (optional)"
-  echo -e "  ${DIM}Connect Google Workspace (Docs, Sheets, Slides) and Figma to the knowledge base.${NC}"
+  echo -e "  ${DIM}Connect Google Workspace (Docs, Sheets, Slides), Figma, and Telegram to the agent.${NC}"
   echo -e "  ${DIM}Leave blank to skip — secrets can be populated in secrets/ later.${NC}"
   UPDATE_CONNECTORS=true
   if has_secret google_client_id && has_secret figma_client_id; then
@@ -571,8 +585,22 @@ else
     fi
     write_secret figma_client_id     "$FIGMA_CLIENT_ID"
     write_secret figma_client_secret "$FIGMA_CLIENT_SECRET"
+
+    echo ""
+    echo -e "  Telegram Bot → https://t.me/BotFather (send /newbot)"
+    echo -e "  ${DIM}After setup, register the webhook:${NC}"
+    echo -e "  ${DIM}  POST https://api.telegram.org/bot<TOKEN>/setWebhook?url=<BACKEND_PUBLIC_URL>/api/v1/connectors/telegram/webhook${NC}"
+    echo ""
+    TELEGRAM_BOT_TOKEN=""; TELEGRAM_BOT_USERNAME=""
+    if confirm "Configure Telegram bot?"; then
+      prompt TELEGRAM_BOT_TOKEN    "Bot token (from BotFather)" "" true
+      prompt TELEGRAM_BOT_USERNAME "Bot username (without @)"   ""
+    fi
+    write_secret telegram_bot_token    "$TELEGRAM_BOT_TOKEN"
+    write_secret telegram_bot_username "$TELEGRAM_BOT_USERNAME"
   else
     CONNECTOR_CALLBACK_BASE_URL="$(read_prod CONNECTOR_CALLBACK_BASE_URL http://localhost:3000)"
+    TELEGRAM_BOT_USERNAME="$(read_prod TELEGRAM_BOT_USERNAME "")"
     echo -e "  ${DIM}Keeping existing connector secrets.${NC}"
   fi
 
@@ -619,8 +647,10 @@ WEB_FETCH_ENABLED=true
 WEB_FETCH_TIMEOUT=10
 WEB_FETCH_MAX_CHARS=50000
 
-# ── Connectors (GOOGLE_CLIENT_ID/SECRET + FIGMA_CLIENT_ID/SECRET come from secrets)
+# ── Connectors (credentials come from secrets; TELEGRAM_BOT_USERNAME is non-secret)
+# Telegram webhook registration: POST https://api.telegram.org/bot<TOKEN>/setWebhook?url=<BACKEND_URL>/api/v1/connectors/telegram/webhook
 CONNECTOR_CALLBACK_BASE_URL=${CONNECTOR_CALLBACK_BASE_URL:-http://localhost:3000}
+TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-}
 EOF
 
   chmod 600 "$PROD_ENV"

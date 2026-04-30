@@ -52,6 +52,10 @@ secrets:
     file: ./secrets/figma_client_id
   figma_client_secret:
     file: ./secrets/figma_client_secret
+  telegram_bot_token:
+    file: ./secrets/telegram_bot_token
+  telegram_bot_username:
+    file: ./secrets/telegram_bot_username
 
 services:
 
@@ -164,6 +168,8 @@ services:
       - google_client_secret
       - figma_client_id
       - figma_client_secret
+      - telegram_bot_token
+      - telegram_bot_username
     environment:
       # ── Non-secret config (safe to put inline) ──────────────────────────────
       MYSQL_HOST: mysql
@@ -199,8 +205,9 @@ services:
       WEB_FETCH_ENABLED: ${WEB_FETCH_ENABLED:-true}
       WEB_FETCH_TIMEOUT: ${WEB_FETCH_TIMEOUT:-10}
       WEB_FETCH_MAX_CHARS: ${WEB_FETCH_MAX_CHARS:-50000}
-      # ── Connectors (GOOGLE_CLIENT_ID/SECRET + FIGMA_CLIENT_ID/SECRET come from secrets)
+      # ── Connectors (credentials come from secrets; TELEGRAM_BOT_USERNAME is non-secret)
       CONNECTOR_CALLBACK_BASE_URL: ${CONNECTOR_CALLBACK_BASE_URL:-http://localhost:3000}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:

@@ -251,6 +251,11 @@ connectors:
   figma:
     client-id: ${FIGMA_CLIENT_ID:}
     client-secret: ${FIGMA_CLIENT_SECRET:}
+  # Register a bot at https://t.me/BotFather, then set these env vars.
+  # Register the webhook: POST https://api.telegram.org/bot<TOKEN>/setWebhook?url=<BACKEND_URL>/api/v1/connectors/telegram/webhook
+  telegram:
+    bot-token: ${TELEGRAM_BOT_TOKEN:}
+    bot-username: ${TELEGRAM_BOT_USERNAME:}
 
 # ── Go Scheduler microservice ────────────────────────────────────────────────
 # Shared service key used by the Go scheduler to authenticate trigger calls.

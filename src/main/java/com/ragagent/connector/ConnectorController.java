@@ -26,10 +26,11 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ConnectorController {
 
-    private final ConnectorService   connectorService;
-    private final GoogleDocsService  googleDocsService;
+    private final ConnectorService    connectorService;
+    private final GoogleDocsService   googleDocsService;
     private final GoogleSheetsService googleSheetsService;
     private final GoogleSlidesService googleSlidesService;
+    private final TelegramService     telegramService;
 
     @GetMapping("/{provider}/auth-url")
     public ResponseEntity<Map<String, String>> authUrl(
@@ -106,6 +107,17 @@ public class ConnectorController {
 
         String url = googleSheetsService.createSpreadsheet(title, content, email);
         return ResponseEntity.ok(Map.of("url", url));
+    }
+
+    /**
+     * POST /api/v1/connectors/telegram/webhook
+     * Called by Telegram's servers when a user sends a message to the bot.
+     * Exempt from JWT auth — Telegram sends updates without a user session.
+     */
+    @PostMapping("/telegram/webhook")
+    public ResponseEntity<Void> telegramWebhook(@RequestBody java.util.Map<String, Object> update) {
+        telegramService.handleWebhook(update);
+        return ResponseEntity.ok().build();
     }
 
     /** POST /api/v1/connectors/google/slides — { title, content } → { url } */
