@@ -103,6 +103,8 @@ public class GoogleDocsService {
 
     private String resolveAccessToken(String email) {
         ConnectorToken ct = tokenRepo.findByOwnerEmailAndProvider(email, "google")
+                .or(() -> email.isEmpty() ? java.util.Optional.empty()
+                        : tokenRepo.findByOwnerEmailAndProvider("", "google"))
                 .orElseThrow(() -> new IllegalStateException(
                         "Google account not connected. Visit /mcp to connect."));
 
