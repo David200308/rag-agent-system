@@ -45,11 +45,13 @@ class ConnectorServiceTest {
     @Test
     void getStatus_noTokens_returnsFalseForAll() {
         when(tokenRepo.findByOwnerEmail("user@test.com")).thenReturn(List.of());
+        when(telegramService.isConnected("user@test.com")).thenReturn(false);
 
         Map<String, Boolean> status = service.getStatus("user@test.com");
 
         assertThat(status.get("google")).isFalse();
         assertThat(status.get("figma")).isFalse();
+        assertThat(status.get("telegram")).isFalse();
     }
 
     @Test
@@ -57,16 +59,30 @@ class ConnectorServiceTest {
         ConnectorToken token = ConnectorToken.builder()
                 .ownerEmail("user@test.com").provider("google").accessToken("tok").build();
         when(tokenRepo.findByOwnerEmail("user@test.com")).thenReturn(List.of(token));
+        when(telegramService.isConnected("user@test.com")).thenReturn(false);
 
         Map<String, Boolean> status = service.getStatus("user@test.com");
 
         assertThat(status.get("google")).isTrue();
         assertThat(status.get("figma")).isFalse();
+        assertThat(status.get("telegram")).isFalse();
+    }
+
+    @Test
+    void getStatus_telegramConnected_returnsTelegramTrue() {
+        when(tokenRepo.findByOwnerEmail("user@test.com")).thenReturn(List.of());
+        when(telegramService.isConnected("user@test.com")).thenReturn(true);
+
+        Map<String, Boolean> status = service.getStatus("user@test.com");
+
+        assertThat(status.get("telegram")).isTrue();
+        assertThat(status.get("google")).isFalse();
     }
 
     @Test
     void getStatus_nullEmail_normalizedToEmptyString() {
         when(tokenRepo.findByOwnerEmail("")).thenReturn(List.of());
+        when(telegramService.isConnected("")).thenReturn(false);
 
         service.getStatus(null);
 
@@ -110,6 +126,14 @@ class ConnectorServiceTest {
 
         verify(tokenRepo).deleteByOwnerEmailAndProvider("", "figma");
         verify(tokenRepo, never()).deleteByOwnerEmailAndProvider(argThat(e -> !e.isEmpty()), any());
+    }
+
+    @Test
+    void disconnect_telegram_delegatesToTelegramService() {
+        service.disconnect("telegram", "user@test.com");
+
+        verify(telegramService).disconnect("user@test.com");
+        verify(tokenRepo, never()).deleteByOwnerEmailAndProvider(any(), any());
     }
 
     @Test
@@ -158,6 +182,13 @@ class ConnectorServiceTest {
         assertThat(saved.getProvider()).isEqualTo("google");
         assertThat(saved.getState()).isNotBlank();
         assertThat(saved.getExpiresAt()).isAfter(LocalDateTime.now());
+    }
+
+    @Test
+    void getAuthUrl_telegram_throwsIllegalArgument() {
+        assertThatThrownBy(() -> service.getAuthUrl("telegram", "user@test.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Login Widget");
     }
 
     @Test

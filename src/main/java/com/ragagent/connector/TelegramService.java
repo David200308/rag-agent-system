@@ -7,104 +7,106 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
-import java.time.LocalDateTime;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.util.HexFormat;
 import java.util.Map;
-import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
- * Manages Telegram Bot connections.
+ * Manages Telegram Bot connections via the Telegram Login Widget.
  *
- * Connection flow (no OAuth — uses Telegram deep-links):
- *   1. generateAuthUrl(email) → stores a one-time link token, returns t.me deep-link
- *   2. User opens link, sends /start <token> to the bot in Telegram
- *   3. handleWebhook(update) validates the token, stores chat_id in connector_tokens
- *   4. sendMessage(email, text) looks up chat_id and calls sendMessage Bot API
+ * Connection flow:
+ *   1. Frontend renders the Telegram Login Widget (requires bot username)
+ *   2. User clicks "Log in with Telegram" in the widget popup
+ *   3. Widget calls window.onTelegramAuth(user) with { id, first_name, hash, auth_date, ... }
+ *   4. Frontend POSTs that payload to POST /api/v1/connectors/telegram/connect
+ *   5. validateAndConnect() verifies HMAC-SHA256(SHA256(botToken), data_check_string)
+ *      and stores the user's chat_id in connector_tokens
+ *   6. sendMessage() calls the Bot API sendMessage using the stored chat_id
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class TelegramService {
 
-    private static final String TG_API_BASE = "https://api.telegram.org/bot";
+    private static final String TG_API_BASE     = "https://api.telegram.org/bot";
+    private static final long   MAX_AUTH_AGE_S  = 86_400; // 24 h
 
-    private final ConnectorProperties           props;
-    private final ConnectorTokenRepository      tokenRepo;
-    private final ConnectorOAuthStateRepository stateRepo;
-    private final RestClient.Builder            restClientBuilder;
+    private final ConnectorProperties      props;
+    private final ConnectorTokenRepository tokenRepo;
+    private final RestClient.Builder       restClientBuilder;
 
-    // ── Auth URL (deep-link) ──────────────────────────────────────────────────
+    // ── Config ────────────────────────────────────────────────────────────────
 
-    public String generateAuthUrl(String ownerEmail) {
-        String linkToken = UUID.randomUUID().toString().replace("-", "");
-        stateRepo.save(ConnectorOAuthState.builder()
-                .state(linkToken)
-                .ownerEmail(ownerEmail != null ? ownerEmail : "")
-                .provider("telegram")
-                .expiresAt(LocalDateTime.now().plusMinutes(15))
-                .build());
-
-        String botUsername = props.telegram() != null ? props.telegram().botUsername() : "";
-        return "https://t.me/" + botUsername + "?start=" + linkToken;
+    public String getBotUsername() {
+        return props.telegram() != null ? props.telegram().botUsername() : "";
     }
 
-    // ── Webhook handler ───────────────────────────────────────────────────────
+    // ── Connect (Login Widget callback) ───────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
+    /**
+     * Validate the Telegram Login Widget auth payload and persist the chat_id.
+     *
+     * Telegram validation algorithm:
+     *   key       = SHA-256( bot_token )
+     *   check_str = sorted( key=value pairs excluding "hash" ) joined by "\n"
+     *   expected  = HMAC-SHA256( key, check_str )  — hex-encoded
+     *   valid     = expected == authData["hash"]  AND  (now - auth_date) < 86400s
+     */
     @Transactional
-    public void handleWebhook(Map<String, Object> update) {
-        try {
-            Map<String, Object> message = (Map<String, Object>) update.get("message");
-            if (message == null) return;
-
-            String text = (String) message.get("text");
-            if (text == null || !text.startsWith("/start")) return;
-
-            // /start alone (no token) → ignore
-            String[] parts = text.split(" ", 2);
-            if (parts.length < 2 || parts[1].isBlank()) return;
-
-            String linkToken = parts[1].trim();
-            Map<String, Object> chat = (Map<String, Object>) message.get("chat");
-            if (chat == null) return;
-
-            Object rawId = chat.get("id");
-            String chatId = rawId instanceof Number n
-                    ? String.valueOf(n.longValue())
-                    : String.valueOf(rawId);
-
-            ConnectorOAuthState state = stateRepo.findByState(linkToken).orElse(null);
-
-            if (state == null
-                    || state.getExpiresAt().isBefore(LocalDateTime.now())
-                    || !"telegram".equals(state.getProvider())) {
-                sendBotMessage(chatId, "This link is invalid or has expired. Please generate a new connection link from the app.");
-                if (state != null) stateRepo.delete(state);
-                return;
-            }
-
-            String ownerEmail = state.getOwnerEmail();
-            stateRepo.delete(state);
-
-            ConnectorToken token = tokenRepo
-                    .findByOwnerEmailAndProvider(ownerEmail, "telegram")
-                    .orElse(ConnectorToken.builder()
-                            .ownerEmail(ownerEmail)
-                            .provider("telegram")
-                            .build());
-
-            token.setAccessToken(chatId);
-            token.setTokenType("telegram");
-            tokenRepo.save(token);
-
-            log.info("[TelegramService] Linked chat {} for user {}", chatId, ownerEmail);
-
-            Map<String, Object> from = (Map<String, Object>) message.get("from");
-            String firstName = from != null ? (String) from.getOrDefault("first_name", "there") : "there";
-            sendBotMessage(chatId, "Hi " + firstName + "! Your Telegram account is now connected. You'll receive messages here from the RAG Agent.");
-
-        } catch (Exception e) {
-            log.error("[TelegramService] Error handling webhook", e);
+    public void validateAndConnect(Map<String, Object> authData, String ownerEmail) {
+        String receivedHash = extract(authData, "hash");
+        if (receivedHash == null || receivedHash.isBlank()) {
+            throw new IllegalArgumentException("Missing hash in Telegram auth data");
         }
+
+        // Build data_check_string: sorted key=value pairs (exclude hash), joined by \n
+        String dataCheckString = authData.entrySet().stream()
+                .filter(e -> !"hash".equals(e.getKey()) && e.getValue() != null)
+                .sorted(Map.Entry.comparingByKey())
+                .map(e -> e.getKey() + "=" + e.getValue())
+                .collect(Collectors.joining("\n"));
+
+        // Compute expected hash
+        String expectedHash = hmacSha256(sha256(botToken()), dataCheckString);
+
+        // Constant-time comparison prevents timing attacks
+        if (!MessageDigest.isEqual(
+                expectedHash.getBytes(StandardCharsets.UTF_8),
+                receivedHash.getBytes(StandardCharsets.UTF_8))) {
+            throw new IllegalArgumentException("Telegram auth hash validation failed");
+        }
+
+        // Reject stale auth data
+        String authDateStr = extract(authData, "auth_date");
+        if (authDateStr != null) {
+            long authDate = Long.parseLong(authDateStr);
+            if (Instant.now().getEpochSecond() - authDate > MAX_AUTH_AGE_S) {
+                throw new IllegalArgumentException("Telegram auth data has expired");
+            }
+        }
+
+        // Persist chat_id (Telegram user id == chat_id for private chats)
+        String chatId = extract(authData, "id");
+        if (chatId == null || chatId.isBlank()) {
+            throw new IllegalArgumentException("Missing id in Telegram auth data");
+        }
+
+        String email = ownerEmail != null ? ownerEmail : "";
+        ConnectorToken token = tokenRepo
+                .findByOwnerEmailAndProvider(email, "telegram")
+                .orElse(ConnectorToken.builder().ownerEmail(email).provider("telegram").build());
+
+        token.setAccessToken(chatId);
+        token.setTokenType("telegram");
+        tokenRepo.save(token);
+        log.info("[TelegramService] Connected Telegram chat {} for user {}", chatId, email);
     }
 
     // ── Send message ──────────────────────────────────────────────────────────
@@ -116,7 +118,7 @@ public class TelegramService {
                         "Telegram is not connected. Please connect your Telegram account first."));
 
         sendBotMessage(token.getAccessToken(), text);
-        log.info("[TelegramService] Sent message for user {}", email);
+        log.info("[TelegramService] Sent Telegram message for user {}", email);
         return "Message sent to your Telegram successfully.";
     }
 
@@ -137,17 +139,43 @@ public class TelegramService {
     // ── Internals ─────────────────────────────────────────────────────────────
 
     private void sendBotMessage(String chatId, String text) {
-        String botToken = props.telegram() != null ? props.telegram().botToken() : "";
-        if (botToken.isBlank()) {
-            log.warn("[TelegramService] Bot token not configured");
-            return;
-        }
+        String token = botToken();
+        if (token.isBlank()) { log.warn("[TelegramService] Bot token not configured"); return; }
         restClientBuilder.build()
                 .post()
-                .uri(TG_API_BASE + botToken + "/sendMessage")
+                .uri(TG_API_BASE + token + "/sendMessage")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("chat_id", chatId, "text", text))
                 .retrieve()
                 .toBodilessEntity();
+    }
+
+    private String botToken() {
+        return props.telegram() != null && props.telegram().botToken() != null
+                ? props.telegram().botToken() : "";
+    }
+
+    private static String extract(Map<String, Object> map, String key) {
+        Object v = map.get(key);
+        return v != null ? v.toString() : null;
+    }
+
+    private static byte[] sha256(String input) {
+        try {
+            return MessageDigest.getInstance("SHA-256")
+                    .digest(input.getBytes(StandardCharsets.UTF_8));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static String hmacSha256(byte[] key, String data) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(key, "HmacSHA256"));
+            return HexFormat.of().formatHex(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            throw new IllegalStateException(e);
+        }
     }
 }

@@ -9,16 +9,15 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 /**
- * REST endpoints for external service connectors (Google Workspace, Figma).
+ * REST endpoints for external service connectors (Google Workspace, Figma, Telegram).
  *
- * All paths are exempt from JWT auth (see AuthFilter) — the exchange endpoint
- * is server-to-server; security comes from the OAuth state token.
- * Status / disconnect read the email from the JWT attribute when auth is enabled.
- *
- * GET    /api/v1/connectors/{provider}/auth-url   → { authUrl }
- * POST   /api/v1/connectors/{provider}/exchange   → 200 | 400
- * GET    /api/v1/connectors/status                → { google, figma }
+ * GET    /api/v1/connectors/{provider}/auth-url   → { authUrl }            (Google, Figma)
+ * POST   /api/v1/connectors/{provider}/exchange   → 200 | 400              (Google, Figma)
+ * GET    /api/v1/connectors/status                → { google, figma, telegram }
  * DELETE /api/v1/connectors/{provider}            → 204
+ *
+ * GET    /api/v1/connectors/telegram/config       → { botUsername }
+ * POST   /api/v1/connectors/telegram/connect      → 200 | 400  (Login Widget callback)
  */
 @Slf4j
 @RestController
@@ -72,11 +71,43 @@ public class ConnectorController {
         return ResponseEntity.noContent().build();
     }
 
+    // ── Telegram Login Widget ─────────────────────────────────────────────────
+
     /**
-     * POST /api/v1/connectors/google/docs
-     * Body: { "title": "...", "content": "..." }
-     * Creates a Google Doc and returns { "url": "https://docs.google.com/..." }
+     * GET /api/v1/connectors/telegram/config
+     * Returns the bot username so the frontend can render the Login Widget.
+     * The bot token is never exposed to the client.
      */
+    @GetMapping("/telegram/config")
+    public ResponseEntity<Map<String, String>> telegramConfig() {
+        return ResponseEntity.ok(Map.of("botUsername", telegramService.getBotUsername()));
+    }
+
+    /**
+     * POST /api/v1/connectors/telegram/connect
+     * Receives the Login Widget auth payload, validates the HMAC-SHA256 hash,
+     * and stores the user's Telegram chat_id.
+     *
+     * Expected body: { id, first_name, last_name?, username?, photo_url?, auth_date, hash }
+     */
+    @PostMapping("/telegram/connect")
+    public ResponseEntity<Void> telegramConnect(
+            @RequestBody Map<String, Object> authData,
+            HttpServletRequest request) {
+
+        String email = (String) request.getAttribute("authenticatedEmail");
+        try {
+            telegramService.validateAndConnect(authData, email);
+            return ResponseEntity.ok().build();
+        } catch (IllegalArgumentException e) {
+            log.warn("[ConnectorController] Telegram connect rejected: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    // ── Google Workspace ──────────────────────────────────────────────────────
+
+    /** POST /api/v1/connectors/google/docs — { title, content } → { url } */
     @PostMapping("/google/docs")
     public ResponseEntity<Map<String, String>> createGoogleDoc(
             @RequestBody Map<String, String> body,
@@ -85,10 +116,7 @@ public class ConnectorController {
         String email   = (String) request.getAttribute("authenticatedEmail");
         String title   = body.getOrDefault("title", "Exported Document");
         String content = body.get("content");
-
-        if (content == null || content.isBlank()) {
-            return ResponseEntity.badRequest().build();
-        }
+        if (content == null || content.isBlank()) return ResponseEntity.badRequest().build();
 
         String url = googleDocsService.createDocument(title, content, email);
         return ResponseEntity.ok(Map.of("url", url));
@@ -107,17 +135,6 @@ public class ConnectorController {
 
         String url = googleSheetsService.createSpreadsheet(title, content, email);
         return ResponseEntity.ok(Map.of("url", url));
-    }
-
-    /**
-     * POST /api/v1/connectors/telegram/webhook
-     * Called by Telegram's servers when a user sends a message to the bot.
-     * Exempt from JWT auth — Telegram sends updates without a user session.
-     */
-    @PostMapping("/telegram/webhook")
-    public ResponseEntity<Void> telegramWebhook(@RequestBody java.util.Map<String, Object> update) {
-        telegramService.handleWebhook(update);
-        return ResponseEntity.ok().build();
     }
 
     /** POST /api/v1/connectors/google/slides — { title, content } → { url } */

@@ -47,9 +47,9 @@ public class ConnectorService {
     public String getAuthUrl(String provider, String ownerEmail) {
         validateProvider(provider);
 
-        // Telegram uses a bot deep-link — TelegramService manages its own link token
+        // Telegram uses the Login Widget, not an OAuth redirect
         if ("telegram".equals(provider)) {
-            return telegramService.generateAuthUrl(ownerEmail);
+            throw new IllegalArgumentException("Telegram does not use OAuth — use the Login Widget");
         }
 
         String state       = UUID.randomUUID().toString().replace("-", "");
