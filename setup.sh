@@ -555,12 +555,18 @@ else
   header "Connectors (optional)"
   echo -e "  ${DIM}Connect Google Workspace (Docs, Sheets, Slides), Figma, and Telegram to the agent.${NC}"
   echo -e "  ${DIM}Leave blank to skip — secrets can be populated in secrets/ later.${NC}"
-  UPDATE_CONNECTORS=true
+  CONNECTORS_ALREADY_SET=false
   if has_secret google_client_id && has_secret figma_client_id; then
+    CONNECTORS_ALREADY_SET=true
     echo -e "  ${DIM}Connectors already configured.${NC}"
-    if ! confirm "Update connector credentials?"; then UPDATE_CONNECTORS=false; fi
   fi
-  if $UPDATE_CONNECTORS; then
+
+  # ── Google ──────────────────────────────────────────────────────────────────
+  UPDATE_GOOGLE=true
+  if $CONNECTORS_ALREADY_SET && has_secret google_client_id; then
+    if ! confirm "Update Google connector credentials?"; then UPDATE_GOOGLE=false; fi
+  fi
+  if $UPDATE_GOOGLE; then
     echo ""
     echo -e "  Google OAuth app → https://console.cloud.google.com/apis/credentials"
     prompt CONNECTOR_CALLBACK_BASE_URL "Public frontend URL (e.g. https://app.example.com)" "https://app.example.com"
@@ -573,7 +579,17 @@ else
     fi
     write_secret google_client_id     "$GOOGLE_CLIENT_ID"
     write_secret google_client_secret "$GOOGLE_CLIENT_SECRET"
+  else
+    CONNECTOR_CALLBACK_BASE_URL="$(read_prod CONNECTOR_CALLBACK_BASE_URL http://localhost:3000)"
+    echo -e "  ${DIM}Keeping existing Google secrets.${NC}"
+  fi
 
+  # ── Figma ───────────────────────────────────────────────────────────────────
+  UPDATE_FIGMA=true
+  if $CONNECTORS_ALREADY_SET && has_secret figma_client_id; then
+    if ! confirm "Update Figma connector credentials?"; then UPDATE_FIGMA=false; fi
+  fi
+  if $UPDATE_FIGMA; then
     echo ""
     echo -e "  Figma OAuth app → https://www.figma.com/developers/apps"
     echo -e "    Redirect URI: ${CONNECTOR_CALLBACK_BASE_URL}/api/connectors/figma/callback"
@@ -585,7 +601,16 @@ else
     fi
     write_secret figma_client_id     "$FIGMA_CLIENT_ID"
     write_secret figma_client_secret "$FIGMA_CLIENT_SECRET"
+  else
+    echo -e "  ${DIM}Keeping existing Figma secrets.${NC}"
+  fi
 
+  # ── Telegram ────────────────────────────────────────────────────────────────
+  UPDATE_TELEGRAM=true
+  if $CONNECTORS_ALREADY_SET && has_secret telegram_bot_token; then
+    if ! confirm "Update Telegram connector credentials?"; then UPDATE_TELEGRAM=false; fi
+  fi
+  if $UPDATE_TELEGRAM; then
     echo ""
     echo -e "  Telegram Bot → https://t.me/BotFather (send /newbot)"
     echo -e "  ${DIM}After setup, register the webhook:${NC}"
@@ -599,9 +624,8 @@ else
     write_secret telegram_bot_token    "$TELEGRAM_BOT_TOKEN"
     write_secret telegram_bot_username "$TELEGRAM_BOT_USERNAME"
   else
-    CONNECTOR_CALLBACK_BASE_URL="$(read_prod CONNECTOR_CALLBACK_BASE_URL http://localhost:3000)"
     TELEGRAM_BOT_USERNAME="$(read_prod TELEGRAM_BOT_USERNAME "")"
-    echo -e "  ${DIM}Keeping existing connector secrets.${NC}"
+    echo -e "  ${DIM}Keeping existing Telegram secrets.${NC}"
   fi
 
   # ── Summary ────────────────────────────────────────────────────────────────
