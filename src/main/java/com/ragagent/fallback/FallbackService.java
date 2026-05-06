@@ -1,13 +1,16 @@
 package com.ragagent.fallback;
 
+import com.ragagent.config.ChatModelFactory;
+import com.ragagent.model.ModelConfig;
+import com.ragagent.model.ModelConfigService;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -24,7 +27,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class FallbackService {
 
-    private final ChatClient chatClient;
+    private final ChatClient         chatClient;
+    private final ModelConfigService modelConfigService;
+    private final ChatModelFactory   chatModelFactory;
 
     /** Simple in-process cache; replace with Redis for production. */
     private final Map<String, String> answerCache = new ConcurrentHashMap<>();
@@ -36,7 +41,7 @@ public class FallbackService {
     /**
      * Entry point called by {@link com.ragagent.agent.nodes.FallbackNode}.
      */
-    public String resolveFallback(String query, String reason) {
+    public String resolveFallback(String query, String reason, Optional<String> selectedModelDisplayName) {
         log.warn("[FallbackService] Resolving fallback for: '{}', reason: {}", query, reason);
 
         // 1. Check cache
@@ -47,14 +52,22 @@ public class FallbackService {
         }
 
         // 2. Try LLM direct answer with circuit-breaker
-        return tryDirectAnswer(query, reason);
+        return tryDirectAnswer(query, reason, selectedModelDisplayName);
     }
 
     @CircuitBreaker(name = "llm", fallbackMethod = "staticFallback")
-    public String tryDirectAnswer(String query, String reason) {
+    public String tryDirectAnswer(String query, String reason, Optional<String> selectedModelDisplayName) {
         log.info("[FallbackService] Attempting direct LLM answer");
 
-        String answer = chatClient.prompt()
+        ModelConfig selectedConfig = selectedModelDisplayName
+                .flatMap(modelConfigService::findByDisplayName)
+                .filter(ModelConfig::isEnabled)
+                .orElse(null);
+        ChatClient effectiveClient = selectedConfig != null
+                ? chatModelFactory.buildChatClient(selectedConfig)
+                : chatClient;
+
+        String answer = effectiveClient.prompt()
                 .system("""
                         You are a helpful assistant. Answer the user's question to the best
                         of your knowledge. If you cannot answer reliably, say so clearly.
@@ -70,7 +83,7 @@ public class FallbackService {
     }
 
     /** Resilience4j fallback — LLM circuit-breaker is open. */
-    public String staticFallback(String query, String reason, Throwable ex) {
+    public String staticFallback(String query, String reason, Optional<String> selectedModelDisplayName, Throwable ex) {
         log.error("[FallbackService] LLM unavailable, serving static fallback: {}", ex.getMessage());
         return STATIC_FALLBACK;
     }

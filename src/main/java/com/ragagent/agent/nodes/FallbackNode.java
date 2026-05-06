@@ -39,7 +39,7 @@ public class FallbackNode {
 
         log.warn("[FallbackNode] Activating fallback — reason: {}", reason);
 
-        String answer = fallbackService.resolveFallback(request.query(), reason);
+        String answer = fallbackService.resolveFallback(request.query(), reason, state.selectedModelDisplayName());
 
         AgentResponse response = new AgentResponse(
                 answer,

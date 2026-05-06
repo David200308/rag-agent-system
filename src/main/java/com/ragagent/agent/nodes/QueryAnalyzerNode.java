@@ -1,6 +1,9 @@
 package com.ragagent.agent.nodes;
 
 import com.ragagent.agent.state.AgentState;
+import com.ragagent.config.ChatModelFactory;
+import com.ragagent.model.ModelConfig;
+import com.ragagent.model.ModelConfigService;
 import com.ragagent.schema.AgentRequest;
 import com.ragagent.schema.QueryAnalysis;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +27,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class QueryAnalyzerNode {
 
-    private final ChatClient chatClient;
+    private final ChatClient         chatClient;
+    private final ModelConfigService modelConfigService;
+    private final ChatModelFactory   chatModelFactory;
 
     private static final String SYSTEM_PROMPT = """
             You are a query-analysis expert for a Retrieval-Augmented Generation (RAG) system.
@@ -58,11 +63,19 @@ public class QueryAnalyzerNode {
 
         log.debug("[QueryAnalyzerNode] Analysing query: {}", request.query());
 
+        ModelConfig selectedConfig = state.selectedModelDisplayName()
+                .flatMap(modelConfigService::findByDisplayName)
+                .filter(ModelConfig::isEnabled)
+                .orElse(null);
+        ChatClient effectiveClient = selectedConfig != null
+                ? chatModelFactory.buildChatClient(selectedConfig)
+                : chatClient;
+
         // BeanOutputConverter generates JSON-Schema from QueryAnalysis and
         // appends the format instructions to the prompt automatically.
         var converter = new BeanOutputConverter<>(QueryAnalysis.class);
 
-        String rawResponse = chatClient.prompt()
+        String rawResponse = effectiveClient.prompt()
                 .system(SYSTEM_PROMPT)
                 .user(u -> u.text("""
                         User query: {query}
