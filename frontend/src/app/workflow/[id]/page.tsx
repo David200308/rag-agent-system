@@ -4,24 +4,40 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Menu } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ModelSelector } from "@/components/ui/ModelSelector";
 import { WorkflowBuilder } from "@/components/workflow/WorkflowBuilder";
-import { fetchWorkflow } from "@/lib/api";
-import type { Workflow } from "@/types/agent";
+import { fetchWorkflow, fetchModels, setWorkflowModel } from "@/lib/api";
+import type { ModelConfig, Workflow } from "@/types/agent";
 import { useWorkflowSidebar } from "../WorkflowSidebarContext";
 
 export default function WorkflowDetailPage() {
   const { id }   = useParams<{ id: string }>();
   const router   = useRouter();
   const openSidebar = useWorkflowSidebar();
-  const [workflow, setWorkflow] = useState<Workflow | null>(null);
-  const [loading,  setLoading]  = useState(true);
+  const [workflow, setWorkflow]   = useState<Workflow | null>(null);
+  const [loading,  setLoading]    = useState(true);
+  const [models, setModels]       = useState<ModelConfig[]>([]);
+  const [wfModel, setWfModel]     = useState<string | null>(null);
+  const [modelSaving, setModelSaving] = useState(false);
 
   useEffect(() => {
     fetchWorkflow(id).then(wf => {
       setWorkflow(wf);
+      setWfModel(wf?.selectedModel ?? null);
       setLoading(false);
     });
+    fetchModels().then(setModels).catch(() => {});
   }, [id]);
+
+  const handleModelChange = async (displayName: string | null) => {
+    setWfModel(displayName);
+    setModelSaving(true);
+    try {
+      await setWorkflowModel(id, displayName);
+    } finally {
+      setModelSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -54,12 +70,21 @@ export default function WorkflowDetailPage() {
         <Button size="icon" variant="ghost" onClick={() => router.push("/workflow")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-sm font-semibold">{workflow.name}</h1>
           {workflow.description && (
             <p className="text-xs text-[--color-muted]">{workflow.description}</p>
           )}
         </div>
+        {models.length > 0 && (
+          <ModelSelector
+            models={models}
+            value={wfModel}
+            onChange={handleModelChange}
+            disabled={modelSaving}
+            className="max-w-[140px] shrink-0"
+          />
+        )}
       </div>
 
       <div className="flex-1 overflow-hidden">

@@ -22,6 +22,7 @@ import type {
   CreateScheduleRequest,
   IngestionResult,
   KnowledgeSourceEntry,
+  ModelConfig,
   ScheduledMessage,
   ShareMetaResponse,
   ShareMode,
@@ -233,6 +234,44 @@ export async function updateSchedule(id: number, payload: UpdateScheduleRequest)
 
 export async function deleteSchedule(id: number): Promise<void> {
   await fetch(`/api/scheduler/schedules/${id}`, { method: "DELETE" });
+}
+
+// ── Model config API ──────────────────────────────────────────────────────────
+
+export async function fetchModels(): Promise<ModelConfig[]> {
+  const res = await fetch("/api/models");
+  if (!res.ok) return [];
+  return res.json() as Promise<ModelConfig[]>;
+}
+
+export async function setUserDefaultModel(displayName: string | null): Promise<void> {
+  await fetch("/api/agent/user/preferences", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ selectedModel: displayName }),
+  });
+}
+
+export async function setConversationModel(
+  conversationId: string,
+  displayName: string | null,
+): Promise<void> {
+  await fetch(`/api/agent/conversations/${conversationId}/model`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ selectedModel: displayName }),
+  });
+}
+
+export async function setWorkflowModel(
+  workflowId: string,
+  displayName: string | null,
+): Promise<void> {
+  await fetch(`/api/workflow/${workflowId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ selectedModel: displayName }),
+  });
 }
 
 // ── Workflow API ──────────────────────────────────────────────────────────────

@@ -4,15 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { MessageSquare, Menu, Share2, CalendarClock } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { queryAgent, createWorkflow } from "@/lib/api";
+import { queryAgent, createWorkflow, fetchModels, fetchConversations, setConversationModel } from "@/lib/api";
 import { useChatStore } from "@/store/chatStore";
 import { MessageBubble } from "./MessageBubble";
 import { MessageInput } from "./MessageInput";
 import { ShareModal } from "./ShareModal";
 import { ScheduleModal } from "./ScheduleModal";
+import { ModelSelector } from "@/components/ui/ModelSelector";
 import { Spinner } from "@/components/ui/Spinner";
 import { Button } from "@/components/ui/Button";
-import type { AgentRequest, AgentPattern, TeamExecMode } from "@/types/agent";
+import type { AgentRequest, AgentPattern, ModelConfig, TeamExecMode } from "@/types/agent";
 
 interface ChatInterfaceProps {
   conversationId: string;
@@ -36,6 +37,37 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
   const [showSchedule, setShowSchedule] = useState(false);
   const { conversations, addMessage, setBackendConversationId } = useChatStore();
   const conversation = conversations.find((c) => c.id === conversationId);
+
+  const [models, setModels]         = useState<ModelConfig[]>([]);
+  const [convModel, setConvModel]   = useState<string | null>(null);
+  const [modelSaving, setModelSaving] = useState(false);
+
+  useEffect(() => {
+    fetchModels().then(setModels).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const backendId = conversation?.backendConversationId;
+    if (!backendId) return;
+    fetchConversations()
+      .then((list) => {
+        const found = list.find((c) => c.id === backendId);
+        if (found) setConvModel(found.selectedModel ?? null);
+      })
+      .catch(() => {});
+  }, [conversation?.backendConversationId]);
+
+  const handleModelChange = async (displayName: string | null) => {
+    const backendId = conversation?.backendConversationId;
+    if (!backendId) return;
+    setConvModel(displayName);
+    setModelSaving(true);
+    try {
+      await setConversationModel(backendId, displayName);
+    } finally {
+      setModelSaving(false);
+    }
+  };
 
   const mutation = useMutation({
     mutationFn: (req: AgentRequest) => queryAgent(req),
@@ -142,6 +174,15 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
         <span className="flex-1 truncate text-sm font-medium">
           {conversation?.title ?? "Chat"}
         </span>
+        {models.length > 0 && conversation?.backendConversationId && (
+          <ModelSelector
+            models={models}
+            value={convModel}
+            onChange={handleModelChange}
+            disabled={modelSaving || mutation.isPending}
+            className="max-w-[140px]"
+          />
+        )}
         {backendId && (
           <>
             {conversation?.backendConversationId && (

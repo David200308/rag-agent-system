@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Moon, Sun, Globe, Trash2, Plus, User, Shield, Clock, KeyRound, Menu } from "lucide-react";
+import { Sun, Globe, Trash2, Plus, User, Shield, Clock, KeyRound, Menu, Bot } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useTimezone } from "@/hooks/useTimezone";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
+import { ModelSelector } from "@/components/ui/ModelSelector";
 import { ResizableLayout } from "@/components/layout/ResizableLayout";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { useChatStore } from "@/store/chatStore";
@@ -13,8 +14,10 @@ import {
   fetchWebFetchWhitelist,
   addWebFetchDomain,
   removeWebFetchDomain,
+  fetchModels,
+  setUserDefaultModel,
 } from "@/lib/api";
-import type { WebFetchWhitelistEntry } from "@/types/agent";
+import type { ModelConfig, WebFetchWhitelistEntry } from "@/types/agent";
 import { cn } from "@/lib/utils";
 import { startRegistration } from "@simplewebauthn/browser";
 import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
@@ -132,6 +135,31 @@ export default function SettingsPage() {
   const filteredTz = tzSearch.trim()
     ? allTimezones.filter((tz) => tz.toLowerCase().includes(tzSearch.toLowerCase()))
     : allTimezones;
+
+  // ── Default model ─────────────────────────────────────────────────────────────
+  const [models, setModels]               = useState<ModelConfig[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [modelSaving, setModelSaving]     = useState(false);
+
+  useEffect(() => {
+    fetchModels().then(setModels).catch(() => {});
+    fetch("/api/agent/user/preferences")
+      .then((r) => r.json())
+      .then((d: { timezone?: string; selectedModel?: string | null }) => {
+        setSelectedModel(d.selectedModel ?? null);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleModelChange = async (displayName: string | null) => {
+    setSelectedModel(displayName);
+    setModelSaving(true);
+    try {
+      await setUserDefaultModel(displayName);
+    } finally {
+      setModelSaving(false);
+    }
+  };
 
   // ── Web-fetch whitelist ───────────────────────────────────────────────────────
   const [whitelist, setWhitelist]   = useState<WebFetchWhitelistEntry[]>([]);
@@ -334,6 +362,29 @@ export default function SettingsPage() {
                   Selected: <span className="font-mono">{timezone}</span>
                 </p>
               </div>
+            )}
+          </SectionCard>
+
+          {/* ── Default Model ────────────────────────────────────────────── */}
+          <SectionCard title="Default Model" icon={<Bot className="h-4 w-4" />}>
+            <p className="mb-3 text-xs text-[--color-muted]">
+              Choose the AI model used for all conversations and workflows by default.
+              Each conversation or workflow can also override this individually.
+            </p>
+            <div className="flex items-center gap-3">
+              <ModelSelector
+                models={models}
+                value={selectedModel}
+                onChange={handleModelChange}
+                disabled={modelSaving}
+                className="flex-1"
+              />
+              {modelSaving && <Spinner className="h-4 w-4 shrink-0" />}
+            </div>
+            {models.length === 0 && (
+              <p className="mt-2 text-xs text-[--color-muted]">
+                No models configured. Ask your admin to add model configs.
+              </p>
             )}
           </SectionCard>
 

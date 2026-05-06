@@ -1,5 +1,13 @@
 // Mirror of the Java schema/* records — kept in sync manually.
 
+export interface ModelConfig {
+  displayName: string;
+  platform: string;
+  modelId: string;
+  enabled: boolean;
+  createdAt: string;
+}
+
 export interface ConversationTurn {
   role: "user" | "assistant";
   content: string;
@@ -95,6 +103,7 @@ export interface BackendConversation {
   id: string;
   userEmail: string | null;
   archived: boolean;
+  selectedModel: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -197,6 +206,7 @@ export interface Workflow {
   ownerEmail: string | null;
   agentPattern: AgentPattern;
   teamExecMode: TeamExecMode | null;
+  selectedModel: string | null;
   createdAt: string;
   updatedAt: string;
 }
