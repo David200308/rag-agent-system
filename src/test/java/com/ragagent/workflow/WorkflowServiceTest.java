@@ -94,6 +94,31 @@ class WorkflowServiceTest {
     }
 
     @Test
+    void update_ownerCanSetSelectedModel() {
+        Workflow wf = new Workflow("w1", "Flow", "owner@test.com", Workflow.AgentPattern.ORCHESTRATOR);
+        when(workflowRepo.findById("w1")).thenReturn(Optional.of(wf));
+        when(workflowRepo.save(wf)).thenReturn(wf);
+
+        service.update("w1", "owner@test.com", Map.of("selectedModel", "GPT-4o"));
+
+        assertThat(wf.getSelectedModel()).isEqualTo("GPT-4o");
+    }
+
+    @Test
+    void update_nullSelectedModel_clearsModel() {
+        Workflow wf = new Workflow("w1", "Flow", "owner@test.com", Workflow.AgentPattern.ORCHESTRATOR);
+        wf.setSelectedModel("GPT-4o");
+        when(workflowRepo.findById("w1")).thenReturn(Optional.of(wf));
+        when(workflowRepo.save(wf)).thenReturn(wf);
+
+        Map<String, Object> patch = new java.util.HashMap<>();
+        patch.put("selectedModel", null);
+        service.update("w1", "owner@test.com", patch);
+
+        assertThat(wf.getSelectedModel()).isNull();
+    }
+
+    @Test
     void update_nonOwnerThrowsSecurityException() {
         Workflow wf = new Workflow("w1", "Flow", "owner@test.com", Workflow.AgentPattern.ORCHESTRATOR);
         when(workflowRepo.findById("w1")).thenReturn(Optional.of(wf));

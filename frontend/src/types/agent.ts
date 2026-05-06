@@ -109,11 +109,25 @@ export interface BackendMessage {
   createdAt: string;
 }
 
+export type ShareMode   = "READ_ONLY" | "INTERACTIVE";
+export type AccessType  = "EVERYONE"  | "WHITELIST";
+
 export interface ConversationShare {
   token: string;
   conversationId: string;
   expiresAt: string | null;
   createdAt: string;
+  shareMode:  ShareMode;
+  accessType: AccessType;
+  whitelist:  string[];
+}
+
+export interface ShareMetaResponse {
+  shareMode:  ShareMode;
+  accessType: AccessType;
+  ownerEmail: string;
+  expiresAt:  string | null;
+  messages:   BackendMessage[];
 }
 
 // ── Scheduled messages ────────────────────────────────────────────────────────

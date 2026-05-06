@@ -38,6 +38,10 @@ public class Workflow {
     @Column(name = "team_exec_mode", length = 20)
     private TeamExecMode teamExecMode;
 
+    /** Model display name for all agents in this workflow; null = system default. */
+    @Column(name = "selected_model", length = 100)
+    private String selectedModel;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 

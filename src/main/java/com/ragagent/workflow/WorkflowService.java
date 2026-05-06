@@ -59,6 +59,10 @@ public class WorkflowService {
             String v = (String) patch.get("teamExecMode");
             wf.setTeamExecMode(v == null ? null : Workflow.TeamExecMode.valueOf(v));
         }
+        if (patch.containsKey("selectedModel")) {
+            String m = (String) patch.get("selectedModel");
+            wf.setSelectedModel(m == null || m.isBlank() ? null : m);
+        }
         return workflowRepo.save(wf);
     }
 

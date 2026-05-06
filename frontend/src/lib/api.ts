@@ -15,6 +15,7 @@ import type {
   Workflow, WorkflowAgent, WorkflowRun, WorkflowRunLog,
   AgentRequest,
   AgentResponse,
+  AccessType,
   BackendConversation,
   BackendMessage,
   ConversationShare,
@@ -22,6 +23,8 @@ import type {
   IngestionResult,
   KnowledgeSourceEntry,
   ScheduledMessage,
+  ShareMetaResponse,
+  ShareMode,
   Skill,
   UpdateScheduleRequest,
   UrlIngestionResult,
@@ -152,10 +155,13 @@ export async function ingestUrl(
 export async function createShare(
   conversationId: string,
   expireDays: number | null,
+  shareMode: ShareMode  = "READ_ONLY",
+  accessType: AccessType = "EVERYONE",
+  whitelist: string[]   = [],
 ): Promise<ConversationShare> {
   return postJson<ConversationShare>(
     `/api/agent/conversations/${conversationId}/share`,
-    { expireDays },
+    { expireDays, shareMode, accessType, whitelist },
   );
 }
 
@@ -168,6 +174,20 @@ export async function getShare(conversationId: string): Promise<ConversationShar
 
 export async function revokeShare(conversationId: string): Promise<void> {
   await fetch(`/api/agent/conversations/${conversationId}/share`, { method: "DELETE" });
+}
+
+export async function fetchSharedConversation(token: string): Promise<ShareMetaResponse | null> {
+  const res = await fetch(`/api/share/${token}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`${res.status}`);
+  return res.json() as Promise<ShareMetaResponse>;
+}
+
+export async function submitSharedQuery(
+  token: string,
+  query: string,
+): Promise<AgentResponse> {
+  return postJson<AgentResponse>(`/api/share/${token}/query`, { query });
 }
 
 // ── Web-fetch whitelist ───────────────────────────────────────────────────────

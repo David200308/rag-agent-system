@@ -222,11 +222,45 @@ CREATE TABLE IF NOT EXISTS connector_oauth_states (
     INDEX idx_cos_state (state)
 );
 
+-- ── Model configurations ─────────────────────────────────────────────────────
+-- Admin-managed list of selectable LLM models.
+-- display_name is the primary key and user-facing identifier.
+-- platform maps to a provider in LlmProperties (openai|anthropic|openrouter|local|deepseek).
+-- model_id is the actual model string passed to the provider API.
+CREATE TABLE IF NOT EXISTS model_configs (
+    display_name VARCHAR(100) PRIMARY KEY,
+    platform     VARCHAR(20)  NOT NULL,
+    model_id     VARCHAR(200) NOT NULL,
+    enabled      BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ── Schema migration: user model selection ────────────────────────────────────
+ALTER TABLE user_preferences ADD COLUMN selected_model VARCHAR(100);
+
+-- ── Schema migration: per-conversation and per-workflow model selection ────────
+ALTER TABLE conversations ADD COLUMN selected_model VARCHAR(100);
+ALTER TABLE workflows ADD COLUMN selected_model VARCHAR(100);
+
 -- ── Schema migration: web_fetch_whitelist per-user isolation ─────────────────
 -- Existing databases: drops the old global unique constraint and adds the per-user
 -- one. On fresh installs these statements fail silently (continue-on-error=true).
 ALTER TABLE web_fetch_whitelist DROP INDEX uq_wfw_domain;
 ALTER TABLE web_fetch_whitelist ADD UNIQUE KEY uq_wfw_domain_user (domain, added_by);
+
+-- ── Schema migration: conversation share modes & access control ───────────────
+ALTER TABLE conversation_shares ADD COLUMN share_mode  VARCHAR(20) NOT NULL DEFAULT 'READ_ONLY';
+ALTER TABLE conversation_shares ADD COLUMN access_type VARCHAR(20) NOT NULL DEFAULT 'EVERYONE';
+
+-- Whitelist of allowed emails when access_type = WHITELIST
+CREATE TABLE IF NOT EXISTS conversation_share_whitelist (
+    id       BIGINT AUTO_INCREMENT PRIMARY KEY,
+    share_id BIGINT       NOT NULL,
+    email    VARCHAR(255) NOT NULL,
+    UNIQUE KEY uq_csw_share_email (share_id, email),
+    CONSTRAINT fk_csw_share FOREIGN KEY (share_id)
+        REFERENCES conversation_shares(id) ON DELETE CASCADE
+);
 
 -- ── Scheduled messages (managed by Go scheduler service) ─────────────────────
 CREATE TABLE IF NOT EXISTS scheduled_messages (

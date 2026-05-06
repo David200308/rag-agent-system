@@ -95,6 +95,30 @@ public class ConversationService {
     }
 
     /**
+     * Set or clear the model for a specific conversation (owner only).
+     * Pass null displayName to reset to the user/system default.
+     */
+    @Transactional
+    public Conversation setConversationModel(String conversationId, String callerEmail, String displayName) {
+        Conversation conv = conversationRepo.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException("Conversation not found: " + conversationId));
+        if (callerEmail != null && conv.getUserEmail() != null
+                && !conv.getUserEmail().equalsIgnoreCase(callerEmail)) {
+            throw new SecurityException("Only the owner can change the model for this conversation.");
+        }
+        conv.setSelectedModel(displayName == null || displayName.isBlank() ? null : displayName);
+        return conversationRepo.save(conv);
+    }
+
+    /** Get the selected model display name for a conversation, or null if none is set. */
+    @Transactional(readOnly = true)
+    public String getConversationModel(String conversationId) {
+        return conversationRepo.findById(conversationId)
+                .map(Conversation::getSelectedModel)
+                .orElse(null);
+    }
+
+    /**
      * Archive or unarchive a conversation.
      * Only the owner may change archive state.
      */
@@ -136,11 +160,17 @@ public class ConversationService {
      * @param conversationId target conversation
      * @param ownerEmail     must be the conversation owner
      * @param expireDays     null → never expires; positive integer → expires in N days
+     * @param shareMode      READ_ONLY | INTERACTIVE
+     * @param accessType     EVERYONE | WHITELIST
+     * @param whitelist      required emails when accessType=WHITELIST
      */
     @Transactional
     public ConversationShare createShare(String conversationId,
                                          String ownerEmail,
-                                         Integer expireDays) {
+                                         Integer expireDays,
+                                         String shareMode,
+                                         String accessType,
+                                         List<String> whitelist) {
         Conversation conv = conversationRepo.findById(conversationId)
                 .orElseThrow(() -> new IllegalArgumentException("Conversation not found: " + conversationId));
 
@@ -150,17 +180,24 @@ public class ConversationService {
 
         // Replace any existing share for this conversation
         shareRepo.findByConversationIdAndOwnerEmail(conversationId, ownerEmail)
-                .ifPresent(existing -> shareRepo.delete(existing));
+                .ifPresent(shareRepo::delete);
 
         Instant expiresAt = expireDays != null
                 ? Instant.now().plus(expireDays, ChronoUnit.DAYS)
                 : null;
 
         ConversationShare share = new ConversationShare(
-                conversationId, UUID.randomUUID().toString(), ownerEmail, expiresAt);
+                conversationId, UUID.randomUUID().toString(), ownerEmail, expiresAt,
+                shareMode, accessType);
+
+        if (whitelist != null && !whitelist.isEmpty()) {
+            share.getWhitelist().addAll(
+                whitelist.stream().map(String::toLowerCase).distinct().toList());
+        }
+
         shareRepo.save(share);
-        log.info("[ConversationService] Share created token={} conversationId={} expiresAt={}",
-                share.getToken(), conversationId, expiresAt);
+        log.info("[ConversationService] Share created token={} conversationId={} mode={} access={} expiresAt={}",
+                share.getToken(), conversationId, shareMode, accessType, expiresAt);
         return share;
     }
 
@@ -174,6 +211,51 @@ public class ConversationService {
                 .filter(ConversationShare::isActive)
                 .map(s -> messageRepo.findByConversationIdOrderByCreatedAtAsc(s.getConversationId()))
                 .orElseThrow(() -> new IllegalArgumentException("Share link not found or expired."));
+    }
+
+    /**
+     * Retrieve a share by token without access restriction (for metadata display).
+     * Returns the share if active, else throws IllegalArgumentException.
+     */
+    @Transactional(readOnly = true)
+    public ConversationShare getShareByToken(String token) {
+        return shareRepo.findByToken(token)
+                .filter(ConversationShare::isActive)
+                .orElseThrow(() -> new IllegalArgumentException("Share link not found or expired."));
+    }
+
+    /**
+     * Validate that callerEmail may access the share.
+     *
+     * Rules:
+     *  - EVERYONE  → callerEmail must not be null (login required)
+     *  - WHITELIST → callerEmail must appear in the share's whitelist
+     *
+     * Returns the validated share, or throws SecurityException / IllegalArgumentException.
+     */
+    @Transactional(readOnly = true)
+    public ConversationShare validateShareAccess(String token, String callerEmail) {
+        ConversationShare share = shareRepo.findByToken(token)
+                .filter(ConversationShare::isActive)
+                .orElseThrow(() -> new IllegalArgumentException("Share link not found or expired."));
+
+        if ("WHITELIST".equals(share.getAccessType())) {
+            if (callerEmail == null || callerEmail.isBlank()) {
+                throw new SecurityException("Authentication required to access this shared conversation.");
+            }
+            boolean allowed = share.getWhitelist().stream()
+                    .anyMatch(e -> e.equalsIgnoreCase(callerEmail));
+            if (!allowed) {
+                throw new SecurityException("Access denied: your email is not on the whitelist.");
+            }
+        } else {
+            // EVERYONE — still require login
+            if (callerEmail == null || callerEmail.isBlank()) {
+                throw new SecurityException("Authentication required to access this shared conversation.");
+            }
+        }
+
+        return share;
     }
 
     /**

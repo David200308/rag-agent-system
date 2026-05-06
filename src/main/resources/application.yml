@@ -83,15 +83,21 @@ spring:
         version: 1.0.0
 
 # ── LLM provider selector ────────────────────────────────────────────────────
-# Set llm.provider to one of: openai | anthropic | openrouter | local
-# Set the corresponding API key env var before starting.
+# Set llm.provider to one of: openai | anthropic | openrouter | deepseek | local
+# This is the system default used when a user has no model preference.
+# Users can override per-request via the model selection feature (POST /api/v1/models).
 #
 #   openai     → OPENAI_API_KEY
 #   anthropic  → ANTHROPIC_API_KEY
 #   openrouter → OPENROUTER_API_KEY
+#   deepseek   → DEEPSEEK_API_KEY
 #   local      → no API key needed (Ollama / LM Studio / llama.cpp)
 llm:
   provider: ${LLM_PROVIDER:openai}
+  # System-level default model (display name of a model_configs DB entry).
+  # Sits below per-conversation and per-user model selection in the priority chain.
+  # Leave blank to use the raw LLM_PROVIDER + its configured model as the fallback.
+  default-model: ${DEFAULT_MODEL:}
   # Override embedding provider independently. Defaults to llm.provider if unset.
   # Use EMBEDDING_PROVIDER=local for Ollama, or leave unset to use OpenAI embeddings.
   embedding-provider: ${EMBEDDING_PROVIDER:}
@@ -120,6 +126,14 @@ llm:
     # Optional HTTP headers forwarded to OpenRouter
     site-url: ${OPENROUTER_SITE_URL:http://localhost:8081}
     site-name: ${OPENROUTER_SITE_NAME:rag-agent-system}
+
+  # ── DeepSeek ─────────────────────────────────────────────────────────────────
+  # OpenAI-compatible endpoint. Models: deepseek-chat (V3), deepseek-reasoner (R1)
+  deepseek:
+    api-key: ${DEEPSEEK_API_KEY:}
+    base-url: https://api.deepseek.com
+    model: ${DEEPSEEK_MODEL:deepseek-chat}
+    temperature: 0.1
 
   # ── Local LLM (Ollama / LM Studio / llama.cpp) ─────────────────────────────
   # Works with any server that exposes an OpenAI-compatible /v1 endpoint.

@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { X, Copy, Check, Link2, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { X, Copy, Check, Link2, Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { createShare, getShare, revokeShare } from "@/lib/api";
-import type { ConversationShare } from "@/types/agent";
+import type { AccessType, ConversationShare, ShareMode } from "@/types/agent";
 
 interface ShareModalProps {
   conversationId: string;
@@ -29,16 +29,30 @@ function formatExpiry(expiresAt: string | null): string {
 }
 
 export function ShareModal({ conversationId, onClose }: ShareModalProps) {
-  const [share, setShare]           = useState<ConversationShare | null | undefined>(undefined);
-  const [expireDays, setExpireDays] = useState<number | null>(7);
-  const [loading, setLoading]       = useState(false);
-  const [copied, setCopied]         = useState(false);
-  const [error, setError]           = useState<string | null>(null);
+  const [share, setShare]             = useState<ConversationShare | null | undefined>(undefined);
+  const [expireDays, setExpireDays]   = useState<number | null>(7);
+  const [shareMode, setShareMode]     = useState<ShareMode>("READ_ONLY");
+  const [accessType, setAccessType]   = useState<AccessType>("EVERYONE");
+  const [whitelist, setWhitelist]     = useState<string[]>([]);
+  const [emailInput, setEmailInput]   = useState("");
+  const [loading, setLoading]         = useState(false);
+  const [copied, setCopied]           = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+  const emailInputRef                 = useRef<HTMLInputElement>(null);
 
   // Load existing share on open
   useEffect(() => {
     getShare(conversationId)
-      .then(setShare)
+      .then((s) => {
+        if (s) {
+          setShare(s);
+          setShareMode(s.shareMode ?? "READ_ONLY");
+          setAccessType(s.accessType ?? "EVERYONE");
+          setWhitelist(s.whitelist ?? []);
+        } else {
+          setShare(null);
+        }
+      })
       .catch(() => setShare(null));
   }, [conversationId]);
 
@@ -50,7 +64,7 @@ export function ShareModal({ conversationId, onClose }: ShareModalProps) {
     setLoading(true);
     setError(null);
     try {
-      const created = await createShare(conversationId, expireDays);
+      const created = await createShare(conversationId, expireDays, shareMode, accessType, whitelist);
       setShare(created);
     } catch {
       setError("Failed to create share link.");
@@ -65,6 +79,7 @@ export function ShareModal({ conversationId, onClose }: ShareModalProps) {
     try {
       await revokeShare(conversationId);
       setShare(null);
+      setWhitelist([]);
     } catch {
       setError("Failed to revoke share link.");
     } finally {
@@ -79,8 +94,19 @@ export function ShareModal({ conversationId, onClose }: ShareModalProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const addEmail = () => {
+    const email = emailInput.trim().toLowerCase();
+    if (!email || whitelist.includes(email)) return;
+    setWhitelist((prev) => [...prev, email]);
+    setEmailInput("");
+    emailInputRef.current?.focus();
+  };
+
+  const removeEmail = (email: string) => {
+    setWhitelist((prev) => prev.filter((e) => e !== email));
+  };
+
   return (
-    /* Backdrop */
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
@@ -97,8 +123,8 @@ export function ShareModal({ conversationId, onClose }: ShareModalProps) {
           </Button>
         </div>
 
-        <div className="px-5 py-4 space-y-4">
-          {/* Loading state */}
+        <div className="px-5 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
+          {/* Loading */}
           {share === undefined && (
             <div className="flex justify-center py-4">
               <Spinner className="h-5 w-5" />
@@ -108,10 +134,116 @@ export function ShareModal({ conversationId, onClose }: ShareModalProps) {
           {/* No share yet — create form */}
           {share === null && (
             <>
-              <p className="text-sm text-[--color-muted]">
-                Anyone with the link can read this conversation (read-only).
-              </p>
+              {/* Mode selector */}
+              <div>
+                <p className="mb-2 text-xs font-medium text-[--color-muted] uppercase tracking-wide">
+                  Share mode
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["READ_ONLY", "INTERACTIVE"] as ShareMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setShareMode(mode)}
+                      className={[
+                        "rounded-lg border px-3 py-2 text-xs font-medium text-left transition-colors",
+                        shareMode === mode
+                          ? "border-gray-900 bg-gray-900 text-white dark:border-gray-100 dark:bg-gray-100 dark:text-black"
+                          : "border-[--color-border] text-[--color-muted] hover:border-gray-400",
+                      ].join(" ")}
+                    >
+                      <div className="font-semibold">
+                        {mode === "READ_ONLY" ? "Read only" : "Interactive"}
+                      </div>
+                      <div className="mt-0.5 text-[10px] leading-tight opacity-70">
+                        {mode === "READ_ONLY"
+                          ? "Visitors can view the conversation"
+                          : "Visitors can ask questions too"}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
+              {/* Access type */}
+              <div>
+                <p className="mb-2 text-xs font-medium text-[--color-muted] uppercase tracking-wide">
+                  Who can access
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["EVERYONE", "WHITELIST"] as AccessType[]).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setAccessType(type)}
+                      className={[
+                        "rounded-lg border px-3 py-2 text-xs font-medium text-left transition-colors",
+                        accessType === type
+                          ? "border-gray-900 bg-gray-900 text-white dark:border-gray-100 dark:bg-gray-100 dark:text-black"
+                          : "border-[--color-border] text-[--color-muted] hover:border-gray-400",
+                      ].join(" ")}
+                    >
+                      <div className="font-semibold">
+                        {type === "EVERYONE" ? "Anyone (login req.)" : "Whitelist only"}
+                      </div>
+                      <div className="mt-0.5 text-[10px] leading-tight opacity-70">
+                        {type === "EVERYONE"
+                          ? "Any logged-in user with the link"
+                          : "Only specific emails"}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Whitelist email input */}
+              {accessType === "WHITELIST" && (
+                <div>
+                  <p className="mb-2 text-xs font-medium text-[--color-muted] uppercase tracking-wide">
+                    Allowed emails
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      ref={emailInputRef}
+                      type="email"
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addEmail()}
+                      placeholder="user@example.com"
+                      className="flex-1 rounded-lg border border-[--color-border] bg-transparent px-3 py-1.5 text-xs outline-none focus:border-gray-400"
+                    />
+                    <Button size="sm" onClick={addEmail} disabled={!emailInput.trim()}>
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  {whitelist.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {whitelist.map((email) => (
+                        <span
+                          key={email}
+                          className="flex items-center gap-1 rounded-full border border-[--color-border] bg-[--color-surface-raised] px-2 py-0.5 text-[11px]"
+                        >
+                          {email}
+                          <button
+                            type="button"
+                            onClick={() => removeEmail(email)}
+                            className="ml-0.5 text-[--color-muted] hover:text-red-500"
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {whitelist.length === 0 && (
+                    <p className="mt-1.5 text-[10px] text-amber-500">
+                      Add at least one email to allow access.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Expiry */}
               <div>
                 <p className="mb-2 text-xs font-medium text-[--color-muted] uppercase tracking-wide">
                   Link expires
@@ -137,16 +269,49 @@ export function ShareModal({ conversationId, onClose }: ShareModalProps) {
 
               {error && <p className="text-xs text-red-500">{error}</p>}
 
-              <Button onClick={handleCreate} loading={loading} className="w-full">
+              <Button
+                onClick={handleCreate}
+                loading={loading}
+                disabled={accessType === "WHITELIST" && whitelist.length === 0}
+                className="w-full"
+              >
                 Create share link
               </Button>
             </>
           )}
 
-          {/* Share exists — show URL */}
+          {/* Share exists — show URL + settings summary */}
           {share && (
             <>
-              <p className="text-xs text-[--color-muted]">{formatExpiry(share.expiresAt)}</p>
+              <div className="flex items-center gap-2 rounded-lg border border-[--color-border] bg-[--color-surface-raised] px-2.5 py-1.5 text-xs">
+                <span className={[
+                  "rounded-full px-2 py-0.5 font-medium",
+                  share.shareMode === "INTERACTIVE"
+                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                    : "bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-400",
+                ].join(" ")}>
+                  {share.shareMode === "INTERACTIVE" ? "Interactive" : "Read only"}
+                </span>
+                <span className="rounded-full border border-[--color-border] px-2 py-0.5 font-medium text-[--color-muted]">
+                  {share.accessType === "WHITELIST"
+                    ? `Whitelist (${share.whitelist?.length ?? 0})`
+                    : "Anyone (login req.)"}
+                </span>
+                <span className="ml-auto text-[--color-muted]">{formatExpiry(share.expiresAt)}</span>
+              </div>
+
+              {share.accessType === "WHITELIST" && (share.whitelist?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {share.whitelist.map((email) => (
+                    <span
+                      key={email}
+                      className="rounded-full border border-[--color-border] bg-[--color-surface-raised] px-2 py-0.5 text-[11px] text-[--color-muted]"
+                    >
+                      {email}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               <div className="flex items-center gap-2 rounded-lg border border-[--color-border] bg-[--color-surface-raised] px-3 py-2">
                 <p className="flex-1 truncate text-xs font-mono text-[--color-muted]">

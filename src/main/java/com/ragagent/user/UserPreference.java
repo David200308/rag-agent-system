@@ -25,6 +25,10 @@ public class UserPreference {
     @Column(nullable = false, length = 64)
     private String timezone = "UTC";
 
+    /** Display name of the user's selected model; null means use the system default. */
+    @Column(name = "selected_model", length = 100)
+    private String selectedModel;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 

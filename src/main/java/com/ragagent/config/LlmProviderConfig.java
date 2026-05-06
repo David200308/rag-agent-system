@@ -47,6 +47,7 @@ public class LlmProviderConfig {
             case "anthropic"  -> buildAnthropic(props.getAnthropic());
             case "openrouter" -> buildOpenRouter(props.getOpenrouter());
             case "local"      -> buildLocal(props.getLocal());
+            case "deepseek"   -> buildDeepSeek(props.getDeepseek());
             default           -> buildOpenAi(props.getOpenai());
         };
     }
@@ -107,6 +108,23 @@ public class LlmProviderConfig {
                 .temperature((double) p.getTemperature())
                 .build();
 
+        return OpenAiChatModel.builder().openAiApi(api).defaultOptions(options).build();
+    }
+
+    // ── DeepSeek (OpenAI-compatible endpoint) ────────────────────────────────
+
+    private ChatModel buildDeepSeek(LlmProperties.DeepSeekProps p) {
+        log.info("[LlmProviderConfig] DeepSeek model={}", p.getModel());
+        // DeepSeek's base URL already ends with /v1 — strip it to avoid double /v1.
+        String baseUrl = p.getBaseUrl().replaceAll("/v1$", "");
+        var api = OpenAiApi.builder()
+                .baseUrl(baseUrl)
+                .apiKey(p.getApiKey())
+                .build();
+        var options = OpenAiChatOptions.builder()
+                .model(p.getModel())
+                .temperature((double) p.getTemperature())
+                .build();
         return OpenAiChatModel.builder().openAiApi(api).defaultOptions(options).build();
     }
 

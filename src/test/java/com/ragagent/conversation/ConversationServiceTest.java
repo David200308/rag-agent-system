@@ -183,7 +183,8 @@ class ConversationServiceTest {
                 .thenReturn(Optional.empty());
         when(shareRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        ConversationShare share = conversationService.createShare("c1", "owner@test.com", 7);
+        ConversationShare share = conversationService.createShare(
+                "c1", "owner@test.com", 7, "READ_ONLY", "EVERYONE", List.of());
 
         assertThat(share.getConversationId()).isEqualTo("c1");
         assertThat(share.getOwnerEmail()).isEqualTo("owner@test.com");
@@ -196,7 +197,8 @@ class ConversationServiceTest {
         when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
 
         assertThatThrownBy(() ->
-                conversationService.createShare("c1", "other@test.com", null))
+                conversationService.createShare("c1", "other@test.com", null,
+                        "READ_ONLY", "EVERYONE", List.of()))
                 .isInstanceOf(SecurityException.class);
     }
 
@@ -208,10 +210,122 @@ class ConversationServiceTest {
                 .thenReturn(Optional.empty());
         when(shareRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        ConversationShare share = conversationService.createShare("c1", "owner@test.com", null);
+        ConversationShare share = conversationService.createShare(
+                "c1", "owner@test.com", null, "READ_ONLY", "EVERYONE", List.of());
 
         assertThat(share.getExpiresAt()).isNull();
         assertThat(share.isActive()).isTrue();
+    }
+
+    @Test
+    void createShare_interactiveMode_setsShareMode() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+        when(shareRepo.findByConversationIdAndOwnerEmail("c1", "owner@test.com"))
+                .thenReturn(Optional.empty());
+        when(shareRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        ConversationShare share = conversationService.createShare(
+                "c1", "owner@test.com", null, "INTERACTIVE", "EVERYONE", List.of());
+
+        assertThat(share.getShareMode()).isEqualTo("INTERACTIVE");
+    }
+
+    @Test
+    void createShare_whitelistMode_setsAccessType() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+        when(shareRepo.findByConversationIdAndOwnerEmail("c1", "owner@test.com"))
+                .thenReturn(Optional.empty());
+        when(shareRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        ConversationShare share = conversationService.createShare(
+                "c1", "owner@test.com", null, "READ_ONLY", "WHITELIST",
+                List.of("a@test.com", "b@test.com"));
+
+        assertThat(share.getAccessType()).isEqualTo("WHITELIST");
+    }
+
+    // ── setConversationModel ──────────────────────────────────────────────────
+
+    @Test
+    void setConversationModel_ownerSetsModel() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+        when(conversationRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        Conversation result = conversationService.setConversationModel("c1", "owner@test.com", "GPT-4o");
+
+        assertThat(result.getSelectedModel()).isEqualTo("GPT-4o");
+    }
+
+    @Test
+    void setConversationModel_nullDisplayName_clearsModel() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        conv.setSelectedModel("GPT-4o");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+        when(conversationRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        Conversation result = conversationService.setConversationModel("c1", "owner@test.com", null);
+
+        assertThat(result.getSelectedModel()).isNull();
+    }
+
+    @Test
+    void setConversationModel_blankDisplayName_clearsModel() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        conv.setSelectedModel("GPT-4o");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+        when(conversationRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        Conversation result = conversationService.setConversationModel("c1", "owner@test.com", "  ");
+
+        assertThat(result.getSelectedModel()).isNull();
+    }
+
+    @Test
+    void setConversationModel_nonOwnerThrowsSecurityException() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+
+        assertThatThrownBy(() ->
+                conversationService.setConversationModel("c1", "other@test.com", "GPT-4o"))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test
+    void setConversationModel_notFound_throwsIllegalArgument() {
+        when(conversationRepo.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                conversationService.setConversationModel("missing", "owner@test.com", "GPT-4o"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ── getConversationModel ──────────────────────────────────────────────────
+
+    @Test
+    void getConversationModel_returnsStoredModel() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        conv.setSelectedModel("Claude-Sonnet");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+
+        assertThat(conversationService.getConversationModel("c1")).isEqualTo("Claude-Sonnet");
+    }
+
+    @Test
+    void getConversationModel_noModelSet_returnsNull() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+
+        assertThat(conversationService.getConversationModel("c1")).isNull();
+    }
+
+    @Test
+    void getConversationModel_notFound_returnsNull() {
+        when(conversationRepo.findById("missing")).thenReturn(Optional.empty());
+
+        assertThat(conversationService.getConversationModel("missing")).isNull();
     }
 
     // ── listConversations ─────────────────────────────────────────────────────

@@ -128,49 +128,61 @@ if [ "$MODE" = "local" ]; then
   prompt MYSQL_USER          "Database user"  "ragagent"
   prompt MYSQL_PASSWORD      "User password"  "ragagent"    true
 
-  # ── LLM provider ──────────────────────────────────────────────────────────
-  header "LLM Provider"
-  echo -e "  Options: ${BOLD}openai${NC} · anthropic · openrouter · local"
-  prompt LLM_PROVIDER "Provider" "openai"
+  # ── LLM providers ─────────────────────────────────────────────────────────
+  header "LLM Providers"
+  echo -e "  Configure API keys for each provider. Users can select any enabled model."
+  echo -e "  The default provider is used when a user has no model preference set."
+  echo -e "  Leave an API key blank to skip that provider."
+  echo ""
+  echo -e "  Supported: ${BOLD}openai${NC} · anthropic · openrouter · deepseek · local"
+  prompt LLM_PROVIDER "Default provider" "openai"
 
+  echo ""
+  echo -e "  ${BOLD}OpenAI${NC}  (api.openai.com)"
+  prompt OPENAI_API_KEY "API key" "" true
+  prompt OPENAI_MODEL   "Default model" "gpt-4o-mini"
+
+  echo ""
+  echo -e "  ${BOLD}Anthropic${NC}  (api.anthropic.com)"
+  prompt ANTHROPIC_API_KEY "API key" "" true
+  prompt ANTHROPIC_MODEL   "Default model" "claude-opus-4-6"
+
+  echo ""
+  echo -e "  ${BOLD}OpenRouter${NC}  (openrouter.ai)"
+  prompt OPENROUTER_API_KEY "API key" "" true
+  prompt OPENROUTER_MODEL   "Default model" "openai/gpt-4o-mini"
+
+  echo ""
+  echo -e "  ${BOLD}DeepSeek${NC}  (api.deepseek.com)"
+  echo -e "  ${DIM}Models: deepseek-chat (V3) · deepseek-reasoner (R1)${NC}"
+  prompt DEEPSEEK_API_KEY "API key" "" true
+  prompt DEEPSEEK_MODEL   "Default model" "deepseek-chat"
+
+  echo ""
+  echo -e "  ${BOLD}Local LLM${NC}  (Ollama / LM Studio / llama.cpp)"
+  LOCAL_LLM_URL="http://host.docker.internal:11434"
+  LOCAL_LLM_MODEL="llama3"
+  LOCAL_EMBEDDING_MODEL="nomic-embed-text"
+  if confirm "Configure local LLM?"; then
+    prompt LOCAL_LLM_URL         "Base URL"        "http://host.docker.internal:11434"
+    prompt LOCAL_LLM_MODEL       "Chat model"      "llama3"
+    prompt LOCAL_EMBEDDING_MODEL "Embedding model" "nomic-embed-text"
+  fi
+
+  # Validate default provider
   case "$LLM_PROVIDER" in
-    openai)
-      prompt OPENAI_API_KEY "OpenAI API key"   ""        true
-      prompt OPENAI_MODEL   "Model"            "gpt-4o-mini"
-      ANTHROPIC_API_KEY=""; ANTHROPIC_MODEL="claude-opus-4-6"
-      OPENROUTER_API_KEY=""; OPENROUTER_MODEL="openai/gpt-4o-mini"
-      LOCAL_LLM_URL="http://host.docker.internal:11434"
-      LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
-      ;;
-    anthropic)
-      prompt ANTHROPIC_API_KEY "Anthropic API key" "" true
-      prompt ANTHROPIC_MODEL   "Model"             "claude-opus-4-6"
-      OPENAI_API_KEY=""; OPENAI_MODEL="gpt-4o-mini"
-      OPENROUTER_API_KEY=""; OPENROUTER_MODEL="openai/gpt-4o-mini"
-      LOCAL_LLM_URL="http://host.docker.internal:11434"
-      LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
-      ;;
-    openrouter)
-      prompt OPENROUTER_API_KEY "OpenRouter API key" "" true
-      prompt OPENROUTER_MODEL   "Model"              "openai/gpt-4o-mini"
-      OPENAI_API_KEY=""; OPENAI_MODEL="gpt-4o-mini"
-      ANTHROPIC_API_KEY=""; ANTHROPIC_MODEL="claude-opus-4-6"
-      LOCAL_LLM_URL="http://host.docker.internal:11434"
-      LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
-      ;;
-    local)
-      prompt LOCAL_LLM_URL        "LLM base URL"      "http://host.docker.internal:11434"
-      prompt LOCAL_LLM_MODEL      "Chat model"        "llama3"
-      prompt LOCAL_EMBEDDING_MODEL "Embedding model"  "nomic-embed-text"
-      OPENAI_API_KEY=""; OPENAI_MODEL="gpt-4o-mini"
-      ANTHROPIC_API_KEY=""; ANTHROPIC_MODEL="claude-opus-4-6"
-      OPENROUTER_API_KEY=""; OPENROUTER_MODEL="openai/gpt-4o-mini"
-      ;;
+    openai|anthropic|openrouter|deepseek|local) ;;
     *)
-      echo -e "${RED}Unknown provider '$LLM_PROVIDER'. Expected: openai | anthropic | openrouter | local${NC}"
+      echo -e "${RED}Unknown provider '$LLM_PROVIDER'. Expected: openai | anthropic | openrouter | deepseek | local${NC}"
       exit 1
       ;;
   esac
+
+  echo ""
+  echo -e "  ${BOLD}Default model${NC}"
+  echo -e "  ${DIM}Optional: display name of a model config (create via POST /api/v1/models after startup).${NC}"
+  echo -e "  ${DIM}Used when no user or conversation model preference is set. Leave blank to use the provider default.${NC}"
+  prompt DEFAULT_MODEL "Default model display name" ""
 
   # ── Auth ───────────────────────────────────────────────────────────────────
   header "Auth"
@@ -247,8 +259,12 @@ MYSQL_DB=$MYSQL_DB
 MYSQL_USER=$MYSQL_USER
 MYSQL_PASSWORD=$MYSQL_PASSWORD
 
-# ── LLM provider: openai | anthropic | openrouter | local ─────────────────────
+# ── LLM providers: openai | anthropic | openrouter | deepseek | local ────────
+# LLM_PROVIDER is the raw fallback when no model is selected at any level.
+# DEFAULT_MODEL (display name of a model_configs entry) sits above LLM_PROVIDER.
+# Priority: conversation model → user model → DEFAULT_MODEL → LLM_PROVIDER
 LLM_PROVIDER=$LLM_PROVIDER
+DEFAULT_MODEL=$DEFAULT_MODEL
 
 OPENAI_API_KEY=$OPENAI_API_KEY
 OPENAI_MODEL=$OPENAI_MODEL
@@ -258,6 +274,9 @@ ANTHROPIC_MODEL=$ANTHROPIC_MODEL
 
 OPENROUTER_API_KEY=$OPENROUTER_API_KEY
 OPENROUTER_MODEL=$OPENROUTER_MODEL
+
+DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY
+DEEPSEEK_MODEL=$DEEPSEEK_MODEL
 
 LOCAL_LLM_URL=$LOCAL_LLM_URL
 LOCAL_LLM_MODEL=$LOCAL_LLM_MODEL
@@ -401,64 +420,80 @@ else
     echo -e "  ${DIM}Keeping existing MySQL secrets.${NC}"
   fi
 
-  # ── LLM provider ──────────────────────────────────────────────────────────
-  header "LLM Provider"
+  # ── LLM providers ─────────────────────────────────────────────────────────
+  header "LLM Providers"
   UPDATE_LLM=true
-  if has_secret openai_api_key || has_secret anthropic_api_key || has_secret openrouter_api_key; then
-    echo -e "  ${DIM}LLM provider already configured ($(read_prod LLM_PROVIDER openai)).${NC}"
+  if has_secret openai_api_key || has_secret anthropic_api_key || has_secret openrouter_api_key || has_secret deepseek_api_key; then
+    echo -e "  ${DIM}LLM providers already configured (default: $(read_prod LLM_PROVIDER openai)).${NC}"
     if ! confirm "Update LLM provider settings?"; then UPDATE_LLM=false; fi
   fi
   if $UPDATE_LLM; then
-    echo -e "  Options: ${BOLD}openai${NC} · anthropic · openrouter · local"
-    prompt LLM_PROVIDER "Provider" "openai"
-    # Blank placeholders keep Docker happy when a provider's secret isn't used
-    write_secret openai_api_key     ""
-    write_secret anthropic_api_key  ""
-    write_secret openrouter_api_key ""
+    echo -e "  Configure API keys for each provider. Users can select any enabled model."
+    echo -e "  The default provider is used when a user has no model preference set."
+    echo -e "  Leave an API key blank to skip that provider."
+    echo ""
+    echo -e "  Supported: ${BOLD}openai${NC} · anthropic · openrouter · deepseek · local"
+    prompt LLM_PROVIDER "Default provider" "openai"
+
+    echo ""
+    echo -e "  ${BOLD}OpenAI${NC}  (api.openai.com)"
+    prompt OPENAI_API_KEY "API key" "" true
+    prompt OPENAI_MODEL   "Default model" "gpt-4o-mini"
+
+    echo ""
+    echo -e "  ${BOLD}Anthropic${NC}  (api.anthropic.com)"
+    prompt ANTHROPIC_API_KEY "API key" "" true
+    prompt ANTHROPIC_MODEL   "Default model" "claude-opus-4-6"
+
+    echo ""
+    echo -e "  ${BOLD}OpenRouter${NC}  (openrouter.ai)"
+    prompt OPENROUTER_API_KEY "API key" "" true
+    prompt OPENROUTER_MODEL   "Default model" "openai/gpt-4o-mini"
+
+    echo ""
+    echo -e "  ${BOLD}DeepSeek${NC}  (api.deepseek.com)"
+    echo -e "  ${DIM}Models: deepseek-chat (V3) · deepseek-reasoner (R1)${NC}"
+    prompt DEEPSEEK_API_KEY "API key" "" true
+    prompt DEEPSEEK_MODEL   "Default model" "deepseek-chat"
+
+    echo ""
+    echo -e "  ${BOLD}Local LLM${NC}  (Ollama / LM Studio / llama.cpp)"
+    LOCAL_LLM_URL="http://host.docker.internal:11434"
+    LOCAL_LLM_MODEL="llama3"
+    LOCAL_EMBEDDING_MODEL="nomic-embed-text"
+    if confirm "Configure local LLM?"; then
+      prompt LOCAL_LLM_URL         "Base URL"        "http://host.docker.internal:11434"
+      prompt LOCAL_LLM_MODEL       "Chat model"      "llama3"
+      prompt LOCAL_EMBEDDING_MODEL "Embedding model" "nomic-embed-text"
+    fi
+
+    # Validate default provider
     case "$LLM_PROVIDER" in
-      openai)
-        prompt OPENAI_API_KEY "OpenAI API key" "" true
-        prompt OPENAI_MODEL   "Model"          "gpt-4o-mini"
-        write_secret openai_api_key "$OPENAI_API_KEY"
-        ANTHROPIC_MODEL="claude-opus-4-6"
-        OPENROUTER_MODEL="openai/gpt-4o-mini"
-        LOCAL_LLM_URL="http://host.docker.internal:11434"
-        LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
-        ;;
-      anthropic)
-        prompt ANTHROPIC_API_KEY "Anthropic API key" "" true
-        prompt ANTHROPIC_MODEL   "Model"             "claude-opus-4-6"
-        write_secret anthropic_api_key "$ANTHROPIC_API_KEY"
-        OPENAI_MODEL="gpt-4o-mini"
-        OPENROUTER_MODEL="openai/gpt-4o-mini"
-        LOCAL_LLM_URL="http://host.docker.internal:11434"
-        LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
-        ;;
-      openrouter)
-        prompt OPENROUTER_API_KEY "OpenRouter API key" "" true
-        prompt OPENROUTER_MODEL   "Model"              "openai/gpt-4o-mini"
-        write_secret openrouter_api_key "$OPENROUTER_API_KEY"
-        OPENAI_MODEL="gpt-4o-mini"
-        ANTHROPIC_MODEL="claude-opus-4-6"
-        LOCAL_LLM_URL="http://host.docker.internal:11434"
-        LOCAL_LLM_MODEL="llama3"; LOCAL_EMBEDDING_MODEL="nomic-embed-text"
-        ;;
-      local)
-        prompt LOCAL_LLM_URL         "LLM base URL"    "http://host.docker.internal:11434"
-        prompt LOCAL_LLM_MODEL       "Chat model"      "llama3"
-        prompt LOCAL_EMBEDDING_MODEL "Embedding model" "nomic-embed-text"
-        OPENAI_MODEL="gpt-4o-mini"; ANTHROPIC_MODEL="claude-opus-4-6"; OPENROUTER_MODEL="openai/gpt-4o-mini"
-        ;;
+      openai|anthropic|openrouter|deepseek|local) ;;
       *)
-        echo -e "${RED}Unknown provider '$LLM_PROVIDER'. Expected: openai | anthropic | openrouter | local${NC}"
+        echo -e "${RED}Unknown provider '$LLM_PROVIDER'. Expected: openai | anthropic | openrouter | deepseek | local${NC}"
         exit 1
         ;;
     esac
+
+    echo ""
+    echo -e "  ${BOLD}Default model${NC}"
+    echo -e "  ${DIM}Optional: display name of a model config (create via POST /api/v1/models after startup).${NC}"
+    echo -e "  ${DIM}Used when no user or conversation model preference is set. Leave blank to use the provider default.${NC}"
+    prompt DEFAULT_MODEL "Default model display name" ""
+
+    # Write all provider secrets (blank = provider disabled)
+    write_secret openai_api_key     "$OPENAI_API_KEY"
+    write_secret anthropic_api_key  "$ANTHROPIC_API_KEY"
+    write_secret openrouter_api_key "$OPENROUTER_API_KEY"
+    write_secret deepseek_api_key   "$DEEPSEEK_API_KEY"
   else
     LLM_PROVIDER="$(read_prod LLM_PROVIDER openai)"
+    DEFAULT_MODEL="$(read_prod DEFAULT_MODEL "")"
     OPENAI_MODEL="$(read_prod OPENAI_MODEL gpt-4o-mini)"
     ANTHROPIC_MODEL="$(read_prod ANTHROPIC_MODEL claude-opus-4-6)"
     OPENROUTER_MODEL="$(read_prod OPENROUTER_MODEL openai/gpt-4o-mini)"
+    DEEPSEEK_MODEL="$(read_prod DEEPSEEK_MODEL deepseek-chat)"
     LOCAL_LLM_URL="$(read_prod LOCAL_LLM_URL http://host.docker.internal:11434)"
     LOCAL_LLM_MODEL="$(read_prod LOCAL_LLM_MODEL llama3)"
     LOCAL_EMBEDDING_MODEL="$(read_prod LOCAL_EMBEDDING_MODEL nomic-embed-text)"
@@ -650,9 +685,11 @@ MYSQL_DB=$MYSQL_DB
 MYSQL_USER=$MYSQL_USER
 
 LLM_PROVIDER=$LLM_PROVIDER
+DEFAULT_MODEL=${DEFAULT_MODEL:-}
 OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
 ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-opus-4-6}
 OPENROUTER_MODEL=${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
 LOCAL_LLM_URL=${LOCAL_LLM_URL:-http://host.docker.internal:11434}
 LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-llama3}
 LOCAL_EMBEDDING_MODEL=${LOCAL_EMBEDDING_MODEL:-nomic-embed-text}

@@ -26,4 +26,19 @@ public class UserPreferenceService {
         pref.setUpdatedAt(Instant.now());
         return repo.save(pref);
     }
+
+    @Transactional
+    public UserPreference setSelectedModel(String email, String displayName) {
+        UserPreference pref = repo.findByEmail(email)
+                .orElseGet(() -> new UserPreference(email, "UTC"));
+        pref.setSelectedModel(displayName);
+        pref.setUpdatedAt(Instant.now());
+        return repo.save(pref);
+    }
+
+    public String getSelectedModel(String email) {
+        return repo.findByEmail(email)
+                .map(UserPreference::getSelectedModel)
+                .orElse(null);
+    }
 }

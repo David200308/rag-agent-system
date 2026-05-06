@@ -1,11 +1,14 @@
 package com.ragagent.agent.nodes;
 
 import com.ragagent.agent.state.AgentState;
+import com.ragagent.config.ChatModelFactory;
 import com.ragagent.config.LlmProperties;
 import com.ragagent.connector.GoogleDocsAgentTool;
 import com.ragagent.connector.GoogleSheetsAgentTool;
 import com.ragagent.connector.GoogleSlidesAgentTool;
 import com.ragagent.connector.TelegramAgentTool;
+import com.ragagent.model.ModelConfig;
+import com.ragagent.model.ModelConfigService;
 import com.ragagent.schema.AgentRequest;
 import com.ragagent.schema.AgentResponse;
 import com.ragagent.schema.DocumentResult;
@@ -36,6 +39,8 @@ public class GeneratorNode {
 
     private final ChatClient            chatClient;
     private final LlmProperties         llmProperties;
+    private final ModelConfigService    modelConfigService;
+    private final ChatModelFactory      chatModelFactory;
     private final GoogleDocsAgentTool   googleDocsTool;
     private final GoogleSheetsAgentTool googleSheetsTool;
     private final GoogleSlidesAgentTool googleSlidesTool;
@@ -53,10 +58,13 @@ public class GeneratorNode {
             - writeToGoogleSheets: call when the user asks to save tabular data or tables to Google Sheets
             - writeToGoogleSlides: call when the user asks to create a presentation in Google Slides
 
-            TELEGRAM TOOL:
+            TELEGRAM TOOLS:
             - sendTelegramMessage: call when the user says "send this to my Telegram", \
             "message me on Telegram", "notify me via Telegram", or similar phrases. \
             Pass the message content the user wants to receive.
+            - createTelegramGroupSession: call ONLY in a shared conversation when the user asks \
+            to "send to Telegram", "create a Telegram group", or "notify both of us on Telegram". \
+            This sends the content to both the conversation owner and the current user's Telegram.
 
             CRITICAL RULES for Google Workspace requests:
             1. When the user provides any docs.google.com URL, you MUST call the matching read tool \
@@ -88,22 +96,33 @@ public class GeneratorNode {
         List<DocumentResult> docs = state.documents();
 
         String userPrompt = buildPrompt(request.query(), analysis, docs, request.conversationHistory());
-        String userEmail  = state.userEmail().orElse(null);
+        String userEmail       = state.userEmail().orElse(null);
+        String shareOwnerEmail = state.shareOwnerEmail().orElse(null);
 
-        log.debug("[GeneratorNode] Generating answer (docs={})", docs.size());
+        ModelConfig selectedConfig = state.selectedModelDisplayName()
+                .flatMap(modelConfigService::findByDisplayName)
+                .filter(ModelConfig::isEnabled)
+                .orElse(null);
+        ChatClient effectiveClient = selectedConfig != null
+                ? chatModelFactory.buildChatClient(selectedConfig)
+                : chatClient;
+
+        log.debug("[GeneratorNode] Generating answer (docs={} model={})", docs.size(),
+                selectedConfig != null ? selectedConfig.getDisplayName() : "default");
 
         // Inject per-request email so tools know which token to use
         googleDocsTool.setCurrentEmail(userEmail);
         googleSheetsTool.setCurrentEmail(userEmail);
         googleSlidesTool.setCurrentEmail(userEmail);
         telegramTool.setCurrentEmail(userEmail);
+        telegramTool.setShareOwnerEmail(shareOwnerEmail);
         String answer;
         try {
             ToolCallbackProvider tools = MethodToolCallbackProvider.builder()
                     .toolObjects(googleDocsTool, googleSheetsTool, googleSlidesTool, telegramTool)
                     .build();
 
-            answer = chatClient.prompt()
+            answer = effectiveClient.prompt()
                     .system(SYSTEM_PROMPT)
                     .user(userPrompt)
                     .toolCallbacks(tools)
@@ -114,6 +133,7 @@ public class GeneratorNode {
             googleSheetsTool.clearCurrentEmail();
             googleSlidesTool.clearCurrentEmail();
             telegramTool.clearCurrentEmail();
+            telegramTool.clearShareOwnerEmail();
         }
 
         AgentResponse response = new AgentResponse(
@@ -131,7 +151,7 @@ public class GeneratorNode {
                         Instant.now(),
                         System.currentTimeMillis() - start,
                         docs.size(),
-                        resolveModelName(),
+                        selectedConfig != null ? selectedConfig.getModelId() : resolveModelName(),
                         null   // conversationId injected by AgentController after persistence
                 )
         );
@@ -190,6 +210,7 @@ public class GeneratorNode {
             case "anthropic"  -> llmProperties.getAnthropic().getModel();
             case "openrouter" -> llmProperties.getOpenrouter().getModel();
             case "local"      -> llmProperties.getLocal().getModel();
+            case "deepseek"   -> llmProperties.getDeepseek().getModel();
             default           -> llmProperties.getOpenai().getModel();
         };
     }

@@ -11,6 +11,10 @@ import org.springframework.validation.annotation.Validated;
  *   LLM_PROVIDER=openai      → uses llm.openai.*
  *   LLM_PROVIDER=anthropic   → uses llm.anthropic.*
  *   LLM_PROVIDER=openrouter  → uses llm.openrouter.*
+ *   LLM_PROVIDER=deepseek    → uses llm.deepseek.*
+ *
+ * Set DEFAULT_MODEL to a model_configs display name to override which model is used
+ * as the system default (sits below per-conversation and per-user selection).
  */
 @Validated
 @ConfigurationProperties(prefix = "llm")
@@ -18,6 +22,13 @@ public class LlmProperties {
 
     @NotBlank
     private String provider = "openai";
+
+    /**
+     * Optional: display name of a model_configs entry to use as the system default.
+     * When set, all queries without a conversation/user model preference use this model.
+     * Leave blank to fall back to the raw LLM_PROVIDER + its configured model.
+     */
+    private String defaultModel;
 
     // Optional: override which provider handles embeddings independently of the chat LLM.
     // Defaults to null (inherits from provider). Set EMBEDDING_PROVIDER=local to use Ollama.
@@ -27,11 +38,15 @@ public class LlmProperties {
     private AnthropicProps anthropic = new AnthropicProps();
     private OpenRouterProps openrouter = new OpenRouterProps();
     private LocalProps local = new LocalProps();
+    private DeepSeekProps deepseek = new DeepSeekProps();
 
     // ── Getters / Setters ─────────────────────────────────────────────────
 
     public String getProvider() { return provider; }
     public void setProvider(String provider) { this.provider = provider; }
+
+    public String getDefaultModel() { return defaultModel; }
+    public void setDefaultModel(String defaultModel) { this.defaultModel = defaultModel; }
 
     public String getEmbeddingProvider() { return embeddingProvider; }
     public void setEmbeddingProvider(String embeddingProvider) { this.embeddingProvider = embeddingProvider; }
@@ -47,6 +62,9 @@ public class LlmProperties {
 
     public LocalProps getLocal() { return local; }
     public void setLocal(LocalProps local) { this.local = local; }
+
+    public DeepSeekProps getDeepseek() { return deepseek; }
+    public void setDeepseek(DeepSeekProps deepseek) { this.deepseek = deepseek; }
 
     // ── Nested config classes ─────────────────────────────────────────────
 
@@ -111,6 +129,26 @@ public class LlmProperties {
         public void   setSiteUrl(String v)  { this.siteUrl = v; }
         public String getSiteName()    { return siteName; }
         public void   setSiteName(String v) { this.siteName = v; }
+    }
+
+    /**
+     * DeepSeek — OpenAI-compatible endpoint.
+     * Models: deepseek-chat (DeepSeek-V3), deepseek-reasoner (DeepSeek-R1)
+     */
+    public static class DeepSeekProps {
+        private String apiKey  = "";
+        private String baseUrl = "https://api.deepseek.com";
+        private String model   = "deepseek-chat";
+        private double temperature = 0.1;
+
+        public String getApiKey()      { return apiKey; }
+        public void   setApiKey(String v)   { this.apiKey = v; }
+        public String getBaseUrl()     { return baseUrl; }
+        public void   setBaseUrl(String v)  { this.baseUrl = v; }
+        public String getModel()       { return model; }
+        public void   setModel(String v)    { this.model = v; }
+        public double getTemperature() { return temperature; }
+        public void   setTemperature(double v) { this.temperature = v; }
     }
 
     /**

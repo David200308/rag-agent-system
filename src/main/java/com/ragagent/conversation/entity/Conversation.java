@@ -24,6 +24,10 @@ public class Conversation {
     @Column(name = "archived", nullable = false)
     private boolean archived = false;
 
+    /** Model display name to use for this conversation; null = user/system default. */
+    @Column(name = "selected_model", length = 100)
+    private String selectedModel;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 

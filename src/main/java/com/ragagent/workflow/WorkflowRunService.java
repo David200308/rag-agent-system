@@ -1,6 +1,9 @@
 package com.ragagent.workflow;
 
 import com.ragagent.auth.service.EmailService;
+import com.ragagent.config.ChatModelFactory;
+import com.ragagent.config.LlmProperties;
+import com.ragagent.model.ModelConfigService;
 import com.ragagent.sandbox.SandboxService;
 import com.ragagent.skill.SkillService;
 import com.ragagent.webfetch.WebFetchService;
@@ -64,6 +67,9 @@ public class WorkflowRunService {
     private final WebFetchService          webFetchService;
     private final SkillService             skillService;
     private final ChatClient               chatClient;
+    private final ChatModelFactory         chatModelFactory;
+    private final ModelConfigService       modelConfigService;
+    private final LlmProperties            llmProperties;
     private final EmailService             emailService;
 
     /** Active SSE emitters keyed by runId. */
@@ -175,9 +181,22 @@ public class WorkflowRunService {
 
             emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "Sandbox ready.");
 
+            // Resolve ChatClient: workflow model → configured DEFAULT_MODEL → raw provider
+            String modelName = workflow.getSelectedModel();
+            if (modelName == null) {
+                String dm = llmProperties.getDefaultModel();
+                if (dm != null && !dm.isBlank()) modelName = dm;
+            }
+            ChatClient effectiveClient = modelName != null
+                    ? modelConfigService.findByDisplayName(modelName)
+                        .filter(com.ragagent.model.ModelConfig::isEnabled)
+                        .map(chatModelFactory::buildChatClient)
+                        .orElse(chatClient)
+                    : chatClient;
+
             String output = switch (workflow.getAgentPattern()) {
-                case ORCHESTRATOR -> executeOrchestrator(run, agents, containerId);
-                case TEAM         -> executeTeam(run, workflow, agents, containerId);
+                case ORCHESTRATOR -> executeOrchestrator(run, agents, containerId, effectiveClient);
+                case TEAM         -> executeTeam(run, workflow, agents, containerId, effectiveClient);
             };
 
             run.setFinalOutput(output);
@@ -240,7 +259,8 @@ public class WorkflowRunService {
 
     // ── Orchestrator pattern ──────────────────────────────────────────────────
 
-    private String executeOrchestrator(WorkflowRun run, List<WorkflowAgent> agents, String containerId) {
+    private String executeOrchestrator(WorkflowRun run, List<WorkflowAgent> agents,
+                                       String containerId, ChatClient effectiveClient) {
         WorkflowAgent mainAgent = agents.stream()
                 .filter(a -> a.getRole() == WorkflowAgent.AgentRole.MAIN)
                 .findFirst()
@@ -251,7 +271,7 @@ public class WorkflowRunService {
                 .toList();
 
         String systemPrompt = buildOrchestratorPrompt(mainAgent, subAgents);
-        return runReActLoop(run, mainAgent, systemPrompt, run.getUserInput(), containerId, subAgents);
+        return runReActLoop(run, mainAgent, systemPrompt, run.getUserInput(), containerId, subAgents, effectiveClient);
     }
 
     private String buildOrchestratorPrompt(WorkflowAgent main, List<WorkflowAgent> subs) {
@@ -292,20 +312,21 @@ public class WorkflowRunService {
     // ── Team pattern ──────────────────────────────────────────────────────────
 
     private String executeTeam(WorkflowRun run, Workflow workflow,
-                               List<WorkflowAgent> agents, String containerId) {
+                               List<WorkflowAgent> agents, String containerId, ChatClient effectiveClient) {
         List<WorkflowAgent> peers = agents.stream()
                 .filter(a -> a.getRole() == WorkflowAgent.AgentRole.PEER)
                 .toList();
         if (peers.isEmpty()) throw new RuntimeException("No PEER agents defined for team workflow");
 
         return switch (workflow.getTeamExecMode()) {
-            case PARALLEL  -> executeTeamParallel(run, peers, containerId);
-            case SEQUENTIAL -> executeTeamSequential(run, peers, containerId);
-            case null -> executeTeamParallel(run, peers, containerId);
+            case PARALLEL   -> executeTeamParallel(run, peers, containerId, effectiveClient);
+            case SEQUENTIAL -> executeTeamSequential(run, peers, containerId, effectiveClient);
+            case null       -> executeTeamParallel(run, peers, containerId, effectiveClient);
         };
     }
 
-    private String executeTeamParallel(WorkflowRun run, List<WorkflowAgent> peers, String containerId) {
+    private String executeTeamParallel(WorkflowRun run, List<WorkflowAgent> peers,
+                                       String containerId, ChatClient effectiveClient) {
         emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM,
                 "Running " + peers.size() + " agents in parallel…");
 
@@ -315,7 +336,7 @@ public class WorkflowRunService {
                             String sysPrompt = (agent.getSystemPrompt() != null ? agent.getSystemPrompt() : "")
                                     + buildSkillSection(workflowService.parseSkillIds(agent))
                                     + buildToolSection(workflowService.parseTools(agent));
-                            return runReActLoop(run, agent, sysPrompt, run.getUserInput(), containerId, List.of());
+                            return runReActLoop(run, agent, sysPrompt, run.getUserInput(), containerId, List.of(), effectiveClient);
                         }, asyncPool))
                 .toList();
 
@@ -329,7 +350,8 @@ public class WorkflowRunService {
         return merged.toString().strip();
     }
 
-    private String executeTeamSequential(WorkflowRun run, List<WorkflowAgent> peers, String containerId) {
+    private String executeTeamSequential(WorkflowRun run, List<WorkflowAgent> peers,
+                                         String containerId, ChatClient effectiveClient) {
         emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM,
                 "Running " + peers.size() + " agents sequentially…");
 
@@ -339,7 +361,7 @@ public class WorkflowRunService {
             String sysPrompt = (agent.getSystemPrompt() != null ? agent.getSystemPrompt() : "")
                     + buildSkillSection(workflowService.parseSkillIds(agent))
                     + buildToolSection(workflowService.parseTools(agent));
-            currentInput = runReActLoop(run, agent, sysPrompt, currentInput, containerId, List.of());
+            currentInput = runReActLoop(run, agent, sysPrompt, currentInput, containerId, List.of(), effectiveClient);
             if (i < peers.size() - 1) {
                 sandboxService.recycleSandbox(containerId);  // clean between sequential steps
             }
@@ -358,7 +380,8 @@ public class WorkflowRunService {
      */
     private String runReActLoop(WorkflowRun run, WorkflowAgent agent,
                                 String systemPrompt, String userInput,
-                                String containerId, List<WorkflowAgent> subAgents) {
+                                String containerId, List<WorkflowAgent> subAgents,
+                                ChatClient effectiveClient) {
 
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of("role", "user", "content", userInput));
@@ -368,7 +391,7 @@ public class WorkflowRunService {
 
         for (int iter = 0; iter < MAX_REACT_ITERATIONS; iter++) {
             String context = buildContext(messages);
-            String llmResponse = chatClient.prompt()
+            String llmResponse = effectiveClient.prompt()
                     .system(systemPrompt)
                     .user(context)
                     .call()
@@ -396,7 +419,7 @@ public class WorkflowRunService {
                     String subPrompt = (subAgent.getSystemPrompt() != null ? subAgent.getSystemPrompt() : "")
                             + buildSkillSection(workflowService.parseSkillIds(subAgent))
                             + buildToolSection(workflowService.parseTools(subAgent));
-                    subResult = runReActLoop(run, subAgent, subPrompt, delegatedTask, containerId, List.of());
+                    subResult = runReActLoop(run, subAgent, subPrompt, delegatedTask, containerId, List.of(), effectiveClient);
                     sandboxService.recycleSandbox(containerId);  // clean workspace between delegations
                 } else {
                     subResult = "[Sub-agent '" + targetName + "' not found]";

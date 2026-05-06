@@ -10,6 +10,9 @@ import org.springframework.stereotype.Component;
  *
  * Email is injected per-request via setCurrentEmail / clearCurrentEmail
  * (same ThreadLocal pattern used by the Google Workspace tools).
+ *
+ * In shared interactive conversations, setShareOwnerEmail injects the
+ * conversation owner's email so createTelegramGroupSession can notify both parties.
  */
 @Slf4j
 @Component
@@ -18,10 +21,14 @@ public class TelegramAgentTool {
 
     private final TelegramService telegramService;
 
-    private static final ThreadLocal<String> CURRENT_EMAIL = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_EMAIL     = new ThreadLocal<>();
+    private static final ThreadLocal<String> SHARE_OWNER_EMAIL = new ThreadLocal<>();
 
-    public void setCurrentEmail(String email) { CURRENT_EMAIL.set(email != null ? email : ""); }
-    public void clearCurrentEmail()           { CURRENT_EMAIL.remove(); }
+    public void setCurrentEmail(String email)     { CURRENT_EMAIL.set(email != null ? email : ""); }
+    public void clearCurrentEmail()               { CURRENT_EMAIL.remove(); }
+
+    public void setShareOwnerEmail(String email)  { SHARE_OWNER_EMAIL.set(email); }
+    public void clearShareOwnerEmail()            { SHARE_OWNER_EMAIL.remove(); }
 
     /**
      * Sends a text message to the user's Telegram account.
@@ -43,6 +50,40 @@ public class TelegramAgentTool {
             return telegramService.sendMessage(email, message);
         } catch (IllegalStateException e) {
             return "Could not send Telegram message: " + e.getMessage();
+        }
+    }
+
+    /**
+     * In a shared interactive conversation, sends the content to both the
+     * conversation owner and the current user via Telegram, creating a group
+     * notification context. Use when the user asks to "send to Telegram",
+     * "create a Telegram group", or "notify both of us on Telegram".
+     *
+     * @param message the text to send to both parties
+     * @return confirmation string describing what was sent
+     */
+    @Tool(description = """
+            In a shared interactive conversation, send content to both the conversation owner
+            and the current user's Telegram accounts, creating a shared Telegram group context.
+            Use this ONLY when this is a shared conversation AND the user asks to "send to Telegram",
+            "create a Telegram group", "notify both of us on Telegram", or similar.
+            Both users must have Telegram connected. Falls back to a single message if not in
+            a shared context.
+            """)
+    public String createTelegramGroupSession(String message) {
+        String visitorEmail = CURRENT_EMAIL.get();
+        String ownerEmail   = SHARE_OWNER_EMAIL.get();
+
+        if (ownerEmail == null || ownerEmail.isBlank()) {
+            return sendTelegramMessage(message);
+        }
+
+        log.info("[TelegramAgentTool] Creating Telegram group session owner='{}' visitor='{}'",
+                ownerEmail, visitorEmail);
+        try {
+            return telegramService.sendGroupNotification(ownerEmail, visitorEmail, message);
+        } catch (Exception e) {
+            return "Could not create Telegram group session: " + e.getMessage();
         }
     }
 }

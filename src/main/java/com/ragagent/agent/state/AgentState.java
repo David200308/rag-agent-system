@@ -24,16 +24,18 @@ import java.util.Optional;
 public class AgentState extends org.bsc.langgraph4j.state.AgentState {
 
     /** Channel definitions — passed to StateGraph as the schema. */
-    public static final Map<String, Channel<?>> SCHEMA = Map.of(
-        "request",        Channels.<AgentRequest>base((cur, upd) -> upd),
-        "queryAnalysis",  Channels.<QueryAnalysis>base((cur, upd) -> upd),
-        "documents",      Channels.appender(java.util.ArrayList::new),
-        "response",       Channels.<AgentResponse>base((cur, upd) -> upd),
-        "route",          Channels.base(() -> QueryAnalysis.Route.RETRIEVE.name()),
-        "error",          Channels.<String>base((cur, upd) -> upd),
-        "fallbackReason", Channels.<String>base((cur, upd) -> upd),
-        "runId",          Channels.<String>base((cur, upd) -> upd),
-        "userEmail",      Channels.<String>base((cur, upd) -> upd)
+    public static final Map<String, Channel<?>> SCHEMA = Map.ofEntries(
+        Map.entry("request",                  Channels.<AgentRequest>base((cur, upd) -> upd)),
+        Map.entry("queryAnalysis",            Channels.<QueryAnalysis>base((cur, upd) -> upd)),
+        Map.entry("documents",                Channels.appender(java.util.ArrayList::new)),
+        Map.entry("response",                 Channels.<AgentResponse>base((cur, upd) -> upd)),
+        Map.entry("route",                    Channels.base(() -> QueryAnalysis.Route.RETRIEVE.name())),
+        Map.entry("error",                    Channels.<String>base((cur, upd) -> upd)),
+        Map.entry("fallbackReason",           Channels.<String>base((cur, upd) -> upd)),
+        Map.entry("runId",                    Channels.<String>base((cur, upd) -> upd)),
+        Map.entry("userEmail",                Channels.<String>base((cur, upd) -> upd)),
+        Map.entry("shareOwnerEmail",          Channels.<String>base((cur, upd) -> upd)),
+        Map.entry("selectedModelDisplayName", Channels.<String>base((cur, upd) -> upd))
     );
 
     public AgentState(Map<String, Object> initData) {
@@ -77,5 +79,13 @@ public class AgentState extends org.bsc.langgraph4j.state.AgentState {
 
     public Optional<String> userEmail() {
         return value("userEmail");
+    }
+
+    public Optional<String> shareOwnerEmail() {
+        return value("shareOwnerEmail");
+    }
+
+    public Optional<String> selectedModelDisplayName() {
+        return value("selectedModelDisplayName");
     }
 }

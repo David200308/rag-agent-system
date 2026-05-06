@@ -2,6 +2,7 @@ package com.ragagent.controller;
 
 import com.ragagent.agent.RagAgentGraph;
 import com.ragagent.agent.state.AgentState;
+import com.ragagent.config.LlmProperties;
 import com.ragagent.conversation.ConversationService;
 import com.ragagent.conversation.entity.ConversationMessage;
 import com.ragagent.knowledge.KnowledgeSourceService;
@@ -11,6 +12,7 @@ import com.ragagent.rag.DocumentIngestionService;
 import com.ragagent.schema.AgentRequest;
 import com.ragagent.schema.AgentResponse;
 import com.ragagent.schema.UrlIngestionResult;
+import com.ragagent.user.UserPreferenceService;
 import com.ragagent.webfetch.WebFetchService;
 import com.ragagent.webfetch.entity.WebFetchWhitelist;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,6 +54,8 @@ public class AgentController {
     private final ConversationService      conversationService;
     private final KnowledgeSourceService   knowledgeSourceService;
     private final WebFetchService          webFetchService;
+    private final UserPreferenceService    userPreferenceService;
+    private final LlmProperties            llmProperties;
 
     // ── Query ─────────────────────────────────────────────────────────────────
 
@@ -79,6 +83,18 @@ public class AgentController {
             initData.put("runId", runId);
             if (userEmail != null) {
                 initData.put("userEmail", userEmail);
+            }
+            // Model priority: conversation → user default → configured DEFAULT_MODEL → raw provider
+            String selectedModel = conversationService.getConversationModel(conversationId);
+            if (selectedModel == null && userEmail != null) {
+                selectedModel = userPreferenceService.getSelectedModel(userEmail);
+            }
+            if (selectedModel == null) {
+                String dm = llmProperties.getDefaultModel();
+                if (dm != null && !dm.isBlank()) selectedModel = dm;
+            }
+            if (selectedModel != null) {
+                initData.put("selectedModelDisplayName", selectedModel);
             }
 
             // Invoke the compiled LangGraph
@@ -128,6 +144,27 @@ public class AgentController {
             return ResponseEntity.status(401).build();
         }
         return ResponseEntity.ok(conversationService.listArchivedConversations(userEmail));
+    }
+
+    @PatchMapping("/conversations/{conversationId}/model")
+    @Operation(summary = "Set the model for a conversation (owner only). Pass null to reset to user/system default.")
+    public ResponseEntity<Map<String, Object>> setConversationModel(
+            @PathVariable String conversationId,
+            @RequestBody Map<String, String> body,
+            HttpServletRequest httpRequest) {
+        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        String displayName = body.get("selectedModel");
+        try {
+            var conv = conversationService.setConversationModel(conversationId, email, displayName);
+            return ResponseEntity.ok(Map.of(
+                    "conversationId", conv.getId(),
+                    "selectedModel", conv.getSelectedModel() != null ? conv.getSelectedModel() : ""
+            ));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @PatchMapping("/conversations/{conversationId}/archive")
@@ -191,7 +228,12 @@ public class AgentController {
 
     /**
      * Create or replace a share link for a conversation.
-     * Body: { "expireDays": 7 }  — omit or set null for no expiry.
+     * Body: {
+     *   "expireDays": 7,          // null = never
+     *   "shareMode":  "READ_ONLY" | "INTERACTIVE",
+     *   "accessType": "EVERYONE"  | "WHITELIST",
+     *   "whitelist":  ["a@b.com"] // required when accessType=WHITELIST
+     * }
      */
     @PostMapping("/conversations/{conversationId}/share")
     @Operation(summary = "Create a shareable link for a conversation (owner only)")
@@ -201,13 +243,27 @@ public class AgentController {
             HttpServletRequest httpRequest) {
 
         String email = (String) httpRequest.getAttribute("authenticatedEmail");
+
         Integer expireDays = null;
-        if (body != null && body.get("expireDays") instanceof Number n) {
-            expireDays = n.intValue();
+        String shareMode   = "READ_ONLY";
+        String accessType  = "EVERYONE";
+        java.util.List<String> whitelist = java.util.List.of();
+
+        if (body != null) {
+            if (body.get("expireDays") instanceof Number n) expireDays = n.intValue();
+            if (body.get("shareMode")  instanceof String s) shareMode  = s;
+            if (body.get("accessType") instanceof String s) accessType = s;
+            if (body.get("whitelist")  instanceof java.util.List<?> l) {
+                whitelist = l.stream()
+                        .filter(e -> e instanceof String)
+                        .map(e -> (String) e)
+                        .toList();
+            }
         }
 
         try {
-            var share = conversationService.createShare(conversationId, email, expireDays);
+            var share = conversationService.createShare(
+                    conversationId, email, expireDays, shareMode, accessType, whitelist);
             return ResponseEntity.ok(shareToMap(share));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
@@ -254,8 +310,11 @@ public class AgentController {
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("token",          share.getToken());
         result.put("conversationId", share.getConversationId());
-        result.put("expiresAt",      share.getExpiresAt());   // null = never expires
+        result.put("expiresAt",      share.getExpiresAt());
         result.put("createdAt",      share.getCreatedAt());
+        result.put("shareMode",      share.getShareMode());
+        result.put("accessType",     share.getAccessType());
+        result.put("whitelist",      share.getWhitelist());
         return result;
     }
 

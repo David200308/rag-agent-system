@@ -19,18 +19,21 @@ public class UserPreferenceController {
 
     @GetMapping("/preferences")
     @Operation(summary = "Get the current user's preferences")
-    public ResponseEntity<Map<String, String>> getPreferences(HttpServletRequest req) {
+    public ResponseEntity<Map<String, Object>> getPreferences(HttpServletRequest req) {
         String email = (String) req.getAttribute("authenticatedEmail");
         if (email == null) {
             return ResponseEntity.status(401).build();
         }
         UserPreference pref = service.getOrDefault(email);
-        return ResponseEntity.ok(Map.of("timezone", pref.getTimezone()));
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("timezone",      pref.getTimezone());
+        result.put("selectedModel", pref.getSelectedModel());
+        return ResponseEntity.ok(result);
     }
 
     @PutMapping("/preferences")
-    @Operation(summary = "Update the current user's preferences")
-    public ResponseEntity<Map<String, String>> updatePreferences(
+    @Operation(summary = "Update the current user's preferences (timezone and/or selectedModel)")
+    public ResponseEntity<Map<String, Object>> updatePreferences(
             @RequestBody Map<String, String> body,
             HttpServletRequest req) {
 
@@ -38,11 +41,21 @@ public class UserPreferenceController {
         if (email == null) {
             return ResponseEntity.status(401).build();
         }
+        UserPreference pref = service.getOrDefault(email);
+
         String timezone = body.get("timezone");
-        if (timezone == null || timezone.isBlank()) {
-            return ResponseEntity.badRequest().build();
+        if (timezone != null && !timezone.isBlank()) {
+            pref = service.setTimezone(email, timezone.trim());
         }
-        UserPreference pref = service.setTimezone(email, timezone.trim());
-        return ResponseEntity.ok(Map.of("timezone", pref.getTimezone()));
+
+        if (body.containsKey("selectedModel")) {
+            String model = body.get("selectedModel");
+            pref = service.setSelectedModel(email, model == null || model.isBlank() ? null : model.trim());
+        }
+
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("timezone",      pref.getTimezone());
+        result.put("selectedModel", pref.getSelectedModel());
+        return ResponseEntity.ok(result);
     }
 }

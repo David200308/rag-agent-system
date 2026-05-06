@@ -122,6 +122,43 @@ public class TelegramService {
         return "Message sent to your Telegram successfully.";
     }
 
+    /**
+     * Sends a message to both the conversation owner and the visitor (shared user).
+     * Used by the createTelegramGroupSession tool in interactive shared conversations.
+     *
+     * The bot acts as a relay — it notifies the owner that the visitor sent a message
+     * and confirms to the visitor that the owner was notified.
+     */
+    public String sendGroupNotification(String ownerEmail, String visitorEmail, String content) {
+        StringBuilder result = new StringBuilder();
+
+        // Notify the owner
+        try {
+            String ownerMsg = (visitorEmail != null && !visitorEmail.isBlank())
+                    ? "Message from shared conversation (sent by " + visitorEmail + "):\n\n" + content
+                    : "Message from a shared conversation:\n\n" + content;
+            sendMessage(ownerEmail, ownerMsg);
+            result.append("Message delivered to the conversation owner via Telegram.");
+        } catch (IllegalStateException e) {
+            result.append("Conversation owner's Telegram is not connected.");
+        }
+
+        // Confirm to the visitor (if distinct from owner and has Telegram)
+        if (visitorEmail != null && !visitorEmail.isBlank()
+                && !visitorEmail.equalsIgnoreCase(ownerEmail)) {
+            try {
+                sendMessage(visitorEmail,
+                        "Your message was forwarded to the conversation owner via Telegram:\n\n" + content);
+                result.append(" Confirmation also sent to your Telegram.");
+            } catch (IllegalStateException ignored) {
+                // Visitor doesn't have Telegram connected — owner notification already sent
+            }
+        }
+
+        log.info("[TelegramService] Group notification sent owner={} visitor={}", ownerEmail, visitorEmail);
+        return result.toString().trim();
+    }
+
     // ── Status / disconnect ───────────────────────────────────────────────────
 
     public boolean isConnected(String ownerEmail) {
