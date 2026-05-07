@@ -248,12 +248,8 @@ public class ConversationService {
             if (!allowed) {
                 throw new SecurityException("Access denied: your email is not on the whitelist.");
             }
-        } else {
-            // EVERYONE — still require login
-            if (callerEmail == null || callerEmail.isBlank()) {
-                throw new SecurityException("Authentication required to access this shared conversation.");
-            }
         }
+        // EVERYONE — anonymous access is allowed
 
         return share;
     }

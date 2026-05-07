@@ -68,9 +68,9 @@ export default function SharedConversationPage() {
     } catch (err: unknown) {
       const errText = err instanceof Error ? err.message : String(err);
       if (errText.includes("401") || errText.includes("Authentication")) {
-        setSendError("You need to be logged in to ask questions here.");
-      } else if (errText.includes("403")) {
-        setSendError("Access denied. Your email may not be on the whitelist.");
+        setSendError("Authentication required. Please log in and try again.");
+      } else if (errText.includes("403") || errText.includes("whitelist")) {
+        setSendError("Access denied — your email is not on the whitelist.");
       } else {
         setSendError("Failed to get a response. Please try again.");
       }
@@ -204,9 +204,10 @@ export default function SharedConversationPage() {
               </button>
             </div>
             <p className="mt-1 text-[10px] text-[--color-muted]">
-              You must be logged in. Messages are added to the shared conversation.
-              {meta?.shareMode === "INTERACTIVE" &&
-                " In interactive mode, the Telegram tool can notify both you and the owner."}
+              {meta?.accessType === "WHITELIST"
+                ? "Login required — your email must be on the whitelist."
+                : "Messages are added to the shared conversation."}
+              {" In interactive mode, the Telegram tool can notify the owner."}
             </p>
           </div>
         </div>

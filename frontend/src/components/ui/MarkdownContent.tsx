@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
+import katex from "katex";
 import { cn } from "@/lib/utils";
 
 interface MarkdownContentProps {
@@ -12,13 +14,75 @@ interface MarkdownContentProps {
   className?: string;
 }
 
-/**
- * Renders assistant message content with full Markdown + LaTeX support.
- *
- * Markdown features: headings, bold/italic, inline code, code blocks,
- * tables, blockquotes, ordered/unordered lists (via remark-gfm).
- * Math: $inline$ and $$block$$ LaTeX via remark-math + rehype-katex.
- */
+function HtmlPreview({ source }: { source: string }) {
+  const [preview, setPreview] = useState(false);
+
+  function autoResize(iframe: HTMLIFrameElement | null) {
+    if (!iframe) return;
+    iframe.onload = () => {
+      try {
+        const h = iframe.contentDocument?.body?.scrollHeight;
+        if (h) iframe.style.height = `${h + 24}px`;
+      } catch {
+        // cross-origin or sandboxed — leave default height
+      }
+    };
+  }
+
+  return (
+    <div className="rounded-lg border border-[--color-border] overflow-hidden my-2">
+      <div className="flex items-center justify-between bg-gray-950 px-4 py-1.5">
+        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">HTML</span>
+        <button
+          onClick={() => setPreview(v => !v)}
+          className="text-[11px] text-blue-400 hover:text-blue-300 font-medium transition-colors"
+        >
+          {preview ? "Source" : "Preview"}
+        </button>
+      </div>
+      {preview ? (
+        <iframe
+          ref={autoResize}
+          srcDoc={source}
+          sandbox="allow-scripts"
+          className="w-full border-0 bg-white"
+          style={{ minHeight: "180px" }}
+          title="HTML Preview"
+        />
+      ) : (
+        <pre className="overflow-x-auto px-4 py-3 text-xs text-gray-100 bg-gray-950 m-0">
+          <code className="language-html">{source}</code>
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function LatexBlock({ source }: { source: string }) {
+  let html = "";
+  let err = false;
+  try {
+    html = katex.renderToString(source.trim(), { displayMode: true, throwOnError: true });
+  } catch {
+    err = true;
+  }
+
+  if (err) {
+    return (
+      <pre className="overflow-x-auto rounded-lg bg-gray-950 px-4 py-3 text-xs text-gray-100 my-2">
+        <code>{source}</code>
+      </pre>
+    );
+  }
+
+  return (
+    <div
+      className="overflow-x-auto py-3 text-center"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
 export function MarkdownContent({ content, className }: MarkdownContentProps) {
   return (
     <div className={cn("prose prose-sm dark:prose-invert max-w-none", className)}>
@@ -26,10 +90,14 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex, rehypeRaw]}
         components={{
-          // Code blocks and inline code
           code({ className: cls, children, ...props }) {
-            const isBlock = cls?.startsWith("language-");
-            if (isBlock) {
+            const lang = cls?.replace("language-", "") ?? "";
+            const src = String(children).replace(/\n$/, "");
+
+            if (lang === "html") return <HtmlPreview source={src} />;
+            if (lang === "latex") return <LatexBlock source={src} />;
+
+            if (lang) {
               return (
                 <pre className="overflow-x-auto rounded-lg bg-gray-950 px-4 py-3 text-xs text-gray-100 dark:bg-gray-900">
                   <code className={cls} {...props}>
@@ -47,7 +115,6 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
               </code>
             );
           },
-          // Tables
           table({ children }) {
             return (
               <div className="overflow-x-auto">
@@ -67,7 +134,6 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
               <td className="border border-[--color-border] px-3 py-1.5">{children}</td>
             );
           },
-          // Blockquotes
           blockquote({ children }) {
             return (
               <blockquote className="border-l-4 border-[--color-border] pl-4 italic text-[--color-muted]">
@@ -75,7 +141,6 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
               </blockquote>
             );
           },
-          // Links — open in new tab
           a({ href, children }) {
             return (
               <a href={href} target="_blank" rel="noopener noreferrer" className="underline">

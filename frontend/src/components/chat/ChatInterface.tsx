@@ -52,15 +52,15 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
     fetchConversations()
       .then((list) => {
         const found = list.find((c) => c.id === backendId);
-        if (found) setConvModel(found.selectedModel ?? null);
+        if (found?.selectedModel) setConvModel(found.selectedModel);
       })
       .catch(() => {});
   }, [conversation?.backendConversationId]);
 
   const handleModelChange = async (displayName: string | null) => {
     const backendId = conversation?.backendConversationId;
-    if (!backendId) return;
     setConvModel(displayName);
+    if (!backendId) return; // will be saved to backend after first message creates the conversation
     setModelSaving(true);
     try {
       await setConversationModel(backendId, displayName);
@@ -76,6 +76,10 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
       const backendId = response.metadata?.conversationId;
       if (backendId && !conversation?.backendConversationId) {
         setBackendConversationId(conversationId, backendId);
+        // Persist any model the user selected before the first message was sent
+        if (convModel) {
+          setConversationModel(backendId, convModel).catch(() => {});
+        }
       }
       addMessage(conversationId, {
         role: "assistant",
@@ -174,7 +178,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
         <span className="flex-1 truncate text-sm font-medium">
           {conversation?.title ?? "Chat"}
         </span>
-        {models.length > 0 && conversation?.backendConversationId && (
+        {models.length > 0 && (
           <ModelSelector
             models={models}
             value={convModel}

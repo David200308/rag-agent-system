@@ -116,7 +116,9 @@ public class ShareController {
             Map<String, Object> initData = new HashMap<>();
             initData.put("request",         agentRequest);
             initData.put("runId",           runId);
-            initData.put("userEmail",       visitorEmail);
+            if (visitorEmail != null) {
+                initData.put("userEmail", visitorEmail);
+            }
             initData.put("shareOwnerEmail", share.getOwnerEmail());
 
             var result = agentGraph.getGraph()

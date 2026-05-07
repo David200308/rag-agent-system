@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, CircleDot, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import type { LogType, RunStatus, WorkflowRunLog } from "@/types/agent";
 
 interface Props {
@@ -115,8 +116,8 @@ export function WorkflowRunViewer({ runId, onDone, initialStatus, fill }: Props)
           ))}
           {status === "DONE" && output && (
             <div className="mt-3 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-3">
-              <p className="text-[10px] font-semibold text-[--color-muted] mb-1">Final Output</p>
-              <p className="text-xs whitespace-pre-wrap">{output}</p>
+              <p className="text-[10px] font-semibold text-[--color-muted] mb-2">Final Output</p>
+              <MarkdownContent content={output} className="text-xs" />
             </div>
           )}
           <div ref={bottomRef} />
@@ -127,25 +128,36 @@ export function WorkflowRunViewer({ runId, onDone, initialStatus, fill }: Props)
 }
 
 function LogEntry({ log }: { log: WorkflowRunLog }) {
-  const [expanded, setExpanded] = useState(log.logType === "LLM_RESPONSE");
+  const isLlm = log.logType === "LLM_RESPONSE";
+  const [expanded, setExpanded] = useState(isLlm);
   const isLong = log.content.length > 200;
 
   return (
-    <div className="font-mono text-[11px]">
+    <div className={cn("font-mono text-[11px]", isLlm && "font-sans")}>
       <div className="flex items-start gap-2">
-        <span className={cn("shrink-0 font-semibold", LOG_COLORS[log.logType])}>
+        <span className={cn("shrink-0 font-semibold font-mono text-[11px]", LOG_COLORS[log.logType])}>
           {LOG_LABELS[log.logType]}
         </span>
         {log.agentName && (
-          <span className="shrink-0 rounded bg-[--color-border]/60 px-1 text-[10px] text-[--color-muted]">
+          <span className="shrink-0 rounded bg-[--color-border]/60 px-1 text-[10px] text-[--color-muted] font-mono">
             {log.agentName}
           </span>
         )}
-        <span className={cn("flex-1 break-all", LOG_COLORS[log.logType])}>
-          {isLong && !expanded
-            ? log.content.slice(0, 200) + "…"
-            : log.content}
-        </span>
+        {isLlm ? (
+          <div className={cn("flex-1 min-w-0", LOG_COLORS[log.logType])}>
+            {isLong && !expanded ? (
+              <span className="break-all">{log.content.slice(0, 200)}…</span>
+            ) : (
+              <MarkdownContent content={log.content} className="text-[11px]" />
+            )}
+          </div>
+        ) : (
+          <span className={cn("flex-1 break-all", LOG_COLORS[log.logType])}>
+            {isLong && !expanded
+              ? log.content.slice(0, 200) + "…"
+              : log.content}
+          </span>
+        )}
         {isLong && (
           <button
             onClick={() => setExpanded(v => !v)}
