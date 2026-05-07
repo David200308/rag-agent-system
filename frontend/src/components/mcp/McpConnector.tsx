@@ -246,6 +246,7 @@ function McpConnectorInner() {
   const [status, setStatus]         = useState<Status>({});
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
   const [banner, setBanner]         = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [showTelegramWidget, setShowTelegramWidget] = useState(false);
 
   const fetchStatus = async () => {
     try {
@@ -260,6 +261,10 @@ function McpConnectorInner() {
     setLoadingMap((prev) => ({ ...prev, [provider]: val }));
 
   const handleConnect = (provider: string) => {
+    if (provider === "telegram") {
+      setShowTelegramWidget(true);
+      return;
+    }
     window.location.href = `/api/connectors/${provider}/connect`;
   };
 
@@ -274,6 +279,7 @@ function McpConnectorInner() {
   };
 
   const handleTelegramAuth = async (user: TelegramAuthData) => {
+    setShowTelegramWidget(false);
     try {
       const res = await fetch("/api/connectors/telegram/connect", {
         method:  "POST",
@@ -330,8 +336,18 @@ function McpConnectorInner() {
             onConnect={() => handleConnect(c.provider)}
             onDisconnect={() => handleDisconnect(c.provider)}
             connectWidget={
-              c.provider === "telegram"
-                ? <TelegramLoginWidget onAuth={handleTelegramAuth} />
+              c.provider === "telegram" && showTelegramWidget
+                ? (
+                  <div className="flex flex-col items-end gap-1.5">
+                    <TelegramLoginWidget onAuth={handleTelegramAuth} />
+                    <button
+                      onClick={() => setShowTelegramWidget(false)}
+                      className="text-[10px] text-[--color-muted] hover:text-[--color-foreground]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )
                 : undefined
             }
           />

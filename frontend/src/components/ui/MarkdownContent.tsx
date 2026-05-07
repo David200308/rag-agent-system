@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 interface MarkdownContentProps {
   content: string;
   className?: string;
+  /** Skip Tailwind Typography prose — use compact flat styling for dense contexts (log viewer, etc.) */
+  compact?: boolean;
 }
 
 function HtmlPreview({ source }: { source: string }) {
@@ -83,9 +85,25 @@ function LatexBlock({ source }: { source: string }) {
   );
 }
 
-export function MarkdownContent({ content, className }: MarkdownContentProps) {
+export function MarkdownContent({ content, className, compact }: MarkdownContentProps) {
+  const wrapperClass = compact
+    ? cn(
+        "text-xs leading-relaxed",
+        // paragraphs / lists — tight spacing
+        "[&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_ul]:pl-4 [&_ol]:pl-4",
+        "[&_ul]:list-disc [&_ol]:list-decimal",
+        // headings — small & bold, no giant margins
+        "[&_h1]:text-sm [&_h1]:font-bold [&_h1]:my-1",
+        "[&_h2]:text-xs [&_h2]:font-bold [&_h2]:my-1",
+        "[&_h3]:text-xs [&_h3]:font-semibold [&_h3]:my-0.5",
+        "[&_h4]:text-xs [&_h4]:font-semibold [&_h4]:my-0.5",
+        // bold / italic just inherit the browser defaults
+        className,
+      )
+    : cn("prose prose-sm dark:prose-invert max-w-none", className);
+
   return (
-    <div className={cn("prose prose-sm dark:prose-invert max-w-none", className)}>
+    <div className={wrapperClass}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex, rehypeRaw]}
@@ -99,7 +117,7 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
 
             if (lang) {
               return (
-                <pre className="overflow-x-auto rounded-lg bg-gray-950 px-4 py-3 text-xs text-gray-100 dark:bg-gray-900">
+                <pre className="overflow-x-auto rounded-md bg-gray-950 px-3 py-2 text-[11px] text-gray-100 my-1.5">
                   <code className={cls} {...props}>
                     {children}
                   </code>
@@ -108,7 +126,12 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
             }
             return (
               <code
-                className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[0.8em] dark:bg-gray-800"
+                className={cn(
+                  "rounded font-mono text-[0.85em]",
+                  compact
+                    ? "bg-black/10 dark:bg-white/10 px-1 py-0.5"
+                    : "bg-gray-100 dark:bg-gray-800 px-1 py-0.5",
+                )}
                 {...props}
               >
                 {children}
@@ -117,26 +140,29 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
           },
           table({ children }) {
             return (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">{children}</table>
+              <div className="overflow-x-auto my-1">
+                <table className="w-full border-collapse text-xs">{children}</table>
               </div>
             );
           },
           th({ children }) {
             return (
-              <th className="border border-[--color-border] bg-[--color-surface-raised] px-3 py-1.5 text-left font-semibold">
+              <th className="border border-[--color-border] bg-[--color-surface-raised] px-2 py-1 text-left font-semibold">
                 {children}
               </th>
             );
           },
           td({ children }) {
             return (
-              <td className="border border-[--color-border] px-3 py-1.5">{children}</td>
+              <td className="border border-[--color-border] px-2 py-1">{children}</td>
             );
           },
           blockquote({ children }) {
             return (
-              <blockquote className="border-l-4 border-[--color-border] pl-4 italic text-[--color-muted]">
+              <blockquote className={cn(
+                "border-l-2 pl-3 italic text-[--color-muted]",
+                compact ? "my-1 border-[--color-border]" : "my-2 border-l-4 border-[--color-border]",
+              )}>
                 {children}
               </blockquote>
             );

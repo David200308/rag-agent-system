@@ -117,7 +117,7 @@ export function WorkflowRunViewer({ runId, onDone, initialStatus, fill }: Props)
           {status === "DONE" && output && (
             <div className="mt-3 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-3">
               <p className="text-[10px] font-semibold text-[--color-muted] mb-2">Final Output</p>
-              <MarkdownContent content={output} className="text-xs" />
+              <MarkdownContent content={output} compact />
             </div>
           )}
           <div ref={bottomRef} />
@@ -148,7 +148,7 @@ function LogEntry({ log }: { log: WorkflowRunLog }) {
             {isLong && !expanded ? (
               <span className="break-all">{log.content.slice(0, 200)}…</span>
             ) : (
-              <MarkdownContent content={log.content} className="text-[11px]" />
+              <MarkdownContent content={log.content} compact />
             )}
           </div>
         ) : (
