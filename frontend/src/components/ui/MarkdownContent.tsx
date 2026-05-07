@@ -140,14 +140,19 @@ export function MarkdownContent({ content, className, compact }: MarkdownContent
           },
           table({ children }) {
             return (
-              <div className="overflow-x-auto my-1">
-                <table className="w-full border-collapse text-xs">{children}</table>
+              <div className={cn("overflow-x-auto", compact ? "my-1 max-w-full" : "my-2")}>
+                <table className={cn("border-collapse", compact ? "text-[11px] w-full" : "w-full text-sm")}>
+                  {children}
+                </table>
               </div>
             );
           },
           th({ children }) {
             return (
-              <th className="border border-[--color-border] bg-[--color-surface-raised] px-2 py-1 text-left font-semibold">
+              <th className={cn(
+                "border border-[--color-border] px-2 py-1 text-left font-semibold",
+                !compact && "bg-[--color-surface-raised]",
+              )}>
                 {children}
               </th>
             );

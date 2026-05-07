@@ -110,7 +110,7 @@ export function WorkflowRunViewer({ runId, onDone, initialStatus, fill }: Props)
       </div>
 
       {(fill || expanded) && (
-        <div className={cn("overflow-y-auto px-4 pb-4 space-y-1.5", fill ? "flex-1" : "max-h-64")}>
+        <div className={cn("overflow-y-auto overflow-x-hidden px-4 pb-4 space-y-1.5", fill ? "flex-1 min-h-0" : "max-h-64")}>
           {logs.map((log, i) => (
             <LogEntry key={i} log={log} />
           ))}

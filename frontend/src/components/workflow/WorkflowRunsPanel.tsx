@@ -74,11 +74,11 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
 
   return (
     <div
-      className="flex flex-col border-[--color-border] bg-[--color-surface]"
+      className="flex h-full flex-col border-[--color-border] bg-[--color-surface]"
       style={{ width: width ?? 320, minWidth: width ?? 320 }}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-[--color-border] px-4 py-3">
+      <div className="flex shrink-0 items-center gap-2 border-b border-[--color-border] px-4 py-3">
         <span className="text-sm font-semibold flex-1">Runs</span>
         <button
           onClick={load}
@@ -96,8 +96,11 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
         </button>
       </div>
 
-      {/* Run list */}
-      <div className="flex flex-col overflow-y-auto" style={{ maxHeight: selectedId ? "40%" : "100%" }}>
+      {/* Run list — shrinks to make room for the detail pane */}
+      <div className={cn(
+        "flex flex-col overflow-y-auto shrink-0",
+        selectedId ? "max-h-[45%]" : "flex-1",
+      )}>
         {runs.length === 0 && !loading && (
           <p className="px-4 py-6 text-center text-xs text-[--color-muted]">No runs yet</p>
         )}
@@ -129,15 +132,15 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
         ))}
       </div>
 
-      {/* Log detail */}
+      {/* Log detail — fills remaining height */}
       {selectedId && (
-        <div className="flex flex-1 flex-col overflow-hidden border-t border-[--color-border]">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-[--color-border]">
           <WorkflowRunViewer
-          runId={selectedId}
-          initialStatus={runs.find(r => r.id === selectedId)?.status}
-          onDone={handleRunDone}
-          fill
-        />
+            runId={selectedId}
+            initialStatus={runs.find(r => r.id === selectedId)?.status}
+            onDone={handleRunDone}
+            fill
+          />
         </div>
       )}
     </div>
