@@ -17,46 +17,56 @@ interface MarkdownContentProps {
 }
 
 function HtmlPreview({ source }: { source: string }) {
-  const [preview, setPreview] = useState(false);
-
-  function autoResize(iframe: HTMLIFrameElement | null) {
-    if (!iframe) return;
-    iframe.onload = () => {
-      try {
-        const h = iframe.contentDocument?.body?.scrollHeight;
-        if (h) iframe.style.height = `${h + 24}px`;
-      } catch {
-        // cross-origin or sandboxed — leave default height
-      }
-    };
-  }
+  const [open, setOpen] = useState(false);
 
   return (
-    <div className="rounded-lg border border-[--color-border] overflow-hidden my-2">
-      <div className="flex items-center justify-between bg-gray-950 px-4 py-1.5">
-        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">HTML</span>
-        <button
-          onClick={() => setPreview(v => !v)}
-          className="text-[11px] text-blue-400 hover:text-blue-300 font-medium transition-colors"
-        >
-          {preview ? "Source" : "Preview"}
-        </button>
-      </div>
-      {preview ? (
-        <iframe
-          ref={autoResize}
-          srcDoc={source}
-          sandbox="allow-scripts"
-          className="w-full border-0 bg-white"
-          style={{ minHeight: "180px" }}
-          title="HTML Preview"
-        />
-      ) : (
+    <>
+      {/* Code block with "Preview" button */}
+      <div className="rounded-lg border border-[--color-border] overflow-hidden my-2">
+        <div className="flex items-center justify-between bg-gray-950 px-4 py-1.5">
+          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">HTML</span>
+          <button
+            onClick={() => setOpen(true)}
+            className="text-[11px] text-blue-400 hover:text-blue-300 font-medium transition-colors"
+          >
+            Preview
+          </button>
+        </div>
         <pre className="overflow-x-auto px-4 py-3 text-xs text-gray-100 bg-gray-950 m-0">
           <code className="language-html">{source}</code>
         </pre>
+      </div>
+
+      {/* Full-screen popup modal */}
+      {open && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60"
+          onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}
+        >
+          <div className="relative flex flex-col bg-white rounded-xl shadow-2xl overflow-hidden"
+            style={{ width: "min(90vw, 1100px)", height: "min(90vh, 800px)" }}
+          >
+            {/* Modal toolbar */}
+            <div className="flex shrink-0 items-center gap-3 bg-gray-100 border-b border-gray-200 px-4 py-2">
+              <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">HTML Preview</span>
+              <button
+                onClick={() => setOpen(false)}
+                className="ml-auto rounded px-3 py-1 text-xs font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+            {/* Sandboxed iframe */}
+            <iframe
+              srcDoc={source}
+              sandbox="allow-scripts"
+              className="flex-1 w-full border-0"
+              title="HTML Preview"
+            />
+          </div>
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
