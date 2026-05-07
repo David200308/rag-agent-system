@@ -1,12 +1,12 @@
 # ── Stage 1: install dependencies ─────────────────────────────────────────────
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # ── Stage 2: build ────────────────────────────────────────────────────────────
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 RUN corepack enable
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
@@ -21,7 +21,7 @@ ENV BACKEND_URL=$BACKEND_URL \
 RUN pnpm build
 
 # ── Stage 3: runtime ──────────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 

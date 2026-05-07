@@ -167,7 +167,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
   return (
     <div className="flex h-full flex-col">
       {/* Header — mobile hamburger + title + share button */}
-      <div className="flex items-center gap-1.5 border-b border-[--color-border] px-3 py-2.5 sm:gap-2 sm:px-4 sm:py-3">
+      <div className="flex items-center gap-1.5 border-b border-[--color-border] bg-[--color-surface] px-3 py-2.5 sm:gap-2 sm:px-4 sm:py-3">
         <button
           onClick={onMenuOpen}
           className="shrink-0 rounded-md p-1 text-[--color-muted] hover:bg-[--color-border]/50 sm:hidden"
