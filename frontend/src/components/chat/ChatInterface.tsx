@@ -167,15 +167,15 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
   return (
     <div className="flex h-full flex-col">
       {/* Header — mobile hamburger + title + share button */}
-      <div className="flex items-center gap-2 border-b border-[--color-border] px-4 py-3">
+      <div className="flex items-center gap-1.5 border-b border-[--color-border] px-3 py-2.5 sm:gap-2 sm:px-4 sm:py-3">
         <button
           onClick={onMenuOpen}
-          className="rounded-md p-1 text-[--color-muted] hover:bg-[--color-border]/50 sm:hidden"
+          className="shrink-0 rounded-md p-1 text-[--color-muted] hover:bg-[--color-border]/50 sm:hidden"
           aria-label="Open menu"
         >
           <Menu className="h-5 w-5" />
         </button>
-        <span className="flex-1 truncate text-sm font-medium">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">
           {conversation?.title ?? "Chat"}
         </span>
         {models.length > 0 && (
@@ -184,7 +184,6 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
             value={convModel}
             onChange={handleModelChange}
             disabled={modelSaving || mutation.isPending}
-            className="max-w-[140px]"
           />
         )}
         {backendId && (
