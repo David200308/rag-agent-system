@@ -106,7 +106,7 @@ export function MarkdownContent({ content, className, compact }: MarkdownContent
     <div className={wrapperClass}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex, rehypeRaw]}
+        rehypePlugins={compact ? [rehypeKatex] : [rehypeKatex, rehypeRaw]}
         components={{
           code({ className: cls, children, ...props }) {
             const lang = cls?.replace("language-", "") ?? "";
