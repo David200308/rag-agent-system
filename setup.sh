@@ -343,11 +343,14 @@ EOF
   # ── Launch ─────────────────────────────────────────────────────────────────
   echo ""
   echo -e "  How would you like to start?"
-  echo -e "    ${BOLD}1${NC}) Build images from source  ${DIM}($COMPOSE up --build)${NC}"
-  echo -e "    ${BOLD}2${NC}) Start with existing images ${DIM}($COMPOSE up)${NC}"
-  echo -e "    ${BOLD}3${NC}) Skip — I'll start manually"
+  echo -e "    ${BOLD}1${NC}) Build all from source       ${DIM}($COMPOSE up --build)${NC}"
+  echo -e "    ${BOLD}2${NC}) Start with existing images  ${DIM}($COMPOSE up)${NC}"
+  echo -e "    ${BOLD}3${NC}) Rebuild frontend only       ${DIM}($COMPOSE up -d --build --no-deps frontend)${NC}"
+  echo -e "    ${BOLD}4${NC}) Rebuild backend only        ${DIM}($COMPOSE up -d --build --no-deps backend)${NC}"
+  echo -e "    ${BOLD}5${NC}) Rebuild scheduler only      ${DIM}($COMPOSE up -d --build --no-deps scheduler)${NC}"
+  echo -e "    ${BOLD}6${NC}) Skip — I'll start manually"
   echo ""
-  printf "  Choice [1/2/3]: "
+  printf "  Choice [1-6]: "
   read -r launch_choice
 
   echo ""
@@ -355,16 +358,23 @@ EOF
   case "$launch_choice" in
     1) $COMPOSE up --build ;;
     2) $COMPOSE up ;;
-    3)
+    3) $COMPOSE up -d --build --no-deps frontend ;;
+    4) $COMPOSE up -d --build --no-deps backend ;;
+    5) $COMPOSE up -d --build --no-deps scheduler ;;
+    6)
       echo -e "  Run manually:"
-      echo -e "    Build:  ${BOLD}$COMPOSE up --build${NC}"
-      echo -e "    Start:  ${BOLD}$COMPOSE up${NC}"
+      echo -e "    All:        ${BOLD}$COMPOSE up --build${NC}"
+      echo -e "    Frontend:   ${BOLD}$COMPOSE up -d --build --no-deps frontend${NC}"
+      echo -e "    Backend:    ${BOLD}$COMPOSE up -d --build --no-deps backend${NC}"
+      echo -e "    Scheduler:  ${BOLD}$COMPOSE up -d --build --no-deps scheduler${NC}"
       ;;
     *)
       echo -e "  ${YELLOW}Invalid choice — skipping launch.${NC}"
       echo -e "  Run manually:"
-      echo -e "    Build:  ${BOLD}$COMPOSE up --build${NC}"
-      echo -e "    Start:  ${BOLD}$COMPOSE up${NC}"
+      echo -e "    All:        ${BOLD}$COMPOSE up --build${NC}"
+      echo -e "    Frontend:   ${BOLD}$COMPOSE up -d --build --no-deps frontend${NC}"
+      echo -e "    Backend:    ${BOLD}$COMPOSE up -d --build --no-deps backend${NC}"
+      echo -e "    Scheduler:  ${BOLD}$COMPOSE up -d --build --no-deps scheduler${NC}"
       ;;
   esac
 
@@ -734,28 +744,39 @@ EOF
   # ── Launch ─────────────────────────────────────────────────────────────────
   echo ""
   echo -e "  How would you like to start?"
-  echo -e "    ${BOLD}1${NC}) Build images from source  ${DIM}($COMPOSE -f docker-compose.prod.yml up -d --build)${NC}"
-  echo -e "    ${BOLD}2${NC}) Start with existing images ${DIM}($COMPOSE -f docker-compose.prod.yml up -d)${NC}"
-  echo -e "    ${BOLD}3${NC}) Skip — I'll start manually"
+  echo -e "    ${BOLD}1${NC}) Build all from source       ${DIM}($COMPOSE -f docker-compose.prod.yml up -d --build)${NC}"
+  echo -e "    ${BOLD}2${NC}) Start with existing images  ${DIM}($COMPOSE -f docker-compose.prod.yml up -d)${NC}"
+  echo -e "    ${BOLD}3${NC}) Rebuild frontend only       ${DIM}($COMPOSE -f docker-compose.prod.yml up -d --build --no-deps frontend)${NC}"
+  echo -e "    ${BOLD}4${NC}) Rebuild backend only        ${DIM}($COMPOSE -f docker-compose.prod.yml up -d --build --no-deps backend)${NC}"
+  echo -e "    ${BOLD}5${NC}) Rebuild scheduler only      ${DIM}($COMPOSE -f docker-compose.prod.yml up -d --build --no-deps scheduler)${NC}"
+  echo -e "    ${BOLD}6${NC}) Skip — I'll start manually"
   echo ""
-  printf "  Choice [1/2/3]: "
+  printf "  Choice [1-6]: "
   read -r launch_choice
 
+  PROD_COMPOSE="$COMPOSE --env-file .env.prod -f docker-compose.prod.yml"
   echo ""
   cd "$SCRIPT_DIR"
   case "$launch_choice" in
-    1) $COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build ;;
-    2) $COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d ;;
-    3)
+    1) $PROD_COMPOSE up -d --build ;;
+    2) $PROD_COMPOSE up -d ;;
+    3) $PROD_COMPOSE up -d --build --no-deps frontend ;;
+    4) $PROD_COMPOSE up -d --build --no-deps backend ;;
+    5) $PROD_COMPOSE up -d --build --no-deps scheduler ;;
+    6)
       echo -e "  Run manually:"
-      echo -e "    Build:  ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build${NC}"
-      echo -e "    Start:  ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d${NC}"
+      echo -e "    All:        ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build${NC}"
+      echo -e "    Frontend:   ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build --no-deps frontend${NC}"
+      echo -e "    Backend:    ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build --no-deps backend${NC}"
+      echo -e "    Scheduler:  ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build --no-deps scheduler${NC}"
       ;;
     *)
       echo -e "  ${YELLOW}Invalid choice — skipping launch.${NC}"
       echo -e "  Run manually:"
-      echo -e "    Build:  ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build${NC}"
-      echo -e "    Start:  ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d${NC}"
+      echo -e "    All:        ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build${NC}"
+      echo -e "    Frontend:   ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build --no-deps frontend${NC}"
+      echo -e "    Backend:    ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build --no-deps backend${NC}"
+      echo -e "    Scheduler:  ${BOLD}$COMPOSE --env-file .env.prod -f docker-compose.prod.yml up -d --build --no-deps scheduler${NC}"
       ;;
   esac
 fi

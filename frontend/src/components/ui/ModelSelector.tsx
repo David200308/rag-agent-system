@@ -46,7 +46,7 @@ export function ModelSelector({ models, value, onChange, disabled, className }: 
         className={cn(
           "flex max-w-[160px] items-center gap-1 rounded-md border border-[--color-border]",
           "bg-[--color-surface-raised] px-2 py-1 text-xs",
-          "hover:bg-[--color-border]/30 focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100",
+          "hover:bg-[--color-border] focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100",
           "disabled:cursor-not-allowed disabled:opacity-50",
         )}
       >
@@ -68,7 +68,7 @@ export function ModelSelector({ models, value, onChange, disabled, className }: 
                 }}
                 className={cn(
                   "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs",
-                  "hover:bg-[--color-border]/30",
+                  "hover:bg-[--color-border]",
                   isSelected && "font-medium",
                 )}
               >
