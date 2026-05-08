@@ -27,6 +27,10 @@ const PRESETS = [
   { label: "Every 10 min",   cron: { m: "*/10", h: "*",  d: "*", mo: "*", w: "*" } },
 ];
 
+interface CronFields {
+  m: string; h: string; d: string; mo: string; w: string;
+}
+
 function CronInput({
   label, value, onChange, placeholder,
 }: {
