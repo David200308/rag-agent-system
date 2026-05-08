@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp, FileText, ExternalLink } from "lucide-react";
-import { cn, truncate } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
 import type { SourceDocument } from "@/types/agent";
 

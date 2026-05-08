@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { X, RefreshCw, CheckCircle2, XCircle, CircleDot, Clock } from "lucide-react";
-import { Button } from "@/components/ui/Button";
 import { WorkflowRunViewer } from "./WorkflowRunViewer";
 import { fetchWorkflowRuns } from "@/lib/api";
 import type { WorkflowRun } from "@/types/agent";

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Menu } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { ModelSelector } from "@/components/ui/ModelSelector";
 import { WorkflowBuilder } from "@/components/workflow/WorkflowBuilder";
 import { fetchWorkflow, fetchModels, setWorkflowModel } from "@/lib/api";
 import type { ModelConfig, Workflow } from "@/types/agent";
@@ -76,19 +75,16 @@ export default function WorkflowDetailPage() {
             <p className="text-xs text-[--color-muted]">{workflow.description}</p>
           )}
         </div>
-        {models.length > 0 && (
-          <ModelSelector
-            models={models}
-            value={wfModel}
-            onChange={handleModelChange}
-            disabled={modelSaving}
-            className="max-w-[140px] shrink-0"
-          />
-        )}
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <WorkflowBuilder workflow={workflow} />
+        <WorkflowBuilder
+          workflow={workflow}
+          models={models}
+          selectedModel={wfModel}
+          onModelChange={handleModelChange}
+          modelSaving={modelSaving}
+        />
       </div>
     </div>
   );

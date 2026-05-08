@@ -27,21 +27,6 @@ const PRESETS = [
   { label: "Every 10 min",   cron: { m: "*/10", h: "*",  d: "*", mo: "*", w: "*" } },
 ];
 
-interface CronFields {
-  m: string; h: string; d: string; mo: string; w: string;
-}
-
-function parseCronExpr(expr: string): CronFields {
-  const parts = expr.split(" ");
-  return {
-    m:  parts[0] ?? "*",
-    h:  parts[1] ?? "*",
-    d:  parts[2] ?? "*",
-    mo: parts[3] ?? "*",
-    w:  parts[4] ?? "*",
-  };
-}
-
 function CronInput({
   label, value, onChange, placeholder,
 }: {

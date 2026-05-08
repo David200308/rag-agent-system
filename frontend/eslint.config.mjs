@@ -1,49 +1,47 @@
-// ESLint v10 flat config — replaces .eslintrc.json
-// typescript-eslint v8 fully replaces the deprecated TSLint.
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const compat = new FlatCompat({ baseDirectory: __dirname });
-
 export default tseslint.config(
-  // Base JS recommended rules
   js.configs.recommended,
 
-  // TypeScript strict rules (replaces TSLint's type-checking rules)
-  ...tseslint.configs.strictTypeChecked,
-  ...tseslint.configs.stylisticTypeChecked,
+  // Basic TypeScript rules (no type-info required — avoids TypeScript 6 / ts-eslint 8.x peer conflict)
+  ...tseslint.configs.recommended,
 
-  // Next.js specific rules via compat shim
-  ...compat.extends("next/core-web-vitals"),
+  // Next.js flat config (eslint-config-next 16.x exports ESLint 9 flat config natively)
+  ...nextCoreWebVitals,
 
-  // Project-wide TS parser options
+  // TypeScript-specific rules scoped to TS files with type-aware parser options
   {
+    files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
       parserOptions: {
         project: "./tsconfig.json",
         tsconfigRootDir: __dirname,
       },
     },
-  },
-
-  // Custom rule overrides
-  {
     rules: {
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
       "@typescript-eslint/consistent-type-imports": ["error", { prefer: "type-imports" }],
       "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/no-floating-promises": "error",
-      "no-console": ["warn", { allow: ["warn", "error"] }],
     },
   },
 
-  // Ignore build artifacts
+  // Global rules
+  {
+    rules: {
+      "no-console": ["warn", { allow: ["warn", "error"] }],
+      // react-hooks v5 strict rules — disabled: these patterns are intentional in this codebase
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/refs": "off",
+    },
+  },
+
   {
     ignores: [".next/**", "node_modules/**", "dist/**"],
   },

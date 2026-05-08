@@ -55,7 +55,7 @@ export function ModelSelector({ models, value, onChange, disabled, className }: 
       </button>
 
       {open && !isDisabled && (
-        <div className="absolute right-0 top-full z-50 mt-1 min-w-[160px] max-w-[220px] rounded-md border border-[--color-border] bg-[--color-surface-raised] py-1 shadow-lg">
+        <div className="absolute right-0 top-full z-50 mt-1 min-w-[160px] max-w-[220px] rounded-md border border-[--color-border] bg-[var(--color-surface-raised)] py-1 shadow-lg">
           {options.map((opt) => {
             const isSelected = opt.value === value;
             return (
