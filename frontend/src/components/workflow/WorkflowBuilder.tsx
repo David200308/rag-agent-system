@@ -18,7 +18,6 @@ import "@xyflow/react/dist/style.css";
 
 import { Plus, Play, Save, History, Download, Upload, FileJson } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { ModelSelector } from "@/components/ui/ModelSelector";
 import { PatternSelector } from "./PatternSelector";
 import { AgentConfigPanel } from "./AgentConfigPanel";
 import { WorkflowRunsPanel } from "./WorkflowRunsPanel";
@@ -29,7 +28,7 @@ import {
   updateWorkflow,
   startWorkflowRun,
 } from "@/lib/api";
-import type { AgentPattern, AgentRole, ModelConfig, RunStatus, TeamExecMode, Workflow, WorkflowAgent } from "@/types/agent";
+import type { AgentPattern, AgentRole, RunStatus, TeamExecMode, Workflow, WorkflowAgent } from "@/types/agent";
 import { cn } from "@/lib/utils";
 
 // ── Flow JSON schema ──────────────────────────────────────────────────────────
@@ -85,15 +84,9 @@ const nodeTypes = { agent: AgentNodeCard };
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-interface Props {
-  workflow: Workflow;
-  models?: ModelConfig[];
-  selectedModel?: string | null;
-  onModelChange?: (value: string | null) => void;
-  modelSaving?: boolean;
-}
+interface Props { workflow: Workflow }
 
-export function WorkflowBuilder({ workflow, models = [], selectedModel = null, onModelChange, modelSaving }: Props) {
+export function WorkflowBuilder({ workflow }: Props) {
   const [agents,       setAgents]       = useState<WorkflowAgent[]>([]);
   const [nodes,        setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges,        setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -448,15 +441,6 @@ export function WorkflowBuilder({ workflow, models = [], selectedModel = null, o
             onChange={handlePatternChange}
           />
           <div className="ml-auto flex items-center gap-2 pl-2">
-            {models.length > 0 && onModelChange && (
-              <ModelSelector
-                models={models}
-                value={selectedModel}
-                onChange={onModelChange}
-                disabled={modelSaving}
-              />
-            )}
-            <div className="h-4 w-px bg-[--color-border]" />
             <Button size="sm" variant="ghost" onClick={addAgent}>
               <Plus className="h-3.5 w-3.5 mr-1" /> Add Agent
             </Button>
