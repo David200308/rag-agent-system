@@ -30,6 +30,19 @@
 
     <dependencyManagement>
         <dependencies>
+            <!--
+                spring-ai-bom 1.1.x upgrades jackson-databind to 2.19.x-SNAPSHOT which
+                does not exist in the snapshot repo and breaks the offline dependency cache
+                step in Docker builds. Pin the entire Jackson BOM to the stable version
+                that Spring Boot 3.4.x ships with so the SNAPSHOT is never resolved.
+            -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>2.18.2</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
