@@ -164,22 +164,12 @@ export function WorkflowBuilder({ workflow }: Props) {
   const runsStartRef  = useRef<{ x: number; w: number } | null>(null);
   runsWidthRef.current = runsWidth;
 
-  // Load agents and skills from backend
-  useEffect(() => {
-    Promise.all([fetchWorkflowAgents(workflow.id), fetchSkills()]).then(([a, s]) => {
-      setAgents(a);
-      setSkills(s);
-      syncNodes(a, s);
-    });
-  }, [workflow.id]);
-
-  function syncNodes(agentList: WorkflowAgent[], skillList?: Skill[]) {
-    const activeSkills = skillList ?? skills;
+  const syncNodes = useCallback((agentList: WorkflowAgent[], skillList: Skill[]) => {
     const newNodes: Node[] = agentList.map(agent => ({
       id:       String(agent.id),
       type:     "agent",
       position: { x: agent.posX, y: agent.posY },
-      data:     { agent, selected: false, onClick: () => setSelectedId(agent.id), skills: activeSkills },
+      data:     { agent, selected: false, onClick: () => setSelectedId(agent.id), skills: skillList },
     }));
     setNodes(newNodes);
 
@@ -228,7 +218,16 @@ export function WorkflowBuilder({ workflow }: Props) {
     );
 
     setEdges([...autoEdges, ...validManual]);
-  }
+  }, [teamExecMode, pattern, setNodes, setEdges]);
+
+  // Load agents and skills from backend
+  useEffect(() => {
+    Promise.all([fetchWorkflowAgents(workflow.id), fetchSkills()]).then(([a, s]) => {
+      setAgents(a);
+      setSkills(s);
+      syncNodes(a, s);
+    });
+  }, [workflow.id, syncNodes]);
 
   // Sync nodes data when selection changes
   useEffect(() => {
@@ -240,7 +239,7 @@ export function WorkflowBuilder({ workflow }: Props) {
         onClick: () => setSelectedId(Number(n.id)),
       },
     })));
-  }, [selectedId]);
+  }, [selectedId, setNodes]);
 
   const selectedAgent = useMemo(
     () => agents.find(a => a.id === selectedId) ?? null,

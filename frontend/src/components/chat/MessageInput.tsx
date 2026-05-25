@@ -5,6 +5,7 @@ import {
   useRef,
   useEffect,
   useCallback,
+  useMemo,
   type KeyboardEvent,
 } from "react";
 import { Send, Database, Globe, Zap, X, ChevronDown } from "lucide-react";
@@ -198,7 +199,7 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
     fetchSkills().then(setAllSkills).catch(() => {});
   }, []);
 
-  const selectedIds = new Set(selectedSkills.map((s) => s.id));
+  const selectedIds = useMemo(() => new Set(selectedSkills.map((s) => s.id)), [selectedSkills]);
 
   // ── skill picker toggle ──────────────────────────────────────────────────────
 

@@ -30,6 +30,7 @@ import type {
   UpdateScheduleRequest,
   UrlIngestionResult,
   WebFetchWhitelistEntry,
+  ScheduleRun,
 } from "@/types/agent";
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
@@ -236,10 +237,10 @@ export async function deleteSchedule(id: string): Promise<void> {
   await fetch(`/api/scheduler/schedules/${id}`, { method: "DELETE" });
 }
 
-export async function fetchScheduleRuns(id: string): Promise<import("@/types/agent").ScheduleRun[]> {
+export async function fetchScheduleRuns(id: string): Promise<ScheduleRun[]> {
   const res = await fetch(`/api/scheduler/schedules/${id}/runs`);
   if (!res.ok) return [];
-  return res.json() as Promise<import("@/types/agent").ScheduleRun[]>;
+  return res.json() as Promise<ScheduleRun[]>;
 }
 
 // ── Model config API ──────────────────────────────────────────────────────────
