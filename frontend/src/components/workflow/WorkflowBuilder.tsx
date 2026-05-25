@@ -12,7 +12,10 @@ import {
   type Connection,
   type Node,
   type Edge,
+  type EdgeChange,
   MarkerType,
+  Handle,
+  Position,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -23,12 +26,13 @@ import { AgentConfigPanel } from "./AgentConfigPanel";
 import { WorkflowRunsPanel } from "./WorkflowRunsPanel";
 import {
   fetchWorkflowAgents,
+  fetchSkills,
   upsertWorkflowAgent,
   deleteWorkflowAgent,
   updateWorkflow,
   startWorkflowRun,
 } from "@/lib/api";
-import type { AgentPattern, AgentRole, RunStatus, TeamExecMode, Workflow, WorkflowAgent } from "@/types/agent";
+import type { AgentPattern, AgentRole, RunStatus, TeamExecMode, Workflow, WorkflowAgent, Skill } from "@/types/agent";
 import { cn } from "@/lib/utils";
 
 // ── Flow JSON schema ──────────────────────────────────────────────────────────
@@ -53,29 +57,69 @@ interface FlowJson {
 
 // ── Agent node visual ─────────────────────────────────────────────────────────
 
-function AgentNodeCard({ data }: { data: { agent: WorkflowAgent; selected: boolean; onClick: () => void } }) {
-  const { agent, selected, onClick } = data;
+function AgentNodeCard({ data }: {
+  data: { agent: WorkflowAgent; selected: boolean; onClick: () => void; skills: Skill[] }
+}) {
+  const { agent, selected, onClick, skills = [] } = data;
+
+  const agentTools: string[] = (() => {
+    try { return JSON.parse(agent.toolsJson ?? "[]"); } catch { return []; }
+  })();
+
+  const agentSkillIds: string[] = (() => {
+    try { return JSON.parse(agent.skillIdsJson ?? "[]"); } catch { return []; }
+  })();
+
+  const agentSkills = skills.filter(s => agentSkillIds.includes(s.id));
+
   const roleColors: Record<string, string> = {
     MAIN: "border-purple-500 bg-purple-50 dark:bg-purple-950/30",
     SUB:  "border-blue-400  bg-blue-50   dark:bg-blue-950/30",
     PEER: "border-[--color-border] bg-[--color-surface-raised]",
   };
+
   return (
     <div
       onClick={onClick}
       className={cn(
-        "rounded-lg border-2 px-2.5 py-1.5 cursor-pointer shadow-sm w-[120px] transition-all",
+        "rounded-lg border-2 px-2.5 py-2 cursor-pointer shadow-sm w-[160px] transition-all",
         roleColors[agent.role],
         selected && "ring-2 ring-black dark:ring-white ring-offset-1",
       )}
     >
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="!w-2 !h-2 !border-[--color-border] !bg-[--color-surface-raised]"
+      />
+
       <p className="text-[9px] font-semibold uppercase tracking-wide text-[--color-muted]">{agent.role}</p>
       <p className="text-xs font-bold truncate">{agent.name}</p>
-      {agent.toolsJson && JSON.parse(agent.toolsJson).length > 0 && (
+
+      {agentTools.length > 0 && (
         <p className="text-[9px] text-[--color-muted] mt-0.5 truncate">
-          {JSON.parse(agent.toolsJson).map((t: string) => t.toLowerCase()).join(", ")}
+          {agentTools.map((t: string) => t.toLowerCase()).join(", ")}
         </p>
       )}
+
+      {agentSkills.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-0.5">
+          {agentSkills.map(skill => (
+            <span
+              key={skill.id}
+              className="flex items-center gap-0.5 rounded-full border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[8px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+            >
+              ⚡ {skill.name}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!w-2 !h-2 !border-[--color-border] !bg-[--color-surface-raised]"
+      />
     </div>
   );
 }
@@ -88,8 +132,10 @@ interface Props { workflow: Workflow }
 
 export function WorkflowBuilder({ workflow }: Props) {
   const [agents,       setAgents]       = useState<WorkflowAgent[]>([]);
+  const [skills,       setSkills]       = useState<Skill[]>([]);
   const [nodes,        setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges,        setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const manualEdgesRef = useRef<Edge[]>([]);
   const [selectedId,   setSelectedId]   = useState<number | null>(null);
   const [pattern,      setPattern]      = useState<AgentPattern>(workflow.agentPattern);
   const [teamExecMode, setTeamExecMode] = useState<TeamExecMode | null>(workflow.teamExecMode);
@@ -118,35 +164,70 @@ export function WorkflowBuilder({ workflow }: Props) {
   const runsStartRef  = useRef<{ x: number; w: number } | null>(null);
   runsWidthRef.current = runsWidth;
 
-  // Load agents from backend
+  // Load agents and skills from backend
   useEffect(() => {
-    fetchWorkflowAgents(workflow.id).then(a => {
+    Promise.all([fetchWorkflowAgents(workflow.id), fetchSkills()]).then(([a, s]) => {
       setAgents(a);
-      syncNodes(a);
+      setSkills(s);
+      syncNodes(a, s);
     });
   }, [workflow.id]);
 
-  function syncNodes(agentList: WorkflowAgent[]) {
+  function syncNodes(agentList: WorkflowAgent[], skillList?: Skill[]) {
+    const activeSkills = skillList ?? skills;
     const newNodes: Node[] = agentList.map(agent => ({
       id:       String(agent.id),
       type:     "agent",
       position: { x: agent.posX, y: agent.posY },
-      data:     { agent, selected: false, onClick: () => setSelectedId(agent.id) },
+      data:     { agent, selected: false, onClick: () => setSelectedId(agent.id), skills: activeSkills },
     }));
     setNodes(newNodes);
 
-    // Auto-wire edges for sequential team
-    if (workflow.teamExecMode === "SEQUENTIAL" && agentList.length > 1) {
+    const autoEdges: Edge[] = [];
+
+    // Sequential team: chain agents in order
+    if (teamExecMode === "SEQUENTIAL" && agentList.length > 1) {
       const sorted = [...agentList].sort((a, b) => a.orderIndex - b.orderIndex);
-      const autoEdges: Edge[] = sorted.slice(0, -1).map((a, i) => ({
-        id:           `e-${a.id}-${sorted[i + 1]!.id}`,
-        source:       String(a.id),
-        target:       String(sorted[i + 1]!.id),
-        markerEnd:    { type: MarkerType.ArrowClosed },
-        style:        { stroke: "#6366f1" },
-      }));
-      setEdges(autoEdges);
+      sorted.slice(0, -1).forEach((a, i) => {
+        autoEdges.push({
+          id:        `e-seq-${a.id}-${sorted[i + 1]!.id}`,
+          source:    String(a.id),
+          target:    String(sorted[i + 1]!.id),
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style:     { stroke: "#6366f1" },
+          label:     "next",
+          labelStyle: { fontSize: 8, fill: "#6366f1" },
+        });
+      });
     }
+
+    // Orchestrator: draw MAIN → each SUB
+    if (pattern === "ORCHESTRATOR") {
+      const mainAgent = agentList.find(a => a.role === "MAIN");
+      const subAgents = agentList.filter(a => a.role === "SUB");
+      if (mainAgent) {
+        subAgents.forEach(sub => {
+          autoEdges.push({
+            id:        `e-orch-${mainAgent.id}-${sub.id}`,
+            source:    String(mainAgent.id),
+            target:    String(sub.id),
+            markerEnd: { type: MarkerType.ArrowClosed },
+            style:     { stroke: "#a855f7" },
+            label:     "delegates",
+            labelStyle: { fontSize: 8, fill: "#a855f7" },
+          });
+        });
+      }
+    }
+
+    // Re-apply manual edges, filtering out any whose nodes were deleted
+    const nodeIds = new Set(agentList.map(a => String(a.id)));
+    const autoEdgeIds = new Set(autoEdges.map(e => e.id));
+    const validManual = manualEdgesRef.current.filter(
+      e => nodeIds.has(e.source) && nodeIds.has(e.target) && !autoEdgeIds.has(e.id),
+    );
+
+    setEdges([...autoEdges, ...validManual]);
   }
 
   // Sync nodes data when selection changes
@@ -210,9 +291,29 @@ export function WorkflowBuilder({ workflow }: Props) {
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const onConnect = useCallback(
-    (params: Connection) =>
-      setEdges(eds => addEdge({ ...params, markerEnd: { type: MarkerType.ArrowClosed } }, eds)),
+    (params: Connection) => {
+      const newEdge: Edge = {
+        ...params,
+        id:        `e-manual-${params.source}-${params.target}-${Date.now()}`,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style:     { stroke: "#94a3b8" },
+      };
+      manualEdgesRef.current = [...manualEdgesRef.current, newEdge];
+      setEdges(eds => addEdge(newEdge, eds));
+    },
     [setEdges],
+  );
+
+  const handleEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      onEdgesChange(changes);
+      changes.forEach(change => {
+        if (change.type === "remove") {
+          manualEdgesRef.current = manualEdgesRef.current.filter(e => e.id !== change.id);
+        }
+      });
+    },
+    [onEdgesChange],
   );
 
   async function addAgent() {
@@ -232,7 +333,7 @@ export function WorkflowBuilder({ workflow }: Props) {
     });
     const updated = [...agents, saved];
     setAgents(updated);
-    syncNodes(updated);
+    syncNodes(updated, skills);
     setSelectedId(saved.id);
   }
 
@@ -251,7 +352,7 @@ export function WorkflowBuilder({ workflow }: Props) {
     });
     const updated = agents.map(a => a.id === saved.id ? saved : a);
     setAgents(updated);
-    syncNodes(updated);
+    syncNodes(updated, skills);
   }
 
   async function handleDeleteAgent() {
@@ -259,7 +360,7 @@ export function WorkflowBuilder({ workflow }: Props) {
     await deleteWorkflowAgent(workflow.id, selectedAgent.id);
     const updated = agents.filter(a => a.id !== selectedAgent.id);
     setAgents(updated);
-    syncNodes(updated);
+    syncNodes(updated, skills);
     setSelectedId(null);
   }
 
@@ -395,7 +496,7 @@ export function WorkflowBuilder({ workflow }: Props) {
         created.push(saved);
       }
       setAgents(created);
-      syncNodes(created);
+      syncNodes(created, skills);
       setSelectedId(null);
       setShowJsonEditor(false);
     } catch (err) {
@@ -558,7 +659,7 @@ export function WorkflowBuilder({ workflow }: Props) {
             edges={edges}
             nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onEdgesChange={handleEdgesChange}
             onConnect={onConnect}
             fitView
           >
