@@ -219,7 +219,7 @@ export async function createSchedule(payload: CreateScheduleRequest): Promise<Sc
   return postJson<ScheduledMessage>("/api/scheduler/schedules", payload);
 }
 
-export async function updateSchedule(id: number, payload: UpdateScheduleRequest): Promise<ScheduledMessage> {
+export async function updateSchedule(id: string, payload: UpdateScheduleRequest): Promise<ScheduledMessage> {
   const res = await fetch(`/api/scheduler/schedules/${id}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
@@ -232,8 +232,14 @@ export async function updateSchedule(id: number, payload: UpdateScheduleRequest)
   return res.json() as Promise<ScheduledMessage>;
 }
 
-export async function deleteSchedule(id: number): Promise<void> {
+export async function deleteSchedule(id: string): Promise<void> {
   await fetch(`/api/scheduler/schedules/${id}`, { method: "DELETE" });
+}
+
+export async function fetchScheduleRuns(id: string): Promise<import("@/types/agent").ScheduleRun[]> {
+  const res = await fetch(`/api/scheduler/schedules/${id}/runs`);
+  if (!res.ok) return [];
+  return res.json() as Promise<import("@/types/agent").ScheduleRun[]>;
 }
 
 // ── Model config API ──────────────────────────────────────────────────────────
@@ -354,6 +360,12 @@ export async function startWorkflowRun(
   emailNotify = false,
 ): Promise<{ runId: string }> {
   return postJson<{ runId: string }>(`/api/workflow/${workflowId}/runs`, { userInput, emailNotify });
+}
+
+export async function fetchConnectorStatus(): Promise<Record<string, boolean>> {
+  const res = await fetch("/api/connectors/status", { cache: "no-store" });
+  if (!res.ok) return {};
+  return res.json() as Promise<Record<string, boolean>>;
 }
 
 export async function fetchRunLogs(runId: string): Promise<WorkflowRunLog[]> {

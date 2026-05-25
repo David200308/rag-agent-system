@@ -275,6 +275,7 @@ connectors:
 # Shared service key used by the Go scheduler to authenticate trigger calls.
 scheduler:
   service-key: ${SCHEDULER_SERVICE_KEY:scheduler-secret-key}
+  url: ${SCHEDULER_URL:http://localhost:8082}
 
 # ── Resend (transactional email) ──────────────────────────────────────────────
 resend:

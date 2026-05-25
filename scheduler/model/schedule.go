@@ -2,30 +2,63 @@ package model
 
 import "time"
 
-// Schedule mirrors the scheduled_messages table.
+// Schedule is the REST representation of a Temporal schedule returned to clients.
+// ID is a UUID string — the Temporal Schedule ID.
 type Schedule struct {
-	ID               int64     `json:"id"`
-	ConversationID   string    `json:"conversationId"`
-	OwnerEmail       string    `json:"ownerEmail"`
-	Message          string    `json:"message"`
-	CronExpr         string    `json:"cronExpr"`         // e.g. "0 8 * * 1"
-	TopK             int       `json:"topK"`
-	UseKnowledgeBase bool      `json:"useKnowledgeBase"`
-	UseWebFetch      bool      `json:"useWebFetch"`
-	Enabled          bool      `json:"enabled"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	ID               string     `json:"id"`
+	ConversationID   string     `json:"conversationId"`
+	OwnerEmail       string     `json:"ownerEmail"`
+	Message          string     `json:"message"`
+	CronExpr         string     `json:"cronExpr"`
+	Timezone         string     `json:"timezone"`
+	TopK             int        `json:"topK"`
+	UseKnowledgeBase bool       `json:"useKnowledgeBase"`
+	UseWebFetch      bool       `json:"useWebFetch"`
+	Enabled          bool       `json:"enabled"`
+	NextRunAt        *time.Time `json:"nextRunAt,omitempty"`
+	LastRunAt        *time.Time `json:"lastRunAt,omitempty"`
+	CreatedAt        time.Time  `json:"createdAt"`
+}
+
+// ScheduleRun is a single execution record from Temporal workflow history.
+type ScheduleRun struct {
+	WorkflowID string     `json:"workflowId"`
+	Status     string     `json:"status"`
+	StartTime  *time.Time `json:"startTime,omitempty"`
+	CloseTime  *time.Time `json:"closeTime,omitempty"`
+}
+
+// ScheduleMemo is stored in the Temporal Schedule Memo field (immutable after creation).
+// It holds user metadata that Temporal itself doesn't track.
+type ScheduleMemo struct {
+	OwnerEmail     string `json:"ownerEmail"`
+	ConversationID string `json:"conversationId"`
+	CreatedAt      string `json:"createdAt"` // RFC3339
+}
+
+// TriggerPayload is the workflow argument passed every time a schedule fires.
+// Mutable fields (message, topK, etc.) live here so they can be updated via Temporal.
+type TriggerPayload struct {
+	UserEmail        string `json:"userEmail"`
+	ConversationID   string `json:"conversationId"`
+	Message          string `json:"message"`
+	TopK             int    `json:"topK"`
+	UseKnowledgeBase bool   `json:"useKnowledgeBase"`
+	UseWebFetch      bool   `json:"useWebFetch"`
+	BackendURL       string `json:"backendUrl"`
+	ServiceKey       string `json:"serviceKey"`
 }
 
 // CreateRequest is the body for POST /schedules.
 type CreateRequest struct {
 	ConversationID   string `json:"conversationId"`
 	Message          string `json:"message"`
-	CronMinute       string `json:"cronMinute"`   // 0-59 or *
-	CronHour         string `json:"cronHour"`     // 0-23 or *
-	CronDay          string `json:"cronDay"`      // 1-31 or *
-	CronMonth        string `json:"cronMonth"`    // 1-12 or *
-	CronWeekday      string `json:"cronWeekday"`  // 0-6 or *
+	CronMinute       string `json:"cronMinute"`
+	CronHour         string `json:"cronHour"`
+	CronDay          string `json:"cronDay"`
+	CronMonth        string `json:"cronMonth"`
+	CronWeekday      string `json:"cronWeekday"`
+	Timezone         string `json:"timezone"` // IANA name, e.g. "America/New_York". Defaults to "UTC".
 	TopK             int    `json:"topK"`
 	UseKnowledgeBase bool   `json:"useKnowledgeBase"`
 	UseWebFetch      bool   `json:"useWebFetch"`
@@ -39,29 +72,33 @@ type UpdateRequest struct {
 	CronDay          *string `json:"cronDay"`
 	CronMonth        *string `json:"cronMonth"`
 	CronWeekday      *string `json:"cronWeekday"`
+	Timezone         *string `json:"timezone"`
 	TopK             *int    `json:"topK"`
 	UseKnowledgeBase *bool   `json:"useKnowledgeBase"`
 	UseWebFetch      *bool   `json:"useWebFetch"`
 	Enabled          *bool   `json:"enabled"`
 }
 
-// BuildCronExpr assembles a 5-field cron expression from individual fields.
-// Blank fields default to "*".
+// InternalCreateRequest is the body for POST /internal/schedules (service-key auth).
+// Used by the Spring Boot workflow engine to create schedules on behalf of a user.
+type InternalCreateRequest struct {
+	OwnerEmail       string `json:"ownerEmail"`
+	ConversationID   string `json:"conversationId"`
+	Message          string `json:"message"`
+	CronExpr         string `json:"cronExpr"` // full 5-field cron expression
+	Timezone         string `json:"timezone"`
+	TopK             int    `json:"topK"`
+	UseKnowledgeBase bool   `json:"useKnowledgeBase"`
+	UseWebFetch      bool   `json:"useWebFetch"`
+}
+
+// BuildCronExpr assembles a 5-field cron expression. Blank fields default to "*".
 func BuildCronExpr(minute, hour, day, month, weekday string) string {
-	if minute == "" {
-		minute = "*"
+	f := func(s string) string {
+		if s == "" {
+			return "*"
+		}
+		return s
 	}
-	if hour == "" {
-		hour = "*"
-	}
-	if day == "" {
-		day = "*"
-	}
-	if month == "" {
-		month = "*"
-	}
-	if weekday == "" {
-		weekday = "*"
-	}
-	return minute + " " + hour + " " + day + " " + month + " " + weekday
+	return f(minute) + " " + f(hour) + " " + f(day) + " " + f(month) + " " + f(weekday)
 }

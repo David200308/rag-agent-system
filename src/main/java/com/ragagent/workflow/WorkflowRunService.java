@@ -3,6 +3,10 @@ package com.ragagent.workflow;
 import com.ragagent.auth.service.EmailService;
 import com.ragagent.config.ChatModelFactory;
 import com.ragagent.config.LlmProperties;
+import com.ragagent.connector.GoogleDocsService;
+import com.ragagent.connector.GoogleSheetsService;
+import com.ragagent.connector.GoogleSlidesService;
+import com.ragagent.connector.TelegramService;
 import com.ragagent.model.ModelConfigService;
 import com.ragagent.sandbox.SandboxService;
 import com.ragagent.skill.SkillService;
@@ -71,6 +75,18 @@ public class WorkflowRunService {
     private final ModelConfigService       modelConfigService;
     private final LlmProperties            llmProperties;
     private final EmailService             emailService;
+    private final WorkflowScheduleClient   workflowScheduleClient;
+    private final GoogleDocsService        googleDocsService;
+    private final GoogleSheetsService      googleSheetsService;
+    private final GoogleSlidesService      googleSlidesService;
+    private final TelegramService          telegramService;
+
+    private static final java.util.Set<String> CONNECTOR_TOOL_NAMES = java.util.Set.of(
+            "GOOGLE_DOCS_WRITE", "GOOGLE_DOCS_READ",
+            "GOOGLE_SHEETS_WRITE",
+            "GOOGLE_SLIDES_WRITE",
+            "TELEGRAM_SEND"
+    );
 
     /** Active SSE emitters keyed by runId. */
     private final ConcurrentHashMap<String, SseEmitter> emitters = new ConcurrentHashMap<>();
@@ -440,17 +456,24 @@ public class WorkflowRunService {
                 emit(run.getId(), agent.getId(), agent.getName(), WorkflowRunLog.LogType.TOOL_CALL,
                         "[" + toolName + "] " + command);
 
-                String blocked = validateNetworkCommand(command, run.getOwnerEmail());
-                if (blocked != null) {
-                    emit(run.getId(), agent.getId(), agent.getName(),
-                            WorkflowRunLog.LogType.TOOL_RESULT, blocked);
-                    messages.add(Map.of("role", "assistant", "content", llmResponse));
-                    messages.add(Map.of("role", "user", "content",
-                            "Tool result (" + toolName + "):\n" + blocked));
-                    continue;
-                }
+                String toolResult;
 
-                String toolResult = sandboxService.exec(containerId, command);
+                if ("SCHEDULE".equalsIgnoreCase(toolName)) {
+                    toolResult = dispatchScheduleTool(run.getOwnerEmail(), command);
+                } else if (CONNECTOR_TOOL_NAMES.contains(toolName.toUpperCase())) {
+                    toolResult = dispatchConnectorTool(toolName.toUpperCase(), command, run.getOwnerEmail());
+                } else {
+                    String blocked = validateNetworkCommand(command, run.getOwnerEmail());
+                    if (blocked != null) {
+                        emit(run.getId(), agent.getId(), agent.getName(),
+                                WorkflowRunLog.LogType.TOOL_RESULT, blocked);
+                        messages.add(Map.of("role", "assistant", "content", llmResponse));
+                        messages.add(Map.of("role", "user", "content",
+                                "Tool result (" + toolName + "):\n" + blocked));
+                        continue;
+                    }
+                    toolResult = sandboxService.exec(containerId, command);
+                }
 
                 emit(run.getId(), agent.getId(), agent.getName(), WorkflowRunLog.LogType.TOOL_RESULT,
                         toolResult);
@@ -478,20 +501,176 @@ public class WorkflowRunService {
 
     // ── Prompt building ───────────────────────────────────────────────────────
 
+    private String dispatchScheduleTool(String ownerEmail, String json) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(json);
+            String action = node.path("action").asText("create");
+            return switch (action.toLowerCase()) {
+                case "create" -> workflowScheduleClient.createSchedule(
+                        ownerEmail,
+                        node.path("conversationId").asText(),
+                        node.path("message").asText(),
+                        node.path("cron").asText("0 9 * * *"),
+                        node.path("timezone").asText("UTC"),
+                        node.path("topK").asInt(5),
+                        node.path("useKnowledgeBase").asBoolean(true),
+                        node.path("useWebFetch").asBoolean(false)
+                );
+                case "list" -> workflowScheduleClient.listSchedules(
+                        ownerEmail,
+                        node.path("conversationId").asText()
+                );
+                case "delete" -> workflowScheduleClient.deleteSchedule(
+                        ownerEmail,
+                        node.path("scheduleId").asText()
+                );
+                default -> "Unknown SCHEDULE action: " + action + ". Valid actions: create, list, delete";
+            };
+        } catch (Exception e) {
+            return "SCHEDULE tool error: " + e.getMessage();
+        }
+    }
+
+    private String dispatchConnectorTool(String toolName, String payload, String ownerEmail) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(payload.trim());
+
+            return switch (toolName) {
+                case "GOOGLE_DOCS_WRITE" -> googleDocsService.createDocument(
+                        node.path("title").asText("Untitled"),
+                        node.path("content").asText(""),
+                        ownerEmail);
+
+                case "GOOGLE_DOCS_READ" -> {
+                    String url = node.isTextual() ? node.asText()
+                            : node.path("url").asText(payload.trim());
+                    yield googleDocsService.readDocument(url, ownerEmail);
+                }
+
+                case "GOOGLE_SHEETS_WRITE" -> googleSheetsService.createSpreadsheet(
+                        node.path("title").asText("Untitled"),
+                        node.path("content").asText(""),
+                        ownerEmail);
+
+                case "GOOGLE_SLIDES_WRITE" -> googleSlidesService.createPresentation(
+                        node.path("title").asText("Untitled"),
+                        node.path("content").asText(""),
+                        ownerEmail);
+
+                case "TELEGRAM_SEND" -> {
+                    String msg = node.isTextual() ? node.asText()
+                            : node.path("message").asText(payload.trim());
+                    yield telegramService.sendMessage(ownerEmail, msg);
+                }
+
+                default -> "Unknown connector tool: " + toolName;
+            };
+        } catch (IllegalStateException e) {
+            return "Connector error: " + e.getMessage();
+        } catch (Exception e) {
+            return "Connector tool failed (" + toolName + "): " + e.getMessage();
+        }
+    }
+
     private String buildToolSection(List<String> tools) {
         if (tools.isEmpty()) return "";
-        return """
 
-                ## Available Tools
-                When you need to run a command, use this format and then STOP — wait for the result:
-                <use_tool name="bash">
-                your shell command here
-                </use_tool>
+        boolean hasSchedule = tools.stream().anyMatch(t -> "SCHEDULE".equalsIgnoreCase(t));
 
-                You can use: """ + String.join(", ", tools.stream().map(String::toLowerCase).toList()) + """
+        // Separate connector tools (CONNECTOR_*) from sandbox tools
+        List<String> connectorIds = tools.stream()
+                .filter(t -> t.toUpperCase().startsWith("CONNECTOR_"))
+                .toList();
+        List<String> sandboxTools = tools.stream()
+                .filter(t -> !"SCHEDULE".equalsIgnoreCase(t) && !t.toUpperCase().startsWith("CONNECTOR_"))
+                .map(String::toLowerCase)
+                .toList();
 
-                When you have a final answer, respond normally without any XML tags.
-                """;
+        StringBuilder sb = new StringBuilder("\n\n## Available Tools\n");
+        sb.append("When you need to run a command, use this format and then STOP — wait for the result:\n");
+
+        if (!sandboxTools.isEmpty()) {
+            sb.append("""
+                    <use_tool name="bash">
+                    your shell command here
+                    </use_tool>
+
+                    Sandbox tools: """);
+            sb.append(String.join(", ", sandboxTools)).append("\n");
+        }
+
+        if (hasSchedule) {
+            sb.append("""
+
+                    To create, list, or delete scheduled messages use the SCHEDULE tool with JSON:
+                    <use_tool name="SCHEDULE">
+                    {"action":"create","conversationId":"<id>","message":"<text>","cron":"0 9 * * 1-5","timezone":"UTC","topK":5,"useKnowledgeBase":true,"useWebFetch":false}
+                    </use_tool>
+
+                    <use_tool name="SCHEDULE">
+                    {"action":"list","conversationId":"<id>"}
+                    </use_tool>
+
+                    <use_tool name="SCHEDULE">
+                    {"action":"delete","scheduleId":"<schedule-id>"}
+                    </use_tool>
+
+                    cron format: minute hour day month weekday (e.g. "0 9 * * 1-5" = Mon-Fri 9 AM UTC)
+                    """);
+        }
+
+        // Connector tool instructions
+        if (!connectorIds.isEmpty()) {
+            sb.append("\n\n### Connected Service Tools\n");
+            sb.append("Use the exact tool names and JSON formats shown below:\n");
+
+            if (connectorIds.contains("CONNECTOR_GOOGLE_DOCS")) {
+                sb.append("""
+
+                        Write a new Google Doc:
+                        <use_tool name="GOOGLE_DOCS_WRITE">
+                        {"title": "My Document", "content": "Full body text here..."}
+                        </use_tool>
+
+                        Read an existing Google Doc:
+                        <use_tool name="GOOGLE_DOCS_READ">
+                        {"url": "https://docs.google.com/document/d/.../edit"}
+                        </use_tool>
+                        """);
+            }
+            if (connectorIds.contains("CONNECTOR_GOOGLE_SHEETS")) {
+                sb.append("""
+
+                        Write a Google Sheet (rows separated by \\n, columns by tab or comma):
+                        <use_tool name="GOOGLE_SHEETS_WRITE">
+                        {"title": "My Spreadsheet", "content": "Name\\tAge\\nAlice\\t30\\nBob\\t25"}
+                        </use_tool>
+                        """);
+            }
+            if (connectorIds.contains("CONNECTOR_GOOGLE_SLIDES")) {
+                sb.append("""
+
+                        Create a Google Slides presentation (slides separated by --- on its own line):
+                        <use_tool name="GOOGLE_SLIDES_WRITE">
+                        {"title": "My Presentation", "content": "Slide Title\\nSlide body text\\n---\\nSlide 2 Title\\nSlide 2 body"}
+                        </use_tool>
+                        """);
+            }
+            if (connectorIds.contains("CONNECTOR_TELEGRAM")) {
+                sb.append("""
+
+                        Send a Telegram message to the workflow owner:
+                        <use_tool name="TELEGRAM_SEND">
+                        {"message": "Your message text here"}
+                        </use_tool>
+                        """);
+            }
+        }
+
+        sb.append("\nWhen you have a final answer, respond normally without any XML tags.");
+        return sb.toString();
     }
 
     private String buildSkillSection(List<String> skillIds) {

@@ -596,6 +596,16 @@ else
     echo -e "  ${DIM}Scheduler service key auto-generated.${NC}"
   fi
 
+  # ── Temporal internal DB ────────────────────────────────────────────────────
+  if ! has_secret temporal_db_password; then
+    TEMPORAL_DB_PASSWORD="$(openssl rand -base64 24 | tr -d '\n')"
+    write_secret temporal_db_password "$TEMPORAL_DB_PASSWORD"
+    echo -e "  ${DIM}Temporal DB password auto-generated.${NC}"
+  else
+    TEMPORAL_DB_PASSWORD="$(cat "$SECRETS_DIR/temporal_db_password")"
+  fi
+  TEMPORAL_DB_USER="$(read_prod TEMPORAL_DB_USER temporal)"
+
   # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ──────────────
   header "Connectors (optional)"
   echo -e "  ${DIM}Connect Google Workspace (Docs, Sheets, Slides), Figma, and Telegram to the agent.${NC}"
@@ -693,6 +703,11 @@ else
 
 MYSQL_DB=$MYSQL_DB
 MYSQL_USER=$MYSQL_USER
+
+# ── Temporal internal DB ───────────────────────────────────────────────────────
+# TEMPORAL_DB_PASSWORD must match secrets/temporal_db_password (auto-generated above).
+TEMPORAL_DB_USER=$TEMPORAL_DB_USER
+TEMPORAL_DB_PASSWORD=$TEMPORAL_DB_PASSWORD
 
 LLM_PROVIDER=$LLM_PROVIDER
 DEFAULT_MODEL=${DEFAULT_MODEL:-}

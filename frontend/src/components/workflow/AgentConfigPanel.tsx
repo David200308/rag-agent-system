@@ -6,8 +6,24 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { SANDBOX_TOOLS } from "@/types/agent";
 import type { AgentRole, Skill, WorkflowAgent } from "@/types/agent";
-import { fetchSkills } from "@/lib/api";
+import { fetchSkills, fetchConnectorStatus } from "@/lib/api";
 import { useSkillsStore } from "@/store/skillsStore";
+
+// ── Connector tool definitions ────────────────────────────────────────────────
+
+interface ConnectorTool {
+  id: string;       // stored in toolsJson, e.g. "CONNECTOR_GOOGLE_DOCS"
+  provider: string; // must match connector status key, e.g. "google"
+  name: string;
+  icon: string;
+}
+
+const CONNECTOR_TOOLS: ConnectorTool[] = [
+  { id: "CONNECTOR_GOOGLE_DOCS",   provider: "google",   name: "Google Docs",   icon: "📄" },
+  { id: "CONNECTOR_GOOGLE_SHEETS", provider: "google",   name: "Google Sheets", icon: "📊" },
+  { id: "CONNECTOR_GOOGLE_SLIDES", provider: "google",   name: "Google Slides", icon: "📑" },
+  { id: "CONNECTOR_TELEGRAM",      provider: "telegram", name: "Telegram",      icon: "✈️" },
+];
 
 interface Props {
   agent: WorkflowAgent | null;
@@ -30,13 +46,15 @@ export function AgentConfigPanel({ agent, pattern, onSave, onDelete, onClose }: 
   const [tools,        setTools]        = useState<string[]>([]);
   const [saving,       setSaving]       = useState(false);
   const [deleting,     setDeleting]     = useState(false);
-  const [skills,       setSkills]       = useState<Skill[]>([]);
+  const [skills,          setSkills]          = useState<Skill[]>([]);
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
+  const [connectorStatus, setConnectorStatus] = useState<Record<string, boolean>>({});
 
   const { setAgentSkills } = useSkillsStore();
 
   useEffect(() => {
     fetchSkills().then(setSkills).catch(() => {});
+    fetchConnectorStatus().then(setConnectorStatus).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -179,6 +197,39 @@ export function AgentConfigPanel({ agent, pattern, onSave, onDelete, onClose }: 
             className="w-full rounded-md border border-[--color-border] bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white resize-none"
           />
         </div>
+
+        {/* Connected Tools */}
+        {CONNECTOR_TOOLS.some(ct => connectorStatus[ct.provider]) && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-[--color-muted]">
+              Connected Tools
+              <span className="ml-1 text-[10px] font-normal">(your integrations)</span>
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {CONNECTOR_TOOLS.filter(ct => connectorStatus[ct.provider]).map(ct => (
+                <button
+                  key={ct.id}
+                  onClick={() => toggleTool(ct.id)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+                    tools.includes(ct.id)
+                      ? "border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400"
+                      : "border-[--color-border] text-[--color-muted] hover:border-sky-400",
+                  )}
+                >
+                  <span>{ct.icon}</span>
+                  {ct.name}
+                </button>
+              ))}
+            </div>
+            {CONNECTOR_TOOLS.some(ct => !connectorStatus[ct.provider]) && (
+              <p className="text-[10px] text-[--color-muted]">
+                More integrations available in{" "}
+                <a href="/mcp" className="underline hover:text-[--color-fg]">Integrations</a>.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Sandbox Tools */}
         <div className="space-y-1.5">

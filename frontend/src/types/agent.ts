@@ -142,17 +142,26 @@ export interface ShareMetaResponse {
 // ── Scheduled messages ────────────────────────────────────────────────────────
 
 export interface ScheduledMessage {
-  id: number;
+  id: string;           // Temporal Schedule ID (UUID)
   conversationId: string;
   ownerEmail: string;
   message: string;
   cronExpr: string;
+  timezone: string;     // IANA timezone name, e.g. "America/New_York"
   topK: number;
   useKnowledgeBase: boolean;
   useWebFetch: boolean;
   enabled: boolean;
+  nextRunAt: string | null;   // ISO-8601, computed by Temporal
+  lastRunAt: string | null;   // ISO-8601, from most recent execution
   createdAt: string;
-  updatedAt: string;
+}
+
+export interface ScheduleRun {
+  workflowId: string;
+  status: string;       // e.g. "COMPLETED", "FAILED", "RUNNING"
+  startTime: string | null;
+  closeTime: string | null;
 }
 
 export interface CreateScheduleRequest {
@@ -163,6 +172,7 @@ export interface CreateScheduleRequest {
   cronDay: string;
   cronMonth: string;
   cronWeekday: string;
+  timezone?: string;    // defaults to "UTC" if omitted
   topK: number;
   useKnowledgeBase: boolean;
   useWebFetch: boolean;
@@ -175,6 +185,7 @@ export interface UpdateScheduleRequest {
   cronDay?: string;
   cronMonth?: string;
   cronWeekday?: string;
+  timezone?: string;
   topK?: number;
   useKnowledgeBase?: boolean;
   useWebFetch?: boolean;
@@ -196,7 +207,7 @@ export type AgentRole    = "MAIN" | "SUB" | "PEER";
 export type RunStatus    = "PENDING" | "RUNNING" | "DONE" | "FAILED";
 export type LogType      = "TOOL_CALL" | "TOOL_RESULT" | "LLM_RESPONSE" | "DELEGATION" | "ERROR" | "SYSTEM";
 
-export const SANDBOX_TOOLS = ["BASH", "CURL", "GIT", "GREP", "PYTHON", "NODE"] as const;
+export const SANDBOX_TOOLS = ["BASH", "CURL", "GIT", "GREP", "PYTHON", "NODE", "SCHEDULE"] as const;
 export type SandboxTool = typeof SANDBOX_TOOLS[number];
 
 export interface Workflow {

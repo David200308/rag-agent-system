@@ -3,6 +3,10 @@ package com.ragagent.workflow;
 import com.ragagent.auth.service.EmailService;
 import com.ragagent.config.ChatModelFactory;
 import com.ragagent.config.LlmProperties;
+import com.ragagent.connector.GoogleDocsService;
+import com.ragagent.connector.GoogleSheetsService;
+import com.ragagent.connector.GoogleSlidesService;
+import com.ragagent.connector.TelegramService;
 import com.ragagent.model.ModelConfigService;
 import com.ragagent.sandbox.SandboxService;
 import com.ragagent.skill.SkillService;
@@ -26,6 +30,8 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,6 +49,11 @@ class WorkflowRunServiceTest {
     @Mock ModelConfigService       modelConfigService;
     @Mock LlmProperties            llmProperties;
     @Mock EmailService             emailService;
+    @Mock WorkflowScheduleClient   workflowScheduleClient;
+    @Mock GoogleDocsService        googleDocsService;
+    @Mock GoogleSheetsService      googleSheetsService;
+    @Mock GoogleSlidesService      googleSlidesService;
+    @Mock TelegramService          telegramService;
 
     WorkflowRunService service;
 
@@ -51,7 +62,9 @@ class WorkflowRunServiceTest {
         service = new WorkflowRunService(
                 runRepo, logRepo, agentRepo, workflowService, sandboxService,
                 webFetchService, skillService, chatClient, chatModelFactory,
-                modelConfigService, llmProperties, emailService);
+                modelConfigService, llmProperties, emailService,
+                workflowScheduleClient,
+                googleDocsService, googleSheetsService, googleSlidesService, telegramService);
     }
 
     // ── startRun ──────────────────────────────────────────────────────────────
@@ -268,6 +281,235 @@ class WorkflowRunServiceTest {
         assertThat(callTruncate(null, 10)).isEqualTo("null");
     }
 
+    // ── buildToolSection — sandbox tools ─────────────────────────────────────
+
+    @Test
+    void buildToolSection_emptyList_returnsEmpty() throws Exception {
+        assertThat(callBuildToolSection(List.of())).isEmpty();
+    }
+
+    @Test
+    void buildToolSection_sandboxTools_includesBashFormat() throws Exception {
+        String result = callBuildToolSection(List.of("BASH", "PYTHON"));
+
+        assertThat(result).contains("use_tool name=\"bash\"");
+        assertThat(result).contains("bash");
+        assertThat(result).contains("python");
+    }
+
+    @Test
+    void buildToolSection_sandboxTools_doesNotIncludeConnectorInstructions() throws Exception {
+        String result = callBuildToolSection(List.of("BASH", "CURL"));
+
+        assertThat(result).doesNotContain("GOOGLE_DOCS_WRITE");
+        assertThat(result).doesNotContain("TELEGRAM_SEND");
+        assertThat(result).doesNotContain("Connected Service Tools");
+    }
+
+    @Test
+    void buildToolSection_scheduleOnly_includesScheduleFormat() throws Exception {
+        String result = callBuildToolSection(List.of("SCHEDULE"));
+
+        assertThat(result).contains("use_tool name=\"SCHEDULE\"");
+        assertThat(result).contains("\"action\"");
+    }
+
+    // ── buildToolSection — connector tools ────────────────────────────────────
+
+    @Test
+    void buildToolSection_googleDocsConnector_includesWriteAndReadInstructions() throws Exception {
+        String result = callBuildToolSection(List.of("CONNECTOR_GOOGLE_DOCS"));
+
+        assertThat(result).contains("Connected Service Tools");
+        assertThat(result).contains("GOOGLE_DOCS_WRITE");
+        assertThat(result).contains("GOOGLE_DOCS_READ");
+    }
+
+    @Test
+    void buildToolSection_googleSheetsConnector_includesSheetsWriteInstruction() throws Exception {
+        String result = callBuildToolSection(List.of("CONNECTOR_GOOGLE_SHEETS"));
+
+        assertThat(result).contains("GOOGLE_SHEETS_WRITE");
+        assertThat(result).doesNotContain("GOOGLE_DOCS_WRITE");
+    }
+
+    @Test
+    void buildToolSection_googleSlidesConnector_includesSlidesWriteInstruction() throws Exception {
+        String result = callBuildToolSection(List.of("CONNECTOR_GOOGLE_SLIDES"));
+
+        assertThat(result).contains("GOOGLE_SLIDES_WRITE");
+        assertThat(result).doesNotContain("GOOGLE_SHEETS_WRITE");
+    }
+
+    @Test
+    void buildToolSection_telegramConnector_includesSendInstruction() throws Exception {
+        String result = callBuildToolSection(List.of("CONNECTOR_TELEGRAM"));
+
+        assertThat(result).contains("TELEGRAM_SEND");
+    }
+
+    @Test
+    void buildToolSection_multipleConnectors_includesAllInstructions() throws Exception {
+        String result = callBuildToolSection(List.of(
+                "CONNECTOR_GOOGLE_DOCS",
+                "CONNECTOR_GOOGLE_SHEETS",
+                "CONNECTOR_GOOGLE_SLIDES",
+                "CONNECTOR_TELEGRAM"));
+
+        assertThat(result).contains("GOOGLE_DOCS_WRITE");
+        assertThat(result).contains("GOOGLE_DOCS_READ");
+        assertThat(result).contains("GOOGLE_SHEETS_WRITE");
+        assertThat(result).contains("GOOGLE_SLIDES_WRITE");
+        assertThat(result).contains("TELEGRAM_SEND");
+    }
+
+    @Test
+    void buildToolSection_sandboxAndConnector_includesBothSections() throws Exception {
+        String result = callBuildToolSection(List.of("BASH", "CONNECTOR_TELEGRAM"));
+
+        assertThat(result).contains("use_tool name=\"bash\"");
+        assertThat(result).contains("TELEGRAM_SEND");
+        assertThat(result).contains("Connected Service Tools");
+    }
+
+    @Test
+    void buildToolSection_alwaysEndsWithFinalAnswerReminder() throws Exception {
+        String withSandbox   = callBuildToolSection(List.of("BASH"));
+        String withConnector = callBuildToolSection(List.of("CONNECTOR_TELEGRAM"));
+        String withSchedule  = callBuildToolSection(List.of("SCHEDULE"));
+
+        assertThat(withSandbox).endsWith("final answer, respond normally without any XML tags.");
+        assertThat(withConnector).endsWith("final answer, respond normally without any XML tags.");
+        assertThat(withSchedule).endsWith("final answer, respond normally without any XML tags.");
+    }
+
+    // ── dispatchConnectorTool ─────────────────────────────────────────────────
+
+    @Test
+    void dispatchConnectorTool_googleDocsWrite_callsCreateDocument() throws Exception {
+        when(googleDocsService.createDocument(eq("My Doc"), eq("Body text"), eq("user@test.com")))
+                .thenReturn("https://docs.google.com/document/d/abc/edit");
+
+        String result = callDispatchConnectorTool(
+                "GOOGLE_DOCS_WRITE",
+                "{\"title\":\"My Doc\",\"content\":\"Body text\"}",
+                "user@test.com");
+
+        assertThat(result).contains("docs.google.com");
+        verify(googleDocsService).createDocument("My Doc", "Body text", "user@test.com");
+    }
+
+    @Test
+    void dispatchConnectorTool_googleDocsRead_callsReadDocument() throws Exception {
+        String docUrl = "https://docs.google.com/document/d/xyz/edit";
+        when(googleDocsService.readDocument(eq(docUrl), eq("user@test.com")))
+                .thenReturn("Document content here");
+
+        String result = callDispatchConnectorTool(
+                "GOOGLE_DOCS_READ",
+                "{\"url\":\"" + docUrl + "\"}",
+                "user@test.com");
+
+        assertThat(result).isEqualTo("Document content here");
+        verify(googleDocsService).readDocument(docUrl, "user@test.com");
+    }
+
+    @Test
+    void dispatchConnectorTool_googleDocsRead_acceptsPlainUrl() throws Exception {
+        String docUrl = "https://docs.google.com/document/d/abc/edit";
+        when(googleDocsService.readDocument(eq(docUrl), anyString()))
+                .thenReturn("Content");
+
+        // Plain string payload (not JSON object)
+        callDispatchConnectorTool("GOOGLE_DOCS_READ", "\"" + docUrl + "\"", "user@test.com");
+
+        verify(googleDocsService).readDocument(docUrl, "user@test.com");
+    }
+
+    @Test
+    void dispatchConnectorTool_googleSheetsWrite_callsCreateSpreadsheet() throws Exception {
+        when(googleSheetsService.createSpreadsheet(eq("Budget"), eq("Name\tAmount"), eq("user@test.com")))
+                .thenReturn("https://docs.google.com/spreadsheets/d/def/edit");
+
+        String result = callDispatchConnectorTool(
+                "GOOGLE_SHEETS_WRITE",
+                "{\"title\":\"Budget\",\"content\":\"Name\\tAmount\"}",
+                "user@test.com");
+
+        assertThat(result).contains("spreadsheets");
+        verify(googleSheetsService).createSpreadsheet("Budget", "Name\tAmount", "user@test.com");
+    }
+
+    @Test
+    void dispatchConnectorTool_googleSlidesWrite_callsCreatePresentation() throws Exception {
+        when(googleSlidesService.createPresentation(eq("Deck"), eq("Slide 1\nbody"), eq("user@test.com")))
+                .thenReturn("https://docs.google.com/presentation/d/ghi/edit");
+
+        String result = callDispatchConnectorTool(
+                "GOOGLE_SLIDES_WRITE",
+                "{\"title\":\"Deck\",\"content\":\"Slide 1\\nbody\"}",
+                "user@test.com");
+
+        assertThat(result).contains("presentation");
+        verify(googleSlidesService).createPresentation("Deck", "Slide 1\nbody", "user@test.com");
+    }
+
+    @Test
+    void dispatchConnectorTool_telegramSend_callsSendMessage() throws Exception {
+        when(telegramService.sendMessage(eq("user@test.com"), eq("Hello!")))
+                .thenReturn("Message sent to your Telegram successfully.");
+
+        String result = callDispatchConnectorTool(
+                "TELEGRAM_SEND",
+                "{\"message\":\"Hello!\"}",
+                "user@test.com");
+
+        assertThat(result).contains("successfully");
+        verify(telegramService).sendMessage("user@test.com", "Hello!");
+    }
+
+    @Test
+    void dispatchConnectorTool_telegramSend_acceptsPlainString() throws Exception {
+        when(telegramService.sendMessage(anyString(), eq("Plain message")))
+                .thenReturn("Message sent to your Telegram successfully.");
+
+        callDispatchConnectorTool("TELEGRAM_SEND", "\"Plain message\"", "user@test.com");
+
+        verify(telegramService).sendMessage("user@test.com", "Plain message");
+    }
+
+    @Test
+    void dispatchConnectorTool_serviceThrowsIllegalState_returnsConnectorError() throws Exception {
+        when(googleDocsService.createDocument(anyString(), anyString(), anyString()))
+                .thenThrow(new IllegalStateException("Google account not connected."));
+
+        String result = callDispatchConnectorTool(
+                "GOOGLE_DOCS_WRITE",
+                "{\"title\":\"T\",\"content\":\"C\"}",
+                "user@test.com");
+
+        assertThat(result).startsWith("Connector error:");
+        assertThat(result).contains("Google account not connected");
+    }
+
+    @Test
+    void dispatchConnectorTool_unknownTool_returnsUnknownMessage() throws Exception {
+        String result = callDispatchConnectorTool("NONEXISTENT_TOOL", "{}", "user@test.com");
+
+        assertThat(result).contains("Unknown connector tool");
+        assertThat(result).contains("NONEXISTENT_TOOL");
+    }
+
+    @Test
+    void dispatchConnectorTool_missingJsonFields_usesDefaultValues() throws Exception {
+        when(googleDocsService.createDocument(eq("Untitled"), eq(""), eq("user@test.com")))
+                .thenReturn("https://docs.google.com/document/d/new/edit");
+
+        callDispatchConnectorTool("GOOGLE_DOCS_WRITE", "{}", "user@test.com");
+
+        verify(googleDocsService).createDocument("Untitled", "", "user@test.com");
+    }
+
     // ── reflection helpers ────────────────────────────────────────────────────
 
     private String callValidate(String command, String email) throws Exception {
@@ -289,5 +531,19 @@ class WorkflowRunServiceTest {
                 "truncate", String.class, int.class);
         m.setAccessible(true);
         return (String) m.invoke(service, s, max);
+    }
+
+    private String callBuildToolSection(List<String> tools) throws Exception {
+        Method m = WorkflowRunService.class.getDeclaredMethod("buildToolSection", List.class);
+        m.setAccessible(true);
+        return (String) m.invoke(service, tools);
+    }
+
+    private String callDispatchConnectorTool(String toolName, String payload, String ownerEmail)
+            throws Exception {
+        Method m = WorkflowRunService.class.getDeclaredMethod(
+                "dispatchConnectorTool", String.class, String.class, String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(service, toolName, payload, ownerEmail);
     }
 }

@@ -2,17 +2,18 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { X, Plus, Trash2, Power, PowerOff, Clock } from "lucide-react";
+import { X, Plus, Trash2, Power, PowerOff, Clock, ChevronDown, ChevronRight, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import {
   fetchSchedules,
   createSchedule,
   updateSchedule,
   deleteSchedule,
+  fetchScheduleRuns,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { cn } from "@/lib/utils";
-import type { CreateScheduleRequest } from "@/types/agent";
+import type { CreateScheduleRequest, ScheduleRun } from "@/types/agent";
 
 // ── Cron field helpers ────────────────────────────────────────────────────────
 
@@ -25,6 +26,21 @@ const PRESETS = [
   { label: "Weekly Sunday",  cron: { m: "0",    h: "8",  d: "*", mo: "*", w: "0" } },
   { label: "1st of month",   cron: { m: "0",    h: "8",  d: "1", mo: "*", w: "*" } },
   { label: "Every 10 min",   cron: { m: "*/10", h: "*",  d: "*", mo: "*", w: "*" } },
+];
+
+const TIMEZONES = [
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Asia/Tokyo",
+  "Asia/Shanghai",
+  "Asia/Singapore",
+  "Australia/Sydney",
 ];
 
 interface CronFields {
@@ -52,10 +68,48 @@ function CronInput({
   );
 }
 
+function RunStatusIcon({ status }: { status: string }) {
+  if (status === "COMPLETED") return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />;
+  if (status === "FAILED" || status === "TIMED_OUT") return <XCircle className="h-3.5 w-3.5 text-red-500" />;
+  return <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />;
+}
+
+function RunHistory({ scheduleId }: { scheduleId: string }) {
+  const { data: runs = [], isLoading } = useQuery<ScheduleRun[]>({
+    queryKey: ["scheduleRuns", scheduleId],
+    queryFn: () => fetchScheduleRuns(scheduleId),
+    staleTime: 30_000,
+  });
+
+  if (isLoading) return <div className="flex justify-center py-2"><Spinner className="h-4 w-4" /></div>;
+  if (runs.length === 0) return <p className="text-xs text-[--color-muted] py-1">No runs yet.</p>;
+
+  return (
+    <ul className="space-y-1">
+      {runs.map((run) => (
+        <li key={run.workflowId} className="flex items-center gap-2 text-xs">
+          <RunStatusIcon status={run.status} />
+          <span className="font-mono text-[--color-muted]">
+            {run.startTime ? new Date(run.startTime).toLocaleString() : "—"}
+          </span>
+          <span className={cn(
+            "ml-auto rounded px-1.5 py-0.5 text-[10px] font-medium",
+            run.status === "COMPLETED" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
+            run.status === "FAILED" || run.status === "TIMED_OUT" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+            "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+          )}>
+            {run.status}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface ScheduleModalProps {
-  conversationId: string; // backend conversation UUID
+  conversationId: string;
   onClose: () => void;
 }
 
@@ -71,9 +125,13 @@ export function ScheduleModal({ conversationId, onClose }: ScheduleModalProps) {
   const [showForm, setShowForm] = useState(false);
   const [message, setMessage] = useState("");
   const [cron, setCron] = useState<CronFields>({ m: "0", h: "8", d: "*", mo: "*", w: "*" });
+  const [timezone, setTimezone] = useState("UTC");
   const [topK, setTopK] = useState(5);
   const [useKb, setUseKb] = useState(true);
   const [useWf, setUseWf] = useState(true);
+
+  // ── Expanded run history per schedule ──────────────────────────────────────
+  const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
 
   const createMutation = useMutation({
     mutationFn: (req: CreateScheduleRequest) => createSchedule(req),
@@ -82,17 +140,18 @@ export function ScheduleModal({ conversationId, onClose }: ScheduleModalProps) {
       setShowForm(false);
       setMessage("");
       setCron({ m: "0", h: "8", d: "*", mo: "*", w: "*" });
+      setTimezone("UTC");
     },
   });
 
   const toggleMutation = useMutation({
-    mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
       updateSchedule(id, { enabled }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["schedules", conversationId] }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => deleteSchedule(id),
+    mutationFn: (id: string) => deleteSchedule(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["schedules", conversationId] }),
   });
 
@@ -106,9 +165,19 @@ export function ScheduleModal({ conversationId, onClose }: ScheduleModalProps) {
       cronDay:     cron.d,
       cronMonth:   cron.mo,
       cronWeekday: cron.w,
+      timezone,
       topK,
       useKnowledgeBase: useKb,
       useWebFetch:      useWf,
+    });
+  };
+
+  const toggleRuns = (id: string) => {
+    setExpandedRuns((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
   };
 
@@ -151,38 +220,69 @@ export function ScheduleModal({ conversationId, onClose }: ScheduleModalProps) {
                 <li
                   key={sc.id}
                   className={cn(
-                    "flex items-start gap-3 rounded-lg border p-3 text-sm",
+                    "rounded-lg border p-3 text-sm",
                     sc.enabled
                       ? "border-[--color-border] bg-[--color-surface-raised]"
                       : "border-[--color-border] bg-[--color-surface] opacity-60",
                   )}
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate font-medium">{sc.message}</p>
-                    <p className="mt-0.5 font-mono text-xs text-[--color-muted]">
-                      {sc.cronExpr}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      title={sc.enabled ? "Disable" : "Enable"}
-                      onClick={() => toggleMutation.mutate({ id: sc.id, enabled: !sc.enabled })}
-                      className="rounded p-1 text-[--color-muted] hover:bg-[--color-border]/50"
-                    >
-                      {sc.enabled ? (
-                        <Power className="h-4 w-4 text-emerald-500" />
-                      ) : (
-                        <PowerOff className="h-4 w-4" />
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate font-medium">{sc.message}</p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                        <span className="font-mono text-xs text-[--color-muted]">{sc.cronExpr}</span>
+                        {sc.timezone && sc.timezone !== "UTC" && (
+                          <span className="text-xs text-[--color-muted]">{sc.timezone}</span>
+                        )}
+                      </div>
+                      {sc.nextRunAt && (
+                        <p className="mt-0.5 text-[11px] text-[--color-muted]">
+                          Next: {new Date(sc.nextRunAt).toLocaleString()}
+                        </p>
                       )}
-                    </button>
-                    <button
-                      title="Delete"
-                      onClick={() => deleteMutation.mutate(sc.id)}
-                      className="rounded p-1 text-[--color-muted] hover:bg-[--color-border]/50"
-                    >
-                      <Trash2 className="h-4 w-4 hover:text-red-500" />
-                    </button>
+                      {sc.lastRunAt && (
+                        <p className="text-[11px] text-[--color-muted]">
+                          Last: {new Date(sc.lastRunAt).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        title={sc.enabled ? "Disable" : "Enable"}
+                        onClick={() => toggleMutation.mutate({ id: sc.id, enabled: !sc.enabled })}
+                        className="rounded p-1 text-[--color-muted] hover:bg-[--color-border]/50"
+                      >
+                        {sc.enabled ? (
+                          <Power className="h-4 w-4 text-emerald-500" />
+                        ) : (
+                          <PowerOff className="h-4 w-4" />
+                        )}
+                      </button>
+                      <button
+                        title="Delete"
+                        onClick={() => deleteMutation.mutate(sc.id)}
+                        className="rounded p-1 text-[--color-muted] hover:bg-[--color-border]/50"
+                      >
+                        <Trash2 className="h-4 w-4 hover:text-red-500" />
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Run history toggle */}
+                  <button
+                    onClick={() => toggleRuns(sc.id)}
+                    className="mt-2 flex items-center gap-1 text-[11px] text-[--color-muted] hover:text-[--color-foreground]"
+                  >
+                    {expandedRuns.has(sc.id)
+                      ? <ChevronDown className="h-3 w-3" />
+                      : <ChevronRight className="h-3 w-3" />}
+                    Run history
+                  </button>
+                  {expandedRuns.has(sc.id) && (
+                    <div className="mt-2 border-t border-[--color-border] pt-2">
+                      <RunHistory scheduleId={sc.id} />
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -244,10 +344,26 @@ export function ScheduleModal({ conversationId, onClose }: ScheduleModalProps) {
                 <CronInput label="Weekday" value={cron.w}  onChange={(v) => setCron((c) => ({ ...c, w: v }))}  placeholder="0-6" />
               </div>
 
-              {/* Preview */}
-              <p className="rounded bg-[--color-surface] px-2 py-1 font-mono text-xs text-[--color-muted]">
-                {cron.m} {cron.h} {cron.d} {cron.mo} {cron.w}
-              </p>
+              {/* Cron preview + timezone row */}
+              <div className="flex items-center gap-3">
+                <p className="flex-1 rounded bg-[--color-surface] px-2 py-1 font-mono text-xs text-[--color-muted]">
+                  {cron.m} {cron.h} {cron.d} {cron.mo} {cron.w}
+                </p>
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-[10px] font-medium uppercase tracking-wider text-[--color-muted]">
+                    Timezone
+                  </label>
+                  <select
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    className="rounded border border-[--color-border] bg-[--color-surface] px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
+                  >
+                    {TIMEZONES.map((tz) => (
+                      <option key={tz} value={tz}>{tz}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
               {/* Options row */}
               <div className="flex flex-wrap items-center gap-3 text-xs text-[--color-muted]">
