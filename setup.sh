@@ -764,6 +764,11 @@ EOF
     echo -e "  ${DIM}Set SANDBOX_ENABLED=false in .env.prod to disable the sandbox entirely.${NC}"
   fi
 
+  # ── Sync TEMPORAL_DB_PASSWORD into .env.prod (temporal container can't use Docker secrets) ──
+  _sync_pass="$(cat "$SECRETS_DIR/temporal_db_password")"
+  sed -i "s|^TEMPORAL_DB_PASSWORD=.*|TEMPORAL_DB_PASSWORD=$_sync_pass|" "$PROD_ENV"
+  unset _sync_pass
+
   # ── Launch ─────────────────────────────────────────────────────────────────
   echo ""
   echo -e "  How would you like to start?"
