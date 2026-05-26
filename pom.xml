@@ -204,10 +204,27 @@
         </dependency>
 
         <!-- Yubico WebAuthn server — passkey registration and authentication -->
+        <!--
+            yubico-util:2.5.3 depends on jackson-dataformat-cbor:2.18.5 whose POM
+            references jackson-databind:2.19.5-SNAPSHOT (non-existent). Excluding it
+            here prevents Maven from ever reading that POM; the stable version below
+            satisfies the runtime need.
+        -->
         <dependency>
             <groupId>com.yubico</groupId>
             <artifactId>webauthn-server-core</artifactId>
             <version>2.5.3</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.dataformat</groupId>
+                    <artifactId>jackson-dataformat-cbor</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-cbor</artifactId>
+            <version>2.18.2</version>
         </dependency>
 
         <!-- Test -->
