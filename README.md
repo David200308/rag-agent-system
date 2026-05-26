@@ -28,10 +28,9 @@
 | Layer            | Technology                                           |
 | ---------------- | ---------------------------------------------------- |
 | Runtime          | Go 1.24                                              |
-| Workflow engine  | Temporal SDK v1.44 (self-hosted)                     |
-| Schedule storage | Temporal Server + PostgreSQL (separate from app DB)  |
-| Retry policy     | 3 attempts, 2s → 4s → 8s exponential backoff         |
-| Observability    | Temporal Web UI (`:8088`)                            |
+| Task queue       | Asynq (Redis-backed)                                 |
+| Schedule storage | MySQL (shared with app DB)                           |
+| Retry policy     | MaxRetry=3, task timeout=5 min (Asynq)               |
 
 ### Frontend
 
@@ -48,10 +47,9 @@
 | Component        | Technology                                       |
 | ---------------- | ------------------------------------------------ |
 | Vector DB        | Weaviate (Docker)                                |
-| Relational DB    | MySQL (Docker) — app data                        |
-| Workflow DB      | PostgreSQL (Docker) — Temporal state only        |
-| Scheduler        | Go microservice backed by Temporal (`:8082`)     |
-| Scheduler UI     | Temporal Web UI (`:8088`)                        |
+| Relational DB    | MySQL (Docker) — app + schedule data             |
+| Task queue       | Redis 7 (Docker) — Asynq backend                 |
+| Scheduler        | Go microservice backed by Asynq (`:8082`)        |
 | Containerization | Docker Compose                                   |
 
 ---
@@ -110,15 +108,15 @@
   ┌───────▼──────┐   ┌────────▼────────┐  ┌───────▼─────────────────┐
   │  Weaviate    │   │     MySQL       │  │  Go Scheduler (:8082)   │
   │  (vectors)   │   │  (auth, convos, │  │                         │
-  │              │   │   workflows,    │  │  Temporal Worker        │
-  └──────────────┘   │   skills)       │  │    └─ RagQueryWorkflow  │
-                     └─────────────────┘  │    └─ TriggerActivity   │
-                                          │         (3× retry)      │
+  │              │   │   workflows,    │  │  Asynq Scheduler        │
+  └──────────────┘   │   skills,       │  │    └─ enqueues tasks    │
+                     │   schedules)    │  │  Asynq Worker           │
+                     └─────────────────┘  │    └─ rag:trigger       │
+                                          │         (MaxRetry=3)    │
                                           │                         │
                                           │  ┌─────────────────┐    │
-                                          │  │ Temporal Server │    │
-                                          │  │  (:7233)        │    │
-                                          │  │  + PostgreSQL   │    │
+                                          │  │  Redis (:6379)  │    │
+                                          │  │  (task queue)   │    │
                                           │  └─────────────────┘    │
                                           └─────────────────────────┘
 ```
@@ -184,7 +182,7 @@ The `SCHEDULE` tool lets a workflow agent manage schedules on behalf of the user
 
 ## Scheduler
 
-The Go microservice (`:8082`) uses **Temporal** as its workflow engine for durable, observable cron scheduling.
+The Go microservice (`:8082`) uses **Asynq** (Redis-backed) for durable cron scheduling, with schedule state persisted in MySQL.
 
 ### How it works
 
@@ -194,13 +192,14 @@ Frontend / Workflow Agent
         │  REST (JWT or service-key)
         ▼
 Go Scheduler (:8082)
-  ├── REST API  →  Temporal Schedule Client  →  Temporal Server (:7233)
-  └── Temporal Worker (same process)
-           └── RagQueryWorkflow
-                 └── TriggerActivity ──► Spring Boot /api/v1/scheduler/trigger
+  ├── REST API  →  cronmgr (asynq.Scheduler)  →  Redis
+  └── Asynq Worker (same process)
+           └── rag:trigger handler
+                 └── POST Spring Boot /api/v1/scheduler/trigger
+                           (MaxRetry=3, Timeout=5 min)
 ```
 
-When a cron fires, Temporal starts a `RagQueryWorkflow` on the worker. The workflow calls `TriggerActivity` which POSTs to Spring Boot. If Spring Boot is down, Temporal retries automatically (3×, exponential backoff). Every execution is recorded in Temporal's database.
+On startup the scheduler reloads all active schedules from MySQL into the Asynq in-process cron engine. When a cron fires, Asynq enqueues a `rag:trigger` task to Redis. The worker picks it up and POSTs to Spring Boot. If the call fails, Asynq retries up to 3 times automatically. Each run is recorded in `schedule_runs` (MySQL).
 
 ### Scheduler API
 
@@ -224,12 +223,8 @@ When a cron fires, Temporal starts a `RagQueryWorkflow` on the worker. The workf
 | `timezone`         | IANA timezone name (e.g. `America/New_York`)         |
 | `message`          | Query sent to the RAG pipeline on each tick          |
 | `enabled`          | Pause/resume without deleting                        |
-| `nextRunAt`        | Next scheduled fire time (computed by Temporal)      |
+| `nextRunAt`        | Next scheduled fire time (computed from cron expr)   |
 | `lastRunAt`        | Most recent actual execution time                    |
-
-### Temporal Web UI
-
-The Temporal UI is available at **http://localhost:8088** when running with Docker Compose. It shows all schedules, individual workflow run history, retry attempts, and error details — no extra tooling needed.
 
 ---
 
@@ -258,11 +253,8 @@ cp .env.example .env
 docker compose up --build
 
 # Services
-# Frontend:      http://localhost:3000
-# Backend API:   http://localhost:8081/swagger-ui.html
-# Scheduler:     http://localhost:8082/health
-# Temporal UI:   http://localhost:8088
-# Weaviate:      http://localhost:8080
+# Frontend:    http://localhost:3000
+# Backend API: http://localhost:8081/swagger-ui.html
+# Scheduler:   http://localhost:8082/health
+# Weaviate:    http://localhost:8080
 ```
-
-> **First run:** Temporal auto-setup takes ~60 seconds to initialise its PostgreSQL schema. The scheduler container will wait for it automatically.
