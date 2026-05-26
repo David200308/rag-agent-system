@@ -86,6 +86,8 @@ func buildTask(sc *model.Schedule) (*asynq.Task, error) {
 		UserEmail:        sc.OwnerEmail,
 		ConversationID:   sc.ConversationID,
 		Message:          sc.Message,
+		WorkflowID:       sc.WorkflowID,
+		WorkflowInput:    sc.WorkflowInput,
 		TopK:             sc.TopK,
 		UseKnowledgeBase: sc.UseKnowledgeBase,
 		UseWebFetch:      sc.UseWebFetch,

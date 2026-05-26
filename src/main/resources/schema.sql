@@ -292,3 +292,9 @@ CREATE TABLE IF NOT EXISTS schedule_runs (
     CONSTRAINT fk_run_sched FOREIGN KEY (schedule_id)
         REFERENCES scheduled_messages(id) ON DELETE CASCADE
 );
+
+-- ── Schema migration: workflow scheduling support ─────────────────────────────
+ALTER TABLE scheduled_messages MODIFY COLUMN conversation_id VARCHAR(36) NULL;
+ALTER TABLE scheduled_messages ADD COLUMN workflow_id    VARCHAR(36) NULL;
+ALTER TABLE scheduled_messages ADD COLUMN workflow_input TEXT        NULL;
+ALTER TABLE scheduled_messages ADD INDEX  idx_sched_workflow (workflow_id);

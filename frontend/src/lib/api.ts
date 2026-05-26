@@ -31,6 +31,8 @@ import type {
   UrlIngestionResult,
   WebFetchWhitelistEntry,
   ScheduleRun,
+  WorkflowSchedule,
+  CreateWorkflowScheduleRequest,
 } from "@/types/agent";
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
@@ -241,6 +243,35 @@ export async function fetchScheduleRuns(id: string): Promise<ScheduleRun[]> {
   const res = await fetch(`/api/scheduler/schedules/${id}/runs`);
   if (!res.ok) return [];
   return res.json() as Promise<ScheduleRun[]>;
+}
+
+// ── Workflow schedules ────────────────────────────────────────────────────────
+
+export async function fetchWorkflowSchedules(workflowId: string): Promise<WorkflowSchedule[]> {
+  const res = await fetch(`/api/scheduler/schedules?workflowId=${encodeURIComponent(workflowId)}`);
+  if (!res.ok) return [];
+  return res.json() as Promise<WorkflowSchedule[]>;
+}
+
+export async function createWorkflowSchedule(payload: CreateWorkflowScheduleRequest): Promise<WorkflowSchedule> {
+  return postJson<WorkflowSchedule>("/api/scheduler/schedules", payload);
+}
+
+export async function updateWorkflowSchedule(id: string, payload: UpdateScheduleRequest): Promise<WorkflowSchedule> {
+  const res = await fetch(`/api/scheduler/schedules/${id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status}: ${text}`);
+  }
+  return res.json() as Promise<WorkflowSchedule>;
+}
+
+export async function deleteWorkflowSchedule(id: string): Promise<void> {
+  await fetch(`/api/scheduler/schedules/${id}`, { method: "DELETE" });
 }
 
 // ── Model config API ──────────────────────────────────────────────────────────

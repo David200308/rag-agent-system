@@ -96,17 +96,24 @@ func (h *Handler) Health(w http.ResponseWriter, _ *http.Request) {
 
 // ── List ──────────────────────────────────────────────────────────────────────
 
-// GET /schedules?conversationId={id}
+// GET /schedules?conversationId={id}  OR  GET /schedules?workflowId={id}
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	h.withAuth(func(w http.ResponseWriter, r *http.Request) {
 		convID := r.URL.Query().Get("conversationId")
-		if convID == "" {
-			writeError(w, http.StatusBadRequest, "conversationId is required")
+		wfID := r.URL.Query().Get("workflowId")
+		if convID == "" && wfID == "" {
+			writeError(w, http.StatusBadRequest, "conversationId or workflowId is required")
 			return
 		}
 		email := r.Context().Value(emailKey).(string)
 
-		schedules, err := h.st.ListByConversation(email, convID)
+		var schedules []*model.Schedule
+		var err error
+		if wfID != "" {
+			schedules, err = h.st.ListByWorkflow(email, wfID)
+		} else {
+			schedules, err = h.st.ListByConversation(email, convID)
+		}
 		if err != nil {
 			log.Printf("[handler] list error: %v", err)
 			writeError(w, http.StatusInternalServerError, "failed to list schedules")
@@ -139,9 +146,17 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid JSON")
 			return
 		}
-		if req.ConversationID == "" || req.Message == "" {
-			writeError(w, http.StatusBadRequest, "conversationId and message are required")
-			return
+		// Either conversation or workflow schedule
+		if req.WorkflowID != "" {
+			if req.WorkflowInput == "" {
+				writeError(w, http.StatusBadRequest, "workflowInput is required for workflow schedules")
+				return
+			}
+		} else {
+			if req.ConversationID == "" || req.Message == "" {
+				writeError(w, http.StatusBadRequest, "conversationId and message are required")
+				return
+			}
 		}
 		if req.TopK <= 0 {
 			req.TopK = 5
@@ -153,6 +168,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		sc := &model.Schedule{
 			ID:               newID(),
 			ConversationID:   req.ConversationID,
+			WorkflowID:       req.WorkflowID,
+			WorkflowInput:    req.WorkflowInput,
 			OwnerEmail:       email,
 			Message:          req.Message,
 			CronExpr:         model.BuildCronExpr(req.CronMinute, req.CronHour, req.CronDay, req.CronMonth, req.CronWeekday),
@@ -348,8 +365,17 @@ func (h *Handler) InternalCreate(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid JSON")
 			return
 		}
-		if req.OwnerEmail == "" || req.ConversationID == "" || req.Message == "" {
-			writeError(w, http.StatusBadRequest, "ownerEmail, conversationId, and message are required")
+		if req.OwnerEmail == "" {
+			writeError(w, http.StatusBadRequest, "ownerEmail is required")
+			return
+		}
+		if req.WorkflowID != "" {
+			if req.WorkflowInput == "" {
+				writeError(w, http.StatusBadRequest, "workflowInput is required for workflow schedules")
+				return
+			}
+		} else if req.ConversationID == "" || req.Message == "" {
+			writeError(w, http.StatusBadRequest, "conversationId and message are required")
 			return
 		}
 		if req.TopK <= 0 {
@@ -365,6 +391,8 @@ func (h *Handler) InternalCreate(w http.ResponseWriter, r *http.Request) {
 		sc := &model.Schedule{
 			ID:               newID(),
 			ConversationID:   req.ConversationID,
+			WorkflowID:       req.WorkflowID,
+			WorkflowInput:    req.WorkflowInput,
 			OwnerEmail:       req.OwnerEmail,
 			Message:          req.Message,
 			CronExpr:         req.CronExpr,

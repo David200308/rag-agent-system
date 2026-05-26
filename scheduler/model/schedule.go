@@ -4,9 +4,12 @@ import "time"
 
 // Schedule is the REST representation returned to clients.
 // ID is a UUID string.
+// Either ConversationID+Message (chat schedule) or WorkflowID+WorkflowInput (workflow schedule) must be set.
 type Schedule struct {
 	ID               string     `json:"id"`
 	ConversationID   string     `json:"conversationId"`
+	WorkflowID       string     `json:"workflowId,omitempty"`
+	WorkflowInput    string     `json:"workflowInput,omitempty"`
 	OwnerEmail       string     `json:"ownerEmail"`
 	Message          string     `json:"message"`
 	CronExpr         string     `json:"cronExpr"`
@@ -29,8 +32,11 @@ type ScheduleRun struct {
 }
 
 // CreateRequest is the body for POST /schedules.
+// Either ConversationID+Message or WorkflowID+WorkflowInput must be set.
 type CreateRequest struct {
 	ConversationID   string `json:"conversationId"`
+	WorkflowID       string `json:"workflowId"`
+	WorkflowInput    string `json:"workflowInput"`
 	Message          string `json:"message"`
 	CronMinute       string `json:"cronMinute"`
 	CronHour         string `json:"cronHour"`
@@ -63,6 +69,8 @@ type UpdateRequest struct {
 type InternalCreateRequest struct {
 	OwnerEmail       string `json:"ownerEmail"`
 	ConversationID   string `json:"conversationId"`
+	WorkflowID       string `json:"workflowId"`
+	WorkflowInput    string `json:"workflowInput"`
 	Message          string `json:"message"`
 	CronExpr         string `json:"cronExpr"` // full 5-field cron expression
 	Timezone         string `json:"timezone"`

@@ -19,11 +19,12 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { Plus, Play, Save, History, Download, Upload, FileJson } from "lucide-react";
+import { Plus, Play, Save, History, Download, Upload, FileJson, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { PatternSelector } from "./PatternSelector";
 import { AgentConfigPanel } from "./AgentConfigPanel";
 import { WorkflowRunsPanel } from "./WorkflowRunsPanel";
+import { WorkflowScheduleModal } from "./WorkflowScheduleModal";
 import {
   fetchWorkflowAgents,
   fetchSkills,
@@ -141,8 +142,9 @@ export function WorkflowBuilder({ workflow }: Props) {
   const [teamExecMode, setTeamExecMode] = useState<TeamExecMode | null>(workflow.teamExecMode);
   const [runId,          setRunId]          = useState<string | null>(null);
   const [runInput,       setRunInput]       = useState("");
-  const [showRunInput,   setShowRunInput]   = useState(false);
-  const [showRunsPanel,  setShowRunsPanel]  = useState(false);
+  const [showRunInput,      setShowRunInput]      = useState(false);
+  const [showRunsPanel,     setShowRunsPanel]     = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [saving,         setSaving]         = useState(false);
   const [browserNotify,  setBrowserNotify]  = useState(() =>
     typeof window !== "undefined" && localStorage.getItem("workflow:notify:browser") === "true");
@@ -563,6 +565,9 @@ export function WorkflowBuilder({ workflow }: Props) {
               className="hidden"
               onChange={handleFileImport}
             />
+            <Button size="sm" variant="ghost" onClick={() => setShowScheduleModal(true)}>
+              <CalendarClock className="h-3.5 w-3.5 mr-1" /> Schedule
+            </Button>
             <Button size="sm" variant="ghost" onClick={() => setShowRunsPanel(v => !v)}>
               <History className="h-3.5 w-3.5 mr-1" /> Runs
             </Button>
@@ -572,6 +577,14 @@ export function WorkflowBuilder({ workflow }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Schedule modal */}
+      {showScheduleModal && (
+        <WorkflowScheduleModal
+          workflowId={workflow.id}
+          onClose={() => setShowScheduleModal(false)}
+        />
+      )}
 
       {/* Run input overlay */}
       {showRunInput && (

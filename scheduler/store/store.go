@@ -24,20 +24,28 @@ func New(dsn string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
+func nullStr(s string) sql.NullString {
+	if s == "" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: s, Valid: true}
+}
+
 func (s *Store) Create(sc *model.Schedule) error {
 	_, err := s.db.Exec(`
 		INSERT INTO scheduled_messages
-			(id, conversation_id, owner_email, message, cron_expr, timezone,
+			(id, conversation_id, workflow_id, workflow_input, owner_email, message, cron_expr, timezone,
 			 top_k, use_knowledge_base, use_web_fetch, enabled, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		sc.ID, sc.ConversationID, sc.OwnerEmail, sc.Message, sc.CronExpr, sc.Timezone,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		sc.ID, nullStr(sc.ConversationID), nullStr(sc.WorkflowID), nullStr(sc.WorkflowInput),
+		sc.OwnerEmail, sc.Message, sc.CronExpr, sc.Timezone,
 		sc.TopK, sc.UseKnowledgeBase, sc.UseWebFetch, sc.Enabled, sc.CreatedAt)
 	return err
 }
 
 func (s *Store) GetByID(id string) (*model.Schedule, error) {
 	row := s.db.QueryRow(`
-		SELECT id, conversation_id, owner_email, message, cron_expr, timezone,
+		SELECT id, conversation_id, workflow_id, workflow_input, owner_email, message, cron_expr, timezone,
 		       top_k, use_knowledge_base, use_web_fetch, enabled, created_at
 		FROM scheduled_messages WHERE id = ?`, id)
 	return scanRow(row)
@@ -45,7 +53,7 @@ func (s *Store) GetByID(id string) (*model.Schedule, error) {
 
 func (s *Store) ListByConversation(ownerEmail, convID string) ([]*model.Schedule, error) {
 	rows, err := s.db.Query(`
-		SELECT id, conversation_id, owner_email, message, cron_expr, timezone,
+		SELECT id, conversation_id, workflow_id, workflow_input, owner_email, message, cron_expr, timezone,
 		       top_k, use_knowledge_base, use_web_fetch, enabled, created_at
 		FROM scheduled_messages
 		WHERE conversation_id = ? AND owner_email = ?
@@ -57,9 +65,24 @@ func (s *Store) ListByConversation(ownerEmail, convID string) ([]*model.Schedule
 	return scanRows(rows)
 }
 
+// ListByWorkflow returns schedules for a workflow, filtered by owner.
+func (s *Store) ListByWorkflow(ownerEmail, workflowID string) ([]*model.Schedule, error) {
+	rows, err := s.db.Query(`
+		SELECT id, conversation_id, workflow_id, workflow_input, owner_email, message, cron_expr, timezone,
+		       top_k, use_knowledge_base, use_web_fetch, enabled, created_at
+		FROM scheduled_messages
+		WHERE workflow_id = ? AND owner_email = ?
+		ORDER BY created_at DESC`, workflowID, ownerEmail)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanRows(rows)
+}
+
 // ListByOwner returns schedules filtered by owner (and optionally conversation).
 func (s *Store) ListByOwner(ownerEmail, convID string) ([]*model.Schedule, error) {
-	query := `SELECT id, conversation_id, owner_email, message, cron_expr, timezone,
+	query := `SELECT id, conversation_id, workflow_id, workflow_input, owner_email, message, cron_expr, timezone,
 		       top_k, use_knowledge_base, use_web_fetch, enabled, created_at
 		FROM scheduled_messages WHERE owner_email = ?`
 	args := []any{ownerEmail}
@@ -93,7 +116,7 @@ func (s *Store) Delete(id string) error {
 // ListAll returns all schedules (used at startup to reload into Asynq scheduler).
 func (s *Store) ListAll() ([]*model.Schedule, error) {
 	rows, err := s.db.Query(`
-		SELECT id, conversation_id, owner_email, message, cron_expr, timezone,
+		SELECT id, conversation_id, workflow_id, workflow_input, owner_email, message, cron_expr, timezone,
 		       top_k, use_knowledge_base, use_web_fetch, enabled, created_at
 		FROM scheduled_messages ORDER BY created_at`)
 	if err != nil {
@@ -164,12 +187,16 @@ func (s *Store) ListRuns(scheduleID string) ([]model.ScheduleRun, error) {
 
 func scanRow(row *sql.Row) (*model.Schedule, error) {
 	var sc model.Schedule
-	err := row.Scan(&sc.ID, &sc.ConversationID, &sc.OwnerEmail, &sc.Message,
+	var convID, wfID, wfInput sql.NullString
+	err := row.Scan(&sc.ID, &convID, &wfID, &wfInput, &sc.OwnerEmail, &sc.Message,
 		&sc.CronExpr, &sc.Timezone, &sc.TopK, &sc.UseKnowledgeBase,
 		&sc.UseWebFetch, &sc.Enabled, &sc.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
+	sc.ConversationID = convID.String
+	sc.WorkflowID = wfID.String
+	sc.WorkflowInput = wfInput.String
 	return &sc, nil
 }
 
@@ -177,12 +204,16 @@ func scanRows(rows *sql.Rows) ([]*model.Schedule, error) {
 	var out []*model.Schedule
 	for rows.Next() {
 		var sc model.Schedule
-		err := rows.Scan(&sc.ID, &sc.ConversationID, &sc.OwnerEmail, &sc.Message,
+		var convID, wfID, wfInput sql.NullString
+		err := rows.Scan(&sc.ID, &convID, &wfID, &wfInput, &sc.OwnerEmail, &sc.Message,
 			&sc.CronExpr, &sc.Timezone, &sc.TopK, &sc.UseKnowledgeBase,
 			&sc.UseWebFetch, &sc.Enabled, &sc.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
+		sc.ConversationID = convID.String
+		sc.WorkflowID = wfID.String
+		sc.WorkflowInput = wfInput.String
 		out = append(out, &sc)
 	}
 	return out, rows.Err()

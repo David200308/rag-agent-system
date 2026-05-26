@@ -6,6 +6,7 @@ import com.ragagent.config.SchedulerProperties;
 import com.ragagent.conversation.ConversationService;
 import com.ragagent.schema.AgentRequest;
 import com.ragagent.schema.AgentResponse;
+import com.ragagent.workflow.WorkflowRunService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ public class SchedulerTriggerController {
     private final RagAgentGraph         agentGraph;
     private final ConversationService   conversationService;
     private final SchedulerProperties   schedulerProperties;
+    private final WorkflowRunService    workflowRunService;
 
     /** Body sent by the Go scheduler when a cron fires. */
     public record TriggerRequest(
@@ -107,6 +109,35 @@ public class SchedulerTriggerController {
             log.error("[SchedulerTrigger] Pipeline error runId={}: {}", runId, ex.getMessage(), ex);
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    /** Body sent by the Go scheduler when a workflow cron fires. */
+    public record WorkflowTriggerRequest(
+            String userEmail,
+            String workflowId,
+            String workflowInput
+    ) {}
+
+    @PostMapping(value = "/workflow-trigger",
+                 consumes = MediaType.APPLICATION_JSON_VALUE,
+                 produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Start a scheduled workflow run on behalf of a user (internal, service-key protected)")
+    public ResponseEntity<Map<String, String>> workflowTrigger(
+            @RequestHeader(value = "X-Scheduler-Key", required = false) String serviceKey,
+            @RequestBody WorkflowTriggerRequest body) {
+
+        if (serviceKey == null || !serviceKey.equals(schedulerProperties.serviceKey())) {
+            log.warn("[SchedulerTrigger] Rejected workflow-trigger — invalid or missing X-Scheduler-Key");
+            return ResponseEntity.status(401).build();
+        }
+
+        log.info("[SchedulerTrigger] workflow-trigger workflowId={} user={}", body.workflowId(), body.userEmail());
+
+        String runId = workflowRunService.startRun(
+                body.workflowId(), body.workflowInput(),
+                body.userEmail() != null ? body.userEmail() : "anonymous",
+                false);
+        return ResponseEntity.ok(Map.of("runId", runId));
     }
 
     private AgentResponse withConversationId(AgentResponse raw, String conversationId) {

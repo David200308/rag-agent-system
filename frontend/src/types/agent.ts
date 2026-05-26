@@ -192,6 +192,30 @@ export interface UpdateScheduleRequest {
   enabled?: boolean;
 }
 
+export interface WorkflowSchedule {
+  id: string;
+  workflowId: string;
+  workflowInput: string;
+  ownerEmail: string;
+  cronExpr: string;
+  timezone: string;
+  enabled: boolean;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  createdAt: string;
+}
+
+export interface CreateWorkflowScheduleRequest {
+  workflowId: string;
+  workflowInput: string;
+  cronMinute: string;
+  cronHour: string;
+  cronDay: string;
+  cronMonth: string;
+  cronWeekday: string;
+  timezone?: string;
+}
+
 export interface WebFetchWhitelistEntry {
   id: number;
   domain: string;
