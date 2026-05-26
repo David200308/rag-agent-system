@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import {
   Upload, Trash2, FileText, CheckCircle2, XCircle,
-  RefreshCw, Zap, Eye, X, ChevronRight, File,
+  RefreshCw, Zap, Eye, X, ChevronRight, File, Folder,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchSkills, uploadSkill, deleteSkill, fetchSkillContent } from "@/lib/api";
@@ -25,6 +25,32 @@ function parseZipSections(raw: string): ZipFile[] | null {
     files.push({ name: sections[i]!, content: sections[i + 1]?.trim() ?? "" });
   }
   return files.length ? files : null;
+}
+
+// ── File tree builder ─────────────────────────────────────────────────────────
+
+interface TreeEntry {
+  kind:  "folder" | "file";
+  label: string;
+  path:  string;
+  depth: number;
+}
+
+function buildFileTree(files: ZipFile[]): TreeEntry[] {
+  const result: TreeEntry[] = [];
+  const seenFolders = new Set<string>();
+  for (const file of files) {
+    const parts = file.name.replace(/\\/g, "/").split("/");
+    for (let i = 0; i < parts.length - 1; i++) {
+      const folderPath = parts.slice(0, i + 1).join("/");
+      if (!seenFolders.has(folderPath)) {
+        seenFolders.add(folderPath);
+        result.push({ kind: "folder", label: parts[i]!, path: folderPath, depth: i });
+      }
+    }
+    result.push({ kind: "file", label: parts[parts.length - 1]!, path: file.name, depth: parts.length - 1 });
+  }
+  return result;
 }
 
 // ── Preview modal ─────────────────────────────────────────────────────────────
@@ -81,24 +107,36 @@ function PreviewModal({ skill, onClose }: { skill: Skill; onClose: () => void })
               <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[--color-muted]">
                 Files ({zipFiles.length})
               </p>
-              {zipFiles.map(f => (
-                <button
-                  key={f.name}
-                  onClick={() => setActiveFile(f.name)}
-                  className={cn(
-                    "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors",
-                    activeFile === f.name
-                      ? "bg-[--color-surface-raised] font-medium"
-                      : "hover:bg-[--color-surface-raised] text-[--color-muted]",
-                  )}
-                >
-                  <File className="h-3 w-3 shrink-0" />
-                  <span className="truncate" title={f.name}>{f.name}</span>
-                  {activeFile === f.name && (
-                    <ChevronRight className="ml-auto h-3 w-3 shrink-0" />
-                  )}
-                </button>
-              ))}
+              {buildFileTree(zipFiles).map(entry =>
+                entry.kind === "folder" ? (
+                  <div
+                    key={`folder:${entry.path}`}
+                    className="flex items-center gap-1.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[--color-muted] select-none"
+                    style={{ paddingLeft: `${8 + entry.depth * 12}px` }}
+                  >
+                    <Folder className="h-3 w-3 shrink-0" />
+                    <span className="truncate" title={entry.label}>{entry.label}</span>
+                  </div>
+                ) : (
+                  <button
+                    key={entry.path}
+                    onClick={() => setActiveFile(entry.path)}
+                    className={cn(
+                      "flex w-full items-center gap-2 py-1.5 pr-3 text-left text-xs transition-colors",
+                      activeFile === entry.path
+                        ? "bg-[--color-surface-raised] font-medium"
+                        : "hover:bg-[--color-surface-raised] text-[--color-muted]",
+                    )}
+                    style={{ paddingLeft: `${8 + entry.depth * 12}px` }}
+                  >
+                    <File className="h-3 w-3 shrink-0" />
+                    <span className="truncate" title={entry.path}>{entry.label}</span>
+                    {activeFile === entry.path && (
+                      <ChevronRight className="ml-auto h-3 w-3 shrink-0" />
+                    )}
+                  </button>
+                )
+              )}
             </div>
 
             {/* Content pane */}

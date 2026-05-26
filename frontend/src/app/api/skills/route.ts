@@ -16,6 +16,16 @@ async function authHeaders() {
   return token ? { authorization: `Bearer ${token}` } : {};
 }
 
+const BINARY_EXTS = new Set([
+  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".svg",
+  ".pdf", ".zip", ".tar", ".gz", ".bz2", ".7z", ".rar",
+  ".jar", ".class", ".pyc", ".pyo", ".pyd",
+  ".exe", ".dll", ".so", ".dylib", ".bin",
+  ".woff", ".woff2", ".ttf", ".eot", ".otf",
+  ".mp3", ".mp4", ".wav", ".avi", ".mov", ".mkv", ".flv",
+  ".db", ".sqlite", ".pkl", ".npz", ".npy",
+]);
+
 async function extractZipContent(zipBuffer: ArrayBuffer): Promise<string> {
   const tmpDir  = path.join(os.tmpdir(), `skill-zip-${Date.now()}`);
   const zipPath = `${tmpDir}.zip`;
@@ -24,13 +34,17 @@ async function extractZipContent(zipBuffer: ArrayBuffer): Promise<string> {
   try {
     await execAsync(`unzip -o "${zipPath}" -d "${tmpDir}"`);
     const { stdout } = await execAsync(
-      `find "${tmpDir}" -type f \\( -name "*.txt" -o -name "*.md" \\) | sort`
+      `find "${tmpDir}" -type f -not -path '*/__MACOSX/*' -not -name '.DS_Store' -not -name '*.DS_Store' | sort`
     );
     const files = stdout.trim().split("\n").filter(Boolean);
     const sections = await Promise.all(
       files.map(async f => {
-        const rel     = path.relative(tmpDir, f);
-        const content = await readFile(f, "utf-8").catch(() => "");
+        const rel = path.relative(tmpDir, f);
+        const ext = path.extname(f).toLowerCase();
+        if (BINARY_EXTS.has(ext)) {
+          return `<<< ${rel} >>>\n(binary file — preview not available)`;
+        }
+        const content = await readFile(f, "utf-8").catch(() => "(binary file — preview not available)");
         return `<<< ${rel} >>>\n${content}`;
       }),
     );
