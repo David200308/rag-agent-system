@@ -10,7 +10,6 @@
 #      echo "sk-..."                       > secrets/openai_api_key
 #      echo "$(openssl rand -base64 64)"   > secrets/auth_jwt_secret
 #      echo "$(openssl rand -base64 32)"   > secrets/scheduler_service_key
-#      echo "$(openssl rand -base64 24)"   > secrets/temporal_db_password
 #      # ... (see full list below)
 #      chmod 600 secrets/*
 #
@@ -45,8 +44,6 @@ secrets:
     file: ./secrets/resend_from_email
   scheduler_service_key:
     file: ./secrets/scheduler_service_key
-  temporal_db_password:
-    file: ./secrets/temporal_db_password
   google_client_id:
     file: ./secrets/google_client_id
   google_client_secret:
@@ -111,65 +108,16 @@ services:
       retries: 10
       start_period: 30s
 
-  # ── Temporal workflow engine ──────────────────────────────────────────────────
-  temporal-db:
-    image: postgres:16-alpine
-    container_name: ragagent-temporal-db
+  # ── Redis (Asynq task queue backend) ─────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: ragagent-redis
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${TEMPORAL_DB_USER:-temporal}
-      POSTGRES_PASSWORD_FILE: /run/secrets/temporal_db_password
-      POSTGRES_DB: temporal
-    secrets:
-      - temporal_db_password
-    volumes:
-      - temporal_db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${TEMPORAL_DB_USER:-temporal}"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
-      timeout: 5s
+      timeout: 3s
       retries: 10
-
-  # temporalio/auto-setup does not support POSTGRES_PWD_FILE, so the password is
-  # read from an env var. Set TEMPORAL_DB_PASSWORD in .env.prod to match the secret.
-  temporal:
-    image: temporalio/auto-setup:latest
-    container_name: ragagent-temporal
-    restart: unless-stopped
-    depends_on:
-      temporal-db:
-        condition: service_healthy
-    ports:
-      - "7233:7233"
-    environment:
-      - DB=postgres12
-      - DB_PORT=5432
-      - POSTGRES_SEEDS=temporal-db
-      - POSTGRES_USER=${TEMPORAL_DB_USER:-temporal}
-      - POSTGRES_PWD=${TEMPORAL_DB_PASSWORD:-temporal}
-      - TEMPORAL_ADDRESS=temporal:7233
-      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
-    volumes:
-      - ./config/dynamicconfig/development-sql.yaml:/config/dynamicconfig/development-sql.yaml:ro
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 7233 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 60s
-
-  temporal-ui:
-    image: temporalio/ui:latest
-    container_name: ragagent-temporal-ui
-    restart: unless-stopped
-    depends_on:
-      temporal:
-        condition: service_healthy
-    ports:
-      - "8088:8080"
-    environment:
-      - TEMPORAL_ADDRESS=temporal:7233
-      - TEMPORAL_CORS_ORIGINS=${TEMPORAL_UI_ORIGIN:-http://localhost:3000}
 
   # ── Go scheduler microservice ─────────────────────────────────────────────────
   scheduler:
@@ -181,16 +129,23 @@ services:
       - "8082:8082"
     restart: unless-stopped
     depends_on:
-      temporal:
+      redis:
+        condition: service_healthy
+      mysql:
         condition: service_healthy
       backend:
         condition: service_healthy
     secrets:
       - scheduler_service_key
+      - mysql_password
     environment:
       PORT: 8082
-      TEMPORAL_HOST_PORT: temporal:7233
-      TEMPORAL_NAMESPACE: default
+      REDIS_ADDR: redis:6379
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-ragagent}
+      MYSQL_USER: ${MYSQL_USER:-ragagent}
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
       BACKEND_URL: http://backend:8081
       SCHEDULER_SERVICE_KEY_FILE: /run/secrets/scheduler_service_key
     healthcheck:
@@ -309,4 +264,3 @@ services:
 volumes:
   weaviate_data:
   mysql_data:
-  temporal_db_data:

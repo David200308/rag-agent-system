@@ -1,28 +1,38 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strings"
 )
 
 type Config struct {
-	Port              string
-	TemporalHostPort  string // e.g. "temporal:7233"
-	TemporalNamespace string // default "default"
-	BackendURL        string
-	ServiceKey        string
-	ValidateURL       string
+	Port          string
+	RedisAddr     string
+	RedisPassword string
+	DSN           string // MySQL connection string
+	BackendURL    string
+	ServiceKey    string
+	ValidateURL   string
 }
 
 func Load() *Config {
 	backendURL := getEnv("BACKEND_URL", "http://localhost:8081")
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
+		getEnv("MYSQL_USER", "ragagent"),
+		getSecret("MYSQL_PASSWORD", "ragagent"),
+		getEnv("MYSQL_HOST", "localhost"),
+		getEnv("MYSQL_PORT", "3306"),
+		getEnv("MYSQL_DB", "ragagent"),
+	)
 	return &Config{
-		Port:              getEnv("PORT", "8082"),
-		TemporalHostPort:  getEnv("TEMPORAL_HOST_PORT", "localhost:7233"),
-		TemporalNamespace: getEnv("TEMPORAL_NAMESPACE", "default"),
-		BackendURL:        backendURL,
-		ServiceKey:        getSecret("SCHEDULER_SERVICE_KEY", "scheduler-secret-key"),
-		ValidateURL:       backendURL + "/api/v1/auth/validate",
+		Port:          getEnv("PORT", "8082"),
+		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisPassword: getSecret("REDIS_PASSWORD", ""),
+		DSN:           dsn,
+		BackendURL:    backendURL,
+		ServiceKey:    getSecret("SCHEDULER_SERVICE_KEY", "scheduler-secret-key"),
+		ValidateURL:   backendURL + "/api/v1/auth/validate",
 	}
 }
 

@@ -2,7 +2,7 @@ package handler
 
 import (
 	"context"
-	"crypto/rand"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,25 +11,23 @@ import (
 	"strings"
 	"time"
 
-	commonpb "go.temporal.io/api/common/v1"
-	"go.temporal.io/api/enums/v1"
-	workflowpb "go.temporal.io/api/workflow/v1"
-	"go.temporal.io/api/workflowservice/v1"
-	"go.temporal.io/sdk/client"
-	"go.temporal.io/sdk/converter"
+	"crypto/rand"
 
+	"github.com/robfig/cron/v3"
 	"scheduler/config"
+	"scheduler/cronmgr"
 	"scheduler/model"
-	ragworkflow "scheduler/workflow"
+	"scheduler/store"
 )
 
 type Handler struct {
 	cfg *config.Config
-	tc  client.Client
+	st  *store.Store
+	mgr *cronmgr.Manager
 }
 
-func New(cfg *config.Config, tc client.Client) *Handler {
-	return &Handler{cfg: cfg, tc: tc}
+func New(cfg *config.Config, st *store.Store, mgr *cronmgr.Manager) *Handler {
+	return &Handler{cfg: cfg, st: st, mgr: mgr}
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -80,6 +78,16 @@ func (h *Handler) validateToken(authHeader string) (string, error) {
 	return result.Email, nil
 }
 
+func (h *Handler) withServiceAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Scheduler-Key") != h.cfg.ServiceKey {
+			writeError(w, http.StatusUnauthorized, "invalid service key")
+			return
+		}
+		next(w, r)
+	}
+}
+
 // ── Health ────────────────────────────────────────────────────────────────────
 
 func (h *Handler) Health(w http.ResponseWriter, _ *http.Request) {
@@ -96,46 +104,21 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "conversationId is required")
 			return
 		}
+		email := r.Context().Value(emailKey).(string)
 
-		iter, err := h.tc.ScheduleClient().List(r.Context(), client.ScheduleListOptions{PageSize: 1000})
+		schedules, err := h.st.ListByConversation(email, convID)
 		if err != nil {
 			log.Printf("[handler] list error: %v", err)
 			writeError(w, http.StatusInternalServerError, "failed to list schedules")
 			return
 		}
-		dc := converter.GetDefaultDataConverter()
-		var schedules []model.Schedule
 
-		for iter.HasNext() {
-			entry, err := iter.Next()
-			if err != nil {
-				log.Printf("[handler] list iterate error: %v", err)
-				break
-			}
-
-			memo, ok := decodeMemo(dc, entry.Memo)
-			if !ok || memo.ConversationID != convID {
-				continue
-			}
-
-			// Describe to get workflow args (message, topK, etc.)
-			handle := h.tc.ScheduleClient().GetHandle(r.Context(), entry.ID)
-			desc, err := handle.Describe(r.Context())
-			if err != nil {
-				log.Printf("[handler] describe error id=%s: %v", entry.ID, err)
-				continue
-			}
-
-			payload := decodePayload(desc.Schedule.Action)
-			sc := buildSchedule(entry.ID, memo, entry.Spec, !entry.Paused, payload,
-				entry.NextActionTimes, entry.RecentActions)
-			schedules = append(schedules, sc)
+		out := make([]model.Schedule, 0, len(schedules))
+		for _, sc := range schedules {
+			enrichSchedule(sc, h.st)
+			out = append(out, *sc)
 		}
-
-		if schedules == nil {
-			schedules = []model.Schedule{}
-		}
-		writeJSON(w, http.StatusOK, schedules)
+		writeJSON(w, http.StatusOK, out)
 	})(w, r)
 }
 
@@ -167,62 +150,33 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			req.Timezone = "UTC"
 		}
 
-		cronExpr := model.BuildCronExpr(req.CronMinute, req.CronHour, req.CronDay, req.CronMonth, req.CronWeekday)
-		scheduleID := newID()
-
-		memo := model.ScheduleMemo{
-			OwnerEmail:     email,
-			ConversationID: req.ConversationID,
-			CreatedAt:      time.Now().UTC().Format(time.RFC3339),
-		}
-		memoJSON, _ := json.Marshal(memo)
-
-		payload := model.TriggerPayload{
-			UserEmail:        email,
+		sc := &model.Schedule{
+			ID:               newID(),
 			ConversationID:   req.ConversationID,
+			OwnerEmail:       email,
 			Message:          req.Message,
+			CronExpr:         model.BuildCronExpr(req.CronMinute, req.CronHour, req.CronDay, req.CronMonth, req.CronWeekday),
+			Timezone:         req.Timezone,
 			TopK:             req.TopK,
 			UseKnowledgeBase: req.UseKnowledgeBase,
 			UseWebFetch:      req.UseWebFetch,
-			BackendURL:       h.cfg.BackendURL,
-			ServiceKey:       h.cfg.ServiceKey,
+			Enabled:          true,
+			CreatedAt:        time.Now().UTC(),
 		}
 
-		handle, err := h.tc.ScheduleClient().Create(r.Context(), client.ScheduleOptions{
-			ID: scheduleID,
-			Spec: client.ScheduleSpec{
-				CronExpressions: []string{cronExpr},
-				TimeZoneName:    req.Timezone,
-			},
-			Action: &client.ScheduleWorkflowAction{
-				ID:        scheduleID + "-run",
-				Workflow:  ragworkflow.RagQueryWorkflow,
-				Args:      []interface{}{payload},
-				TaskQueue: ragworkflow.TaskQueue,
-			},
-			Memo: map[string]interface{}{
-				"data": string(memoJSON),
-			},
-			Overlap: enums.SCHEDULE_OVERLAP_POLICY_SKIP,
-		})
-		if err != nil {
-			log.Printf("[handler] create schedule error: %v", err)
+		if err := h.st.Create(sc); err != nil {
+			log.Printf("[handler] create db error: %v", err)
 			writeError(w, http.StatusInternalServerError, "failed to create schedule")
 			return
 		}
-
-		desc, _ := handle.Describe(r.Context())
-		var nextTimes []time.Time
-		if desc != nil {
-			nextTimes = desc.Info.NextActionTimes
+		if err := h.mgr.Add(sc); err != nil {
+			log.Printf("[handler] register cron error: %v", err)
+			_ = h.st.Delete(sc.ID) // rollback
+			writeError(w, http.StatusInternalServerError, "failed to register schedule")
+			return
 		}
 
-		createdAt, _ := time.Parse(time.RFC3339, memo.CreatedAt)
-		sc := buildSchedule(scheduleID, memo,
-			&client.ScheduleSpec{CronExpressions: []string{cronExpr}, TimeZoneName: req.Timezone},
-			true, payload, nextTimes, nil)
-		sc.CreatedAt = createdAt
-
+		sc.NextRunAt = nextRunTime(sc.CronExpr, sc.Timezone)
 		writeJSON(w, http.StatusCreated, sc)
 	})(w, r)
 }
@@ -235,6 +189,20 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		email := r.Context().Value(emailKey).(string)
 		id := r.PathValue("id")
 
+		sc, err := h.st.GetByID(id)
+		if err == sql.ErrNoRows {
+			writeError(w, http.StatusNotFound, "schedule not found")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to fetch schedule")
+			return
+		}
+		if sc.OwnerEmail != email {
+			writeError(w, http.StatusForbidden, "not the owner")
+			return
+		}
+
 		body, _ := io.ReadAll(io.LimitReader(r.Body, 32*1024))
 		var req model.UpdateRequest
 		if err := json.Unmarshal(body, &req); err != nil {
@@ -242,114 +210,58 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		handle := h.tc.ScheduleClient().GetHandle(r.Context(), id)
-		desc, err := handle.Describe(r.Context())
-		if err != nil {
-			writeError(w, http.StatusNotFound, "schedule not found")
-			return
-		}
-
-		dc := converter.GetDefaultDataConverter()
-		memo, ok := decodeMemo(dc, desc.Memo)
-		if !ok || memo.OwnerEmail != email {
-			writeError(w, http.StatusForbidden, "not the owner")
-			return
-		}
-
-		// Start from existing payload and apply partial updates
-		current := decodePayload(desc.Schedule.Action)
 		if req.Message != nil {
-			current.Message = *req.Message
+			sc.Message = *req.Message
 		}
 		if req.TopK != nil {
-			current.TopK = *req.TopK
+			sc.TopK = *req.TopK
 		}
 		if req.UseKnowledgeBase != nil {
-			current.UseKnowledgeBase = *req.UseKnowledgeBase
+			sc.UseKnowledgeBase = *req.UseKnowledgeBase
 		}
 		if req.UseWebFetch != nil {
-			current.UseWebFetch = *req.UseWebFetch
+			sc.UseWebFetch = *req.UseWebFetch
 		}
-		// Always refresh secrets in case they rotated
-		current.BackendURL = h.cfg.BackendURL
-		current.ServiceKey = h.cfg.ServiceKey
-
-		// Build updated cron expression by merging into the existing spec
-		cronExpr := ""
-		timezone := "UTC"
-		if desc.Schedule.Spec != nil {
-			if len(desc.Schedule.Spec.CronExpressions) > 0 {
-				cronExpr = desc.Schedule.Spec.CronExpressions[0]
-			}
-			if desc.Schedule.Spec.TimeZoneName != "" {
-				timezone = desc.Schedule.Spec.TimeZoneName
-			}
-		}
-		if req.CronMinute != nil || req.CronHour != nil || req.CronDay != nil ||
-			req.CronMonth != nil || req.CronWeekday != nil {
-			parts := strings.Fields(cronExpr)
-			for len(parts) < 5 {
-				parts = append(parts, "*")
-			}
-			if req.CronMinute != nil {
-				parts[0] = *req.CronMinute
-			}
-			if req.CronHour != nil {
-				parts[1] = *req.CronHour
-			}
-			if req.CronDay != nil {
-				parts[2] = *req.CronDay
-			}
-			if req.CronMonth != nil {
-				parts[3] = *req.CronMonth
-			}
-			if req.CronWeekday != nil {
-				parts[4] = *req.CronWeekday
-			}
-			cronExpr = strings.Join(parts, " ")
+		if req.Enabled != nil {
+			sc.Enabled = *req.Enabled
 		}
 		if req.Timezone != nil {
-			timezone = *req.Timezone
+			sc.Timezone = *req.Timezone
 		}
 
-		updatedPayload := current
-		err = handle.Update(r.Context(), client.ScheduleUpdateOptions{
-			DoUpdate: func(input client.ScheduleUpdateInput) (*client.ScheduleUpdate, error) {
-				sched := &input.Description.Schedule
-				sched.Spec = &client.ScheduleSpec{
-					CronExpressions: []string{cronExpr},
-					TimeZoneName:    timezone,
-				}
-				if req.Enabled != nil {
-					sched.State = &client.ScheduleState{Paused: !*req.Enabled}
-				}
-				if action, ok := sched.Action.(*client.ScheduleWorkflowAction); ok {
-					action.Args = []interface{}{updatedPayload}
-				}
-				return &client.ScheduleUpdate{Schedule: sched}, nil
-			},
-		})
-		if err != nil {
-			log.Printf("[handler] update schedule error id=%s: %v", id, err)
+		// Merge cron fields into the existing expression
+		parts := strings.Fields(sc.CronExpr)
+		for len(parts) < 5 {
+			parts = append(parts, "*")
+		}
+		if req.CronMinute != nil {
+			parts[0] = *req.CronMinute
+		}
+		if req.CronHour != nil {
+			parts[1] = *req.CronHour
+		}
+		if req.CronDay != nil {
+			parts[2] = *req.CronDay
+		}
+		if req.CronMonth != nil {
+			parts[3] = *req.CronMonth
+		}
+		if req.CronWeekday != nil {
+			parts[4] = *req.CronWeekday
+		}
+		sc.CronExpr = strings.Join(parts, " ")
+
+		if err := h.st.Update(sc); err != nil {
+			log.Printf("[handler] update db error id=%s: %v", id, err)
 			writeError(w, http.StatusInternalServerError, "failed to update schedule")
 			return
 		}
-
-		desc2, _ := handle.Describe(r.Context())
-		enabled := true
-		var nextTimes []time.Time
-		var recentActions []client.ScheduleActionResult
-		if desc2 != nil {
-			if desc2.Schedule.State != nil {
-				enabled = !desc2.Schedule.State.Paused
-			}
-			nextTimes = desc2.Info.NextActionTimes
-			recentActions = desc2.Info.RecentActions
+		if err := h.mgr.Update(sc); err != nil {
+			log.Printf("[handler] update cron error id=%s: %v", id, err)
 		}
 
-		sc := buildSchedule(id, memo,
-			&client.ScheduleSpec{CronExpressions: []string{cronExpr}, TimeZoneName: timezone},
-			enabled, updatedPayload, nextTimes, recentActions)
+		sc.NextRunAt = nextRunTime(sc.CronExpr, sc.Timezone)
+		sc.LastRunAt = h.st.LastRunTime(sc.ID)
 		writeJSON(w, http.StatusOK, sc)
 	})(w, r)
 }
@@ -362,22 +274,23 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		email := r.Context().Value(emailKey).(string)
 		id := r.PathValue("id")
 
-		handle := h.tc.ScheduleClient().GetHandle(r.Context(), id)
-		desc, err := handle.Describe(r.Context())
-		if err != nil {
+		sc, err := h.st.GetByID(id)
+		if err == sql.ErrNoRows {
 			writeError(w, http.StatusNotFound, "schedule not found")
 			return
 		}
-
-		dc := converter.GetDefaultDataConverter()
-		memo, ok := decodeMemo(dc, desc.Memo)
-		if !ok || memo.OwnerEmail != email {
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to fetch schedule")
+			return
+		}
+		if sc.OwnerEmail != email {
 			writeError(w, http.StatusForbidden, "not the owner")
 			return
 		}
 
-		if err := handle.Delete(r.Context()); err != nil {
-			log.Printf("[handler] delete schedule error id=%s: %v", id, err)
+		h.mgr.Remove(id)
+		if err := h.st.Delete(id); err != nil {
+			log.Printf("[handler] delete db error id=%s: %v", id, err)
 			writeError(w, http.StatusInternalServerError, "failed to delete schedule")
 			return
 		}
@@ -390,38 +303,37 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 // GET /schedules/{id}/runs
 func (h *Handler) ListRuns(w http.ResponseWriter, r *http.Request) {
 	h.withAuth(func(w http.ResponseWriter, r *http.Request) {
+		email := r.Context().Value(emailKey).(string)
 		id := r.PathValue("id")
 
-		resp, err := h.tc.ListWorkflow(r.Context(), &workflowservice.ListWorkflowExecutionsRequest{
-			Namespace: h.cfg.TemporalNamespace,
-			Query:     fmt.Sprintf(`TemporalScheduledById = "%s"`, id),
-			PageSize:  20,
-		})
+		sc, err := h.st.GetByID(id)
+		if err == sql.ErrNoRows {
+			writeError(w, http.StatusNotFound, "schedule not found")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to fetch schedule")
+			return
+		}
+		if sc.OwnerEmail != email {
+			writeError(w, http.StatusForbidden, "not the owner")
+			return
+		}
+
+		runs, err := h.st.ListRuns(id)
 		if err != nil {
 			log.Printf("[handler] list runs error id=%s: %v", id, err)
 			writeError(w, http.StatusInternalServerError, "failed to list runs")
 			return
 		}
-
-		runs := make([]model.ScheduleRun, 0, len(resp.Executions))
-		for _, exec := range resp.Executions {
-			runs = append(runs, executionToRun(exec))
+		if runs == nil {
+			runs = []model.ScheduleRun{}
 		}
 		writeJSON(w, http.StatusOK, runs)
 	})(w, r)
 }
 
 // ── Internal endpoints (service-key auth, used by Spring Boot workflow engine) ─
-
-func (h *Handler) withServiceAuth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Scheduler-Key") != h.cfg.ServiceKey {
-			writeError(w, http.StatusUnauthorized, "invalid service key")
-			return
-		}
-		next(w, r)
-	}
-}
 
 // POST /internal/schedules
 func (h *Handler) InternalCreate(w http.ResponseWriter, r *http.Request) {
@@ -450,49 +362,8 @@ func (h *Handler) InternalCreate(w http.ResponseWriter, r *http.Request) {
 			req.CronExpr = "0 9 * * *"
 		}
 
-		scheduleID := newID()
-		memo := model.ScheduleMemo{
-			OwnerEmail:     req.OwnerEmail,
-			ConversationID: req.ConversationID,
-			CreatedAt:      time.Now().UTC().Format(time.RFC3339),
-		}
-		memoJSON, _ := json.Marshal(memo)
-
-		payload := model.TriggerPayload{
-			UserEmail:        req.OwnerEmail,
-			ConversationID:   req.ConversationID,
-			Message:          req.Message,
-			TopK:             req.TopK,
-			UseKnowledgeBase: req.UseKnowledgeBase,
-			UseWebFetch:      req.UseWebFetch,
-			BackendURL:       h.cfg.BackendURL,
-			ServiceKey:       h.cfg.ServiceKey,
-		}
-
-		_, err = h.tc.ScheduleClient().Create(r.Context(), client.ScheduleOptions{
-			ID: scheduleID,
-			Spec: client.ScheduleSpec{
-				CronExpressions: []string{req.CronExpr},
-				TimeZoneName:    req.Timezone,
-			},
-			Action: &client.ScheduleWorkflowAction{
-				ID:        scheduleID + "-run",
-				Workflow:  ragworkflow.RagQueryWorkflow,
-				Args:      []interface{}{payload},
-				TaskQueue: ragworkflow.TaskQueue,
-			},
-			Memo:    map[string]interface{}{"data": string(memoJSON)},
-			Overlap: enums.SCHEDULE_OVERLAP_POLICY_SKIP,
-		})
-		if err != nil {
-			log.Printf("[handler] internal create error: %v", err)
-			writeError(w, http.StatusInternalServerError, "failed to create schedule")
-			return
-		}
-
-		createdAt, _ := time.Parse(time.RFC3339, memo.CreatedAt)
-		writeJSON(w, http.StatusCreated, model.Schedule{
-			ID:               scheduleID,
+		sc := &model.Schedule{
+			ID:               newID(),
 			ConversationID:   req.ConversationID,
 			OwnerEmail:       req.OwnerEmail,
 			Message:          req.Message,
@@ -502,8 +373,23 @@ func (h *Handler) InternalCreate(w http.ResponseWriter, r *http.Request) {
 			UseKnowledgeBase: req.UseKnowledgeBase,
 			UseWebFetch:      req.UseWebFetch,
 			Enabled:          true,
-			CreatedAt:        createdAt,
-		})
+			CreatedAt:        time.Now().UTC(),
+		}
+
+		if err := h.st.Create(sc); err != nil {
+			log.Printf("[handler] internal create db error: %v", err)
+			writeError(w, http.StatusInternalServerError, "failed to create schedule")
+			return
+		}
+		if err := h.mgr.Add(sc); err != nil {
+			log.Printf("[handler] internal register cron error: %v", err)
+			_ = h.st.Delete(sc.ID)
+			writeError(w, http.StatusInternalServerError, "failed to register schedule")
+			return
+		}
+
+		sc.NextRunAt = nextRunTime(sc.CronExpr, sc.Timezone)
+		writeJSON(w, http.StatusCreated, sc)
 	})(w, r)
 }
 
@@ -517,35 +403,19 @@ func (h *Handler) InternalList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		iter, err := h.tc.ScheduleClient().List(r.Context(), client.ScheduleListOptions{PageSize: 1000})
+		schedules, err := h.st.ListByOwner(ownerEmail, convID)
 		if err != nil {
 			log.Printf("[handler] internal list error: %v", err)
 			writeError(w, http.StatusInternalServerError, "failed to list schedules")
 			return
 		}
-		dc := converter.GetDefaultDataConverter()
-		var schedules []model.Schedule
 
-		for iter.HasNext() {
-			entry, err := iter.Next()
-			if err != nil {
-				break
-			}
-			memo, ok := decodeMemo(dc, entry.Memo)
-			if !ok || memo.ConversationID != convID {
-				continue
-			}
-			if ownerEmail != "" && memo.OwnerEmail != ownerEmail {
-				continue
-			}
-			sc := buildSchedule(entry.ID, memo, entry.Spec, !entry.Paused,
-				model.TriggerPayload{}, entry.NextActionTimes, entry.RecentActions)
-			schedules = append(schedules, sc)
+		out := make([]model.Schedule, 0, len(schedules))
+		for _, sc := range schedules {
+			enrichSchedule(sc, h.st)
+			out = append(out, *sc)
 		}
-		if schedules == nil {
-			schedules = []model.Schedule{}
-		}
-		writeJSON(w, http.StatusOK, schedules)
+		writeJSON(w, http.StatusOK, out)
 	})(w, r)
 }
 
@@ -555,23 +425,22 @@ func (h *Handler) InternalDelete(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		ownerEmail := r.URL.Query().Get("ownerEmail")
 
-		handle := h.tc.ScheduleClient().GetHandle(r.Context(), id)
-		desc, err := handle.Describe(r.Context())
-		if err != nil {
+		sc, err := h.st.GetByID(id)
+		if err == sql.ErrNoRows {
 			writeError(w, http.StatusNotFound, "schedule not found")
 			return
 		}
-
-		if ownerEmail != "" {
-			dc := converter.GetDefaultDataConverter()
-			memo, ok := decodeMemo(dc, desc.Memo)
-			if ok && memo.OwnerEmail != ownerEmail {
-				writeError(w, http.StatusForbidden, "not the owner")
-				return
-			}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to fetch schedule")
+			return
+		}
+		if ownerEmail != "" && sc.OwnerEmail != ownerEmail {
+			writeError(w, http.StatusForbidden, "not the owner")
+			return
 		}
 
-		if err := handle.Delete(r.Context()); err != nil {
+		h.mgr.Remove(id)
+		if err := h.st.Delete(id); err != nil {
 			log.Printf("[handler] internal delete error id=%s: %v", id, err)
 			writeError(w, http.StatusInternalServerError, "failed to delete schedule")
 			return
@@ -592,101 +461,27 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
-// decodeMemo extracts a ScheduleMemo from a Temporal Memo proto field.
-// The memo was stored as a single JSON string under the "data" key.
-func decodeMemo(dc converter.DataConverter, rawMemo *commonpb.Memo) (model.ScheduleMemo, bool) {
-	if rawMemo == nil {
-		return model.ScheduleMemo{}, false
-	}
-	payload, ok := rawMemo.Fields["data"]
-	if !ok {
-		return model.ScheduleMemo{}, false
-	}
-	var dataStr string
-	if err := dc.FromPayload(payload, &dataStr); err != nil {
-		return model.ScheduleMemo{}, false
-	}
-	var memo model.ScheduleMemo
-	if err := json.Unmarshal([]byte(dataStr), &memo); err != nil {
-		return model.ScheduleMemo{}, false
-	}
-	return memo, true
+// enrichSchedule populates NextRunAt and LastRunAt on a schedule in-place.
+func enrichSchedule(sc *model.Schedule, st *store.Store) {
+	sc.NextRunAt = nextRunTime(sc.CronExpr, sc.Timezone)
+	sc.LastRunAt = st.LastRunTime(sc.ID)
 }
 
-// decodePayload extracts TriggerPayload from the workflow action's Args.
-// Args come back from Temporal as map[string]interface{} (JSON-decoded), so we
-// round-trip through JSON to get a properly typed TriggerPayload.
-func decodePayload(action client.ScheduleAction) model.TriggerPayload {
-	wa, ok := action.(*client.ScheduleWorkflowAction)
-	if !ok || len(wa.Args) == 0 {
-		return model.TriggerPayload{}
+// nextRunTime computes the next cron firing time using the 5-field cron expression.
+func nextRunTime(cronExpr, timezone string) *time.Time {
+	loc := time.UTC
+	if timezone != "" && timezone != "UTC" {
+		if l, err := time.LoadLocation(timezone); err == nil {
+			loc = l
+		}
 	}
-	raw, err := json.Marshal(wa.Args[0])
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	schedule, err := parser.Parse(cronExpr)
 	if err != nil {
-		return model.TriggerPayload{}
+		return nil
 	}
-	var p model.TriggerPayload
-	_ = json.Unmarshal(raw, &p)
-	return p
-}
-
-func buildSchedule(
-	id string,
-	memo model.ScheduleMemo,
-	spec *client.ScheduleSpec,
-	enabled bool,
-	payload model.TriggerPayload,
-	nextTimes []time.Time,
-	recentActions []client.ScheduleActionResult,
-) model.Schedule {
-	cronExpr, timezone := "", "UTC"
-	if spec != nil {
-		if len(spec.CronExpressions) > 0 {
-			cronExpr = spec.CronExpressions[0]
-		}
-		if spec.TimeZoneName != "" {
-			timezone = spec.TimeZoneName
-		}
-	}
-	createdAt, _ := time.Parse(time.RFC3339, memo.CreatedAt)
-	sc := model.Schedule{
-		ID:               id,
-		ConversationID:   memo.ConversationID,
-		OwnerEmail:       memo.OwnerEmail,
-		Message:          payload.Message,
-		CronExpr:         cronExpr,
-		Timezone:         timezone,
-		TopK:             payload.TopK,
-		UseKnowledgeBase: payload.UseKnowledgeBase,
-		UseWebFetch:      payload.UseWebFetch,
-		Enabled:          enabled,
-		CreatedAt:        createdAt,
-	}
-	if len(nextTimes) > 0 {
-		t := nextTimes[0]
-		sc.NextRunAt = &t
-	}
-	if len(recentActions) > 0 {
-		t := recentActions[len(recentActions)-1].ActualTime
-		sc.LastRunAt = &t
-	}
-	return sc
-}
-
-func executionToRun(exec *workflowpb.WorkflowExecutionInfo) model.ScheduleRun {
-	run := model.ScheduleRun{
-		WorkflowID: exec.GetExecution().GetWorkflowId(),
-		Status:     strings.TrimPrefix(exec.GetStatus().String(), "WORKFLOW_EXECUTION_STATUS_"),
-	}
-	if t := exec.GetStartTime(); t != nil {
-		ts := t.AsTime()
-		run.StartTime = &ts
-	}
-	if t := exec.GetCloseTime(); t != nil {
-		ts := t.AsTime()
-		run.CloseTime = &ts
-	}
-	return run
+	next := schedule.Next(time.Now().In(loc))
+	return &next
 }
 
 // newID generates a random UUID v4 string.

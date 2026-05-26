@@ -262,13 +262,14 @@ CREATE TABLE IF NOT EXISTS conversation_share_whitelist (
         REFERENCES conversation_shares(id) ON DELETE CASCADE
 );
 
--- ── Scheduled messages (managed by Go scheduler service) ─────────────────────
+-- ── Scheduled messages (managed by Go scheduler service via Asynq + Redis) ────
 CREATE TABLE IF NOT EXISTS scheduled_messages (
-    id                 BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id                 VARCHAR(36)  NOT NULL PRIMARY KEY,  -- UUID
     conversation_id    VARCHAR(36)  NOT NULL,
     owner_email        VARCHAR(255) NOT NULL,
     message            TEXT         NOT NULL,
-    cron_expr          VARCHAR(100) NOT NULL,        -- e.g. "0 8 * * 1"
+    cron_expr          VARCHAR(100) NOT NULL,              -- e.g. "0 8 * * 1"
+    timezone           VARCHAR(100) NOT NULL DEFAULT 'UTC',
     top_k              INT          NOT NULL DEFAULT 5,
     use_knowledge_base BOOLEAN      NOT NULL DEFAULT TRUE,
     use_web_fetch      BOOLEAN      NOT NULL DEFAULT TRUE,
@@ -280,3 +281,25 @@ CREATE TABLE IF NOT EXISTS scheduled_messages (
     CONSTRAINT fk_sched_conv FOREIGN KEY (conversation_id)
         REFERENCES conversations(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS schedule_runs (
+    id           VARCHAR(36)  NOT NULL PRIMARY KEY,  -- run UUID
+    schedule_id  VARCHAR(36)  NOT NULL,
+    status       VARCHAR(20)  NOT NULL,              -- RUNNING, COMPLETED, FAILED
+    start_time   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    close_time   TIMESTAMP    NULL,
+    INDEX idx_run_sched (schedule_id),
+    CONSTRAINT fk_run_sched FOREIGN KEY (schedule_id)
+        REFERENCES scheduled_messages(id) ON DELETE CASCADE
+);
+
+-- ── Migration: Temporal → Asynq (run once on existing deployments) ────────────
+-- The Temporal-era schema had id BIGINT AUTO_INCREMENT and no timezone column.
+-- This table was not written to in production (Temporal held all state), so it
+-- is safe to ALTER without a data migration — existing rows, if any, can be dropped.
+--
+-- MySQL automatically drops AUTO_INCREMENT when the column type changes to VARCHAR.
+-- ADD COLUMN IF NOT EXISTS requires MySQL 8.0.3+.
+ALTER TABLE scheduled_messages
+    MODIFY COLUMN id       VARCHAR(36)  NOT NULL,
+    ADD COLUMN IF NOT EXISTS timezone   VARCHAR(100) NOT NULL DEFAULT 'UTC' AFTER cron_expr;

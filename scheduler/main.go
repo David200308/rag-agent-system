@@ -3,56 +3,81 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
-	"go.temporal.io/sdk/client"
-	"go.temporal.io/sdk/worker"
-
-	"scheduler/activity"
+	"github.com/hibiken/asynq"
 	"scheduler/config"
+	"scheduler/cronmgr"
 	"scheduler/handler"
-	ragworkflow "scheduler/workflow"
+	"scheduler/store"
+	"scheduler/worker"
 )
 
 func main() {
 	cfg := config.Load()
 
-	// Connect to Temporal server
-	tc, err := client.Dial(client.Options{
-		HostPort:  cfg.TemporalHostPort,
-		Namespace: cfg.TemporalNamespace,
-	})
+	st, err := store.New(cfg.DSN)
 	if err != nil {
-		log.Fatalf("[scheduler] cannot connect to Temporal at %s: %v", cfg.TemporalHostPort, err)
+		log.Fatalf("[scheduler] cannot connect to MySQL: %v", err)
 	}
-	defer tc.Close()
 
-	// Start worker: polls the task queue and executes workflows + activities
-	w := worker.New(tc, ragworkflow.TaskQueue, worker.Options{})
-	w.RegisterWorkflow(ragworkflow.RagQueryWorkflow)
-	w.RegisterActivity(activity.TriggerActivity)
-	if err := w.Start(); err != nil {
-		log.Fatalf("[scheduler] cannot start worker: %v", err)
+	redisOpt := asynq.RedisClientOpt{
+		Addr:     cfg.RedisAddr,
+		Password: cfg.RedisPassword,
 	}
-	defer w.Stop()
-	log.Printf("[scheduler] worker started on task-queue=%s", ragworkflow.TaskQueue)
+
+	asynqScheduler := asynq.NewScheduler(redisOpt, &asynq.SchedulerOpts{
+		Location: time.UTC,
+	})
+
+	mgr := cronmgr.New(asynqScheduler)
+
+	// Reload all active schedules from MySQL on startup
+	schedules, err := st.ListAll()
+	if err != nil {
+		log.Fatalf("[scheduler] failed to load schedules from DB: %v", err)
+	}
+	mgr.LoadAll(schedules)
+	log.Printf("[scheduler] loaded %d schedule(s) from DB", len(schedules))
+
+	// Start cron scheduler in background
+	go func() {
+		if err := asynqScheduler.Run(); err != nil {
+			log.Fatalf("[scheduler] cron scheduler error: %v", err)
+		}
+	}()
+
+	// Start Asynq task worker in background
+	asynqServer := asynq.NewServer(redisOpt, asynq.Config{
+		Queues:      map[string]int{worker.Queue: 1},
+		Concurrency: 5,
+	})
+	mux := asynq.NewServeMux()
+	mux.HandleFunc(worker.TypeRagTrigger, worker.NewHandler(cfg, st))
+
+	go func() {
+		if err := asynqServer.Run(mux); err != nil {
+			log.Fatalf("[scheduler] task worker error: %v", err)
+		}
+	}()
 
 	// HTTP REST API
-	h := handler.New(cfg, tc)
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", h.Health)
-	mux.HandleFunc("GET /schedules", h.List)
-	mux.HandleFunc("POST /schedules", h.Create)
-	mux.HandleFunc("PATCH /schedules/{id}", h.Update)
-	mux.HandleFunc("DELETE /schedules/{id}", h.Delete)
-	mux.HandleFunc("GET /schedules/{id}/runs", h.ListRuns)
+	h := handler.New(cfg, st, mgr)
+	httpMux := http.NewServeMux()
+	httpMux.HandleFunc("GET /health", h.Health)
+	httpMux.HandleFunc("GET /schedules", h.List)
+	httpMux.HandleFunc("POST /schedules", h.Create)
+	httpMux.HandleFunc("PATCH /schedules/{id}", h.Update)
+	httpMux.HandleFunc("DELETE /schedules/{id}", h.Delete)
+	httpMux.HandleFunc("GET /schedules/{id}/runs", h.ListRuns)
 
 	// Internal endpoints — service-key auth, used by Spring Boot workflow engine
-	mux.HandleFunc("POST /internal/schedules", h.InternalCreate)
-	mux.HandleFunc("GET /internal/schedules", h.InternalList)
-	mux.HandleFunc("DELETE /internal/schedules/{id}", h.InternalDelete)
+	httpMux.HandleFunc("POST /internal/schedules", h.InternalCreate)
+	httpMux.HandleFunc("GET /internal/schedules", h.InternalList)
+	httpMux.HandleFunc("DELETE /internal/schedules/{id}", h.InternalDelete)
 
 	log.Printf("[scheduler] listening on :%s", cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, mux); err != nil {
+	if err := http.ListenAndServe(":"+cfg.Port, httpMux); err != nil {
 		log.Fatalf("[scheduler] server error: %v", err)
 	}
 }

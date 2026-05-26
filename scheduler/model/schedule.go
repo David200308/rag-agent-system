@@ -2,8 +2,8 @@ package model
 
 import "time"
 
-// Schedule is the REST representation of a Temporal schedule returned to clients.
-// ID is a UUID string — the Temporal Schedule ID.
+// Schedule is the REST representation returned to clients.
+// ID is a UUID string.
 type Schedule struct {
 	ID               string     `json:"id"`
 	ConversationID   string     `json:"conversationId"`
@@ -20,33 +20,12 @@ type Schedule struct {
 	CreatedAt        time.Time  `json:"createdAt"`
 }
 
-// ScheduleRun is a single execution record from Temporal workflow history.
+// ScheduleRun is a single execution record stored in schedule_runs.
 type ScheduleRun struct {
-	WorkflowID string     `json:"workflowId"`
+	WorkflowID string     `json:"workflowId"` // run UUID
 	Status     string     `json:"status"`
 	StartTime  *time.Time `json:"startTime,omitempty"`
 	CloseTime  *time.Time `json:"closeTime,omitempty"`
-}
-
-// ScheduleMemo is stored in the Temporal Schedule Memo field (immutable after creation).
-// It holds user metadata that Temporal itself doesn't track.
-type ScheduleMemo struct {
-	OwnerEmail     string `json:"ownerEmail"`
-	ConversationID string `json:"conversationId"`
-	CreatedAt      string `json:"createdAt"` // RFC3339
-}
-
-// TriggerPayload is the workflow argument passed every time a schedule fires.
-// Mutable fields (message, topK, etc.) live here so they can be updated via Temporal.
-type TriggerPayload struct {
-	UserEmail        string `json:"userEmail"`
-	ConversationID   string `json:"conversationId"`
-	Message          string `json:"message"`
-	TopK             int    `json:"topK"`
-	UseKnowledgeBase bool   `json:"useKnowledgeBase"`
-	UseWebFetch      bool   `json:"useWebFetch"`
-	BackendURL       string `json:"backendUrl"`
-	ServiceKey       string `json:"serviceKey"`
 }
 
 // CreateRequest is the body for POST /schedules.
