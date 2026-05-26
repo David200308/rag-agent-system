@@ -1,0 +1,8 @@
+# Temporal dynamic configuration overrides for SQL (Postgres) persistence.
+# Values here override compiled-in defaults at runtime without redeployment.
+# See https://docs.temporal.io/references/dynamic-configuration for all keys.
+
+# Increase search attribute cache refresh so new attributes are visible quickly.
+system.forceSearchAttributesCacheRefreshOnRead:
+  - value: true
+    constraints: {}

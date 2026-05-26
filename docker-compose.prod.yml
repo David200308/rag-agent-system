@@ -149,6 +149,8 @@ services:
       - POSTGRES_PWD=${TEMPORAL_DB_PASSWORD:-temporal}
       - TEMPORAL_ADDRESS=temporal:7233
       - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    volumes:
+      - ./config/dynamicconfig/development-sql.yaml:/config/dynamicconfig/development-sql.yaml:ro
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 7233 || exit 1"]
       interval: 10s
