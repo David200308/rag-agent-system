@@ -31,10 +31,11 @@
     <dependencyManagement>
         <dependencies>
             <!--
-                spring-ai-bom 1.1.x upgrades jackson-databind to 2.19.x-SNAPSHOT which
-                does not exist in the snapshot repo and breaks the offline dependency cache
-                step in Docker builds. Pin the entire Jackson BOM to the stable version
-                that Spring Boot 3.4.x ships with so the SNAPSHOT is never resolved.
+                spring-ai-bom 1.1.x and com.yubico:yubico-util:2.5.3 pull in
+                jackson-dataformat-cbor:2.18.5, whose POM references jackson-databind:2.19.5-SNAPSHOT
+                which does not exist and breaks Docker offline builds. Pin the BOM and the
+                specific CBOR artifact to stable 2.18.2 to prevent the SNAPSHOT from ever
+                being resolved.
             -->
             <dependency>
                 <groupId>com.fasterxml.jackson</groupId>
@@ -42,6 +43,11 @@
                 <version>2.18.2</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.dataformat</groupId>
+                <artifactId>jackson-dataformat-cbor</artifactId>
+                <version>2.18.2</version>
             </dependency>
             <dependency>
                 <groupId>org.springframework.ai</groupId>
