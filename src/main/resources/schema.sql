@@ -292,14 +292,3 @@ CREATE TABLE IF NOT EXISTS schedule_runs (
     CONSTRAINT fk_run_sched FOREIGN KEY (schedule_id)
         REFERENCES scheduled_messages(id) ON DELETE CASCADE
 );
-
--- ── Migration: Temporal → Asynq (run once on existing deployments) ────────────
--- The Temporal-era schema had id BIGINT AUTO_INCREMENT and no timezone column.
--- This table was not written to in production (Temporal held all state), so it
--- is safe to ALTER without a data migration — existing rows, if any, can be dropped.
---
--- MySQL automatically drops AUTO_INCREMENT when the column type changes to VARCHAR.
--- ADD COLUMN IF NOT EXISTS requires MySQL 8.0.3+.
-ALTER TABLE scheduled_messages
-    MODIFY COLUMN id       VARCHAR(36)  NOT NULL,
-    ADD COLUMN IF NOT EXISTS timezone   VARCHAR(100) NOT NULL DEFAULT 'UTC' AFTER cron_expr;
