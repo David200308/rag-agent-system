@@ -91,7 +91,7 @@ require_cmd() {
 clear
 echo ""
 echo -e "${BOLD}  RAG Agent System — Setup${NC}"
-echo -e "  ${DIM}Spring AI · LangGraph4j · Weaviate · MySQL${NC}"
+echo -e "  ${DIM}Spring AI · LangGraph4j · Weaviate · MySQL · Redis (Asynq)${NC}"
 echo ""
 
 # ── mode selection ────────────────────────────────────────────────────────────
@@ -596,24 +596,6 @@ else
     echo -e "  ${DIM}Scheduler service key auto-generated.${NC}"
   fi
 
-  # ── Temporal internal DB ────────────────────────────────────────────────────
-  header "Temporal Database"
-  UPDATE_TEMPORAL=true
-  if has_secret temporal_db_password; then
-    echo -e "  ${DIM}Temporal DB already configured (user: $(read_prod TEMPORAL_DB_USER temporal)).${NC}"
-    if ! confirm "Update Temporal DB settings?"; then UPDATE_TEMPORAL=false; fi
-  fi
-  if $UPDATE_TEMPORAL; then
-    prompt TEMPORAL_DB_USER     "Database user" "temporal"
-    prompt TEMPORAL_DB_PASSWORD "User password" "" true
-    [ -z "$TEMPORAL_DB_PASSWORD" ] && TEMPORAL_DB_PASSWORD="$(openssl rand -base64 24 | tr -d '\n')" && echo -e "  ${DIM}Password left blank — auto-generated.${NC}"
-    write_secret temporal_db_password "$TEMPORAL_DB_PASSWORD"
-  else
-    TEMPORAL_DB_USER="$(read_prod TEMPORAL_DB_USER temporal)"
-    TEMPORAL_DB_PASSWORD="$(cat "$SECRETS_DIR/temporal_db_password")"
-    echo -e "  ${DIM}Keeping existing Temporal DB settings.${NC}"
-  fi
-
   # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ──────────────
   header "Connectors (optional)"
   echo -e "  ${DIM}Connect Google Workspace (Docs, Sheets, Slides), Figma, and Telegram to the agent.${NC}"
@@ -712,11 +694,6 @@ else
 MYSQL_DB=$MYSQL_DB
 MYSQL_USER=$MYSQL_USER
 
-# ── Temporal internal DB ───────────────────────────────────────────────────────
-# TEMPORAL_DB_PASSWORD must match secrets/temporal_db_password (auto-generated above).
-TEMPORAL_DB_USER=$TEMPORAL_DB_USER
-TEMPORAL_DB_PASSWORD=$TEMPORAL_DB_PASSWORD
-
 LLM_PROVIDER=$LLM_PROVIDER
 DEFAULT_MODEL=${DEFAULT_MODEL:-}
 OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
@@ -763,11 +740,6 @@ EOF
     echo -e "  ${YELLOW}Skipped.${NC} Build later: ${BOLD}docker build -f Dockerfile.sandbox -t ragagent/sandbox:latest .${NC}"
     echo -e "  ${DIM}Set SANDBOX_ENABLED=false in .env.prod to disable the sandbox entirely.${NC}"
   fi
-
-  # ── Sync TEMPORAL_DB_PASSWORD into .env.prod (temporal container can't use Docker secrets) ──
-  _sync_pass="$(cat "$SECRETS_DIR/temporal_db_password")"
-  sed -i "s|^TEMPORAL_DB_PASSWORD=.*|TEMPORAL_DB_PASSWORD=$_sync_pass|" "$PROD_ENV"
-  unset _sync_pass
 
   # ── Launch ─────────────────────────────────────────────────────────────────
   echo ""
