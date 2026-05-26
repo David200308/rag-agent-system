@@ -597,14 +597,21 @@ else
   fi
 
   # ── Temporal internal DB ────────────────────────────────────────────────────
-  if ! has_secret temporal_db_password; then
-    TEMPORAL_DB_PASSWORD="$(openssl rand -base64 24 | tr -d '\n')"
-    write_secret temporal_db_password "$TEMPORAL_DB_PASSWORD"
-    echo -e "  ${DIM}Temporal DB password auto-generated.${NC}"
-  else
-    TEMPORAL_DB_PASSWORD="$(cat "$SECRETS_DIR/temporal_db_password")"
+  header "Temporal Database"
+  UPDATE_TEMPORAL=true
+  if has_secret temporal_db_password; then
+    echo -e "  ${DIM}Temporal DB already configured (user: $(read_prod TEMPORAL_DB_USER temporal)).${NC}"
+    if ! confirm "Update Temporal DB settings?"; then UPDATE_TEMPORAL=false; fi
   fi
-  TEMPORAL_DB_USER="$(read_prod TEMPORAL_DB_USER temporal)"
+  if $UPDATE_TEMPORAL; then
+    prompt TEMPORAL_DB_USER     "Database user" "temporal"
+    prompt TEMPORAL_DB_PASSWORD "User password" "" true
+    write_secret temporal_db_password "$TEMPORAL_DB_PASSWORD"
+  else
+    TEMPORAL_DB_USER="$(read_prod TEMPORAL_DB_USER temporal)"
+    TEMPORAL_DB_PASSWORD="$(cat "$SECRETS_DIR/temporal_db_password")"
+    echo -e "  ${DIM}Keeping existing Temporal DB settings.${NC}"
+  fi
 
   # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ──────────────
   header "Connectors (optional)"
