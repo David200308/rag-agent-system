@@ -606,6 +606,7 @@ else
   if $UPDATE_TEMPORAL; then
     prompt TEMPORAL_DB_USER     "Database user" "temporal"
     prompt TEMPORAL_DB_PASSWORD "User password" "" true
+    [ -z "$TEMPORAL_DB_PASSWORD" ] && TEMPORAL_DB_PASSWORD="$(openssl rand -base64 24 | tr -d '\n')" && echo -e "  ${DIM}Password left blank — auto-generated.${NC}"
     write_secret temporal_db_password "$TEMPORAL_DB_PASSWORD"
   else
     TEMPORAL_DB_USER="$(read_prod TEMPORAL_DB_USER temporal)"
