@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Cache dependency downloads separately from source compilation
 COPY pom.xml .
-RUN mvn dependency:go-offline -B \
+RUN mvn -B dependency:resolve dependency:resolve-plugins \
     -Dmaven.wagon.http.retryHandler.count=3 \
     -Dmaven.wagon.http.retryHandler.requestSentEnabled=true
 
