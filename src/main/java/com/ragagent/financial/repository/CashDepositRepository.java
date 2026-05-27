@@ -1,0 +1,12 @@
+package com.ragagent.financial.repository;
+
+import com.ragagent.financial.entity.CashDeposit;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface CashDepositRepository extends JpaRepository<CashDeposit, String> {
+    List<CashDeposit> findByOwnerEmailOrderByCreatedAtDesc(String ownerEmail);
+}

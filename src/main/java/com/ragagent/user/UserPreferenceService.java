@@ -41,4 +41,13 @@ public class UserPreferenceService {
                 .map(UserPreference::getSelectedModel)
                 .orElse(null);
     }
+
+    @Transactional
+    public UserPreference setDefaultCurrency(String email, String currency) {
+        UserPreference pref = repo.findByEmail(email)
+                .orElseGet(() -> new UserPreference(email, "UTC"));
+        pref.setDefaultCurrency(currency == null || currency.isBlank() ? "USD" : currency.trim().toUpperCase());
+        pref.setUpdatedAt(Instant.now());
+        return repo.save(pref);
+    }
 }

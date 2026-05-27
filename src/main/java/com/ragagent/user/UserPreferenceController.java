@@ -26,8 +26,9 @@ public class UserPreferenceController {
         }
         UserPreference pref = service.getOrDefault(email);
         Map<String, Object> result = new java.util.LinkedHashMap<>();
-        result.put("timezone",      pref.getTimezone());
-        result.put("selectedModel", pref.getSelectedModel());
+        result.put("timezone",         pref.getTimezone());
+        result.put("selectedModel",    pref.getSelectedModel());
+        result.put("defaultCurrency",  pref.getDefaultCurrency());
         return ResponseEntity.ok(result);
     }
 
@@ -53,9 +54,14 @@ public class UserPreferenceController {
             pref = service.setSelectedModel(email, model == null || model.isBlank() ? null : model.trim());
         }
 
+        if (body.containsKey("defaultCurrency")) {
+            pref = service.setDefaultCurrency(email, body.get("defaultCurrency"));
+        }
+
         Map<String, Object> result = new java.util.LinkedHashMap<>();
-        result.put("timezone",      pref.getTimezone());
-        result.put("selectedModel", pref.getSelectedModel());
+        result.put("timezone",        pref.getTimezone());
+        result.put("selectedModel",   pref.getSelectedModel());
+        result.put("defaultCurrency", pref.getDefaultCurrency());
         return ResponseEntity.ok(result);
     }
 }

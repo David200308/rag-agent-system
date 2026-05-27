@@ -298,3 +298,51 @@ ALTER TABLE scheduled_messages MODIFY COLUMN conversation_id VARCHAR(36) NULL;
 ALTER TABLE scheduled_messages ADD COLUMN workflow_id    VARCHAR(36) NULL;
 ALTER TABLE scheduled_messages ADD COLUMN workflow_input TEXT        NULL;
 ALTER TABLE scheduled_messages ADD INDEX  idx_sched_workflow (workflow_id);
+
+-- ── Schema migration: financial default currency preference ───────────────────
+ALTER TABLE user_preferences ADD COLUMN default_currency VARCHAR(10) NOT NULL DEFAULT 'USD';
+
+-- ── Financial portfolio tables ────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS financial_cash_deposits (
+    id              VARCHAR(36)    PRIMARY KEY,
+    owner_email     VARCHAR(255)   NOT NULL,
+    platform        VARCHAR(255)   NOT NULL,
+    platform_type   VARCHAR(100)   NOT NULL,
+    country_region  VARCHAR(100),
+    deposit_type    VARCHAR(10)    NOT NULL,   -- FIXED | FLEX
+    currency        VARCHAR(10)    NOT NULL,
+    amount          DECIMAL(19,4)  NOT NULL,
+    created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_fin_dep_owner (owner_email)
+);
+
+CREATE TABLE IF NOT EXISTS financial_stocks (
+    id              VARCHAR(36)    PRIMARY KEY,
+    owner_email     VARCHAR(255)   NOT NULL,
+    broker          VARCHAR(255)   NOT NULL,
+    stock_type      VARCHAR(20)    NOT NULL,   -- US_STOCK | HK_STOCK | CN_STOCK | SG_STOCK | OTHER
+    symbol          VARCHAR(20)    NOT NULL,
+    name            VARCHAR(255)   NOT NULL,
+    stock_amount    DECIMAL(19,4)  NOT NULL,
+    invest_amount   DECIMAL(19,4)  NOT NULL,
+    currency        VARCHAR(10)    NOT NULL,
+    fee             DECIMAL(19,4)  NOT NULL DEFAULT 0,
+    created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_fin_stk_owner (owner_email)
+);
+
+CREATE TABLE IF NOT EXISTS financial_crypto (
+    id              VARCHAR(36)    PRIMARY KEY,
+    owner_email     VARCHAR(255)   NOT NULL,
+    name            VARCHAR(255)   NOT NULL,
+    symbol          VARCHAR(30)    NOT NULL,
+    amount          DECIMAL(28,8)  NOT NULL,
+    invest_amount   DECIMAL(19,4)  NOT NULL,
+    currency        VARCHAR(10)    NOT NULL,
+    created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_fin_cry_owner (owner_email)
+);

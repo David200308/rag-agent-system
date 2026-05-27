@@ -29,6 +29,10 @@ public class UserPreference {
     @Column(name = "selected_model", length = 100)
     private String selectedModel;
 
+    /** Preferred display currency for the financial dashboard. Defaults to USD. */
+    @Column(name = "default_currency", length = 10)
+    private String defaultCurrency = "USD";
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
