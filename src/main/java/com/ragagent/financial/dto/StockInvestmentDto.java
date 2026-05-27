@@ -24,6 +24,8 @@ public record StockInvestmentDto(
         /** convertedCurrentValue uses currentValue converted to defaultCurrency; null if price unavailable. */
         BigDecimal convertedCurrentValue,
         String     convertedCurrency,
+        /** (convertedCurrentValue - convertedInvestAmount) / convertedInvestAmount * 100; null if price unavailable. */
+        Double     pnlPercent,
         Instant    createdAt,
         Instant    updatedAt
 ) {}

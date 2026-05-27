@@ -347,7 +347,7 @@ function CryptoForm({ initial, onSave, onCancel, saving }: {
         </Field>
       </div>
       <p className="text-[11px] text-[--color-muted]">
-        Symbol must match Binance trading pair base (BTC, ETH, SOL…)
+        Symbol must match Hyperliquid perp asset name (BTC, ETH, SOL…)
       </p>
       <div className="mt-1 flex justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
@@ -359,11 +359,25 @@ function CryptoForm({ initial, onSave, onCancel, saving }: {
 
 // ── Summary card ──────────────────────────────────────────────────────────────
 
-function SummaryCard({ label, value, currency }: { label: string; value: number; currency: string }) {
+function PnlBadge({ pct }: { pct: number }) {
+  const pos = pct >= 0;
   return (
-    <div className="rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4">
+    <span className={`text-xs font-medium ${pos ? "text-green-500" : "text-red-500"}`}>
+      {pos ? "+" : ""}{pct.toFixed(2)}%
+    </span>
+  );
+}
+
+function SummaryCard({ label, value, currency, pnlPercent }: {
+  label: string; value: number; currency: string; pnlPercent?: number | null;
+}) {
+  return (
+    <div className="rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4 min-w-0">
       <p className="text-xs text-[--color-muted]">{label}</p>
       <p className="mt-1 text-lg font-semibold tabular-nums">{formatAmount(value, currency)}</p>
+      {pnlPercent != null && (
+        <p className="mt-0.5"><PnlBadge pct={pnlPercent} /></p>
+      )}
     </div>
   );
 }
@@ -450,6 +464,23 @@ export function FinancialManager() {
   const totalDeposits = deposits.reduce((s, d) => s + (d.convertedAmount ?? 0), 0);
   const totalStocks   = stocks.reduce((s, st) => s + (st.convertedCurrentValue ?? st.convertedInvestAmount ?? 0), 0);
   const totalCrypto   = crypto.reduce((s, c) => s + (c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0), 0);
+
+  // Aggregate P&L% for summary cards (only when at least one item has live price)
+  const stocksInvested  = stocks.reduce((s, st) => s + st.convertedInvestAmount, 0);
+  const stocksPnlPct    = stocks.some((st) => st.pnlPercent != null) && stocksInvested > 0
+    ? (totalStocks - stocksInvested) / stocksInvested * 100
+    : null;
+
+  const cryptoInvested  = crypto.reduce((s, c) => s + c.convertedInvestAmount, 0);
+  const cryptoPnlPct    = crypto.some((c) => c.pnlPercent != null) && cryptoInvested > 0
+    ? (totalCrypto - cryptoInvested) / cryptoInvested * 100
+    : null;
+
+  const summaryItems = [
+    { label: "Cash Deposits",      value: totalDeposits, pnlPercent: null         },
+    { label: "Stock Investments",  value: totalStocks,   pnlPercent: stocksPnlPct },
+    { label: "Crypto Investments", value: totalCrypto,   pnlPercent: cryptoPnlPct },
+  ] as const;
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
 
@@ -539,10 +570,24 @@ export function FinancialManager() {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-3">
-          <SummaryCard label="Cash Deposits"     value={totalDeposits} currency={defaultCurrency} />
-          <SummaryCard label="Stock Investments" value={totalStocks}   currency={defaultCurrency} />
-          <SummaryCard label="Crypto Investments" value={totalCrypto}  currency={defaultCurrency} />
+        {/* Desktop: 3-column grid */}
+        <div className="mt-4 hidden sm:grid sm:grid-cols-3 sm:gap-3">
+          {summaryItems.map((item) => (
+            <SummaryCard key={item.label} label={item.label} value={item.value}
+              currency={defaultCurrency} pnlPercent={item.pnlPercent} />
+          ))}
+        </div>
+        {/* Mobile: swipeable snap carousel */}
+        <div className="mt-4 flex gap-3 overflow-x-auto sm:hidden"
+          style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" }}>
+          {summaryItems.map((item, i) => (
+            <div key={item.label} className="shrink-0"
+              style={{ scrollSnapAlign: "start", width: "78vw",
+                marginRight: i === summaryItems.length - 1 ? "8vw" : undefined }}>
+              <SummaryCard label={item.label} value={item.value}
+                currency={defaultCurrency} pnlPercent={item.pnlPercent} />
+            </div>
+          ))}
         </div>
 
         <div className="mt-4 flex items-center gap-1">
@@ -636,6 +681,7 @@ export function FinancialManager() {
                       <Th label="Price"    column="currentPrice" sort={stockSort.sort} onSort={stockSort.toggle} right />
                       <Th label="Value"    column="currentValue" sort={stockSort.sort} onSort={stockSort.toggle} right />
                       <Th label={`≈ ${defaultCurrency}`} column="convertedCurrentValue" sort={stockSort.sort} onSort={stockSort.toggle} right />
+                      <Th label="P&L%" column="pnlPercent" sort={stockSort.sort} onSort={stockSort.toggle} right />
                       <th className="px-4 py-2.5" />
                     </tr>
                   </thead>
@@ -659,6 +705,9 @@ export function FinancialManager() {
                           {s.convertedCurrentValue != null
                             ? formatAmount(s.convertedCurrentValue, defaultCurrency)
                             : formatAmount(s.convertedInvestAmount, defaultCurrency)}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {s.pnlPercent != null ? <PnlBadge pct={s.pnlPercent} /> : <span className="text-[--color-muted]">—</span>}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-1">
@@ -691,9 +740,10 @@ export function FinancialManager() {
                       <Th label="Name"     column="name"         sort={cryptoSort.sort} onSort={cryptoSort.toggle} />
                       <Th label="Amount"   column="amount"       sort={cryptoSort.sort} onSort={cryptoSort.toggle} right />
                       <Th label="Invested" column="investAmount" sort={cryptoSort.sort} onSort={cryptoSort.toggle} right />
-                      <Th label="Price (USDT)" column="currentPrice" sort={cryptoSort.sort} onSort={cryptoSort.toggle} right />
-                      <Th label="Value (USDT)" column="currentValue" sort={cryptoSort.sort} onSort={cryptoSort.toggle} right />
+                      <Th label="Price (USD)" column="currentPrice" sort={cryptoSort.sort} onSort={cryptoSort.toggle} right />
+                      <Th label="Value (USD)" column="currentValue" sort={cryptoSort.sort} onSort={cryptoSort.toggle} right />
                       <Th label={`≈ ${defaultCurrency}`} column="convertedCurrentValue" sort={cryptoSort.sort} onSort={cryptoSort.toggle} right />
+                      <Th label="P&L%" column="pnlPercent" sort={cryptoSort.sort} onSort={cryptoSort.toggle} right />
                       <th className="px-4 py-2.5" />
                     </tr>
                   </thead>
@@ -705,15 +755,18 @@ export function FinancialManager() {
                         <td className="px-4 py-3 text-right tabular-nums">{c.amount}</td>
                         <td className="px-4 py-3 text-right tabular-nums">{formatAmount(c.investAmount, c.currency)}</td>
                         <td className="px-4 py-3 text-right tabular-nums">
-                          {c.currentPrice != null ? `$${formatPrice(c.currentPrice)}` : <span className="text-[--color-muted]">—</span>}
+                          {c.currentPrice != null ? formatAmount(c.currentPrice, "USD") : <span className="text-[--color-muted]">—</span>}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
-                          {c.currentValue != null ? `$${formatPrice(c.currentValue)}` : <span className="text-[--color-muted]">—</span>}
+                          {c.currentValue != null ? formatAmount(c.currentValue, "USD") : <span className="text-[--color-muted]">—</span>}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-[--color-muted]">
                           {c.convertedCurrentValue != null
                             ? formatAmount(c.convertedCurrentValue, defaultCurrency)
                             : formatAmount(c.convertedInvestAmount, defaultCurrency)}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {c.pnlPercent != null ? <PnlBadge pct={c.pnlPercent} /> : <span className="text-[--color-muted]">—</span>}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-1">

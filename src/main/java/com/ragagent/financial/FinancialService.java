@@ -160,13 +160,18 @@ public class FinancialService {
 
         double convertedInvest = fxService.convert(s.getInvestAmount().doubleValue(), s.getCurrency(), toCurrency);
 
+        Double pnlPercent = null;
+        if (convertedCurrentValue != null && convertedInvest > 0) {
+            pnlPercent = Math.round((convertedCurrentValue.doubleValue() - convertedInvest) / convertedInvest * 10000.0) / 100.0;
+        }
+
         return new StockInvestmentDto(
                 s.getId(), s.getOwnerEmail(), s.getBroker(), s.getStockType(),
                 s.getSymbol(), s.getName(), s.getStockAmount(), s.getInvestAmount(),
                 s.getCurrency(), s.getFee(),
                 currentPrice, priceCurrency, currentValue,
                 bd(convertedInvest), convertedCurrentValue, toCurrency,
-                s.getCreatedAt(), s.getUpdatedAt()
+                pnlPercent, s.getCreatedAt(), s.getUpdatedAt()
         );
     }
 
@@ -236,12 +241,17 @@ public class FinancialService {
 
         double convertedInvest = fxService.convert(c.getInvestAmount().doubleValue(), c.getCurrency(), toCurrency);
 
+        Double pnlPercent = null;
+        if (convertedCurrentValue != null && convertedInvest > 0) {
+            pnlPercent = Math.round((convertedCurrentValue.doubleValue() - convertedInvest) / convertedInvest * 10000.0) / 100.0;
+        }
+
         return new CryptoInvestmentDto(
                 c.getId(), c.getOwnerEmail(), c.getName(), c.getSymbol(),
                 c.getAmount(), c.getInvestAmount(), c.getCurrency(),
                 currentPrice, currentValue,
                 bd(convertedInvest), convertedCurrentValue, toCurrency,
-                c.getCreatedAt(), c.getUpdatedAt()
+                pnlPercent, c.getCreatedAt(), c.getUpdatedAt()
         );
     }
 

@@ -53,6 +53,8 @@ export interface StockInvestment {
   /** currentValue in convertedCurrency; null if price unavailable */
   convertedCurrentValue: number | null;
   convertedCurrency: string;
+  /** (convertedCurrentValue - convertedInvestAmount) / convertedInvestAmount * 100; null if price unavailable */
+  pnlPercent: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -72,6 +74,8 @@ export interface CryptoInvestment {
   convertedInvestAmount: number;
   convertedCurrentValue: number | null;
   convertedCurrency: string;
+  /** (convertedCurrentValue - convertedInvestAmount) / convertedInvestAmount * 100; null if price unavailable */
+  pnlPercent: number | null;
   createdAt: string;
   updatedAt: string;
 }

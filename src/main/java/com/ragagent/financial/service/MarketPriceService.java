@@ -17,12 +17,14 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 /**
  * Fetches and caches live market prices.
  *
- * Stocks  — Yahoo Finance  (unofficial v7 quote endpoint; no API key needed)
- * Crypto  — Binance REST   (/api/v3/ticker/price; public, no key needed)
+ * Stocks  — Yahoo Finance    (unofficial v7 quote endpoint; no API key needed)
+ * Crypto  — Hyperliquid REST (POST /info {"type":"allMids"}; public, no key needed)
+ *           Returns USD mid prices for all perp assets in one request.
  *
  * Prices are shared across all users (they are the same for everyone).
  * Auto-refresh triggers when the cache is older than 1 hour.
@@ -115,45 +117,49 @@ public class MarketPriceService {
         }
     }
 
+    /**
+     * Fetches all mid prices from Hyperliquid in one POST request, then stores
+     * prices for the requested symbols.
+     *
+     * Endpoint: POST https://api.hyperliquid.xyz/info
+     * Body:     {"type":"allMids"}
+     * Response: {"BTC":"65000.0","ETH":"3500.0", ...}  (USD mid prices)
+     */
     public synchronized void refreshCryptoPrices(List<String> symbols) {
         if (symbols.isEmpty()) return;
         try {
-            // BTC -> BTCUSDT, ETH -> ETHUSDT, etc.
-            List<String> pairs = symbols.stream()
-                    .map(s -> s.toUpperCase() + "USDT")
-                    .distinct()
-                    .collect(Collectors.toList());
-
-            String symbolsJson = pairs.stream()
-                    .map(s -> "\"" + s + "\"")
-                    .collect(Collectors.joining(",", "[", "]"));
-
-            String url = "https://api.binance.com/api/v3/ticker/price?symbols="
-                    + URLEncoder.encode(symbolsJson, StandardCharsets.UTF_8);
+            String body = "{\"type\":\"allMids\"}";
 
             HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
+                    .uri(URI.create("https://api.hyperliquid.xyz/info"))
                     .timeout(Duration.ofSeconds(15))
-                    .GET()
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
 
             HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             JsonNode root = objectMapper.readTree(resp.body());
 
+            // root is a flat object: { "BTC": "65000.0", "ETH": "3500.0", ... }
+            Set<String> wanted = symbols.stream()
+                    .map(String::toUpperCase)
+                    .collect(Collectors.toSet());
+
             int updated = 0;
-            if (root.isArray()) {
-                for (JsonNode ticker : root) {
-                    String pair  = ticker.path("symbol").asText("");
-                    double price = ticker.path("price").asDouble(0);
-                    if (pair.endsWith("USDT") && price > 0) {
-                        String base = pair.substring(0, pair.length() - 4);
-                        cryptoPrices.put(base, price);
+            var fields = root.fields();
+            while (fields.hasNext()) {
+                var entry = fields.next();
+                String sym = entry.getKey().toUpperCase();
+                if (wanted.contains(sym)) {
+                    double price = entry.getValue().asDouble(0);
+                    if (price > 0) {
+                        cryptoPrices.put(sym, price);
                         updated++;
                     }
                 }
             }
             cryptoLastFetched = Instant.now();
-            log.info("[MarketPriceService] Crypto prices refreshed: {} symbols", updated);
+            log.info("[MarketPriceService] Crypto prices refreshed via Hyperliquid: {} symbols", updated);
         } catch (Exception e) {
             log.error("[MarketPriceService] Crypto price fetch failed: {}", e.getMessage());
         }
