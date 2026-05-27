@@ -1,0 +1,29 @@
+package com.ragagent.financial.dto;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+
+public record StockInvestmentDto(
+        String     id,
+        String     ownerEmail,
+        String     broker,
+        String     stockType,
+        String     symbol,
+        String     name,
+        BigDecimal stockAmount,
+        BigDecimal investAmount,
+        String     currency,
+        BigDecimal fee,
+        /** Live price from Yahoo Finance in priceCurrency; null if unavailable. */
+        Double     currentPrice,
+        /** Currency of the live price (e.g. USD, HKD). */
+        String     priceCurrency,
+        /** currentPrice × stockAmount; null if price unavailable. */
+        BigDecimal currentValue,
+        BigDecimal convertedInvestAmount,
+        /** convertedCurrentValue uses currentValue converted to defaultCurrency; null if price unavailable. */
+        BigDecimal convertedCurrentValue,
+        String     convertedCurrency,
+        Instant    createdAt,
+        Instant    updatedAt
+) {}

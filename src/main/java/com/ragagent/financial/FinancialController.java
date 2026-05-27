@@ -1,8 +1,12 @@
 package com.ragagent.financial;
 
+import com.ragagent.financial.dto.CashDepositDto;
+import com.ragagent.financial.dto.CryptoInvestmentDto;
+import com.ragagent.financial.dto.StockInvestmentDto;
 import com.ragagent.financial.entity.CashDeposit;
 import com.ragagent.financial.entity.CryptoInvestment;
 import com.ragagent.financial.entity.StockInvestment;
+import com.ragagent.user.UserPreferenceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,14 +23,15 @@ import java.util.Map;
 @Tag(name = "Financial", description = "Financial portfolio management")
 public class FinancialController {
 
-    private final FinancialService service;
+    private final FinancialService      service;
+    private final UserPreferenceService prefService;
 
     // ── Cash Deposits ─────────────────────────────────────────────────────────
 
     @GetMapping("/deposits")
-    @Operation(summary = "List cash deposits for the authenticated user")
-    public ResponseEntity<List<CashDeposit>> listDeposits(HttpServletRequest req) {
-        return ResponseEntity.ok(service.listDeposits(email(req)));
+    @Operation(summary = "List cash deposits with amounts converted to the user's default currency")
+    public ResponseEntity<List<CashDepositDto>> listDeposits(HttpServletRequest req) {
+        return ResponseEntity.ok(service.listDeposits(email(req), defaultCurrency(req)));
     }
 
     @PostMapping("/deposits")
@@ -37,7 +42,6 @@ public class FinancialController {
     }
 
     @PutMapping("/deposits/{id}")
-    @Operation(summary = "Update a cash deposit")
     public ResponseEntity<CashDeposit> updateDeposit(
             @PathVariable String id,
             @RequestBody Map<String, Object> body,
@@ -50,7 +54,6 @@ public class FinancialController {
     }
 
     @DeleteMapping("/deposits/{id}")
-    @Operation(summary = "Delete a cash deposit")
     public ResponseEntity<Void> deleteDeposit(@PathVariable String id, HttpServletRequest req) {
         try {
             service.deleteDeposit(id, email(req));
@@ -63,20 +66,18 @@ public class FinancialController {
     // ── Stocks ────────────────────────────────────────────────────────────────
 
     @GetMapping("/stocks")
-    @Operation(summary = "List stock investments for the authenticated user")
-    public ResponseEntity<List<StockInvestment>> listStocks(HttpServletRequest req) {
-        return ResponseEntity.ok(service.listStocks(email(req)));
+    @Operation(summary = "List stocks with live prices and converted amounts")
+    public ResponseEntity<List<StockInvestmentDto>> listStocks(HttpServletRequest req) {
+        return ResponseEntity.ok(service.listStocks(email(req), defaultCurrency(req)));
     }
 
     @PostMapping("/stocks")
-    @Operation(summary = "Create a stock investment")
     public ResponseEntity<StockInvestment> createStock(
             @RequestBody Map<String, Object> body, HttpServletRequest req) {
         return ResponseEntity.status(201).body(service.createStock(email(req), body));
     }
 
     @PutMapping("/stocks/{id}")
-    @Operation(summary = "Update a stock investment")
     public ResponseEntity<StockInvestment> updateStock(
             @PathVariable String id,
             @RequestBody Map<String, Object> body,
@@ -89,7 +90,6 @@ public class FinancialController {
     }
 
     @DeleteMapping("/stocks/{id}")
-    @Operation(summary = "Delete a stock investment")
     public ResponseEntity<Void> deleteStock(@PathVariable String id, HttpServletRequest req) {
         try {
             service.deleteStock(id, email(req));
@@ -102,20 +102,18 @@ public class FinancialController {
     // ── Crypto ────────────────────────────────────────────────────────────────
 
     @GetMapping("/crypto")
-    @Operation(summary = "List crypto investments for the authenticated user")
-    public ResponseEntity<List<CryptoInvestment>> listCrypto(HttpServletRequest req) {
-        return ResponseEntity.ok(service.listCrypto(email(req)));
+    @Operation(summary = "List crypto investments with live prices and converted amounts")
+    public ResponseEntity<List<CryptoInvestmentDto>> listCrypto(HttpServletRequest req) {
+        return ResponseEntity.ok(service.listCrypto(email(req), defaultCurrency(req)));
     }
 
     @PostMapping("/crypto")
-    @Operation(summary = "Create a crypto investment")
     public ResponseEntity<CryptoInvestment> createCrypto(
             @RequestBody Map<String, Object> body, HttpServletRequest req) {
         return ResponseEntity.status(201).body(service.createCrypto(email(req), body));
     }
 
     @PutMapping("/crypto/{id}")
-    @Operation(summary = "Update a crypto investment")
     public ResponseEntity<CryptoInvestment> updateCrypto(
             @PathVariable String id,
             @RequestBody Map<String, Object> body,
@@ -128,7 +126,6 @@ public class FinancialController {
     }
 
     @DeleteMapping("/crypto/{id}")
-    @Operation(summary = "Delete a crypto investment")
     public ResponseEntity<Void> deleteCrypto(@PathVariable String id, HttpServletRequest req) {
         try {
             service.deleteCrypto(id, email(req));
@@ -138,10 +135,25 @@ public class FinancialController {
         }
     }
 
+    // ── Price refresh ─────────────────────────────────────────────────────────
+
+    @PostMapping("/prices/refresh")
+    @Operation(summary = "Force-refresh live market prices for all of the user's symbols")
+    public ResponseEntity<Map<String, String>> refreshPrices(HttpServletRequest req) {
+        service.refreshPrices(email(req));
+        return ResponseEntity.ok(Map.of("status", "ok"));
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private String email(HttpServletRequest req) {
         String email = (String) req.getAttribute("authenticatedEmail");
         return email != null ? email : "anonymous";
+    }
+
+    private String defaultCurrency(HttpServletRequest req) {
+        String email = email(req);
+        String cur   = prefService.getOrDefault(email).getDefaultCurrency();
+        return (cur != null && !cur.isBlank()) ? cur : "USD";
     }
 }

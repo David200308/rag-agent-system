@@ -15,6 +15,8 @@ export const STOCK_TYPE_LABELS: Record<StockType, string> = {
   OTHER:    "Other",
 };
 
+// ── Backend DTOs (mirror of Java records) ────────────────────────────────────
+
 export interface CashDeposit {
   id: string;
   ownerEmail: string;
@@ -22,8 +24,11 @@ export interface CashDeposit {
   platformType: string;
   countryRegion: string;
   depositType: DepositType;
-  currency: Currency;
+  currency: string;
   amount: number;
+  /** Server-side converted amount in convertedCurrency */
+  convertedAmount: number;
+  convertedCurrency: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -37,8 +42,17 @@ export interface StockInvestment {
   name: string;
   stockAmount: number;
   investAmount: number;
-  currency: Currency;
+  currency: string;
   fee: number;
+  /** Live price from Yahoo Finance in priceCurrency; null if unavailable */
+  currentPrice: number | null;
+  priceCurrency: string | null;
+  /** currentPrice × stockAmount; null if price unavailable */
+  currentValue: number | null;
+  convertedInvestAmount: number;
+  /** currentValue in convertedCurrency; null if price unavailable */
+  convertedCurrentValue: number | null;
+  convertedCurrency: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -50,36 +64,35 @@ export interface CryptoInvestment {
   symbol: string;
   amount: number;
   investAmount: number;
-  currency: Currency;
+  currency: string;
+  /** Live USDT price from Binance; null if unavailable */
+  currentPrice: number | null;
+  /** currentPrice × amount (USDT); null if price unavailable */
+  currentValue: number | null;
+  convertedInvestAmount: number;
+  convertedCurrentValue: number | null;
+  convertedCurrency: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface ExchangeRates {
-  result: string;
-  base_code: string;
-  time_last_update_utc: string;
-  conversion_rates: Record<string, number>;
-}
-
-/** Convert `amount` in `from` currency to `to` currency using USD-base rates. */
-export function convertCurrency(
-  amount: number,
-  from: string,
-  to: string,
-  rates: Record<string, number>,
-): number {
-  if (from === to) return amount;
-  const fromRate = rates[from] ?? 1;
-  const toRate   = rates[to]   ?? 1;
-  return (amount / fromRate) * toRate;
-}
+// ── Formatting helpers ────────────────────────────────────────────────────────
 
 export function formatAmount(value: number, currency: string): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${currency} ${value.toFixed(2)}`;
+  }
+}
+
+export function formatPrice(value: number): string {
+  if (value >= 1000) return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  if (value >= 1)    return value.toFixed(4);
+  return value.toPrecision(4);
 }
