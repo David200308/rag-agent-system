@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Pencil, Trash2, RefreshCw, ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw, ChevronDown, ChevronUp, ChevronsUpDown, Download } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
   CURRENCIES,
@@ -303,7 +303,7 @@ function StockForm({ initial, brokers, onSave, onCancel, saving }: {
         </Field>
       </div>
       <p className="text-[11px] text-[--color-muted]">
-        Use Yahoo Finance ticker format: AAPL (US), 0700.HK (HK), 600519.SS (CN), D05.SI (SG)
+        Use Alpha Vantage ticker format: AAPL (US), 0700.HK (HK), 600519.SS (CN), D05.SI (SG)
       </p>
       <div className="mt-1 flex justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
@@ -368,12 +368,17 @@ function PnlBadge({ pct }: { pct: number }) {
   );
 }
 
-function SummaryCard({ label, value, currency, pnlPercent }: {
-  label: string; value: number; currency: string; pnlPercent?: number | null;
+function SummaryCard({ label, value, currency, pnlPercent, share }: {
+  label: string; value: number; currency: string; pnlPercent?: number | null; share?: number;
 }) {
   return (
     <div className="rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4 min-w-0">
-      <p className="text-xs text-[--color-muted]">{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-[--color-muted]">{label}</p>
+        {share != null && (
+          <span className="text-xs font-medium text-[--color-muted] tabular-nums">{share.toFixed(1)}%</span>
+        )}
+      </div>
       <p className="mt-1 text-lg font-semibold tabular-nums">{formatAmount(value, currency)}</p>
       {pnlPercent != null && (
         <p className="mt-0.5"><PnlBadge pct={pnlPercent} /></p>
@@ -384,6 +389,170 @@ function SummaryCard({ label, value, currency, pnlPercent }: {
 
 function unique(arr: string[]): string[] {
   return [...new Set(arr.filter(Boolean))].sort();
+}
+
+// ── Export helpers ────────────────────────────────────────────────────────────
+
+function pct(part: number, total: number): string {
+  if (total === 0) return "0.0%";
+  return (part / total * 100).toFixed(1) + "%";
+}
+
+function buildMarkdown(
+  deposits: CashDeposit[],
+  stocks: StockInvestment[],
+  crypto: CryptoInvestment[],
+  currency: string,
+  grandTotal: number,
+): string {
+  const date = new Date().toISOString().slice(0, 10);
+  const lines: string[] = [`# Financial Report — ${date}`, ""];
+
+  // Summary
+  const totalDep = deposits.reduce((s, d) => s + (d.convertedAmount ?? 0), 0);
+  const totalStk = stocks.reduce((s, st) => s + (st.convertedCurrentValue ?? st.convertedInvestAmount ?? 0), 0);
+  const totalCry = crypto.reduce((s, c) => s + (c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0), 0);
+  lines.push("## Summary", "");
+  lines.push(`| Category | Value (${currency}) | % of Total |`);
+  lines.push("|---|---:|---:|");
+  lines.push(`| Cash Deposits | ${formatAmount(totalDep, currency)} | ${pct(totalDep, grandTotal)} |`);
+  lines.push(`| Stock Investments | ${formatAmount(totalStk, currency)} | ${pct(totalStk, grandTotal)} |`);
+  lines.push(`| Crypto Investments | ${formatAmount(totalCry, currency)} | ${pct(totalCry, grandTotal)} |`);
+  lines.push(`| **Total** | **${formatAmount(grandTotal, currency)}** | **100%** |`);
+  lines.push("");
+
+  // Deposits
+  if (deposits.length > 0) {
+    lines.push("## Cash Deposits", "");
+    lines.push(`| Platform | Type | Country | F/X | Amount | ≈ ${currency} | % of Total |`);
+    lines.push("|---|---|---|---|---:|---:|---:|");
+    for (const d of deposits) {
+      lines.push(`| ${d.platform} | ${d.platformType} | ${d.countryRegion || "—"} | ${d.depositType} | ${formatAmount(d.amount, d.currency)} | ${formatAmount(d.convertedAmount, currency)} | ${pct(d.convertedAmount ?? 0, grandTotal)} |`);
+    }
+    lines.push("");
+  }
+
+  // Stocks
+  if (stocks.length > 0) {
+    lines.push("## Stock Investments", "");
+    lines.push(`| Symbol | Name | Shares | Invested | Price | Value | ≈ ${currency} | P&L% | % of Total |`);
+    lines.push("|---|---|---:|---:|---:|---:|---:|---:|---:|");
+    for (const s of stocks) {
+      const val = s.convertedCurrentValue ?? s.convertedInvestAmount ?? 0;
+      lines.push(`| ${s.symbol} | ${s.name} | ${s.stockAmount} | ${formatAmount(s.investAmount, s.currency)} | ${s.currentPrice != null ? formatPrice(s.currentPrice) : "—"} | ${s.currentValue != null ? formatAmount(s.currentValue, s.priceCurrency ?? s.currency) : "—"} | ${formatAmount(val, currency)} | ${s.pnlPercent != null ? (s.pnlPercent >= 0 ? "+" : "") + s.pnlPercent.toFixed(2) + "%" : "—"} | ${pct(val, grandTotal)} |`);
+    }
+    lines.push("");
+  }
+
+  // Crypto
+  if (crypto.length > 0) {
+    lines.push("## Crypto Investments", "");
+    lines.push(`| Symbol | Name | Amount | Invested | Price (USD) | Value (USD) | ≈ ${currency} | P&L% | % of Total |`);
+    lines.push("|---|---|---:|---:|---:|---:|---:|---:|---:|");
+    for (const c of crypto) {
+      const val = c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0;
+      lines.push(`| ${c.symbol} | ${c.name} | ${c.amount} | ${formatAmount(c.investAmount, c.currency)} | ${c.currentPrice != null ? formatAmount(c.currentPrice, "USD") : "—"} | ${c.currentValue != null ? formatAmount(c.currentValue, "USD") : "—"} | ${formatAmount(val, currency)} | ${c.pnlPercent != null ? (c.pnlPercent >= 0 ? "+" : "") + c.pnlPercent.toFixed(2) + "%" : "—"} | ${pct(val, grandTotal)} |`);
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+function downloadFile(content: string, filename: string, mime: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportPdf(
+  deposits: CashDeposit[],
+  stocks: StockInvestment[],
+  crypto: CryptoInvestment[],
+  currency: string,
+  grandTotal: number,
+) {
+  const date = new Date().toISOString().slice(0, 10);
+  const totalDep = deposits.reduce((s, d) => s + (d.convertedAmount ?? 0), 0);
+  const totalStk = stocks.reduce((s, st) => s + (st.convertedCurrentValue ?? st.convertedInvestAmount ?? 0), 0);
+  const totalCry = crypto.reduce((s, c) => s + (c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0), 0);
+
+  const tableStyle = `border-collapse:collapse;width:100%;font-size:11px;margin-bottom:20px`;
+  const thStyle = `border:1px solid #ccc;padding:4px 8px;background:#f5f5f5;text-align:left`;
+  const tdStyle = `border:1px solid #ccc;padding:4px 8px`;
+  const tdR = `border:1px solid #ccc;padding:4px 8px;text-align:right`;
+
+  const depRows = deposits.map(d => `<tr>
+    <td style="${tdStyle}">${d.platform}</td><td style="${tdStyle}">${d.platformType}</td>
+    <td style="${tdStyle}">${d.countryRegion || "—"}</td><td style="${tdStyle}">${d.depositType}</td>
+    <td style="${tdR}">${formatAmount(d.amount, d.currency)}</td>
+    <td style="${tdR}">${formatAmount(d.convertedAmount, currency)}</td>
+    <td style="${tdR}">${pct(d.convertedAmount ?? 0, grandTotal)}</td></tr>`).join("");
+
+  const stkRows = stocks.map(s => {
+    const val = s.convertedCurrentValue ?? s.convertedInvestAmount ?? 0;
+    return `<tr>
+    <td style="${tdStyle}">${s.symbol}</td><td style="${tdStyle}">${s.name}</td>
+    <td style="${tdR}">${s.stockAmount}</td>
+    <td style="${tdR}">${formatAmount(s.investAmount, s.currency)}</td>
+    <td style="${tdR}">${s.currentPrice != null ? formatPrice(s.currentPrice) : "—"}</td>
+    <td style="${tdR}">${s.currentValue != null ? formatAmount(s.currentValue, s.priceCurrency ?? s.currency) : "—"}</td>
+    <td style="${tdR}">${formatAmount(val, currency)}</td>
+    <td style="${tdR}">${s.pnlPercent != null ? (s.pnlPercent >= 0 ? "+" : "") + s.pnlPercent.toFixed(2) + "%" : "—"}</td>
+    <td style="${tdR}">${pct(val, grandTotal)}</td></tr>`;
+  }).join("");
+
+  const cryRows = crypto.map(c => {
+    const val = c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0;
+    return `<tr>
+    <td style="${tdStyle}">${c.symbol}</td><td style="${tdStyle}">${c.name}</td>
+    <td style="${tdR}">${c.amount}</td>
+    <td style="${tdR}">${formatAmount(c.investAmount, c.currency)}</td>
+    <td style="${tdR}">${c.currentPrice != null ? formatAmount(c.currentPrice, "USD") : "—"}</td>
+    <td style="${tdR}">${c.currentValue != null ? formatAmount(c.currentValue, "USD") : "—"}</td>
+    <td style="${tdR}">${formatAmount(val, currency)}</td>
+    <td style="${tdR}">${c.pnlPercent != null ? (c.pnlPercent >= 0 ? "+" : "") + c.pnlPercent.toFixed(2) + "%" : "—"}</td>
+    <td style="${tdR}">${pct(val, grandTotal)}</td></tr>`;
+  }).join("");
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Financial Report ${date}</title>
+<style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:18px;margin-bottom:4px}h2{font-size:14px;margin-top:20px}@media print{button{display:none}}</style>
+</head><body>
+<h1>Financial Report</h1><p style="color:#666;font-size:12px">${date}</p>
+<button onclick="window.print()" style="margin-bottom:16px;padding:6px 14px;cursor:pointer">Print / Save as PDF</button>
+<h2>Summary</h2>
+<table style="${tableStyle}"><thead><tr>
+  <th style="${thStyle}">Category</th><th style="${thStyle}">Value (${currency})</th><th style="${thStyle}">% of Total</th>
+</tr></thead><tbody>
+  <tr><td style="${tdStyle}">Cash Deposits</td><td style="${tdR}">${formatAmount(totalDep, currency)}</td><td style="${tdR}">${pct(totalDep, grandTotal)}</td></tr>
+  <tr><td style="${tdStyle}">Stock Investments</td><td style="${tdR}">${formatAmount(totalStk, currency)}</td><td style="${tdR}">${pct(totalStk, grandTotal)}</td></tr>
+  <tr><td style="${tdStyle}">Crypto Investments</td><td style="${tdR}">${formatAmount(totalCry, currency)}</td><td style="${tdR}">${pct(totalCry, grandTotal)}</td></tr>
+  <tr><td style="border:1px solid #ccc;padding:4px 8px;font-weight:bold">Total</td><td style="${tdR}font-weight:bold">${formatAmount(grandTotal, currency)}</td><td style="${tdR}font-weight:bold">100%</td></tr>
+</tbody></table>
+${deposits.length > 0 ? `<h2>Cash Deposits</h2>
+<table style="${tableStyle}"><thead><tr>
+  <th style="${thStyle}">Platform</th><th style="${thStyle}">Type</th><th style="${thStyle}">Country</th><th style="${thStyle}">F/X</th>
+  <th style="${thStyle}">Amount</th><th style="${thStyle}">≈ ${currency}</th><th style="${thStyle}">% of Total</th>
+</tr></thead><tbody>${depRows}</tbody></table>` : ""}
+${stocks.length > 0 ? `<h2>Stock Investments</h2>
+<table style="${tableStyle}"><thead><tr>
+  <th style="${thStyle}">Symbol</th><th style="${thStyle}">Name</th><th style="${thStyle}">Shares</th>
+  <th style="${thStyle}">Invested</th><th style="${thStyle}">Price</th><th style="${thStyle}">Value</th>
+  <th style="${thStyle}">≈ ${currency}</th><th style="${thStyle}">P&amp;L%</th><th style="${thStyle}">% of Total</th>
+</tr></thead><tbody>${stkRows}</tbody></table>` : ""}
+${crypto.length > 0 ? `<h2>Crypto Investments</h2>
+<table style="${tableStyle}"><thead><tr>
+  <th style="${thStyle}">Symbol</th><th style="${thStyle}">Name</th><th style="${thStyle}">Amount</th>
+  <th style="${thStyle}">Invested</th><th style="${thStyle}">Price (USD)</th><th style="${thStyle}">Value (USD)</th>
+  <th style="${thStyle}">≈ ${currency}</th><th style="${thStyle}">P&amp;L%</th><th style="${thStyle}">% of Total</th>
+</tr></thead><tbody>${cryRows}</tbody></table>` : ""}
+</body></html>`;
+
+  const w = window.open("", "_blank");
+  if (w) { w.document.write(html); w.document.close(); }
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -476,10 +645,12 @@ export function FinancialManager() {
     ? (totalCrypto - cryptoInvested) / cryptoInvested * 100
     : null;
 
+  const grandTotal = totalDeposits + totalStocks + totalCrypto;
+
   const summaryItems = [
-    { label: "Cash Deposits",      value: totalDeposits, pnlPercent: null         },
-    { label: "Stock Investments",  value: totalStocks,   pnlPercent: stocksPnlPct },
-    { label: "Crypto Investments", value: totalCrypto,   pnlPercent: cryptoPnlPct },
+    { label: "Cash Deposits",      value: totalDeposits, pnlPercent: null,         share: grandTotal > 0 ? totalDeposits / grandTotal * 100 : 0 },
+    { label: "Stock Investments",  value: totalStocks,   pnlPercent: stocksPnlPct, share: grandTotal > 0 ? totalStocks  / grandTotal * 100 : 0 },
+    { label: "Crypto Investments", value: totalCrypto,   pnlPercent: cryptoPnlPct, share: grandTotal > 0 ? totalCrypto  / grandTotal * 100 : 0 },
   ] as const;
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
@@ -556,6 +727,20 @@ export function FinancialManager() {
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
             </button>
+            <div className="flex items-center gap-1 rounded-md border border-[--color-border] bg-[--color-surface] px-1">
+              <Download className="h-3 w-3 text-[--color-muted]" />
+              <button
+                onClick={() => downloadFile(buildMarkdown(deposits, stocks, crypto, defaultCurrency, grandTotal), `financial-${new Date().toISOString().slice(0,10)}.md`, "text/markdown")}
+                className="px-1.5 py-1 text-xs text-[--color-muted] hover:text-inherit"
+                title="Export as Markdown"
+              >MD</button>
+              <span className="text-[--color-border]">|</span>
+              <button
+                onClick={() => exportPdf(deposits, stocks, crypto, defaultCurrency, grandTotal)}
+                className="px-1.5 py-1 text-xs text-[--color-muted] hover:text-inherit"
+                title="Export as PDF"
+              >PDF</button>
+            </div>
             <div className="relative flex items-center gap-1.5 rounded-md border border-[--color-border] bg-[--color-surface] px-2.5 py-1.5">
               <span className="text-xs text-[--color-muted]">Default:</span>
               <select
@@ -574,7 +759,7 @@ export function FinancialManager() {
         <div className="mt-4 hidden sm:grid sm:grid-cols-3 sm:gap-3">
           {summaryItems.map((item) => (
             <SummaryCard key={item.label} label={item.label} value={item.value}
-              currency={defaultCurrency} pnlPercent={item.pnlPercent} />
+              currency={defaultCurrency} pnlPercent={item.pnlPercent} share={item.share} />
           ))}
         </div>
         {/* Mobile: swipeable snap carousel */}
@@ -585,7 +770,7 @@ export function FinancialManager() {
               style={{ scrollSnapAlign: "start", width: "78vw",
                 marginRight: i === summaryItems.length - 1 ? "8vw" : undefined }}>
               <SummaryCard label={item.label} value={item.value}
-                currency={defaultCurrency} pnlPercent={item.pnlPercent} />
+                currency={defaultCurrency} pnlPercent={item.pnlPercent} share={item.share} />
             </div>
           ))}
         </div>
@@ -628,6 +813,7 @@ export function FinancialManager() {
                       <Th label="F/X"      column="depositType" sort={depositSort.sort} onSort={depositSort.toggle} />
                       <Th label="Amount"   column="amount" sort={depositSort.sort} onSort={depositSort.toggle} right />
                       <Th label={`≈ ${defaultCurrency}`} column="convertedAmount" sort={depositSort.sort} onSort={depositSort.toggle} right />
+                      <th className={`px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]`}>% of Total</th>
                       <th className="px-4 py-2.5" />
                     </tr>
                   </thead>
@@ -646,6 +832,7 @@ export function FinancialManager() {
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">{formatAmount(d.amount, d.currency)}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-[--color-muted]">{formatAmount(d.convertedAmount, defaultCurrency)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-xs text-[--color-muted]">{pct(d.convertedAmount ?? 0, grandTotal)}</td>
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-1">
                             <Button size="icon" variant="ghost" className="h-7 w-7"
@@ -682,6 +869,7 @@ export function FinancialManager() {
                       <Th label="Value"    column="currentValue" sort={stockSort.sort} onSort={stockSort.toggle} right />
                       <Th label={`≈ ${defaultCurrency}`} column="convertedCurrentValue" sort={stockSort.sort} onSort={stockSort.toggle} right />
                       <Th label="P&L%" column="pnlPercent" sort={stockSort.sort} onSort={stockSort.toggle} right />
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">% of Total</th>
                       <th className="px-4 py-2.5" />
                     </tr>
                   </thead>
@@ -708,6 +896,9 @@ export function FinancialManager() {
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {s.pnlPercent != null ? <PnlBadge pct={s.pnlPercent} /> : <span className="text-[--color-muted]">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-xs text-[--color-muted]">
+                          {pct((s.convertedCurrentValue ?? s.convertedInvestAmount ?? 0), grandTotal)}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-1">
@@ -744,6 +935,7 @@ export function FinancialManager() {
                       <Th label="Value (USD)" column="currentValue" sort={cryptoSort.sort} onSort={cryptoSort.toggle} right />
                       <Th label={`≈ ${defaultCurrency}`} column="convertedCurrentValue" sort={cryptoSort.sort} onSort={cryptoSort.toggle} right />
                       <Th label="P&L%" column="pnlPercent" sort={cryptoSort.sort} onSort={cryptoSort.toggle} right />
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">% of Total</th>
                       <th className="px-4 py-2.5" />
                     </tr>
                   </thead>
@@ -767,6 +959,9 @@ export function FinancialManager() {
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {c.pnlPercent != null ? <PnlBadge pct={c.pnlPercent} /> : <span className="text-[--color-muted]">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-xs text-[--color-muted]">
+                          {pct((c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0), grandTotal)}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-1">

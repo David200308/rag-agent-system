@@ -4,25 +4,26 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 /**
  * Fetches and caches live market prices.
  *
- * Stocks  — Yahoo Finance    (unofficial v7 quote endpoint; no API key needed)
+ * Stocks  — Alpha Vantage GLOBAL_QUOTE endpoint (requires ALPHAVANTAGE_API_KEY)
  * Crypto  — Hyperliquid REST (POST /info {"type":"allMids"}; public, no key needed)
  *           Returns USD mid prices for all perp assets in one request.
  *
@@ -35,6 +36,9 @@ import java.util.stream.StreamSupport;
 @RequiredArgsConstructor
 public class MarketPriceService {
 
+    @Value("${financial.alphavantage.api-key:demo}")
+    private String alphaVantageApiKey;
+
     private static final Duration CACHE_TTL = Duration.ofHours(1);
 
     private final ObjectMapper objectMapper;
@@ -44,7 +48,7 @@ public class MarketPriceService {
 
     // symbol (e.g. "AAPL", "0700.HK") -> price in native currency
     private final Map<String, Double> stockPrices      = new ConcurrentHashMap<>();
-    // symbol -> currency code returned by Yahoo (USD, HKD, …)
+    // symbol -> currency code inferred from exchange suffix (USD, HKD, …)
     private final Map<String, String> stockCurrencies  = new ConcurrentHashMap<>();
 
     // crypto base symbol (e.g. "BTC", "ETH") -> USDT price
@@ -77,44 +81,53 @@ public class MarketPriceService {
 
     public synchronized void refreshStockPrices(List<String> symbols) {
         if (symbols.isEmpty()) return;
-        try {
-            String joined = symbols.stream()
-                    .map(s -> s.toUpperCase())
-                    .distinct()
-                    .collect(Collectors.joining(","));
+        List<String> distinct = symbols.stream().map(String::toUpperCase).distinct().collect(Collectors.toList());
+        int updated = 0;
+        for (String sym : distinct) {
+            try {
+                String url = "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol="
+                        + sym + "&apikey=" + alphaVantageApiKey;
 
-            String url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols="
-                    + URLEncoder.encode(joined, StandardCharsets.UTF_8)
-                    + "&fields=regularMarketPrice,currency";
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .timeout(Duration.ofSeconds(15))
+                        .header("Accept", "application/json")
+                        .GET()
+                        .build();
 
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(15))
-                    .header("User-Agent", "Mozilla/5.0 (compatible)")
-                    .header("Accept", "application/json")
-                    .GET()
-                    .build();
-
-            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-            JsonNode results = objectMapper.readTree(resp.body())
-                    .path("quoteResponse").path("result");
-
-            int updated = 0;
-            for (JsonNode q : results) {
-                String sym   = q.path("symbol").asText("").toUpperCase();
-                double price = q.path("regularMarketPrice").asDouble(0);
-                String cur   = q.path("currency").asText("USD");
-                if (!sym.isEmpty() && price > 0) {
+                HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+                JsonNode quote = objectMapper.readTree(resp.body()).path("Global Quote");
+                double price = quote.path("05. price").asDouble(0);
+                if (price > 0) {
                     stockPrices.put(sym, price);
-                    stockCurrencies.put(sym, cur);
+                    stockCurrencies.put(sym, inferCurrency(sym));
                     updated++;
+                } else {
+                    // Alpha Vantage returns {"Information":...} on rate-limit / invalid key
+                    JsonNode info = objectMapper.readTree(resp.body()).path("Information");
+                    if (!info.isMissingNode()) {
+                        log.warn("[MarketPriceService] Alpha Vantage info for {}: {}", sym, info.asText());
+                    }
                 }
+            } catch (Exception e) {
+                log.error("[MarketPriceService] Stock price fetch failed for {}: {}", sym, e.getMessage());
             }
-            stockLastFetched = Instant.now();
-            log.info("[MarketPriceService] Stock prices refreshed: {} symbols", updated);
-        } catch (Exception e) {
-            log.error("[MarketPriceService] Stock price fetch failed: {}", e.getMessage());
         }
+        stockLastFetched = Instant.now();
+        log.info("[MarketPriceService] Stock prices refreshed via Alpha Vantage: {}/{} symbols", updated, distinct.size());
+    }
+
+    /** Infer the native currency of a stock symbol from its exchange suffix. */
+    private static String inferCurrency(String symbol) {
+        String upper = symbol.toUpperCase();
+        if (upper.endsWith(".HK"))                          return "HKD";
+        if (upper.endsWith(".SS") || upper.endsWith(".SZ")) return "CNY";
+        if (upper.endsWith(".SI"))                          return "SGD";
+        if (upper.endsWith(".T"))                           return "JPY";
+        if (upper.endsWith(".L"))                           return "GBP";
+        if (upper.endsWith(".AX"))                          return "AUD";
+        if (upper.endsWith(".TO"))                          return "CAD";
+        return "USD";
     }
 
     /**

@@ -282,6 +282,11 @@ resend:
   api-key: ${RESEND_API_KEY:}
   from-email: ${RESEND_FROM_EMAIL:noreply@example.com}
 
+# ── Financial / Market Data ───────────────────────────────────────────────────
+financial:
+  alphavantage:
+    api-key: ${ALPHAVANTAGE_API_KEY:demo}
+
 logging:
   level:
     com.ragagent: DEBUG

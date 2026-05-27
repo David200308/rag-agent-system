@@ -93,6 +93,8 @@ services:
       # ── Resend (email OTP)
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-noreply@example.com}
+      # ── Financial / Market data
+      ALPHAVANTAGE_API_KEY: ${ALPHAVANTAGE_API_KEY:-demo}
       # ── Web fetch
       WEB_FETCH_ENABLED: ${WEB_FETCH_ENABLED:-true}
       WEB_FETCH_TIMEOUT: ${WEB_FETCH_TIMEOUT:-10}

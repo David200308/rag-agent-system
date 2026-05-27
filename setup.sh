@@ -215,6 +215,14 @@ if [ "$MODE" = "local" ]; then
   SCHEDULER_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
   echo -e "  ${DIM}Scheduler service key auto-generated.${NC}"
 
+  # ── Financial / Market data ───────────────────────────────────────────────
+  header "Financial — Alpha Vantage (optional)"
+  echo -e "  ${DIM}Used for live stock prices. Get a free key at https://www.alphavantage.co/support/#api-key${NC}"
+  echo -e "  ${DIM}Leave blank to use the 'demo' key (limited to a few demo tickers).${NC}"
+  ALPHAVANTAGE_API_KEY=""
+  prompt ALPHAVANTAGE_API_KEY "Alpha Vantage API key" "" true
+  [ -z "$ALPHAVANTAGE_API_KEY" ] && ALPHAVANTAGE_API_KEY="demo"
+
   # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ──────────────
   header "Connectors (optional)"
   echo -e "  ${DIM}Connect Google Workspace (Docs, Sheets, Slides), Figma, and Telegram to the agent.${NC}"
@@ -297,6 +305,9 @@ AUTH_PASSKEY_ORIGIN=$AUTH_PASSKEY_ORIGIN
 # ── Resend ────────────────────────────────────────────────────────────────────
 RESEND_API_KEY=$RESEND_API_KEY
 RESEND_FROM_EMAIL=$RESEND_FROM_EMAIL
+
+# ── Financial / Market data ───────────────────────────────────────────────────
+ALPHAVANTAGE_API_KEY=$ALPHAVANTAGE_API_KEY
 
 # ── Weaviate ──────────────────────────────────────────────────────────────────
 WEAVIATE_API_KEY=$WEAVIATE_API_KEY
@@ -594,6 +605,24 @@ else
     write_secret scheduler_service_key "$SCHEDULER_SERVICE_KEY"
     echo ""
     echo -e "  ${DIM}Scheduler service key auto-generated.${NC}"
+  fi
+
+  # ── Financial / Market data ───────────────────────────────────────────────
+  header "Financial — Alpha Vantage (optional)"
+  UPDATE_AV=true
+  if has_secret alphavantage_api_key; then
+    echo -e "  ${DIM}Alpha Vantage already configured.${NC}"
+    if ! confirm "Update Alpha Vantage API key?"; then UPDATE_AV=false; fi
+  fi
+  if $UPDATE_AV; then
+    echo -e "  ${DIM}Get a free key at https://www.alphavantage.co/support/#api-key${NC}"
+    echo -e "  ${DIM}Leave blank to use the 'demo' key (limited to a few demo tickers).${NC}"
+    ALPHAVANTAGE_API_KEY=""
+    prompt ALPHAVANTAGE_API_KEY "Alpha Vantage API key" "" true
+    [ -z "$ALPHAVANTAGE_API_KEY" ] && ALPHAVANTAGE_API_KEY="demo"
+    write_secret alphavantage_api_key "$ALPHAVANTAGE_API_KEY"
+  else
+    echo -e "  ${DIM}Keeping existing Alpha Vantage secret.${NC}"
   fi
 
   # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ──────────────
