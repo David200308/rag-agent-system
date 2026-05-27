@@ -201,8 +201,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 // ── Forms ─────────────────────────────────────────────────────────────────────
 
 type DepositFields = Omit<CashDeposit, "id"|"ownerEmail"|"convertedAmount"|"convertedCurrency"|"createdAt"|"updatedAt">;
-type StockFields   = Omit<StockInvestment, "id"|"ownerEmail"|"currentPrice"|"priceCurrency"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"createdAt"|"updatedAt">;
-type CryptoFields  = Omit<CryptoInvestment, "id"|"ownerEmail"|"currentPrice"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"createdAt"|"updatedAt">;
+type StockFields   = Omit<StockInvestment, "id"|"ownerEmail"|"currentPrice"|"priceCurrency"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"createdAt"|"updatedAt">;
+type CryptoFields  = Omit<CryptoInvestment, "id"|"ownerEmail"|"currentPrice"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"createdAt"|"updatedAt">;
 
 const emptyDeposit = (): DepositFields => ({ platform:"", platformType:"", countryRegion:"", depositType:"FIXED", currency:"USD", amount:0 });
 const emptyStock   = (): StockFields   => ({ broker:"", stockType:"US_STOCK", symbol:"", name:"", stockAmount:0, investAmount:0, currency:"USD", fee:0 });
