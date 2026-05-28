@@ -346,3 +346,18 @@ CREATE TABLE IF NOT EXISTS financial_crypto (
     updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_fin_cry_owner (owner_email)
 );
+
+CREATE TABLE IF NOT EXISTS financial_cards (
+    id              VARCHAR(36)    PRIMARY KEY,
+    owner_email     VARCHAR(255)   NOT NULL,
+    bank            VARCHAR(255)   NOT NULL,
+    types           VARCHAR(50)    NOT NULL,   -- comma-separated: Credit,Debit,ATM
+    card_name       VARCHAR(255)   NOT NULL,
+    network         VARCHAR(20)    NOT NULL,   -- Mastercard | Visa | UnionPay | JCB | AMEX
+    expire_date     VARCHAR(7),                -- YYYY-MM format, nullable
+    credit_limit    DECIMAL(19,2),             -- nullable
+    shared_credit   TINYINT(1),               -- NULL=unknown, 1=shared pool, 0=dedicated
+    created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_fin_card_owner (owner_email)
+);

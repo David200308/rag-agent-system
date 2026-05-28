@@ -2,22 +2,27 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Pencil, Trash2, RefreshCw, ChevronDown, ChevronUp, ChevronsUpDown, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw, ChevronDown, ChevronUp, ChevronsUpDown, Download, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
   CURRENCIES,
   DEPOSIT_TYPES,
   STOCK_TYPES,
   STOCK_TYPE_LABELS,
+  CARD_TYPES,
+  CARD_NETWORKS,
   type CashDeposit,
   type CryptoInvestment,
   type Currency,
   type StockInvestment,
+  type Card,
+  type CardType,
+  type CardNetwork,
   formatAmount,
   formatPrice,
 } from "@/types/financial";
 
-type Tab = "deposits" | "stocks" | "crypto";
+type Tab = "deposits" | "stocks" | "crypto" | "cards";
 type SortDir = "asc" | "desc";
 interface SortConfig { column: string; dir: SortDir }
 
@@ -212,10 +217,32 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 type DepositFields = Omit<CashDeposit, "id"|"ownerEmail"|"convertedAmount"|"convertedCurrency"|"createdAt"|"updatedAt">;
 type StockFields   = Omit<StockInvestment, "id"|"ownerEmail"|"currentPrice"|"priceCurrency"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"createdAt"|"updatedAt">;
 type CryptoFields  = Omit<CryptoInvestment, "id"|"ownerEmail"|"currentPrice"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"createdAt"|"updatedAt">;
+type CardFields    = Omit<Card, "id"|"ownerEmail"|"createdAt"|"updatedAt">;
 
 const emptyDeposit = (): DepositFields => ({ platform:"", platformType:"", countryRegion:"", depositType:"FIXED", currency:"USD", amount:0 });
 const emptyStock   = (): StockFields   => ({ broker:"", stockType:"US_STOCK", symbol:"", name:"", stockAmount:0, investAmount:0, currency:"USD", fee:0 });
 const emptyCrypto  = (): CryptoFields  => ({ name:"", symbol:"", amount:0, investAmount:0, currency:"USD" });
+const emptyCard    = (): CardFields    => ({ bank:"", types:[], cardName:"", network:"Visa", expireDate:"", creditLimit:null, sharedCredit:null });
+
+const NETWORK_COLORS: Record<CardNetwork, string> = {
+  Visa:      "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  Mastercard:"bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+  UnionPay:  "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+  JCB:       "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+  AMEX:      "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300",
+};
+
+const TYPE_COLORS: Record<CardType, string> = {
+  Credit: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
+  Debit:  "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300",
+  ATM:    "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+};
+
+function formatExpiry(dateStr: string): string {
+  if (!dateStr) return "—";
+  const [year, month] = dateStr.split("-");
+  return `${month}/${year}`;
+}
 
 function DepositForm({ initial, suggestions, onSave, onCancel, saving }: {
   initial: DepositFields;
@@ -366,6 +393,90 @@ function CryptoForm({ initial, onSave, onCancel, saving }: {
   );
 }
 
+function CardForm({ initial, banks, onSave, onCancel, saving }: {
+  initial: CardFields; banks: string[];
+  onSave: (d: CardFields) => void; onCancel: () => void; saving: boolean;
+}) {
+  const [f, setF] = useState(initial);
+  const s = (k: string, v: unknown) => setF((p) => ({ ...p, [k]: v }));
+  const isCredit = f.types.includes("Credit");
+
+  return (
+    <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); onSave(f); }}>
+      <Field label="Bank *">
+        <ComboInput value={f.bank} onChange={(v) => s("bank", v)}
+          suggestions={banks} placeholder="e.g. HSBC, DBS, Citi" required />
+      </Field>
+      <Field label="Card Type *">
+        <div className="flex gap-5 pt-1">
+          {CARD_TYPES.map((t) => (
+            <label key={t} className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
+              <input
+                type="checkbox"
+                className="rounded border-[--color-border]"
+                checked={f.types.includes(t)}
+                onChange={(e) => {
+                  const next = e.target.checked ? [...f.types, t] : f.types.filter((x) => x !== t);
+                  setF((p) => ({ ...p, types: next, sharedCredit: next.includes("Credit") ? p.sharedCredit : null }));
+                }}
+              />
+              {t}
+            </label>
+          ))}
+        </div>
+      </Field>
+      <Field label="Card Name *">
+        <input className={inputCls} required value={f.cardName}
+          onChange={(e) => s("cardName", e.target.value)} placeholder="e.g. Premier Mastercard" />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Network">
+          <select className={selectCls} value={f.network}
+            onChange={(e) => s("network", e.target.value as CardNetwork)}>
+            {CARD_NETWORKS.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </Field>
+        <Field label="Expiry Date">
+          <input className={inputCls} type="month" value={f.expireDate}
+            onChange={(e) => s("expireDate", e.target.value)} />
+        </Field>
+      </div>
+      {isCredit && (
+        <>
+          <Field label="Credit Limit">
+            <input className={inputCls} type="number" min="0" step="0.01"
+              placeholder="Leave blank if unknown"
+              value={f.creditLimit ?? ""}
+              onChange={(e) => s("creditLimit", e.target.value ? parseFloat(e.target.value) : null)} />
+          </Field>
+          <Field label="Shared Credit">
+            <div className="flex gap-5 pt-1">
+              {([true, false] as const).map((v) => (
+                <label key={String(v)} className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
+                  <input type="radio" name="sharedCredit" checked={f.sharedCredit === v}
+                    onChange={() => s("sharedCredit", v)} />
+                  {v ? "Shared" : "Dedicated"}
+                </label>
+              ))}
+              <label className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
+                <input type="radio" name="sharedCredit" checked={f.sharedCredit === null}
+                  onChange={() => s("sharedCredit", null)} />
+                Unknown
+              </label>
+            </div>
+          </Field>
+        </>
+      )}
+      <div className="mt-2 flex justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" size="sm" disabled={saving || f.types.length === 0}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 // ── Summary card ──────────────────────────────────────────────────────────────
 
 function PnlBadge({ pct }: { pct: number }) {
@@ -377,8 +488,8 @@ function PnlBadge({ pct }: { pct: number }) {
   );
 }
 
-function SummaryCard({ label, value, currency, pnlPercent, share, usdValue }: {
-  label: string; value: number; currency: string; pnlPercent?: number | null; share?: number; usdValue?: number | null;
+function SummaryCard({ label, value, currency, pnlPercent, share, usdValue, hide }: {
+  label: string; value: number; currency: string; pnlPercent?: number | null; share?: number; usdValue?: number | null; hide?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4 min-w-0">
@@ -388,9 +499,9 @@ function SummaryCard({ label, value, currency, pnlPercent, share, usdValue }: {
           <span className="text-xs font-medium text-[--color-muted] tabular-nums">{share.toFixed(1)}%</span>
         )}
       </div>
-      <p className="mt-1 text-lg font-semibold tabular-nums">{formatAmount(value, currency)}</p>
+      <p className="mt-1 text-lg font-semibold tabular-nums">{hide ? "***" : formatAmount(value, currency)}</p>
       {usdValue != null && (
-        <p className="mt-0.5 text-xs text-[--color-muted] tabular-nums">{formatAmount(usdValue, "USD")}</p>
+        <p className="mt-0.5 text-xs text-[--color-muted] tabular-nums">{hide ? "***" : formatAmount(usdValue, "USD")}</p>
       )}
       {pnlPercent != null && (
         <p className="mt-0.5"><PnlBadge pct={pnlPercent} /></p>
@@ -572,10 +683,12 @@ ${crypto.length > 0 ? `<h2>Crypto Investments</h2>
 export function FinancialManager() {
   const [tab, setTab] = useState<Tab>("deposits");
   const [defaultCurrency, setDefaultCurrency] = useState<Currency>("USD");
+  const [hideAmounts, setHideAmounts] = useState(false);
 
   const [deposits, setDeposits] = useState<CashDeposit[]>([]);
   const [stocks,   setStocks]   = useState<StockInvestment[]>([]);
   const [crypto,   setCrypto]   = useState<CryptoInvestment[]>([]);
+  const [cards,    setCards]    = useState<Card[]>([]);
 
   const [loading,   setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -585,11 +698,13 @@ export function FinancialManager() {
   const depositSort = useSort({ column: "platform", dir: "asc" });
   const stockSort   = useSort({ column: "symbol",   dir: "asc" });
   const cryptoSort  = useSort({ column: "symbol",   dir: "asc" });
+  const cardSort    = useSort({ column: "bank",     dir: "asc" });
 
   const [modal, setModal] = useState<
     | { mode: "add-deposit" }   | { mode: "edit-deposit";  item: CashDeposit }
     | { mode: "add-stock" }     | { mode: "edit-stock";    item: StockInvestment }
     | { mode: "add-crypto" }    | { mode: "edit-crypto";   item: CryptoInvestment }
+    | { mode: "add-card" }      | { mode: "edit-card";     item: Card }
     | null
   >(null);
 
@@ -601,16 +716,18 @@ export function FinancialManager() {
   const brokerSuggestions = unique(stocks.map((s) => s.broker));
 
   const loadAll = useCallback(async () => {
-    const [deps, stks, cry, cur, rates] = await Promise.all([
+    const [deps, stks, cry, cds, cur, rates] = await Promise.all([
       apiFetch<CashDeposit>("deposits"),
       apiFetch<StockInvestment>("stocks"),
       apiFetch<CryptoInvestment>("crypto"),
+      apiFetch<Card>("cards"),
       fetchUserCurrency(),
       fetchExchangeRates(),
     ]);
     setDeposits(deps);
     setStocks(stks);
     setCrypto(cry);
+    setCards(cds);
     setDefaultCurrency(cur as Currency);
     setFxRates(rates);
   }, []);
@@ -720,11 +837,29 @@ export function FinancialManager() {
   const deleteDeposit = async (id: string) => { await apiDelete("deposits", id); setDeposits((p) => p.filter((d) => d.id !== id)); };
   const deleteStock   = async (id: string) => { await apiDelete("stocks",   id); setStocks((p)   => p.filter((s) => s.id !== id)); };
   const deleteCrypto  = async (id: string) => { await apiDelete("crypto",   id); setCrypto((p)   => p.filter((c) => c.id !== id)); };
+  const deleteCard    = async (id: string) => { await apiDelete("cards",    id); setCards((p)    => p.filter((c) => c.id !== id)); };
+
+  async function saveCard(data: CardFields) {
+    setSaving(true);
+    try {
+      if (modal?.mode === "edit-card") {
+        await apiUpdate<Card>("cards", modal.item.id, data);
+      } else {
+        await apiCreate<Card>("cards", data);
+      }
+      setModal(null);
+      setCards(await apiFetch<Card>("cards"));
+    } finally { setSaving(false); }
+  }
 
   // Sorted views
   const sortedDeposits = sortData(deposits, depositSort.sort);
   const sortedStocks   = sortData(stocks,   stockSort.sort);
   const sortedCrypto   = sortData(crypto,   cryptoSort.sort);
+  const sortedCards    = sortData(cards,    cardSort.sort);
+
+  // Amount masking helper
+  const amt = (formatted: string) => hideAmounts ? "***" : formatted;
 
   const tabCls = (t: Tab) =>
     `px-4 py-2 text-xs font-medium rounded-md transition-colors ${
@@ -742,6 +877,15 @@ export function FinancialManager() {
         <div className="flex items-center justify-between">
           <h1 className="text-base font-semibold">Financial</h1>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setHideAmounts((v) => !v)}
+              title={hideAmounts ? "Show amounts" : "Hide amounts"}
+              className="rounded-md p-1.5 text-[--color-muted] hover:bg-[--color-border]/50"
+            >
+              {hideAmounts
+                ? <EyeOff className="h-3.5 w-3.5" />
+                : <Eye className="h-3.5 w-3.5" />}
+            </button>
             <button
               onClick={() => void handleRefresh()}
               disabled={refreshing}
@@ -782,7 +926,7 @@ export function FinancialManager() {
         <div className="mt-4 hidden sm:grid sm:grid-cols-3 sm:gap-3">
           {summaryItems.map((item) => (
             <SummaryCard key={item.label} label={item.label} value={item.value}
-              currency={defaultCurrency} pnlPercent={item.pnlPercent} share={item.share} usdValue={item.usdValue} />
+              currency={defaultCurrency} pnlPercent={item.pnlPercent} share={item.share} usdValue={item.usdValue} hide={hideAmounts} />
           ))}
         </div>
         {/* Mobile: swipeable snap carousel */}
@@ -793,7 +937,7 @@ export function FinancialManager() {
               style={{ scrollSnapAlign: "start", width: "78vw",
                 marginRight: i === summaryItems.length - 1 ? "8vw" : undefined }}>
               <SummaryCard label={item.label} value={item.value}
-                currency={defaultCurrency} pnlPercent={item.pnlPercent} share={item.share} usdValue={item.usdValue} />
+                currency={defaultCurrency} pnlPercent={item.pnlPercent} share={item.share} usdValue={item.usdValue} hide={hideAmounts} />
             </div>
           ))}
         </div>
@@ -802,6 +946,7 @@ export function FinancialManager() {
           <button className={tabCls("deposits")} onClick={() => setTab("deposits")}>Cash Deposits</button>
           <button className={tabCls("stocks")}   onClick={() => setTab("stocks")}>Stocks</button>
           <button className={tabCls("crypto")}   onClick={() => setTab("crypto")}>Crypto</button>
+          <button className={tabCls("cards")}    onClick={() => setTab("cards")}>Cards</button>
         </div>
       </div>
 
@@ -815,10 +960,11 @@ export function FinancialManager() {
               <Button size="sm" onClick={() => setModal(
                 tab === "deposits" ? { mode: "add-deposit" }
                 : tab === "stocks" ? { mode: "add-stock" }
-                : { mode: "add-crypto" },
+                : tab === "crypto" ? { mode: "add-crypto" }
+                : { mode: "add-card" },
               )}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Add {tab === "deposits" ? "Deposit" : tab === "stocks" ? "Stock" : "Crypto"}
+                Add {tab === "deposits" ? "Deposit" : tab === "stocks" ? "Stock" : tab === "crypto" ? "Crypto" : "Card"}
               </Button>
             </div>
 
@@ -853,8 +999,8 @@ export function FinancialManager() {
                               : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
                           }`}>{d.depositType}</span>
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums">{formatAmount(d.amount, d.currency)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-[--color-muted]">{formatAmount(d.convertedAmount, defaultCurrency)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{amt(formatAmount(d.amount, d.currency))}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-[--color-muted]">{amt(formatAmount(d.convertedAmount, defaultCurrency))}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-xs text-[--color-muted]">{pct(d.convertedAmount ?? 0, grandTotal)}</td>
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-1">
@@ -902,20 +1048,20 @@ export function FinancialManager() {
                         <td className="px-4 py-3 font-semibold">{s.symbol}</td>
                         <td className="px-4 py-3">{s.name}</td>
                         <td className="px-4 py-3 text-xs text-[--color-muted]">{STOCK_TYPE_LABELS[s.stockType]}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{s.stockAmount}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{formatAmount(s.investAmount, s.currency)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{amt(String(s.stockAmount))}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{amt(formatAmount(s.investAmount, s.currency))}</td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {s.currentPrice != null
-                            ? <span>{formatPrice(s.currentPrice)} <span className="text-[10px] text-[--color-muted]">{s.priceCurrency}</span></span>
+                            ? <span>{amt(formatPrice(s.currentPrice))} <span className="text-[10px] text-[--color-muted]">{s.priceCurrency}</span></span>
                             : <span className="text-[--color-muted]">—</span>}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
-                          {s.currentValue != null ? formatAmount(s.currentValue, s.priceCurrency ?? s.currency) : <span className="text-[--color-muted]">—</span>}
+                          {s.currentValue != null ? amt(formatAmount(s.currentValue, s.priceCurrency ?? s.currency)) : <span className="text-[--color-muted]">—</span>}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-[--color-muted]">
                           {s.convertedCurrentValue != null
-                            ? formatAmount(s.convertedCurrentValue, defaultCurrency)
-                            : formatAmount(s.convertedInvestAmount, defaultCurrency)}
+                            ? amt(formatAmount(s.convertedCurrentValue, defaultCurrency))
+                            : amt(formatAmount(s.convertedInvestAmount, defaultCurrency))}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {s.pnlPercent != null ? <PnlBadge pct={s.pnlPercent} /> : <span className="text-[--color-muted]">—</span>}
@@ -967,18 +1113,18 @@ export function FinancialManager() {
                       <tr key={c.id} className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
                         <td className="px-4 py-3 font-semibold">{c.symbol}</td>
                         <td className="px-4 py-3">{c.name}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{c.amount}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{formatAmount(c.investAmount, c.currency)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{amt(String(c.amount))}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{amt(formatAmount(c.investAmount, c.currency))}</td>
                         <td className="px-4 py-3 text-right tabular-nums">
-                          {c.currentPrice != null ? formatAmount(c.currentPrice, "USD") : <span className="text-[--color-muted]">—</span>}
+                          {c.currentPrice != null ? amt(formatAmount(c.currentPrice, "USD")) : <span className="text-[--color-muted]">—</span>}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
-                          {c.currentValue != null ? formatAmount(c.currentValue, "USD") : <span className="text-[--color-muted]">—</span>}
+                          {c.currentValue != null ? amt(formatAmount(c.currentValue, "USD")) : <span className="text-[--color-muted]">—</span>}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-[--color-muted]">
                           {c.convertedCurrentValue != null
-                            ? formatAmount(c.convertedCurrentValue, defaultCurrency)
-                            : formatAmount(c.convertedInvestAmount, defaultCurrency)}
+                            ? amt(formatAmount(c.convertedCurrentValue, defaultCurrency))
+                            : amt(formatAmount(c.convertedInvestAmount, defaultCurrency))}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {c.pnlPercent != null ? <PnlBadge pct={c.pnlPercent} /> : <span className="text-[--color-muted]">—</span>}
@@ -994,6 +1140,73 @@ export function FinancialManager() {
                             </Button>
                             <Button size="icon" variant="ghost" className="h-7 w-7"
                               onClick={() => void deleteCrypto(c.id)}>
+                              <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+
+            {/* ── Cards ── */}
+            {tab === "cards" && (sortedCards.length === 0 ? (
+              <p className="py-12 text-center text-sm text-[--color-muted]">No cards yet.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-[--color-border]">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className={thCls}>
+                      <Th label="Bank"         column="bank"        sort={cardSort.sort} onSort={cardSort.toggle} />
+                      <Th label="Card Name"    column="cardName"    sort={cardSort.sort} onSort={cardSort.toggle} />
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-[--color-muted]">Types</th>
+                      <Th label="Network"      column="network"     sort={cardSort.sort} onSort={cardSort.toggle} />
+                      <Th label="Expiry"       column="expireDate"  sort={cardSort.sort} onSort={cardSort.toggle} />
+                      <Th label="Credit Limit" column="creditLimit" sort={cardSort.sort} onSort={cardSort.toggle} right />
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-[--color-muted]">Shared Credit</th>
+                      <th className="px-4 py-2.5" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedCards.map((c) => (
+                      <tr key={c.id} className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
+                        <td className="px-4 py-3 font-medium">{c.bank}</td>
+                        <td className="px-4 py-3">{c.cardName}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {c.types.map((t) => (
+                              <span key={t} className={`rounded px-1.5 py-0.5 text-xs font-medium ${TYPE_COLORS[t]}`}>{t}</span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${NETWORK_COLORS[c.network]}`}>{c.network}</span>
+                        </td>
+                        <td className="px-4 py-3 tabular-nums">{formatExpiry(c.expireDate)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {c.creditLimit != null
+                            ? amt(c.creditLimit.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))
+                            : <span className="text-[--color-muted]">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {c.types.includes("Credit")
+                            ? c.sharedCredit === true
+                              ? <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Shared</span>
+                              : c.sharedCredit === false
+                                ? <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">Dedicated</span>
+                                : <span className="text-[--color-muted]">—</span>
+                            : <span className="text-[--color-muted]">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-1">
+                            <Button size="icon" variant="ghost" className="h-7 w-7"
+                              onClick={() => setModal({ mode: "edit-card", item: c })}>
+                              <Pencil className="h-3.5 w-3.5 text-[--color-muted]" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7"
+                              onClick={() => void deleteCard(c.id)}>
                               <Trash2 className="h-3.5 w-3.5 text-red-400" />
                             </Button>
                           </div>
@@ -1045,6 +1258,19 @@ export function FinancialManager() {
                   currency: modal.item.currency as Currency }
               : emptyCrypto()}
             onSave={saveCrypto} onCancel={() => setModal(null)} saving={saving} />
+        </Modal>
+      )}
+
+      {(modal?.mode === "add-card" || modal?.mode === "edit-card") && (
+        <Modal title={modal.mode === "add-card" ? "Add Card" : "Edit Card"} onClose={() => setModal(null)}>
+          <CardForm
+            initial={modal.mode === "edit-card"
+              ? { bank: modal.item.bank, types: modal.item.types, cardName: modal.item.cardName,
+                  network: modal.item.network, expireDate: modal.item.expireDate,
+                  creditLimit: modal.item.creditLimit, sharedCredit: modal.item.sharedCredit }
+              : emptyCard()}
+            banks={unique(cards.map((c) => c.bank))}
+            onSave={saveCard} onCancel={() => setModal(null)} saving={saving} />
         </Modal>
       )}
     </div>

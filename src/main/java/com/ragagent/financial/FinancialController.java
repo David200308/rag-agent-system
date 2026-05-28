@@ -1,8 +1,10 @@
 package com.ragagent.financial;
 
+import com.ragagent.financial.dto.CardDto;
 import com.ragagent.financial.dto.CashDepositDto;
 import com.ragagent.financial.dto.CryptoInvestmentDto;
 import com.ragagent.financial.dto.StockInvestmentDto;
+import com.ragagent.financial.entity.Card;
 import com.ragagent.financial.entity.CashDeposit;
 import com.ragagent.financial.entity.CryptoInvestment;
 import com.ragagent.financial.entity.StockInvestment;
@@ -129,6 +131,43 @@ public class FinancialController {
     public ResponseEntity<Void> deleteCrypto(@PathVariable String id, HttpServletRequest req) {
         try {
             service.deleteCrypto(id, email(req));
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        }
+    }
+
+    // ── Cards ─────────────────────────────────────────────────────────────────
+
+    @GetMapping("/cards")
+    @Operation(summary = "List cards")
+    public ResponseEntity<List<CardDto>> listCards(HttpServletRequest req) {
+        return ResponseEntity.ok(service.listCards(email(req)));
+    }
+
+    @PostMapping("/cards")
+    @Operation(summary = "Create a card")
+    public ResponseEntity<Card> createCard(
+            @RequestBody Map<String, Object> body, HttpServletRequest req) {
+        return ResponseEntity.status(201).body(service.createCard(email(req), body));
+    }
+
+    @PutMapping("/cards/{id}")
+    public ResponseEntity<Card> updateCard(
+            @PathVariable String id,
+            @RequestBody Map<String, Object> body,
+            HttpServletRequest req) {
+        try {
+            return ResponseEntity.ok(service.updateCard(id, email(req), body));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        }
+    }
+
+    @DeleteMapping("/cards/{id}")
+    public ResponseEntity<Void> deleteCard(@PathVariable String id, HttpServletRequest req) {
+        try {
+            service.deleteCard(id, email(req));
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();

@@ -1,4 +1,24 @@
 export const CURRENCIES = ["HKD", "CNY", "USD", "JPY", "SGD", "GBP", "AUD", "EUR", "CAD"] as const;
+
+export const CARD_TYPES = ["Credit", "Debit", "ATM"] as const;
+export type CardType = typeof CARD_TYPES[number];
+
+export const CARD_NETWORKS = ["Mastercard", "Visa", "UnionPay", "JCB", "AMEX"] as const;
+export type CardNetwork = typeof CARD_NETWORKS[number];
+
+export interface Card {
+  id: string;
+  ownerEmail: string;
+  bank: string;
+  types: CardType[];
+  cardName: string;
+  network: CardNetwork;
+  expireDate: string;
+  creditLimit: number | null;
+  sharedCredit: boolean | null;
+  createdAt: string;
+  updatedAt: string;
+}
 export type Currency = typeof CURRENCIES[number];
 
 export const DEPOSIT_TYPES = ["FIXED", "FLEX"] as const;

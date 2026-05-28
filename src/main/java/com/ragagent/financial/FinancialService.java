@@ -1,11 +1,14 @@
 package com.ragagent.financial;
 
+import com.ragagent.financial.dto.CardDto;
 import com.ragagent.financial.dto.CashDepositDto;
 import com.ragagent.financial.dto.CryptoInvestmentDto;
 import com.ragagent.financial.dto.StockInvestmentDto;
+import com.ragagent.financial.entity.Card;
 import com.ragagent.financial.entity.CashDeposit;
 import com.ragagent.financial.entity.CryptoInvestment;
 import com.ragagent.financial.entity.StockInvestment;
+import com.ragagent.financial.repository.CardRepository;
 import com.ragagent.financial.repository.CashDepositRepository;
 import com.ragagent.financial.repository.CryptoInvestmentRepository;
 import com.ragagent.financial.repository.StockInvestmentRepository;
@@ -19,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -32,6 +36,7 @@ public class FinancialService {
     private final CashDepositRepository      depositRepo;
     private final StockInvestmentRepository  stockRepo;
     private final CryptoInvestmentRepository cryptoRepo;
+    private final CardRepository             cardRepo;
     private final ExchangeRateService        fxService;
     private final MarketPriceService         priceService;
 
@@ -252,6 +257,73 @@ public class FinancialService {
                 currentPrice, currentValue,
                 bd(convertedInvest), convertedCurrentValue, toCurrency,
                 pnlPercent, c.getCreatedAt(), c.getUpdatedAt()
+        );
+    }
+
+    // ── Cards ─────────────────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public List<CardDto> listCards(String ownerEmail) {
+        return cardRepo.findByOwnerEmailOrderByCreatedAtDesc(ownerEmail)
+                .stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public Card createCard(String ownerEmail, Map<String, Object> body) {
+        Card c = new Card();
+        c.setId(UUID.randomUUID().toString());
+        c.setOwnerEmail(ownerEmail);
+        applyCardFields(c, body);
+        return cardRepo.save(c);
+    }
+
+    @Transactional
+    public Card updateCard(String id, String ownerEmail, Map<String, Object> body) {
+        Card c = cardRepo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Not found"));
+        checkOwner(c.getOwnerEmail(), ownerEmail);
+        applyCardFields(c, body);
+        c.setUpdatedAt(Instant.now());
+        return cardRepo.save(c);
+    }
+
+    @Transactional
+    public void deleteCard(String id, String ownerEmail) {
+        cardRepo.findById(id).ifPresent(c -> {
+            checkOwner(c.getOwnerEmail(), ownerEmail);
+            cardRepo.delete(c);
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void applyCardFields(Card c, Map<String, Object> body) {
+        if (body.containsKey("bank"))        c.setBank((String) body.get("bank"));
+        if (body.containsKey("types")) {
+            List<String> types = (List<String>) body.get("types");
+            c.setTypes(types == null ? "" : String.join(",", types));
+        }
+        if (body.containsKey("cardName"))    c.setCardName((String) body.get("cardName"));
+        if (body.containsKey("network"))     c.setNetwork((String) body.get("network"));
+        if (body.containsKey("expireDate"))  c.setExpireDate((String) body.get("expireDate"));
+        if (body.containsKey("creditLimit")) {
+            Object cl = body.get("creditLimit");
+            c.setCreditLimit(cl != null ? new BigDecimal(cl.toString()) : null);
+        }
+        if (body.containsKey("sharedCredit")) {
+            Object sc = body.get("sharedCredit");
+            c.setSharedCredit(sc instanceof Boolean ? (Boolean) sc : null);
+        }
+    }
+
+    private CardDto toDto(Card c) {
+        List<String> types = (c.getTypes() == null || c.getTypes().isBlank())
+                ? List.of()
+                : Arrays.asList(c.getTypes().split(","));
+        return new CardDto(
+                c.getId(), c.getOwnerEmail(), c.getBank(), types,
+                c.getCardName(), c.getNetwork(), c.getExpireDate(),
+                c.getCreditLimit(), c.getSharedCredit(),
+                c.getCreatedAt(), c.getUpdatedAt()
         );
     }
 
