@@ -243,6 +243,53 @@ On startup the scheduler reloads all active schedules from MySQL into the Asynq 
 
 ---
 
+## Financial Management
+
+A personal portfolio tracker built into the application, accessible at `/financial`.
+
+### Asset types
+
+| Asset       | Description                                                    |
+| ----------- | -------------------------------------------------------------- |
+| Cash        | Bank / money-market deposits with platform, type, and currency |
+| Stocks      | Equity positions with live prices from **Finnhub**             |
+| Crypto      | Token holdings with live USD mid prices from **Hyperliquid**   |
+| Cards       | Credit / debit card registry with limits and expiry            |
+
+All monetary values are converted to the user's `defaultCurrency` (set in preferences) using exchange rates from **open.er-api.com** (cached 1 hour).  Stocks and crypto prices are also cached for 1 hour and auto-refresh on the first stale read.
+
+### Financial API
+
+| Method   | Path                                  | Description                                       |
+| -------- | ------------------------------------- | ------------------------------------------------- |
+| `GET`    | `/api/v1/financial/deposits`          | List cash deposits (amounts converted)            |
+| `POST`   | `/api/v1/financial/deposits`          | Create a deposit                                  |
+| `PUT`    | `/api/v1/financial/deposits/{id}`     | Update a deposit                                  |
+| `DELETE` | `/api/v1/financial/deposits/{id}`     | Delete a deposit                                  |
+| `GET`    | `/api/v1/financial/stocks`            | List stocks with live prices and P&L %            |
+| `POST`   | `/api/v1/financial/stocks`            | Create a stock position                           |
+| `PUT`    | `/api/v1/financial/stocks/{id}`       | Update a stock position                           |
+| `DELETE` | `/api/v1/financial/stocks/{id}`       | Delete a stock position                           |
+| `GET`    | `/api/v1/financial/crypto`            | List crypto holdings with live prices and P&L %   |
+| `POST`   | `/api/v1/financial/crypto`            | Create a crypto holding                           |
+| `PUT`    | `/api/v1/financial/crypto/{id}`       | Update a crypto holding                           |
+| `DELETE` | `/api/v1/financial/crypto/{id}`       | Delete a crypto holding                           |
+| `GET`    | `/api/v1/financial/cards`             | List cards                                        |
+| `POST`   | `/api/v1/financial/cards`             | Create a card                                     |
+| `PUT`    | `/api/v1/financial/cards/{id}`        | Update a card                                     |
+| `DELETE` | `/api/v1/financial/cards/{id}`        | Delete a card                                     |
+| `POST`   | `/api/v1/financial/prices/refresh`    | Force-refresh live prices for all user symbols    |
+
+All endpoints require JWT auth and are scoped to the authenticated user's email.
+
+### Required environment variables
+
+| Variable                   | Description                                            |
+| -------------------------- | ------------------------------------------------------ |
+| `FINNHUB_API_KEY`          | Finnhub API key for stock quotes                       |
+
+---
+
 ## Running locally
 
 ```bash

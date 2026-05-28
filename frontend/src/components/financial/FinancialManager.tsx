@@ -530,47 +530,58 @@ function unique(arr: string[]): string[] {
 
 // ── Export helpers ────────────────────────────────────────────────────────────
 
+type DownloadSection = "deposits" | "stocks" | "crypto" | "cards";
+
+const SECTION_LABELS: Record<DownloadSection, string> = {
+  deposits: "Cash Deposits",
+  stocks:   "Stocks",
+  crypto:   "Crypto",
+  cards:    "Cards",
+};
+
 function pct(part: number, total: number): string {
   if (total === 0) return "0.0%";
   return (part / total * 100).toFixed(1) + "%";
 }
 
 function buildMarkdown(
+  sections: DownloadSection[],
   deposits: CashDeposit[],
   stocks: StockInvestment[],
   crypto: CryptoInvestment[],
+  cards: Card[],
   currency: string,
   grandTotal: number,
 ): string {
+  const has = (s: DownloadSection) => sections.includes(s);
   const date = new Date().toISOString().slice(0, 10);
   const lines: string[] = [`# Financial Report — ${date}`, ""];
 
-  // Summary
-  const totalDep = deposits.reduce((s, d) => s + (d.convertedAmount ?? 0), 0);
-  const totalStk = stocks.reduce((s, st) => s + (st.convertedCurrentValue ?? st.convertedInvestAmount ?? 0), 0);
-  const totalCry = crypto.reduce((s, c) => s + (c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0), 0);
-  lines.push("## Summary", "");
-  lines.push(`| Category | Value (${currency}) | % of Total |`);
-  lines.push("|---|---:|---:|");
-  lines.push(`| Cash Deposits | ${formatAmount(totalDep, currency)} | ${pct(totalDep, grandTotal)} |`);
-  lines.push(`| Stock Investments | ${formatAmount(totalStk, currency)} | ${pct(totalStk, grandTotal)} |`);
-  lines.push(`| Crypto Investments | ${formatAmount(totalCry, currency)} | ${pct(totalCry, grandTotal)} |`);
-  lines.push(`| **Total** | **${formatAmount(grandTotal, currency)}** | **100%** |`);
-  lines.push("");
-
-  // Deposits
-  if (deposits.length > 0) {
-    lines.push("## Cash Deposits", "");
-    lines.push(`| Platform | Type | Country | F/X | Amount | ≈ ${currency} | % of Total |`);
-    lines.push("|---|---|---|---|---:|---:|---:|");
-    for (const d of deposits) {
-      lines.push(`| ${d.platform} | ${d.platformType} | ${d.countryRegion || "—"} | ${d.depositType} | ${formatAmount(d.amount, d.currency)} | ${formatAmount(d.convertedAmount, currency)} | ${pct(d.convertedAmount ?? 0, grandTotal)} |`);
-    }
+  const financialSections = sections.filter((s) => s !== "cards");
+  if (financialSections.length > 1) {
+    const totalDep = has("deposits") ? deposits.reduce((s, d) => s + (d.convertedAmount ?? 0), 0) : 0;
+    const totalStk = has("stocks")   ? stocks.reduce((s, st) => s + (st.convertedCurrentValue ?? st.convertedInvestAmount ?? 0), 0) : 0;
+    const totalCry = has("crypto")   ? crypto.reduce((s, c) => s + (c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0), 0) : 0;
+    lines.push("## Summary", "");
+    lines.push(`| Category | Value (${currency}) | % of Total |`);
+    lines.push("|---|---:|---:|");
+    if (has("deposits")) lines.push(`| Cash Deposits | ${formatAmount(totalDep, currency)} | ${pct(totalDep, grandTotal)} |`);
+    if (has("stocks"))   lines.push(`| Stock Investments | ${formatAmount(totalStk, currency)} | ${pct(totalStk, grandTotal)} |`);
+    if (has("crypto"))   lines.push(`| Crypto Investments | ${formatAmount(totalCry, currency)} | ${pct(totalCry, grandTotal)} |`);
+    lines.push(`| **Total** | **${formatAmount(grandTotal, currency)}** | **100%** |`);
     lines.push("");
   }
 
-  // Stocks
-  if (stocks.length > 0) {
+  if (has("deposits") && deposits.length > 0) {
+    lines.push("## Cash Deposits", "");
+    lines.push(`| Platform | Type | Country | F/X | Amount | ≈ ${currency} | % of Total |`);
+    lines.push("|---|---|---|---|---:|---:|---:|");
+    for (const d of deposits)
+      lines.push(`| ${d.platform} | ${d.platformType} | ${d.countryRegion || "—"} | ${d.depositType} | ${formatAmount(d.amount, d.currency)} | ${formatAmount(d.convertedAmount, currency)} | ${pct(d.convertedAmount ?? 0, grandTotal)} |`);
+    lines.push("");
+  }
+
+  if (has("stocks") && stocks.length > 0) {
     lines.push("## Stock Investments", "");
     lines.push(`| Symbol | Name | Shares | Invested | Price | Value | ≈ ${currency} | P&L% | % of Total |`);
     lines.push("|---|---|---:|---:|---:|---:|---:|---:|---:|");
@@ -581,14 +592,28 @@ function buildMarkdown(
     lines.push("");
   }
 
-  // Crypto
-  if (crypto.length > 0) {
+  if (has("crypto") && crypto.length > 0) {
     lines.push("## Crypto Investments", "");
     lines.push(`| Symbol | Name | Amount | Invested | Price (USD) | Value (USD) | ≈ ${currency} | P&L% | % of Total |`);
     lines.push("|---|---|---:|---:|---:|---:|---:|---:|---:|");
     for (const c of crypto) {
       const val = c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0;
       lines.push(`| ${c.symbol} | ${c.name} | ${c.amount} | ${formatAmount(c.investAmount, c.currency)} | ${c.currentPrice != null ? formatAmount(c.currentPrice, "USD") : "—"} | ${c.currentValue != null ? formatAmount(c.currentValue, "USD") : "—"} | ${formatAmount(val, currency)} | ${c.pnlPercent != null ? (c.pnlPercent >= 0 ? "+" : "") + c.pnlPercent.toFixed(2) + "%" : "—"} | ${pct(val, grandTotal)} |`);
+    }
+    lines.push("");
+  }
+
+  if (has("cards") && cards.length > 0) {
+    lines.push("## Cards", "");
+    lines.push(`| Bank | Country | Card Name | Types | Network | Expiry | Credit Limit | Shared Credit |`);
+    lines.push("|---|---|---|---|---|---|---:|---|");
+    for (const c of cards) {
+      const creditStr = c.creditLimit != null
+        ? `${c.creditLimitCurrency ?? ""} ${c.creditLimit.toLocaleString("en-US", { maximumFractionDigits: 0 })}`.trim()
+        : "—";
+      const sharedStr = c.types.includes("Credit")
+        ? (c.sharedCredit === true ? "Shared" : c.sharedCredit === false ? "Dedicated" : "—") : "—";
+      lines.push(`| ${c.bank} | ${c.countryRegion || "—"} | ${c.cardName} | ${c.types.join(", ")} | ${c.network} | ${formatExpiry(c.expireDate)} | ${creditStr} | ${sharedStr} |`);
     }
     lines.push("");
   }
@@ -605,91 +630,206 @@ function downloadFile(content: string, filename: string, mime: string) {
 }
 
 function exportPdf(
+  sections: DownloadSection[],
   deposits: CashDeposit[],
   stocks: StockInvestment[],
   crypto: CryptoInvestment[],
+  cards: Card[],
   currency: string,
   grandTotal: number,
+  title = "Financial Report",
 ) {
+  const has = (s: DownloadSection) => sections.includes(s);
   const date = new Date().toISOString().slice(0, 10);
-  const totalDep = deposits.reduce((s, d) => s + (d.convertedAmount ?? 0), 0);
-  const totalStk = stocks.reduce((s, st) => s + (st.convertedCurrentValue ?? st.convertedInvestAmount ?? 0), 0);
-  const totalCry = crypto.reduce((s, c) => s + (c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0), 0);
 
-  const tableStyle = `border-collapse:collapse;width:100%;font-size:11px;margin-bottom:20px`;
-  const thStyle = `border:1px solid #ccc;padding:4px 8px;background:#f5f5f5;text-align:left`;
-  const tdStyle = `border:1px solid #ccc;padding:4px 8px`;
+  const ts  = `border-collapse:collapse;width:100%;font-size:11px;margin-bottom:20px`;
+  const th  = `border:1px solid #ccc;padding:4px 8px;background:#f5f5f5;text-align:left`;
+  const td  = `border:1px solid #ccc;padding:4px 8px`;
   const tdR = `border:1px solid #ccc;padding:4px 8px;text-align:right`;
 
-  const depRows = deposits.map(d => `<tr>
-    <td style="${tdStyle}">${d.platform}</td><td style="${tdStyle}">${d.platformType}</td>
-    <td style="${tdStyle}">${d.countryRegion || "—"}</td><td style="${tdStyle}">${d.depositType}</td>
+  const financialSections = sections.filter((s) => s !== "cards");
+  let summaryHtml = "";
+  if (financialSections.length > 1) {
+    const tDep = has("deposits") ? deposits.reduce((s, d) => s + (d.convertedAmount ?? 0), 0) : 0;
+    const tStk = has("stocks")   ? stocks.reduce((s, st) => s + (st.convertedCurrentValue ?? st.convertedInvestAmount ?? 0), 0) : 0;
+    const tCry = has("crypto")   ? crypto.reduce((s, c) => s + (c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0), 0) : 0;
+    summaryHtml = `<h2>Summary</h2><table style="${ts}"><thead><tr>
+  <th style="${th}">Category</th><th style="${th}">Value (${currency})</th><th style="${th}">% of Total</th>
+</tr></thead><tbody>
+  ${has("deposits") ? `<tr><td style="${td}">Cash Deposits</td><td style="${tdR}">${formatAmount(tDep, currency)}</td><td style="${tdR}">${pct(tDep, grandTotal)}</td></tr>` : ""}
+  ${has("stocks")   ? `<tr><td style="${td}">Stock Investments</td><td style="${tdR}">${formatAmount(tStk, currency)}</td><td style="${tdR}">${pct(tStk, grandTotal)}</td></tr>` : ""}
+  ${has("crypto")   ? `<tr><td style="${td}">Crypto Investments</td><td style="${tdR}">${formatAmount(tCry, currency)}</td><td style="${tdR}">${pct(tCry, grandTotal)}</td></tr>` : ""}
+  <tr><td style="${td};font-weight:bold">Total</td><td style="${tdR};font-weight:bold">${formatAmount(grandTotal, currency)}</td><td style="${tdR};font-weight:bold">100%</td></tr>
+</tbody></table>`;
+  }
+
+  const depRows = has("deposits") ? deposits.map(d => `<tr>
+    <td style="${td}">${d.platform}</td><td style="${td}">${d.platformType}</td>
+    <td style="${td}">${d.countryRegion || "—"}</td><td style="${td}">${d.depositType}</td>
     <td style="${tdR}">${formatAmount(d.amount, d.currency)}</td>
     <td style="${tdR}">${formatAmount(d.convertedAmount, currency)}</td>
-    <td style="${tdR}">${pct(d.convertedAmount ?? 0, grandTotal)}</td></tr>`).join("");
+    <td style="${tdR}">${pct(d.convertedAmount ?? 0, grandTotal)}</td></tr>`).join("") : "";
 
-  const stkRows = stocks.map(s => {
+  const stkRows = has("stocks") ? stocks.map(s => {
     const val = s.convertedCurrentValue ?? s.convertedInvestAmount ?? 0;
     return `<tr>
-    <td style="${tdStyle}">${s.symbol}</td><td style="${tdStyle}">${s.name}</td>
-    <td style="${tdR}">${s.stockAmount}</td>
-    <td style="${tdR}">${formatAmount(s.investAmount, s.currency)}</td>
+    <td style="${td}">${s.symbol}</td><td style="${td}">${s.name}</td>
+    <td style="${tdR}">${s.stockAmount}</td><td style="${tdR}">${formatAmount(s.investAmount, s.currency)}</td>
     <td style="${tdR}">${s.currentPrice != null ? formatPrice(s.currentPrice) : "—"}</td>
     <td style="${tdR}">${s.currentValue != null ? formatAmount(s.currentValue, s.priceCurrency ?? s.currency) : "—"}</td>
     <td style="${tdR}">${formatAmount(val, currency)}</td>
     <td style="${tdR}">${s.pnlPercent != null ? (s.pnlPercent >= 0 ? "+" : "") + s.pnlPercent.toFixed(2) + "%" : "—"}</td>
     <td style="${tdR}">${pct(val, grandTotal)}</td></tr>`;
-  }).join("");
+  }).join("") : "";
 
-  const cryRows = crypto.map(c => {
+  const cryRows = has("crypto") ? crypto.map(c => {
     const val = c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0;
     return `<tr>
-    <td style="${tdStyle}">${c.symbol}</td><td style="${tdStyle}">${c.name}</td>
-    <td style="${tdR}">${c.amount}</td>
-    <td style="${tdR}">${formatAmount(c.investAmount, c.currency)}</td>
+    <td style="${td}">${c.symbol}</td><td style="${td}">${c.name}</td>
+    <td style="${tdR}">${c.amount}</td><td style="${tdR}">${formatAmount(c.investAmount, c.currency)}</td>
     <td style="${tdR}">${c.currentPrice != null ? formatAmount(c.currentPrice, "USD") : "—"}</td>
     <td style="${tdR}">${c.currentValue != null ? formatAmount(c.currentValue, "USD") : "—"}</td>
     <td style="${tdR}">${formatAmount(val, currency)}</td>
     <td style="${tdR}">${c.pnlPercent != null ? (c.pnlPercent >= 0 ? "+" : "") + c.pnlPercent.toFixed(2) + "%" : "—"}</td>
     <td style="${tdR}">${pct(val, grandTotal)}</td></tr>`;
-  }).join("");
+  }).join("") : "";
+
+  const cardRows = has("cards") ? cards.map(c => {
+    const creditStr = c.creditLimit != null
+      ? `${c.creditLimitCurrency ?? ""} ${c.creditLimit.toLocaleString("en-US", { maximumFractionDigits: 0 })}`.trim() : "—";
+    const sharedStr = c.types.includes("Credit")
+      ? (c.sharedCredit === true ? "Shared" : c.sharedCredit === false ? "Dedicated" : "—") : "—";
+    return `<tr>
+    <td style="${td}">${c.bank}</td><td style="${td}">${c.countryRegion || "—"}</td>
+    <td style="${td}">${c.cardName}</td><td style="${td}">${c.types.join(", ")}</td>
+    <td style="${td}">${c.network}</td><td style="${td}">${formatExpiry(c.expireDate)}</td>
+    <td style="${tdR}">${creditStr}</td><td style="${td}">${sharedStr}</td></tr>`;
+  }).join("") : "";
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>Financial Report ${date}</title>
+<title>${title} ${date}</title>
 <style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:18px;margin-bottom:4px}h2{font-size:14px;margin-top:20px}@media print{button{display:none}}</style>
 </head><body>
-<h1>Financial Report</h1><p style="color:#666;font-size:12px">${date}</p>
+<h1>${title}</h1><p style="color:#666;font-size:12px">${date}</p>
 <button onclick="window.print()" style="margin-bottom:16px;padding:6px 14px;cursor:pointer">Print / Save as PDF</button>
-<h2>Summary</h2>
-<table style="${tableStyle}"><thead><tr>
-  <th style="${thStyle}">Category</th><th style="${thStyle}">Value (${currency})</th><th style="${thStyle}">% of Total</th>
-</tr></thead><tbody>
-  <tr><td style="${tdStyle}">Cash Deposits</td><td style="${tdR}">${formatAmount(totalDep, currency)}</td><td style="${tdR}">${pct(totalDep, grandTotal)}</td></tr>
-  <tr><td style="${tdStyle}">Stock Investments</td><td style="${tdR}">${formatAmount(totalStk, currency)}</td><td style="${tdR}">${pct(totalStk, grandTotal)}</td></tr>
-  <tr><td style="${tdStyle}">Crypto Investments</td><td style="${tdR}">${formatAmount(totalCry, currency)}</td><td style="${tdR}">${pct(totalCry, grandTotal)}</td></tr>
-  <tr><td style="border:1px solid #ccc;padding:4px 8px;font-weight:bold">Total</td><td style="${tdR}font-weight:bold">${formatAmount(grandTotal, currency)}</td><td style="${tdR}font-weight:bold">100%</td></tr>
-</tbody></table>
-${deposits.length > 0 ? `<h2>Cash Deposits</h2>
-<table style="${tableStyle}"><thead><tr>
-  <th style="${thStyle}">Platform</th><th style="${thStyle}">Type</th><th style="${thStyle}">Country</th><th style="${thStyle}">F/X</th>
-  <th style="${thStyle}">Amount</th><th style="${thStyle}">≈ ${currency}</th><th style="${thStyle}">% of Total</th>
+${summaryHtml}
+${has("deposits") && deposits.length > 0 ? `<h2>Cash Deposits</h2><table style="${ts}"><thead><tr>
+  <th style="${th}">Platform</th><th style="${th}">Type</th><th style="${th}">Country</th><th style="${th}">F/X</th>
+  <th style="${th}">Amount</th><th style="${th}">≈ ${currency}</th><th style="${th}">% of Total</th>
 </tr></thead><tbody>${depRows}</tbody></table>` : ""}
-${stocks.length > 0 ? `<h2>Stock Investments</h2>
-<table style="${tableStyle}"><thead><tr>
-  <th style="${thStyle}">Symbol</th><th style="${thStyle}">Name</th><th style="${thStyle}">Shares</th>
-  <th style="${thStyle}">Invested</th><th style="${thStyle}">Price</th><th style="${thStyle}">Value</th>
-  <th style="${thStyle}">≈ ${currency}</th><th style="${thStyle}">P&amp;L%</th><th style="${thStyle}">% of Total</th>
+${has("stocks") && stocks.length > 0 ? `<h2>Stock Investments</h2><table style="${ts}"><thead><tr>
+  <th style="${th}">Symbol</th><th style="${th}">Name</th><th style="${th}">Shares</th>
+  <th style="${th}">Invested</th><th style="${th}">Price</th><th style="${th}">Value</th>
+  <th style="${th}">≈ ${currency}</th><th style="${th}">P&amp;L%</th><th style="${th}">% of Total</th>
 </tr></thead><tbody>${stkRows}</tbody></table>` : ""}
-${crypto.length > 0 ? `<h2>Crypto Investments</h2>
-<table style="${tableStyle}"><thead><tr>
-  <th style="${thStyle}">Symbol</th><th style="${thStyle}">Name</th><th style="${thStyle}">Amount</th>
-  <th style="${thStyle}">Invested</th><th style="${thStyle}">Price (USD)</th><th style="${thStyle}">Value (USD)</th>
-  <th style="${thStyle}">≈ ${currency}</th><th style="${thStyle}">P&amp;L%</th><th style="${thStyle}">% of Total</th>
+${has("crypto") && crypto.length > 0 ? `<h2>Crypto Investments</h2><table style="${ts}"><thead><tr>
+  <th style="${th}">Symbol</th><th style="${th}">Name</th><th style="${th}">Amount</th>
+  <th style="${th}">Invested</th><th style="${th}">Price (USD)</th><th style="${th}">Value (USD)</th>
+  <th style="${th}">≈ ${currency}</th><th style="${th}">P&amp;L%</th><th style="${th}">% of Total</th>
 </tr></thead><tbody>${cryRows}</tbody></table>` : ""}
+${has("cards") && cards.length > 0 ? `<h2>Cards</h2><table style="${ts}"><thead><tr>
+  <th style="${th}">Bank</th><th style="${th}">Country</th><th style="${th}">Card Name</th>
+  <th style="${th}">Types</th><th style="${th}">Network</th><th style="${th}">Expiry</th>
+  <th style="${th}">Credit Limit</th><th style="${th}">Shared Credit</th>
+</tr></thead><tbody>${cardRows}</tbody></table>` : ""}
 </body></html>`;
 
   const w = window.open("", "_blank");
   if (w) { w.document.write(html); w.document.close(); }
+}
+
+// ── Download modal ────────────────────────────────────────────────────────────
+
+function DownloadModal({ deposits, stocks, crypto, cards, currency, grandTotal, onClose }: {
+  deposits: CashDeposit[]; stocks: StockInvestment[]; crypto: CryptoInvestment[]; cards: Card[];
+  currency: string; grandTotal: number; onClose: () => void;
+}) {
+  const [sections, setSections] = useState<DownloadSection[]>(["deposits", "stocks", "crypto", "cards"]);
+  const [format,   setFormat]   = useState<"markdown" | "pdf">("markdown");
+  const [mode,     setMode]     = useState<"combined" | "separate">("combined");
+
+  const toggle = (s: DownloadSection) =>
+    setSections((p) => p.includes(s) ? p.filter((x) => x !== s) : [...p, s]);
+
+  const handleDownload = () => {
+    if (sections.length === 0) return;
+    const date = new Date().toISOString().slice(0, 10);
+    if (mode === "combined") {
+      if (format === "markdown") {
+        downloadFile(buildMarkdown(sections, deposits, stocks, crypto, cards, currency, grandTotal), `financial-${date}.md`, "text/markdown");
+      } else {
+        exportPdf(sections, deposits, stocks, crypto, cards, currency, grandTotal, "Financial Report");
+      }
+    } else {
+      for (const section of sections) {
+        if (format === "markdown") {
+          downloadFile(buildMarkdown([section], deposits, stocks, crypto, cards, currency, grandTotal), `financial-${section}-${date}.md`, "text/markdown");
+        } else {
+          exportPdf([section], deposits, stocks, crypto, cards, currency, grandTotal, SECTION_LABELS[section]);
+        }
+      }
+    }
+    onClose();
+  };
+
+  return (
+    <Modal title="Download Report" onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        <div>
+          <p className="mb-2 text-xs text-[--color-muted]">Sections</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(["deposits", "stocks", "crypto", "cards"] as DownloadSection[]).map((s) => (
+              <label key={s} className={`flex cursor-pointer select-none items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                sections.includes(s)
+                  ? "border-[--color-primary] bg-[--color-primary]/5"
+                  : "border-[--color-border] hover:bg-[--color-border]/30"
+              }`}>
+                <input type="checkbox" className="accent-[--color-primary]"
+                  checked={sections.includes(s)} onChange={() => toggle(s)} />
+                {SECTION_LABELS[s]}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="mb-2 text-xs text-[--color-muted]">Format</p>
+            <div className="flex flex-col gap-2">
+              {(["markdown", "pdf"] as const).map((f) => (
+                <label key={f} className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
+                  <input type="radio" name="dl-format" checked={format === f} onChange={() => setFormat(f)} />
+                  {f === "markdown" ? "Markdown (.md)" : "PDF (print)"}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-xs text-[--color-muted]">Output</p>
+            <div className="flex flex-col gap-2">
+              {(["combined", "separate"] as const).map((m) => (
+                <label key={m} className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
+                  <input type="radio" name="dl-mode" checked={mode === m} onChange={() => setMode(m)} />
+                  {m === "combined" ? "Combined" : "Separate files"}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        {mode === "separate" && format === "pdf" && (
+          <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+            Separate PDF opens one window per section — allow popups if prompted.
+          </p>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+          <Button size="sm" disabled={sections.length === 0} onClick={handleDownload}>
+            <Download className="mr-1.5 h-3.5 w-3.5" />
+            Download
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -724,6 +864,8 @@ export function FinancialManager() {
     | { mode: "add-card" }      | { mode: "edit-card";     item: Card }
     | null
   >(null);
+
+  const [showDownload, setShowDownload] = useState(false);
 
   const depositSuggestions = {
     platforms:     unique(deposits.map((d) => d.platform)),
@@ -934,20 +1076,14 @@ export function FinancialManager() {
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
             </button>
-            <div className="flex items-center gap-1 rounded-md border border-[--color-border] bg-[--color-surface] px-1">
-              <Download className="h-3 w-3 text-[--color-muted]" />
-              <button
-                onClick={() => downloadFile(buildMarkdown(deposits, stocks, crypto, defaultCurrency, grandTotal), `financial-${new Date().toISOString().slice(0,10)}.md`, "text/markdown")}
-                className="px-1.5 py-1 text-xs text-[--color-muted] hover:text-inherit"
-                title="Export as Markdown"
-              >MD</button>
-              <span className="text-[--color-border]">|</span>
-              <button
-                onClick={() => exportPdf(deposits, stocks, crypto, defaultCurrency, grandTotal)}
-                className="px-1.5 py-1 text-xs text-[--color-muted] hover:text-inherit"
-                title="Export as PDF"
-              >PDF</button>
-            </div>
+            <button
+              onClick={() => setShowDownload(true)}
+              title="Download report"
+              className="flex items-center gap-1.5 rounded-md border border-[--color-border] bg-[--color-surface] px-2.5 py-1.5 text-xs text-[--color-muted] hover:text-inherit"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </button>
             <div className="relative flex items-center gap-1.5 rounded-md border border-[--color-border] bg-[--color-surface] px-2.5 py-1.5">
               <span className="text-xs text-[--color-muted]">Default:</span>
               <select
@@ -1333,6 +1469,18 @@ export function FinancialManager() {
             banks={unique(cards.map((c) => c.bank))}
             onSave={saveCard} onCancel={() => setModal(null)} saving={saving} />
         </Modal>
+      )}
+
+      {showDownload && (
+        <DownloadModal
+          deposits={deposits}
+          stocks={stocks}
+          crypto={crypto}
+          cards={cards}
+          currency={defaultCurrency}
+          grandTotal={grandTotal}
+          onClose={() => setShowDownload(false)}
+        />
       )}
     </div>
   );
