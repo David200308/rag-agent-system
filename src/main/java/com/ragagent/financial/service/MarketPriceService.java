@@ -36,8 +36,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class MarketPriceService {
 
-    @Value("${financial.alphavantage.api-key:demo}")
-    private String alphaVantageApiKey;
+    @Value("${financial.finnhub.api-key:}")
+    private String finnhubApiKey;
 
     private static final Duration CACHE_TTL = Duration.ofHours(1);
 
@@ -85,8 +85,9 @@ public class MarketPriceService {
         int updated = 0;
         for (String sym : distinct) {
             try {
-                String url = "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol="
-                        + sym + "&apikey=" + alphaVantageApiKey;
+                // GET https://finnhub.io/api/v1/quote?symbol=AAPL&token=KEY
+                // Response: { "c": 261.74, "d": 4.11, "dp": 1.60, "h": 263.31, "l": 259.36, "o": 258.62, "pc": 257.63, "t": 1582641000 }
+                String url = "https://finnhub.io/api/v1/quote?symbol=" + sym + "&token=" + finnhubApiKey;
 
                 HttpRequest req = HttpRequest.newBuilder()
                         .uri(URI.create(url))
@@ -96,25 +97,21 @@ public class MarketPriceService {
                         .build();
 
                 HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-                JsonNode quote = objectMapper.readTree(resp.body()).path("Global Quote");
-                double price = quote.path("05. price").asDouble(0);
+                JsonNode root = objectMapper.readTree(resp.body());
+                double price = root.path("c").asDouble(0);
                 if (price > 0) {
                     stockPrices.put(sym, price);
                     stockCurrencies.put(sym, inferCurrency(sym));
                     updated++;
                 } else {
-                    // Alpha Vantage returns {"Information":...} on rate-limit / invalid key
-                    JsonNode info = objectMapper.readTree(resp.body()).path("Information");
-                    if (!info.isMissingNode()) {
-                        log.warn("[MarketPriceService] Alpha Vantage info for {}: {}", sym, info.asText());
-                    }
+                    log.warn("[MarketPriceService] Finnhub returned no price for {} (price=0 or missing)", sym);
                 }
             } catch (Exception e) {
                 log.error("[MarketPriceService] Stock price fetch failed for {}: {}", sym, e.getMessage());
             }
         }
         stockLastFetched = Instant.now();
-        log.info("[MarketPriceService] Stock prices refreshed via Alpha Vantage: {}/{} symbols", updated, distinct.size());
+        log.info("[MarketPriceService] Stock prices refreshed via Finnhub: {}/{} symbols", updated, distinct.size());
     }
 
     /** Infer the native currency of a stock symbol from its exchange suffix. */

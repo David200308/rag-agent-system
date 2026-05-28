@@ -303,7 +303,7 @@ function StockForm({ initial, brokers, onSave, onCancel, saving }: {
         </Field>
       </div>
       <p className="text-[11px] text-[--color-muted]">
-        Use Alpha Vantage ticker format: AAPL (US), 0700.HK (HK), 600519.SS (CN), D05.SI (SG)
+        Use Finnhub ticker format: AAPL (US), 0700.HK (HK), 600519.SS (CN), D05.SI (SG)
       </p>
       <div className="mt-1 flex justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>

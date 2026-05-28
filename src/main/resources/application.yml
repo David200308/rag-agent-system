@@ -284,8 +284,8 @@ resend:
 
 # ── Financial / Market Data ───────────────────────────────────────────────────
 financial:
-  alphavantage:
-    api-key: ${ALPHAVANTAGE_API_KEY:demo}
+  finnhub:
+    api-key: ${FINNHUB_API_KEY:}
 
 logging:
   level:

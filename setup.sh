@@ -216,12 +216,11 @@ if [ "$MODE" = "local" ]; then
   echo -e "  ${DIM}Scheduler service key auto-generated.${NC}"
 
   # ── Financial / Market data ───────────────────────────────────────────────
-  header "Financial — Alpha Vantage (optional)"
-  echo -e "  ${DIM}Used for live stock prices. Get a free key at https://www.alphavantage.co/support/#api-key${NC}"
-  echo -e "  ${DIM}Leave blank to use the 'demo' key (limited to a few demo tickers).${NC}"
-  ALPHAVANTAGE_API_KEY=""
-  prompt ALPHAVANTAGE_API_KEY "Alpha Vantage API key" "" true
-  [ -z "$ALPHAVANTAGE_API_KEY" ] && ALPHAVANTAGE_API_KEY="demo"
+  header "Financial — Finnhub (optional)"
+  echo -e "  ${DIM}Used for live stock prices. Get a free key at https://finnhub.io/register${NC}"
+  echo -e "  ${DIM}Leave blank to skip — stock prices will not be fetched.${NC}"
+  FINNHUB_API_KEY=""
+  prompt FINNHUB_API_KEY "Finnhub API key" "" true
 
   # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ──────────────
   header "Connectors (optional)"
@@ -307,7 +306,7 @@ RESEND_API_KEY=$RESEND_API_KEY
 RESEND_FROM_EMAIL=$RESEND_FROM_EMAIL
 
 # ── Financial / Market data ───────────────────────────────────────────────────
-ALPHAVANTAGE_API_KEY=$ALPHAVANTAGE_API_KEY
+FINNHUB_API_KEY=$FINNHUB_API_KEY
 
 # ── Weaviate ──────────────────────────────────────────────────────────────────
 WEAVIATE_API_KEY=$WEAVIATE_API_KEY
@@ -608,21 +607,20 @@ else
   fi
 
   # ── Financial / Market data ───────────────────────────────────────────────
-  header "Financial — Alpha Vantage (optional)"
-  UPDATE_AV=true
-  if has_secret alphavantage_api_key; then
-    echo -e "  ${DIM}Alpha Vantage already configured.${NC}"
-    if ! confirm "Update Alpha Vantage API key?"; then UPDATE_AV=false; fi
+  header "Financial — Finnhub (optional)"
+  UPDATE_FH=true
+  if has_secret finnhub_api_key; then
+    echo -e "  ${DIM}Finnhub already configured.${NC}"
+    if ! confirm "Update Finnhub API key?"; then UPDATE_FH=false; fi
   fi
-  if $UPDATE_AV; then
-    echo -e "  ${DIM}Get a free key at https://www.alphavantage.co/support/#api-key${NC}"
-    echo -e "  ${DIM}Leave blank to use the 'demo' key (limited to a few demo tickers).${NC}"
-    ALPHAVANTAGE_API_KEY=""
-    prompt ALPHAVANTAGE_API_KEY "Alpha Vantage API key" "" true
-    [ -z "$ALPHAVANTAGE_API_KEY" ] && ALPHAVANTAGE_API_KEY="demo"
-    write_secret alphavantage_api_key "$ALPHAVANTAGE_API_KEY"
+  if $UPDATE_FH; then
+    echo -e "  ${DIM}Get a free key at https://finnhub.io/register${NC}"
+    echo -e "  ${DIM}Leave blank to skip — stock prices will not be fetched.${NC}"
+    FINNHUB_API_KEY=""
+    prompt FINNHUB_API_KEY "Finnhub API key" "" true
+    write_secret finnhub_api_key "$FINNHUB_API_KEY"
   else
-    echo -e "  ${DIM}Keeping existing Alpha Vantage secret.${NC}"
+    echo -e "  ${DIM}Keeping existing Finnhub secret.${NC}"
   fi
 
   # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ──────────────
