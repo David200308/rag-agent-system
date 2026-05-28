@@ -59,7 +59,8 @@ public class ExchangeRateService {
                     .build();
             HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             JsonNode root = objectMapper.readTree(resp.body());
-            JsonNode cr = root.path("conversion_rates");
+            // open.er-api.com (free) uses "rates"; paid exchangerate-api.com uses "conversion_rates"
+            JsonNode cr = root.has("rates") ? root.path("rates") : root.path("conversion_rates");
             Map<String, Double> rates = new HashMap<>();
             cr.fields().forEachRemaining(e -> rates.put(e.getKey(), e.getValue().asDouble()));
             if (!rates.isEmpty()) {
