@@ -57,6 +57,15 @@ async function apiRefreshPrices(): Promise<void> {
   await fetch("/api/financial/prices", { method: "POST" });
 }
 
+async function fetchExchangeRates(): Promise<Record<string, number>> {
+  try {
+    const res = await fetch("/api/financial/rates");
+    if (!res.ok) return {};
+    const data = await res.json() as { rates?: Record<string, number> };
+    return data.rates ?? {};
+  } catch { return {}; }
+}
+
 async function fetchUserCurrency(): Promise<string> {
   try {
     const res = await fetch("/api/agent/user/preferences");
@@ -153,7 +162,7 @@ function ComboInput({ value, onChange, suggestions, placeholder, required }: {
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)} />
       {open && filtered.length > 0 && (
-        <ul className="absolute z-50 mt-1 w-full rounded-md border border-[--color-border] bg-[--color-surface-raised] py-1 shadow-lg">
+        <ul className="absolute z-50 mt-1 w-full rounded-md border border-[--color-border] bg-white dark:bg-neutral-900 py-1 shadow-lg">
           {filtered.map((s) => (
             <li key={s} className="cursor-pointer px-3 py-1.5 text-sm hover:bg-[--color-border]/50"
               onMouseDown={(e) => { e.preventDefault(); onChange(s); setOpen(false); }}>
@@ -368,8 +377,8 @@ function PnlBadge({ pct }: { pct: number }) {
   );
 }
 
-function SummaryCard({ label, value, currency, pnlPercent, share }: {
-  label: string; value: number; currency: string; pnlPercent?: number | null; share?: number;
+function SummaryCard({ label, value, currency, pnlPercent, share, usdValue }: {
+  label: string; value: number; currency: string; pnlPercent?: number | null; share?: number; usdValue?: number | null;
 }) {
   return (
     <div className="rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4 min-w-0">
@@ -380,6 +389,9 @@ function SummaryCard({ label, value, currency, pnlPercent, share }: {
         )}
       </div>
       <p className="mt-1 text-lg font-semibold tabular-nums">{formatAmount(value, currency)}</p>
+      {usdValue != null && (
+        <p className="mt-0.5 text-xs text-[--color-muted] tabular-nums">{formatAmount(usdValue, "USD")}</p>
+      )}
       {pnlPercent != null && (
         <p className="mt-0.5"><PnlBadge pct={pnlPercent} /></p>
       )}
@@ -568,6 +580,7 @@ export function FinancialManager() {
   const [loading,   setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving,    setSaving]    = useState(false);
+  const [fxRates,   setFxRates]   = useState<Record<string, number>>({});
 
   const depositSort = useSort({ column: "platform", dir: "asc" });
   const stockSort   = useSort({ column: "symbol",   dir: "asc" });
@@ -588,16 +601,18 @@ export function FinancialManager() {
   const brokerSuggestions = unique(stocks.map((s) => s.broker));
 
   const loadAll = useCallback(async () => {
-    const [deps, stks, cry, cur] = await Promise.all([
+    const [deps, stks, cry, cur, rates] = await Promise.all([
       apiFetch<CashDeposit>("deposits"),
       apiFetch<StockInvestment>("stocks"),
       apiFetch<CryptoInvestment>("crypto"),
       fetchUserCurrency(),
+      fetchExchangeRates(),
     ]);
     setDeposits(deps);
     setStocks(stks);
     setCrypto(cry);
     setDefaultCurrency(cur as Currency);
+    setFxRates(rates);
   }, []);
 
   useEffect(() => {
@@ -647,10 +662,18 @@ export function FinancialManager() {
 
   const grandTotal = totalDeposits + totalStocks + totalCrypto;
 
+  // Convert a default-currency total back to USD for the secondary label
+  const toUSD = (amount: number): number | null => {
+    if (defaultCurrency === "USD") return null;
+    const rate = fxRates[defaultCurrency];
+    if (!rate) return null;
+    return amount / rate;
+  };
+
   const summaryItems = [
-    { label: "Cash Deposits",      value: totalDeposits, pnlPercent: null,         share: grandTotal > 0 ? totalDeposits / grandTotal * 100 : 0 },
-    { label: "Stock Investments",  value: totalStocks,   pnlPercent: stocksPnlPct, share: grandTotal > 0 ? totalStocks  / grandTotal * 100 : 0 },
-    { label: "Crypto Investments", value: totalCrypto,   pnlPercent: cryptoPnlPct, share: grandTotal > 0 ? totalCrypto  / grandTotal * 100 : 0 },
+    { label: "Cash Deposits",      value: totalDeposits, pnlPercent: null,         share: grandTotal > 0 ? totalDeposits / grandTotal * 100 : 0, usdValue: null as number | null },
+    { label: "Stock Investments",  value: totalStocks,   pnlPercent: stocksPnlPct, share: grandTotal > 0 ? totalStocks  / grandTotal * 100 : 0, usdValue: toUSD(totalStocks) },
+    { label: "Crypto Investments", value: totalCrypto,   pnlPercent: cryptoPnlPct, share: grandTotal > 0 ? totalCrypto  / grandTotal * 100 : 0, usdValue: toUSD(totalCrypto) },
   ] as const;
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
@@ -759,7 +782,7 @@ export function FinancialManager() {
         <div className="mt-4 hidden sm:grid sm:grid-cols-3 sm:gap-3">
           {summaryItems.map((item) => (
             <SummaryCard key={item.label} label={item.label} value={item.value}
-              currency={defaultCurrency} pnlPercent={item.pnlPercent} share={item.share} />
+              currency={defaultCurrency} pnlPercent={item.pnlPercent} share={item.share} usdValue={item.usdValue} />
           ))}
         </div>
         {/* Mobile: swipeable snap carousel */}
@@ -770,7 +793,7 @@ export function FinancialManager() {
               style={{ scrollSnapAlign: "start", width: "78vw",
                 marginRight: i === summaryItems.length - 1 ? "8vw" : undefined }}>
               <SummaryCard label={item.label} value={item.value}
-                currency={defaultCurrency} pnlPercent={item.pnlPercent} share={item.share} />
+                currency={defaultCurrency} pnlPercent={item.pnlPercent} share={item.share} usdValue={item.usdValue} />
             </div>
           ))}
         </div>
