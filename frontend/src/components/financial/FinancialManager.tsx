@@ -451,12 +451,13 @@ function CardForm({ initial, banks, onSave, onCancel, saving }: {
         <>
           <Field label="Credit Limit">
             <div className="flex gap-2">
-              <select className={`${selectCls} w-24 shrink-0`}
+              <select
+                className="w-20 shrink-0 rounded-md border border-[--color-border] bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm outline-none focus:border-[--color-primary] focus:ring-1 focus:ring-[--color-primary]/30 cursor-pointer"
                 value={f.creditLimitCurrency ?? "HKD"}
                 onChange={(e) => s("creditLimitCurrency", e.target.value)}>
                 {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-              <input className={inputCls} type="number" min="0" step="0.01"
+              <input className={`${inputCls} flex-1`} type="number" min="0" step="0.01"
                 placeholder="Leave blank if unknown"
                 value={f.creditLimit ?? ""}
                 onChange={(e) => s("creditLimit", e.target.value ? parseFloat(e.target.value) : null)} />
