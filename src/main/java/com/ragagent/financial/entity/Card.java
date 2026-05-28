@@ -25,6 +25,9 @@ public class Card {
     @Column(nullable = false, length = 255)
     private String bank;
 
+    @Column(name = "country_region", length = 100)
+    private String countryRegion;
+
     /** Comma-separated list: Credit, Debit, ATM */
     @Column(nullable = false, length = 50)
     private String types;
@@ -42,6 +45,9 @@ public class Card {
 
     @Column(name = "credit_limit", precision = 19, scale = 2)
     private BigDecimal creditLimit;
+
+    @Column(name = "credit_limit_currency", length = 10)
+    private String creditLimitCurrency;
 
     /** null = unknown, true = shared pool, false = dedicated limit */
     @Column(name = "shared_credit")

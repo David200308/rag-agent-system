@@ -297,7 +297,8 @@ public class FinancialService {
 
     @SuppressWarnings("unchecked")
     private void applyCardFields(Card c, Map<String, Object> body) {
-        if (body.containsKey("bank"))        c.setBank((String) body.get("bank"));
+        if (body.containsKey("bank"))          c.setBank((String) body.get("bank"));
+        if (body.containsKey("countryRegion")) c.setCountryRegion((String) body.get("countryRegion"));
         if (body.containsKey("types")) {
             List<String> types = (List<String>) body.get("types");
             c.setTypes(types == null ? "" : String.join(",", types));
@@ -309,6 +310,7 @@ public class FinancialService {
             Object cl = body.get("creditLimit");
             c.setCreditLimit(cl != null ? new BigDecimal(cl.toString()) : null);
         }
+        if (body.containsKey("creditLimitCurrency")) c.setCreditLimitCurrency((String) body.get("creditLimitCurrency"));
         if (body.containsKey("sharedCredit")) {
             Object sc = body.get("sharedCredit");
             c.setSharedCredit(sc instanceof Boolean ? (Boolean) sc : null);
@@ -320,9 +322,9 @@ public class FinancialService {
                 ? List.of()
                 : Arrays.asList(c.getTypes().split(","));
         return new CardDto(
-                c.getId(), c.getOwnerEmail(), c.getBank(), types,
+                c.getId(), c.getOwnerEmail(), c.getBank(), c.getCountryRegion(), types,
                 c.getCardName(), c.getNetwork(), c.getExpireDate(),
-                c.getCreditLimit(), c.getSharedCredit(),
+                c.getCreditLimit(), c.getCreditLimitCurrency(), c.getSharedCredit(),
                 c.getCreatedAt(), c.getUpdatedAt()
         );
     }

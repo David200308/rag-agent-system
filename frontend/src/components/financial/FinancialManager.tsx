@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Pencil, Trash2, RefreshCw, ChevronDown, ChevronUp, ChevronsUpDown, Download, Eye, EyeOff } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw, ChevronDown, ChevronUp, ChevronsUpDown, Download, Eye, EyeOff, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
   CURRENCIES,
@@ -222,7 +222,7 @@ type CardFields    = Omit<Card, "id"|"ownerEmail"|"createdAt"|"updatedAt">;
 const emptyDeposit = (): DepositFields => ({ platform:"", platformType:"", countryRegion:"", depositType:"FIXED", currency:"USD", amount:0 });
 const emptyStock   = (): StockFields   => ({ broker:"", stockType:"US_STOCK", symbol:"", name:"", stockAmount:0, investAmount:0, currency:"USD", fee:0 });
 const emptyCrypto  = (): CryptoFields  => ({ name:"", symbol:"", amount:0, investAmount:0, currency:"USD" });
-const emptyCard    = (): CardFields    => ({ bank:"", types:[], cardName:"", network:"Visa", expireDate:"", creditLimit:null, sharedCredit:null });
+const emptyCard    = (): CardFields    => ({ bank:"", countryRegion:"", types:[], cardName:"", network:"Visa", expireDate:"", creditLimit:null, creditLimitCurrency:"HKD", sharedCredit:null });
 
 const NETWORK_COLORS: Record<CardNetwork, string> = {
   Visa:      "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
@@ -403,10 +403,16 @@ function CardForm({ initial, banks, onSave, onCancel, saving }: {
 
   return (
     <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); onSave(f); }}>
-      <Field label="Bank *">
-        <ComboInput value={f.bank} onChange={(v) => s("bank", v)}
-          suggestions={banks} placeholder="e.g. HSBC, DBS, Citi" required />
-      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Bank *">
+          <ComboInput value={f.bank} onChange={(v) => s("bank", v)}
+            suggestions={banks} placeholder="e.g. HSBC, DBS, Citi" required />
+        </Field>
+        <Field label="Country / Region">
+          <ComboInput value={f.countryRegion} onChange={(v) => s("countryRegion", v)}
+            suggestions={[]} placeholder="e.g. HK, SG, US" />
+        </Field>
+      </div>
       <Field label="Card Type *">
         <div className="flex gap-5 pt-1">
           {CARD_TYPES.map((t) => (
@@ -444,10 +450,17 @@ function CardForm({ initial, banks, onSave, onCancel, saving }: {
       {isCredit && (
         <>
           <Field label="Credit Limit">
-            <input className={inputCls} type="number" min="0" step="0.01"
-              placeholder="Leave blank if unknown"
-              value={f.creditLimit ?? ""}
-              onChange={(e) => s("creditLimit", e.target.value ? parseFloat(e.target.value) : null)} />
+            <div className="flex gap-2">
+              <select className={`${selectCls} w-24 shrink-0`}
+                value={f.creditLimitCurrency ?? "HKD"}
+                onChange={(e) => s("creditLimitCurrency", e.target.value)}>
+                {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <input className={inputCls} type="number" min="0" step="0.01"
+                placeholder="Leave blank if unknown"
+                value={f.creditLimit ?? ""}
+                onChange={(e) => s("creditLimit", e.target.value ? parseFloat(e.target.value) : null)} />
+            </div>
           </Field>
           <Field label="Shared Credit">
             <div className="flex gap-5 pt-1">
@@ -700,6 +713,9 @@ export function FinancialManager() {
   const cryptoSort  = useSort({ column: "symbol",   dir: "asc" });
   const cardSort    = useSort({ column: "bank",     dir: "asc" });
 
+  const [searchTerm, setSearchTerm] = useState("");
+  useEffect(() => { setSearchTerm(""); }, [tab]);
+
   const [modal, setModal] = useState<
     | { mode: "add-deposit" }   | { mode: "edit-deposit";  item: CashDeposit }
     | { mode: "add-stock" }     | { mode: "edit-stock";    item: StockInvestment }
@@ -858,6 +874,29 @@ export function FinancialManager() {
   const sortedCrypto   = sortData(crypto,   cryptoSort.sort);
   const sortedCards    = sortData(cards,    cardSort.sort);
 
+  // Filtered views
+  const q = searchTerm.toLowerCase();
+  const filteredDeposits = q
+    ? sortedDeposits.filter((d) =>
+        [d.platform, d.platformType, d.countryRegion, d.depositType, d.currency]
+          .some((v) => v?.toLowerCase().includes(q)))
+    : sortedDeposits;
+  const filteredStocks = q
+    ? sortedStocks.filter((s) =>
+        [s.symbol, s.name, s.broker, s.stockType]
+          .some((v) => v?.toLowerCase().includes(q)))
+    : sortedStocks;
+  const filteredCrypto = q
+    ? sortedCrypto.filter((c) =>
+        [c.symbol, c.name]
+          .some((v) => v?.toLowerCase().includes(q)))
+    : sortedCrypto;
+  const filteredCards = q
+    ? sortedCards.filter((c) =>
+        [c.bank, c.countryRegion, c.cardName, c.network, c.types.join(" ")]
+          .some((v) => v?.toLowerCase().includes(q)))
+    : sortedCards;
+
   // Amount masking helper
   const amt = (formatted: string) => hideAmounts ? "***" : formatted;
 
@@ -956,7 +995,16 @@ export function FinancialManager() {
           <p className="py-12 text-center text-sm text-[--color-muted]">Loading…</p>
         ) : (
           <>
-            <div className="mb-4 flex justify-end">
+            <div className="mb-4 flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[--color-muted]" />
+                <input
+                  className="w-full rounded-md border border-[--color-border] bg-[--color-surface] py-1.5 pl-8 pr-3 text-sm outline-none focus:border-[--color-primary] focus:ring-1 focus:ring-[--color-primary]/30"
+                  placeholder={`Search ${tab === "deposits" ? "deposits" : tab === "stocks" ? "stocks" : tab === "crypto" ? "crypto" : "cards"}…`}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
               <Button size="sm" onClick={() => setModal(
                 tab === "deposits" ? { mode: "add-deposit" }
                 : tab === "stocks" ? { mode: "add-stock" }
@@ -969,8 +1017,10 @@ export function FinancialManager() {
             </div>
 
             {/* ── Cash Deposits ── */}
-            {tab === "deposits" && (sortedDeposits.length === 0 ? (
-              <p className="py-12 text-center text-sm text-[--color-muted]">No cash deposits yet.</p>
+            {tab === "deposits" && (filteredDeposits.length === 0 ? (
+              <p className="py-12 text-center text-sm text-[--color-muted]">
+                {q ? `No deposits matching "${searchTerm}".` : "No cash deposits yet."}
+              </p>
             ) : (
               <div className="overflow-x-auto rounded-xl border border-[--color-border]">
                 <table className="w-full text-sm">
@@ -987,7 +1037,7 @@ export function FinancialManager() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedDeposits.map((d) => (
+                    {filteredDeposits.map((d) => (
                       <tr key={d.id} className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
                         <td className="px-4 py-3 font-medium">{d.platform}</td>
                         <td className="px-4 py-3 text-[--color-muted]">{d.platformType}</td>
@@ -1022,8 +1072,10 @@ export function FinancialManager() {
             ))}
 
             {/* ── Stocks ── */}
-            {tab === "stocks" && (sortedStocks.length === 0 ? (
-              <p className="py-12 text-center text-sm text-[--color-muted]">No stock investments yet.</p>
+            {tab === "stocks" && (filteredStocks.length === 0 ? (
+              <p className="py-12 text-center text-sm text-[--color-muted]">
+                {q ? `No stocks matching "${searchTerm}".` : "No stock investments yet."}
+              </p>
             ) : (
               <div className="overflow-x-auto rounded-xl border border-[--color-border]">
                 <table className="w-full text-sm">
@@ -1043,7 +1095,7 @@ export function FinancialManager() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedStocks.map((s) => (
+                    {filteredStocks.map((s) => (
                       <tr key={s.id} className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
                         <td className="px-4 py-3 font-semibold">{s.symbol}</td>
                         <td className="px-4 py-3">{s.name}</td>
@@ -1089,8 +1141,10 @@ export function FinancialManager() {
             ))}
 
             {/* ── Crypto ── */}
-            {tab === "crypto" && (sortedCrypto.length === 0 ? (
-              <p className="py-12 text-center text-sm text-[--color-muted]">No crypto investments yet.</p>
+            {tab === "crypto" && (filteredCrypto.length === 0 ? (
+              <p className="py-12 text-center text-sm text-[--color-muted]">
+                {q ? `No crypto matching "${searchTerm}".` : "No crypto investments yet."}
+              </p>
             ) : (
               <div className="overflow-x-auto rounded-xl border border-[--color-border]">
                 <table className="w-full text-sm">
@@ -1109,7 +1163,7 @@ export function FinancialManager() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedCrypto.map((c) => (
+                    {filteredCrypto.map((c) => (
                       <tr key={c.id} className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
                         <td className="px-4 py-3 font-semibold">{c.symbol}</td>
                         <td className="px-4 py-3">{c.name}</td>
@@ -1152,15 +1206,18 @@ export function FinancialManager() {
             ))}
 
             {/* ── Cards ── */}
-            {tab === "cards" && (sortedCards.length === 0 ? (
-              <p className="py-12 text-center text-sm text-[--color-muted]">No cards yet.</p>
+            {tab === "cards" && (filteredCards.length === 0 ? (
+              <p className="py-12 text-center text-sm text-[--color-muted]">
+                {q ? `No cards matching "${searchTerm}".` : "No cards yet."}
+              </p>
             ) : (
               <div className="overflow-x-auto rounded-xl border border-[--color-border]">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className={thCls}>
-                      <Th label="Bank"         column="bank"        sort={cardSort.sort} onSort={cardSort.toggle} />
-                      <Th label="Card Name"    column="cardName"    sort={cardSort.sort} onSort={cardSort.toggle} />
+                      <Th label="Bank"         column="bank"          sort={cardSort.sort} onSort={cardSort.toggle} />
+                      <Th label="Country"      column="countryRegion" sort={cardSort.sort} onSort={cardSort.toggle} />
+                      <Th label="Card Name"    column="cardName"      sort={cardSort.sort} onSort={cardSort.toggle} />
                       <th className="px-4 py-2.5 text-left text-xs font-medium text-[--color-muted]">Types</th>
                       <Th label="Network"      column="network"     sort={cardSort.sort} onSort={cardSort.toggle} />
                       <Th label="Expiry"       column="expireDate"  sort={cardSort.sort} onSort={cardSort.toggle} />
@@ -1170,9 +1227,10 @@ export function FinancialManager() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedCards.map((c) => (
+                    {filteredCards.map((c) => (
                       <tr key={c.id} className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
                         <td className="px-4 py-3 font-medium">{c.bank}</td>
+                        <td className="px-4 py-3 text-[--color-muted]">{c.countryRegion || "—"}</td>
                         <td className="px-4 py-3">{c.cardName}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-1">
@@ -1187,7 +1245,7 @@ export function FinancialManager() {
                         <td className="px-4 py-3 tabular-nums">{formatExpiry(c.expireDate)}</td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {c.creditLimit != null
-                            ? amt(c.creditLimit.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))
+                            ? <span>{c.creditLimitCurrency && <span className="mr-1 text-xs text-[--color-muted]">{c.creditLimitCurrency}</span>}{amt(c.creditLimit.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 }))}</span>
                             : <span className="text-[--color-muted]">—</span>}
                         </td>
                         <td className="px-4 py-3">
@@ -1265,9 +1323,11 @@ export function FinancialManager() {
         <Modal title={modal.mode === "add-card" ? "Add Card" : "Edit Card"} onClose={() => setModal(null)}>
           <CardForm
             initial={modal.mode === "edit-card"
-              ? { bank: modal.item.bank, types: modal.item.types, cardName: modal.item.cardName,
+              ? { bank: modal.item.bank, countryRegion: modal.item.countryRegion,
+                  types: modal.item.types, cardName: modal.item.cardName,
                   network: modal.item.network, expireDate: modal.item.expireDate,
-                  creditLimit: modal.item.creditLimit, sharedCredit: modal.item.sharedCredit }
+                  creditLimit: modal.item.creditLimit, creditLimitCurrency: modal.item.creditLimitCurrency ?? "HKD",
+                  sharedCredit: modal.item.sharedCredit }
               : emptyCard()}
             banks={unique(cards.map((c) => c.bank))}
             onSave={saveCard} onCancel={() => setModal(null)} saving={saving} />

@@ -8,11 +8,13 @@ public record CardDto(
         String       id,
         String       ownerEmail,
         String       bank,
+        String       countryRegion,
         List<String> types,
         String       cardName,
         String       network,
         String       expireDate,
         BigDecimal   creditLimit,
+        String       creditLimitCurrency,
         Boolean      sharedCredit,
         Instant      createdAt,
         Instant      updatedAt

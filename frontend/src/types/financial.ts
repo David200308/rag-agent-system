@@ -10,11 +10,13 @@ export interface Card {
   id: string;
   ownerEmail: string;
   bank: string;
+  countryRegion: string;
   types: CardType[];
   cardName: string;
   network: CardNetwork;
   expireDate: string;
   creditLimit: number | null;
+  creditLimitCurrency: string | null;
   sharedCredit: boolean | null;
   createdAt: string;
   updatedAt: string;
