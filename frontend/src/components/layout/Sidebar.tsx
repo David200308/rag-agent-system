@@ -73,7 +73,7 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[--color-border] px-3 py-3">
-        <span className="text-sm font-semibold">RAG Agent</span>
+        <span className="text-sm font-semibold">SkyProton Agent System</span>
         <div className="flex items-center gap-1">
           <ThemeToggle />
           <Button size="icon" variant="ghost" onClick={handleNew} title="New conversation">

@@ -4,8 +4,9 @@ import "katex/dist/katex.min.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "RAG Agent",
-  description: "Spring AI + LangGraph4j + Weaviate — intelligent document Q&A",
+  title: "Agent System | SkyProton",
+  description: "SkyProton Agent System",
+  icons: { icon: "/logo.svg" },
 };
 
 export default function RootLayout({

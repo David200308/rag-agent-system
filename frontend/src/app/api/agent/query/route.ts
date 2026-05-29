@@ -6,7 +6,6 @@ const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8081";
 
 /**
  * POST /api/agent/query
- * Proxies the RAG agent query to Spring Boot using undici.
  * Forwards the rag-session cookie as a Bearer token for Spring Boot auth.
  */
 export async function POST(req: NextRequest) {
