@@ -346,6 +346,9 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
             Sign out
           </button>
         )}
+        <p className="pt-1 pl-2 text-left text-[10px] text-[--color-muted]">
+          &copy; {new Date().getFullYear()} SkyProton
+        </p>
       </div>
     </aside>
   );

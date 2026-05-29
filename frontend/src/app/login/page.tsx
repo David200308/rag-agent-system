@@ -161,7 +161,7 @@ export default function LoginPage() {
                 d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h1 className="text-lg font-semibold">Sign in to RAG Agent</h1>
+          <h1 className="text-lg font-semibold">Sign in to SkyProton Agent System</h1>
           <p className="mt-1 text-sm text-[--color-muted]">
             {step === "email"
               ? "Enter your email to sign in"
@@ -300,6 +300,9 @@ export default function LoginPage() {
           </form>
         )}
       </div>
+      <p className="mt-6 text-center text-xs text-[--color-muted]">
+        &copy; {new Date().getFullYear()} SkyProton
+      </p>
     </div>
   );
 }
