@@ -4,7 +4,6 @@ import com.ragagent.auth.service.AuthService;
 import com.ragagent.auth.service.CliKeyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -117,9 +116,12 @@ public class AuthController {
     @Operation(summary = "Register an Ed25519 public key for CLI request signing (JWT required)")
     public ResponseEntity<Map<String, String>> registerKey(
             @RequestBody Map<String, String> body,
-            HttpServletRequest httpRequest) {
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
-        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        // /api/v1/auth/* is exempt from AuthFilter, so validate the JWT manually
+        // (same pattern as the /validate endpoint above)
+        String token = extractToken(authHeader);
+        String email = (token != null) ? authService.validateToken(token) : null;
         if (email == null) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
