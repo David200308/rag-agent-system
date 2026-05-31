@@ -18,13 +18,17 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/backend
+  IMAGE_NAME: ${{ github.repository }}/rag-agent-system-backend
 
 jobs:
   # ── Test ────────────────────────────────────────────────────────────────────
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout
@@ -37,17 +41,35 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Run tests
+      - name: Run tests with coverage
         working-directory: backend
         run: mvn test -B
 
-      - name: Upload test reports
+      - name: Upload Surefire reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
           path: backend/target/surefire-reports/
           retention-days: 7
+
+      - name: Upload JaCoCo coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: backend/target/site/jacoco/
+          retention-days: 7
+
+      - name: Coverage summary
+        if: always()
+        uses: madrapps/jacoco-report@v1.7.1
+        with:
+          paths: backend/target/site/jacoco/jacoco.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          min-coverage-overall: 0
+          min-coverage-changed-files: 0
+          title: Test Coverage
 
   # ── Build & Push Docker image ────────────────────────────────────────────────
   docker:

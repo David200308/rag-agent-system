@@ -244,4 +244,112 @@ class WorkflowServiceTest {
 
         assertThat(service.parseSkillIds(agent)).isEmpty();
     }
+
+    // ── update — additional patch fields ──────────────────────────────────────
+
+    @Test
+    void update_ownerCanChangeDescription() {
+        Workflow wf = new Workflow("w1", "Flow", "owner@test.com", Workflow.AgentPattern.ORCHESTRATOR);
+        when(workflowRepo.findById("w1")).thenReturn(Optional.of(wf));
+        when(workflowRepo.save(wf)).thenReturn(wf);
+
+        service.update("w1", "owner@test.com", Map.of("description", "New description"));
+
+        assertThat(wf.getDescription()).isEqualTo("New description");
+    }
+
+    @Test
+    void update_ownerCanChangeAgentPattern() {
+        Workflow wf = new Workflow("w1", "Flow", "owner@test.com", Workflow.AgentPattern.ORCHESTRATOR);
+        when(workflowRepo.findById("w1")).thenReturn(Optional.of(wf));
+        when(workflowRepo.save(wf)).thenReturn(wf);
+
+        service.update("w1", "owner@test.com", Map.of("agentPattern", "TEAM"));
+
+        assertThat(wf.getAgentPattern()).isEqualTo(Workflow.AgentPattern.TEAM);
+    }
+
+    @Test
+    void update_ownerCanSetTeamExecMode() {
+        Workflow wf = new Workflow("w1", "Flow", "owner@test.com", Workflow.AgentPattern.TEAM);
+        when(workflowRepo.findById("w1")).thenReturn(Optional.of(wf));
+        when(workflowRepo.save(wf)).thenReturn(wf);
+
+        service.update("w1", "owner@test.com", Map.of("teamExecMode", "SEQUENTIAL"));
+
+        assertThat(wf.getTeamExecMode()).isEqualTo(Workflow.TeamExecMode.SEQUENTIAL);
+    }
+
+    @Test
+    void update_nullTeamExecMode_clearsMode() {
+        Workflow wf = new Workflow("w1", "Flow", "owner@test.com", Workflow.AgentPattern.TEAM);
+        wf.setTeamExecMode(Workflow.TeamExecMode.PARALLEL);
+        when(workflowRepo.findById("w1")).thenReturn(Optional.of(wf));
+        when(workflowRepo.save(wf)).thenReturn(wf);
+
+        Map<String, Object> patch = new java.util.HashMap<>();
+        patch.put("teamExecMode", null);
+        service.update("w1", "owner@test.com", patch);
+
+        assertThat(wf.getTeamExecMode()).isNull();
+    }
+
+    @Test
+    void update_blankSelectedModel_clearsModel() {
+        Workflow wf = new Workflow("w1", "Flow", "owner@test.com", Workflow.AgentPattern.ORCHESTRATOR);
+        wf.setSelectedModel("GPT-4o");
+        when(workflowRepo.findById("w1")).thenReturn(Optional.of(wf));
+        when(workflowRepo.save(wf)).thenReturn(wf);
+
+        service.update("w1", "owner@test.com", Map.of("selectedModel", "  "));
+
+        assertThat(wf.getSelectedModel()).isNull();
+    }
+
+    // ── deleteAgent ───────────────────────────────────────────────────────────
+
+    @Test
+    void deleteAgent_callsRepositoryDeleteById() {
+        service.deleteAgent(42L);
+
+        verify(agentRepo).deleteById(42L);
+    }
+
+    // ── upsertAgent — agentId not found creates new ───────────────────────────
+
+    @Test
+    void upsertAgent_agentIdNotFoundInRepo_createsNewAgent() {
+        when(agentRepo.findById(999L)).thenReturn(Optional.empty());
+        when(agentRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        ArgumentCaptor<WorkflowAgent> captor = ArgumentCaptor.forClass(WorkflowAgent.class);
+
+        service.upsertAgent("w1", 999L, "Ghost Agent", WorkflowAgent.AgentRole.PEER,
+                "Ghost prompt", List.of("BASH"), List.of(), 2, 50.0, 100.0);
+
+        verify(agentRepo).save(captor.capture());
+        assertThat(captor.getValue().getName()).isEqualTo("Ghost Agent");
+        assertThat(captor.getValue().getWorkflowId()).isEqualTo("w1");
+    }
+
+    @Test
+    void upsertAgent_nullSkillIds_serialisesAsEmptyArray() {
+        when(agentRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        ArgumentCaptor<WorkflowAgent> captor = ArgumentCaptor.forClass(WorkflowAgent.class);
+
+        service.upsertAgent("w1", null, "Agent", WorkflowAgent.AgentRole.PEER,
+                "prompt", List.of(), null, 0, 0.0, 0.0);
+
+        verify(agentRepo).save(captor.capture());
+        assertThat(captor.getValue().getSkillIdsJson()).isEqualTo("[]");
+    }
+
+    // ── parseSkillIds — invalid JSON ──────────────────────────────────────────
+
+    @Test
+    void parseSkillIds_invalidJson_returnsEmptyList() {
+        WorkflowAgent agent = new WorkflowAgent();
+        agent.setSkillIdsJson("{not-an-array}");
+
+        assertThat(service.parseSkillIds(agent)).isEmpty();
+    }
 }

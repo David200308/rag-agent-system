@@ -1,36 +1,38 @@
 # RAG Agent System
 
-![frontend](./images/frontend.png)
+| Chat Mode                | Workflow Mode                    |
+| ------------------------ | -------------------------------- |
+| ![chat](./images/chat.png) | ![workflow](./images/workflow.png) |
 
 ## Tech Stack
 
 ### Backend
 
-| Layer            | Technology                                 |
-| ---------------- | ------------------------------------------ |
-| Runtime          | Java 21 (virtual threads)                  |
-| Framework        | Spring Boot 3.4.5                          |
-| AI orchestration | Spring AI 1.1                              |
-| Agent graph      | LangGraph4j 1.7                            |
-| LLM providers    | OpenAI / OpenRouter / Anthropic / Local    |
-| Vector store     | Weaviate                                   |
-| Embeddings       | Spring AI embedding abstraction            |
-| Document parsing | Apache Tika (PDF, text, HTML)              |
-| HTML scraping    | Jsoup                                      |
-| Circuit breaker  | Resilience4j 2.2                           |
-| Auth             | OTP email (Resend) + JJWT stateless tokens |
-| Persistence      | MySQL 8 + Spring Data JPA                  |
-| MCP server       | Spring AI MCP WebMVC SSE transport         |
-| API docs         | SpringDoc OpenAPI (Swagger UI)             |
+| Layer            | Technology                                         |
+| ---------------- | -------------------------------------------------- |
+| Runtime          | Java 21 (virtual threads)                          |
+| Framework        | Spring Boot 3.4.5                                  |
+| AI orchestration | Spring AI 1.1                                      |
+| Agent graph      | LangGraph4j 1.7                                    |
+| LLM providers    | OpenAI / OpenRouter / Anthropic / DeepSeek / Local |
+| Vector store     | Weaviate                                           |
+| Embeddings       | Spring AI embedding abstraction                    |
+| Document parsing | Apache Tika (PDF, text, HTML)                      |
+| HTML scraping    | Jsoup                                              |
+| Circuit breaker  | Resilience4j 2.2                                   |
+| Auth             | OTP email (Resend) + JJWT stateless tokens         |
+| Persistence      | MySQL 8 + Spring Data JPA                          |
+| MCP server       | Spring AI MCP WebMVC SSE transport                 |
+| API docs         | SpringDoc OpenAPI (Swagger UI)                     |
 
 ### Scheduler
 
-| Layer            | Technology                                           |
-| ---------------- | ---------------------------------------------------- |
-| Runtime          | Go 1.24                                              |
-| Task queue       | Asynq (Redis-backed)                                 |
-| Schedule storage | MySQL (shared with app DB)                           |
-| Retry policy     | MaxRetry=3, task timeout=5 min (Asynq)               |
+| Layer            | Technology                             |
+| ---------------- | -------------------------------------- |
+| Runtime          | Go 1.24                                |
+| Task queue       | Asynq (Redis-backed)                   |
+| Schedule storage | MySQL (shared with app DB)             |
+| Retry policy     | MaxRetry=3, task timeout=5 min (Asynq) |
 
 ### Frontend
 
@@ -44,13 +46,13 @@
 
 ### Infrastructure
 
-| Component        | Technology                                       |
-| ---------------- | ------------------------------------------------ |
-| Vector DB        | Weaviate (Docker)                                |
-| Relational DB    | MySQL (Docker) — app + schedule data             |
-| Task queue       | Redis 7 (Docker) — Asynq backend                 |
-| Scheduler        | Go microservice backed by Asynq (`:8082`)        |
-| Containerization | Docker Compose                                   |
+| Component        | Technology                                  |
+| ---------------- | ------------------------------------------- |
+| Vector DB        | Weaviate (Docker)                           |
+| Relational DB    | MySQL (Docker) — app + schedule data       |
+| Task queue       | Redis 7 (Docker) — Asynq backend           |
+| Scheduler        | Go microservice backed by Asynq (`:8082`) |
+| Containerization | Docker Compose                              |
 
 ---
 
@@ -103,6 +105,11 @@
 │  │ OTP + JWT    │  │  (SSE)       │  │  + Sandbox +       │ │
 │  └──────────────┘  └──────────────┘  │  SCHEDULE tool     │ │
 │                                      └────────────────────┘ │
+│  ┌──────────────┐  ┌──────────────┐                         │
+│  │  Connectors  │  │    Model     │                         │
+│  │  (Google /   │  │  Selection   │                         │
+│  │   Telegram)  │  │  (per-user)  │                         │
+│  └──────────────┘  └──────────────┘                         │
 └─────────────────────────────────────────────────────────────┘
           │                    │                   │
   ┌───────▼──────┐   ┌────────▼────────┐  ┌───────▼─────────────────┐
@@ -110,10 +117,10 @@
   │  (vectors)   │   │  (auth, convos, │  │                         │
   │              │   │   workflows,    │  │  Asynq Scheduler        │
   └──────────────┘   │   skills,       │  │    └─ enqueues tasks    │
-                     │   schedules)    │  │  Asynq Worker           │
-                     └─────────────────┘  │    └─ rag:trigger       │
-                                          │         (MaxRetry=3)    │
-                                          │                         │
+                     │   schedules,    │  │  Asynq Worker           │
+                     │   model_configs,│  │    └─ rag:trigger       │
+                     │   connectors)   │  │         (MaxRetry=3)    │
+                     └─────────────────┘  │                         │
                                           │  ┌─────────────────┐    │
                                           │  │  Redis (:6379)  │    │
                                           │  │  (task queue)   │    │
@@ -127,12 +134,12 @@
 
 The LangGraph4j graph determines the execution path per query:
 
-| Route              | Condition                          | Path                                        |
-| ------------------ | ---------------------------------- | ------------------------------------------- |
-| `RETRIEVE`         | Query needs knowledge base context | analyzeQuery → retrieve → generate → END    |
-| `RETRIEVE` (empty) | No matching documents found        | analyzeQuery → retrieve → fallback → END    |
-| `DIRECT`           | Query answerable without retrieval | analyzeQuery → generate → END              |
-| `FALLBACK`         | Query out of scope / unsafe        | analyzeQuery → fallback → END              |
+| Route                | Condition                          | Path                                        |
+| -------------------- | ---------------------------------- | ------------------------------------------- |
+| `RETRIEVE`         | Query needs knowledge base context | analyzeQuery → retrieve → generate → END |
+| `RETRIEVE` (empty) | No matching documents found        | analyzeQuery → retrieve → fallback → END |
+| `DIRECT`           | Query answerable without retrieval | analyzeQuery → generate → END             |
+| `FALLBACK`         | Query out of scope / unsafe        | analyzeQuery → fallback → END             |
 
 ---
 
@@ -140,10 +147,10 @@ The LangGraph4j graph determines the execution path per query:
 
 Workflows compose multiple AI agents into pipelines with two patterns:
 
-| Pattern        | Description                                               |
-| -------------- | --------------------------------------------------------- |
-| `ORCHESTRATOR` | One orchestrator agent routes tasks to specialist agents  |
-| `TEAM`         | Multiple agents run in `PARALLEL` or `SEQUENTIAL` order  |
+| Pattern          | Description                                                 |
+| ---------------- | ----------------------------------------------------------- |
+| `ORCHESTRATOR` | One orchestrator agent routes tasks to specialist agents    |
+| `TEAM`         | Multiple agents run in `PARALLEL` or `SEQUENTIAL` order |
 
 Each workflow run executes inside an ephemeral Docker sandbox (`SandboxService`) with CPU/memory resource limits and a watchdog that terminates runaway containers. Agents can load user-uploaded **Skills** (code files) to extend their capabilities.
 
@@ -151,13 +158,17 @@ Each workflow run executes inside an ephemeral Docker sandbox (`SandboxService`)
 
 | Tool              | Description                                                        |
 | ----------------- | ------------------------------------------------------------------ |
-| `BASH`            | Execute shell commands in the sandbox                              |
-| `CURL`            | HTTP requests from the sandbox                                     |
-| `GIT`             | Git operations in the sandbox                                      |
-| `GREP`            | Text search in the sandbox                                         |
-| `PYTHON`          | Run Python scripts in the sandbox                                  |
-| `NODE`            | Run Node.js scripts in the sandbox                                 |
-| `SCHEDULE`        | Create, list, or delete scheduled RAG queries (calls Go scheduler) |
+| `BASH`          | Execute shell commands in the sandbox                              |
+| `CURL`          | HTTP requests from the sandbox                                     |
+| `GIT`           | Git operations in the sandbox                                      |
+| `GREP`          | Text search in the sandbox                                         |
+| `PYTHON`        | Run Python scripts in the sandbox                                  |
+| `NODE`          | Run Node.js scripts in the sandbox                                 |
+| `SCHEDULE`      | Create, list, or delete scheduled RAG queries (calls Go scheduler) |
+| `GOOGLE_DOCS`   | Read and write Google Docs via connected OAuth token               |
+| `GOOGLE_SHEETS` | Read and write Google Sheets via connected OAuth token             |
+| `GOOGLE_SLIDES` | Read and write Google Slides via connected OAuth token             |
+| `TELEGRAM`      | Send messages to a connected Telegram chat                         |
 
 The `SCHEDULE` tool lets a workflow agent manage schedules on behalf of the user:
 
@@ -177,6 +188,63 @@ The `SCHEDULE` tool lets a workflow agent manage schedules on behalf of the user
 {"action":"delete","scheduleId":"<schedule-id>"}
 </use_tool>
 ```
+
+---
+
+## Connectors
+
+Users can link third-party services to their account. Once connected, workflow agents can use the corresponding tools automatically.
+
+### Google (OAuth 2.0)
+
+The OAuth flow issues a per-user access + refresh token pair stored in `connector_tokens`. Agents receive scoped read/write tools for Docs, Sheets, and Slides.
+
+| Method     | Path                                       | Description                             |
+| ---------- | ------------------------------------------ | --------------------------------------- |
+| `GET`    | `/api/v1/connectors/{provider}/auth-url` | Get OAuth redirect URL for a provider   |
+| `POST`   | `/api/v1/connectors/{provider}/exchange` | Exchange auth code for tokens           |
+| `GET`    | `/api/v1/connectors/status`              | List which providers are connected      |
+| `DELETE` | `/api/v1/connectors/{provider}`          | Disconnect a provider and revoke tokens |
+| `POST`   | `/api/v1/connectors/google/docs`         | Create a new Google Doc                 |
+| `POST`   | `/api/v1/connectors/google/sheets`       | Create a new Google Sheet               |
+| `POST`   | `/api/v1/connectors/google/slides`       | Create a new Google Slides presentation |
+
+### Telegram (Login Widget)
+
+Connection uses the Telegram Login Widget (no OAuth redirect). The widget returns a signed payload that the backend verifies with HMAC-SHA256 before storing the user's `chat_id`.
+
+| Method   | Path                                    | Description                             |
+| -------- | --------------------------------------- | --------------------------------------- |
+| `GET`  | `/api/v1/connectors/telegram/config`  | Get bot username for the Login Widget   |
+| `POST` | `/api/v1/connectors/telegram/connect` | Verify widget payload and store chat_id |
+
+---
+
+## Model Selection
+
+Admins manage a `model_configs` table of named LLM configurations (display name, platform, model ID). Users can pick their preferred model in settings; the backend resolves it through `ChatModelFactory` at request time with a per-user cache.
+
+### Model Config API
+
+| Method     | Path                             | Description                   |
+| ---------- | -------------------------------- | ----------------------------- |
+| `GET`    | `/api/v1/models`               | List all model configurations |
+| `POST`   | `/api/v1/models`               | Create a model configuration  |
+| `PUT`    | `/api/v1/models/{displayName}` | Update a model configuration  |
+| `DELETE` | `/api/v1/models/{displayName}` | Delete a model configuration  |
+
+---
+
+## Conversation Sharing
+
+Conversations can be shared via a link with configurable access controls.
+
+| Field          | Values                          | Description                                   |
+| -------------- | ------------------------------- | --------------------------------------------- |
+| `shareMode`  | `READ_ONLY` / `INTERACTIVE` | Viewer can read only, or also send messages   |
+| `accessType` | `EVERYONE` / `WHITELIST`    | Public link or restricted to specified emails |
+
+When `accessType` is `WHITELIST`, only listed emails may access the shared link. `INTERACTIVE` shares notify the conversation owner via Telegram (if connected) when a new participant joins.
 
 ---
 
@@ -203,28 +271,28 @@ On startup the scheduler reloads all active schedules from MySQL into the Asynq 
 
 ### Scheduler API
 
-| Method   | Path                          | Auth        | Description                                |
-| -------- | ----------------------------- | ----------- | ------------------------------------------ |
-| `GET`    | `/schedules?conversationId=`  | JWT         | List schedules for a conversation          |
-| `POST`   | `/schedules`                  | JWT         | Create a new schedule                      |
-| `PATCH`  | `/schedules/{id}`             | JWT         | Update schedule (cron, message, enabled…)  |
-| `DELETE` | `/schedules/{id}`             | JWT         | Delete a schedule                          |
-| `GET`    | `/schedules/{id}/runs`        | JWT         | List recent execution history              |
-| `POST`   | `/internal/schedules`         | Service key | Create on behalf of a workflow agent       |
-| `GET`    | `/internal/schedules`         | Service key | List on behalf of a workflow agent         |
-| `DELETE` | `/internal/schedules/{id}`    | Service key | Delete on behalf of a workflow agent       |
+| Method     | Path                           | Auth        | Description                                |
+| ---------- | ------------------------------ | ----------- | ------------------------------------------ |
+| `GET`    | `/schedules?conversationId=` | JWT         | List schedules for a conversation          |
+| `POST`   | `/schedules`                 | JWT         | Create a new schedule                      |
+| `PATCH`  | `/schedules/{id}`            | JWT         | Update schedule (cron, message, enabled…) |
+| `DELETE` | `/schedules/{id}`            | JWT         | Delete a schedule                          |
+| `GET`    | `/schedules/{id}/runs`       | JWT         | List recent execution history              |
+| `POST`   | `/internal/schedules`        | Service key | Create on behalf of a workflow agent       |
+| `GET`    | `/internal/schedules`        | Service key | List on behalf of a workflow agent         |
+| `DELETE` | `/internal/schedules/{id}`   | Service key | Delete on behalf of a workflow agent       |
 
 ### Schedule fields
 
-| Field              | Description                                          |
-| ------------------ | ---------------------------------------------------- |
-| `id`               | UUID string (Temporal Schedule ID)                   |
-| `cronExpr`         | 5-field cron expression (e.g. `0 9 * * 1-5`)        |
-| `timezone`         | IANA timezone name (e.g. `America/New_York`)         |
-| `message`          | Query sent to the RAG pipeline on each tick          |
-| `enabled`          | Pause/resume without deleting                        |
-| `nextRunAt`        | Next scheduled fire time (computed from cron expr)   |
-| `lastRunAt`        | Most recent actual execution time                    |
+| Field         | Description                                        |
+| ------------- | -------------------------------------------------- |
+| `id`        | UUID string                                        |
+| `cronExpr`  | 5-field cron expression (e.g.`0 9 * * 1-5`)      |
+| `timezone`  | IANA timezone name (e.g.`America/New_York`)      |
+| `message`   | Query sent to the RAG pipeline on each tick        |
+| `enabled`   | Pause/resume without deleting                      |
+| `nextRunAt` | Next scheduled fire time (computed from cron expr) |
+| `lastRunAt` | Most recent actual execution time                  |
 
 ---
 
@@ -249,44 +317,44 @@ A personal portfolio tracker built into the application, accessible at `/financi
 
 ### Asset types
 
-| Asset       | Description                                                    |
-| ----------- | -------------------------------------------------------------- |
-| Cash        | Bank / money-market deposits with platform, type, and currency |
-| Stocks      | Equity positions with live prices from **Finnhub**             |
-| Crypto      | Token holdings with live USD mid prices from **Hyperliquid**   |
-| Cards       | Credit / debit card registry with limits and expiry            |
+| Asset  | Description                                                       |
+| ------ | ----------------------------------------------------------------- |
+| Cash   | Bank / money-market deposits with platform, type, and currency    |
+| Stocks | Equity positions with live prices from**Finnhub**           |
+| Crypto | Token holdings with live USD mid prices from**Hyperliquid** |
+| Cards  | Credit / debit card registry with limits and expiry               |
 
-All monetary values are converted to the user's `defaultCurrency` (set in preferences) using exchange rates from **open.er-api.com** (cached 1 hour).  Stocks and crypto prices are also cached for 1 hour and auto-refresh on the first stale read.
+All monetary values are converted to the user's `defaultCurrency` (set in preferences) using exchange rates from **open.er-api.com** (cached 1 hour). Stocks and crypto prices are also cached for 1 hour and auto-refresh on the first stale read.
 
 ### Financial API
 
-| Method   | Path                                  | Description                                       |
-| -------- | ------------------------------------- | ------------------------------------------------- |
-| `GET`    | `/api/v1/financial/deposits`          | List cash deposits (amounts converted)            |
-| `POST`   | `/api/v1/financial/deposits`          | Create a deposit                                  |
-| `PUT`    | `/api/v1/financial/deposits/{id}`     | Update a deposit                                  |
-| `DELETE` | `/api/v1/financial/deposits/{id}`     | Delete a deposit                                  |
-| `GET`    | `/api/v1/financial/stocks`            | List stocks with live prices and P&L %            |
-| `POST`   | `/api/v1/financial/stocks`            | Create a stock position                           |
-| `PUT`    | `/api/v1/financial/stocks/{id}`       | Update a stock position                           |
-| `DELETE` | `/api/v1/financial/stocks/{id}`       | Delete a stock position                           |
-| `GET`    | `/api/v1/financial/crypto`            | List crypto holdings with live prices and P&L %   |
-| `POST`   | `/api/v1/financial/crypto`            | Create a crypto holding                           |
-| `PUT`    | `/api/v1/financial/crypto/{id}`       | Update a crypto holding                           |
-| `DELETE` | `/api/v1/financial/crypto/{id}`       | Delete a crypto holding                           |
-| `GET`    | `/api/v1/financial/cards`             | List cards                                        |
-| `POST`   | `/api/v1/financial/cards`             | Create a card                                     |
-| `PUT`    | `/api/v1/financial/cards/{id}`        | Update a card                                     |
-| `DELETE` | `/api/v1/financial/cards/{id}`        | Delete a card                                     |
-| `POST`   | `/api/v1/financial/prices/refresh`    | Force-refresh live prices for all user symbols    |
+| Method     | Path                                 | Description                                     |
+| ---------- | ------------------------------------ | ----------------------------------------------- |
+| `GET`    | `/api/v1/financial/deposits`       | List cash deposits (amounts converted)          |
+| `POST`   | `/api/v1/financial/deposits`       | Create a deposit                                |
+| `PUT`    | `/api/v1/financial/deposits/{id}`  | Update a deposit                                |
+| `DELETE` | `/api/v1/financial/deposits/{id}`  | Delete a deposit                                |
+| `GET`    | `/api/v1/financial/stocks`         | List stocks with live prices and P&L %          |
+| `POST`   | `/api/v1/financial/stocks`         | Create a stock position                         |
+| `PUT`    | `/api/v1/financial/stocks/{id}`    | Update a stock position                         |
+| `DELETE` | `/api/v1/financial/stocks/{id}`    | Delete a stock position                         |
+| `GET`    | `/api/v1/financial/crypto`         | List crypto holdings with live prices and P&L % |
+| `POST`   | `/api/v1/financial/crypto`         | Create a crypto holding                         |
+| `PUT`    | `/api/v1/financial/crypto/{id}`    | Update a crypto holding                         |
+| `DELETE` | `/api/v1/financial/crypto/{id}`    | Delete a crypto holding                         |
+| `GET`    | `/api/v1/financial/cards`          | List cards                                      |
+| `POST`   | `/api/v1/financial/cards`          | Create a card                                   |
+| `PUT`    | `/api/v1/financial/cards/{id}`     | Update a card                                   |
+| `DELETE` | `/api/v1/financial/cards/{id}`     | Delete a card                                   |
+| `POST`   | `/api/v1/financial/prices/refresh` | Force-refresh live prices for all user symbols  |
 
 All endpoints require JWT auth and are scoped to the authenticated user's email.
 
 ### Required environment variables
 
-| Variable                   | Description                                            |
-| -------------------------- | ------------------------------------------------------ |
-| `FINNHUB_API_KEY`          | Finnhub API key for stock quotes                       |
+| Variable            | Description                      |
+| ------------------- | -------------------------------- |
+| `FINNHUB_API_KEY` | Finnhub API key for stock quotes |
 
 ---
 

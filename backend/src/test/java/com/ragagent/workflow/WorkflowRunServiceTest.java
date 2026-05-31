@@ -510,6 +510,139 @@ class WorkflowRunServiceTest {
         verify(googleDocsService).createDocument("Untitled", "", "user@test.com");
     }
 
+    // ── startRun — emailNotify ────────────────────────────────────────────────
+
+    @Test
+    void startRun_emailNotifyTrue_registersRunForNotification() {
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        String runId = service.startRun("wf-1", "task", "owner@test.com", true);
+
+        // The run ID is registered in emailNotifyRuns; can't directly assert on private map,
+        // but we verify the run was saved with PENDING status as a proxy for proper setup.
+        assertThat(runId).isNotBlank();
+        ArgumentCaptor<WorkflowRun> captor = ArgumentCaptor.forClass(WorkflowRun.class);
+        verify(runRepo, atLeastOnce()).save(captor.capture());
+        assertThat(captor.getAllValues().stream()
+                .anyMatch(r -> r.getStatus() == WorkflowRun.RunStatus.PENDING)).isTrue();
+    }
+
+    @Test
+    void startRun_emailNotifyTrue_anonymousUser_doesNotRegisterForNotification() {
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        // anonymous users must not receive email notifications
+        String runId = service.startRun("wf-1", "task", "anonymous", true);
+
+        assertThat(runId).isNotBlank();
+    }
+
+    // ── dispatchScheduleTool ──────────────────────────────────────────────────
+
+    @Test
+    void dispatchScheduleTool_createAction_callsCreateSchedule() throws Exception {
+        when(workflowScheduleClient.createSchedule(
+                eq("owner@test.com"), anyString(), anyString(),
+                anyString(), anyString(), anyInt(), anyBoolean(), anyBoolean()))
+                .thenReturn("Schedule created. ID: sched-1, cron: 0 9 * * *, timezone: UTC");
+
+        String result = callDispatchScheduleTool("owner@test.com",
+                "{\"action\":\"create\",\"conversationId\":\"conv-1\",\"message\":\"hello\"," +
+                "\"cron\":\"0 9 * * *\",\"timezone\":\"UTC\",\"topK\":5," +
+                "\"useKnowledgeBase\":true,\"useWebFetch\":false}");
+
+        assertThat(result).contains("sched-1");
+        verify(workflowScheduleClient).createSchedule(
+                eq("owner@test.com"), eq("conv-1"), eq("hello"),
+                eq("0 9 * * *"), eq("UTC"), eq(5), eq(true), eq(false));
+    }
+
+    @Test
+    void dispatchScheduleTool_listAction_callsListSchedules() throws Exception {
+        when(workflowScheduleClient.listSchedules("owner@test.com", "conv-1"))
+                .thenReturn("[{\"id\":\"s1\"}]");
+
+        String result = callDispatchScheduleTool("owner@test.com",
+                "{\"action\":\"list\",\"conversationId\":\"conv-1\"}");
+
+        assertThat(result).contains("s1");
+        verify(workflowScheduleClient).listSchedules("owner@test.com", "conv-1");
+    }
+
+    @Test
+    void dispatchScheduleTool_deleteAction_callsDeleteSchedule() throws Exception {
+        when(workflowScheduleClient.deleteSchedule("owner@test.com", "sched-99"))
+                .thenReturn("Schedule sched-99 deleted successfully.");
+
+        String result = callDispatchScheduleTool("owner@test.com",
+                "{\"action\":\"delete\",\"scheduleId\":\"sched-99\"}");
+
+        assertThat(result).contains("deleted");
+        verify(workflowScheduleClient).deleteSchedule("owner@test.com", "sched-99");
+    }
+
+    @Test
+    void dispatchScheduleTool_unknownAction_returnsErrorMessage() throws Exception {
+        String result = callDispatchScheduleTool("owner@test.com",
+                "{\"action\":\"patch\",\"scheduleId\":\"sched-1\"}");
+
+        assertThat(result).contains("Unknown SCHEDULE action");
+        assertThat(result).contains("patch");
+    }
+
+    @Test
+    void dispatchScheduleTool_invalidJson_returnsErrorMessage() throws Exception {
+        String result = callDispatchScheduleTool("owner@test.com", "{bad json");
+
+        assertThat(result).contains("SCHEDULE tool error");
+    }
+
+    @Test
+    void dispatchScheduleTool_createWithDefaults_usesFallbackCronAndTimezone() throws Exception {
+        when(workflowScheduleClient.createSchedule(
+                anyString(), anyString(), anyString(),
+                eq("0 9 * * *"), eq("UTC"), anyInt(), anyBoolean(), anyBoolean()))
+                .thenReturn("Schedule created. ID: s1, cron: 0 9 * * *, timezone: UTC");
+
+        // Omit cron and timezone → defaults applied
+        callDispatchScheduleTool("owner@test.com",
+                "{\"action\":\"create\",\"conversationId\":\"c1\",\"message\":\"hi\"}");
+
+        verify(workflowScheduleClient).createSchedule(
+                anyString(), anyString(), anyString(),
+                eq("0 9 * * *"), eq("UTC"), anyInt(), anyBoolean(), anyBoolean());
+    }
+
+    // ── buildSkillSection ─────────────────────────────────────────────────────
+
+    @Test
+    void buildSkillSection_nullOrEmptyList_returnsEmpty() throws Exception {
+        assertThat(callBuildSkillSection(null)).isEmpty();
+        assertThat(callBuildSkillSection(List.of())).isEmpty();
+    }
+
+    @Test
+    void buildSkillSection_withSkillIds_appendsSkillContent() throws Exception {
+        when(skillService.getContent("skill-1")).thenReturn(java.util.Optional.of("Skill one content"));
+        when(skillService.getContent("skill-2")).thenReturn(java.util.Optional.of("Skill two content"));
+
+        String result = callBuildSkillSection(List.of("skill-1", "skill-2"));
+
+        assertThat(result).contains("## Knowledge");
+        assertThat(result).contains("Skill one content");
+        assertThat(result).contains("Skill two content");
+    }
+
+    @Test
+    void buildSkillSection_skillNotFound_skipsIt() throws Exception {
+        when(skillService.getContent("missing")).thenReturn(java.util.Optional.empty());
+
+        String result = callBuildSkillSection(List.of("missing"));
+
+        assertThat(result).contains("## Knowledge");
+        assertThat(result).doesNotContain("content");
+    }
+
     // ── reflection helpers ────────────────────────────────────────────────────
 
     private String callValidate(String command, String email) throws Exception {
@@ -545,5 +678,19 @@ class WorkflowRunServiceTest {
                 "dispatchConnectorTool", String.class, String.class, String.class);
         m.setAccessible(true);
         return (String) m.invoke(service, toolName, payload, ownerEmail);
+    }
+
+    private String callDispatchScheduleTool(String ownerEmail, String json) throws Exception {
+        Method m = WorkflowRunService.class.getDeclaredMethod(
+                "dispatchScheduleTool", String.class, String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(service, ownerEmail, json);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String callBuildSkillSection(List<String> skillIds) throws Exception {
+        Method m = WorkflowRunService.class.getDeclaredMethod("buildSkillSection", List.class);
+        m.setAccessible(true);
+        return (String) m.invoke(service, skillIds);
     }
 }

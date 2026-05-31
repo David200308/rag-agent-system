@@ -238,4 +238,95 @@ class ConnectorServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Provider mismatch");
     }
+
+    // ── getStatus — figma ─────────────────────────────────────────────────────
+
+    @Test
+    void getStatus_figmaConnected_returnsFigmaTrue() {
+        ConnectorToken token = ConnectorToken.builder()
+                .ownerEmail("user@test.com").provider("figma").accessToken("tok").build();
+        when(tokenRepo.findByOwnerEmail("user@test.com")).thenReturn(List.of(token));
+        when(telegramService.isConnected("user@test.com")).thenReturn(false);
+
+        Map<String, Boolean> status = service.getStatus("user@test.com");
+
+        assertThat(status.get("figma")).isTrue();
+        assertThat(status.get("google")).isFalse();
+        assertThat(status.get("telegram")).isFalse();
+    }
+
+    @Test
+    void getStatus_allConnected_returnsAllTrue() {
+        ConnectorToken google = ConnectorToken.builder()
+                .ownerEmail("user@test.com").provider("google").accessToken("g-tok").build();
+        ConnectorToken figma = ConnectorToken.builder()
+                .ownerEmail("user@test.com").provider("figma").accessToken("f-tok").build();
+        when(tokenRepo.findByOwnerEmail("user@test.com")).thenReturn(List.of(google, figma));
+        when(telegramService.isConnected("user@test.com")).thenReturn(true);
+
+        Map<String, Boolean> status = service.getStatus("user@test.com");
+
+        assertThat(status.get("google")).isTrue();
+        assertThat(status.get("figma")).isTrue();
+        assertThat(status.get("telegram")).isTrue();
+    }
+
+    // ── disconnect — additional branches ──────────────────────────────────────
+
+    @Test
+    void disconnect_figma_deletesUserAndAnonymousTokens() {
+        service.disconnect("figma", "user@test.com");
+
+        verify(tokenRepo).deleteByOwnerEmailAndProvider("user@test.com", "figma");
+        verify(tokenRepo).deleteByOwnerEmailAndProvider("", "figma");
+    }
+
+    // ── getAuthUrl — scope / prompt params ────────────────────────────────────
+
+    @Test
+    void getAuthUrl_google_includesConsentPromptAndOfflineAccess() {
+        when(stateRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        String url = service.getAuthUrl("google", "user@test.com");
+
+        assertThat(url).contains("prompt=consent");
+        assertThat(url).contains("access_type=offline");
+    }
+
+    @Test
+    void getAuthUrl_figma_includesFileReadScope() {
+        when(stateRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        String url = service.getAuthUrl("figma", "user@test.com");
+
+        assertThat(url).contains("scope=file_read");
+    }
+
+    // ── purgeExpiredStates ────────────────────────────────────────────────────
+
+    @Test
+    void purgeExpiredStates_callsDeleteExpiredOnRepo() {
+        service.purgeExpiredStates();
+
+        verify(stateRepo).deleteExpired(any(LocalDateTime.class));
+    }
+
+    // ── exchangeCode — deleted state on expiry ─────────────────────────────────
+
+    @Test
+    void exchangeCode_expiredState_deletesStateBeforeThrowingException() {
+        ConnectorOAuthState expired = ConnectorOAuthState.builder()
+                .state("exp-state")
+                .ownerEmail("user@test.com")
+                .provider("google")
+                .expiresAt(LocalDateTime.now().minusMinutes(5))
+                .build();
+        when(stateRepo.findByState("exp-state")).thenReturn(Optional.of(expired));
+
+        assertThatThrownBy(() -> service.exchangeCode("google", "code", "exp-state"))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        // State must be deleted even when expired
+        verify(stateRepo).delete(expired);
+    }
 }

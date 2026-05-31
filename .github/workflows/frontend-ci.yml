@@ -12,7 +12,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/frontend
+  IMAGE_NAME: ${{ github.repository }}/rag-agent-system-frontend
 
 jobs:
   # ── Lint & Type-check ───────────────────────────────────────────────────────

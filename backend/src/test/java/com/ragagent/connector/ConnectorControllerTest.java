@@ -1,0 +1,212 @@
+package com.ragagent.connector;
+
+import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.ResponseEntity;
+
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class ConnectorControllerTest {
+
+    @Mock ConnectorService    connectorService;
+    @Mock GoogleDocsService   googleDocsService;
+    @Mock GoogleSheetsService googleSheetsService;
+    @Mock GoogleSlidesService googleSlidesService;
+    @Mock TelegramService     telegramService;
+    @Mock HttpServletRequest  request;
+    @InjectMocks ConnectorController controller;
+
+    // ── authUrl ────────────────────────────────────────────────────────────────
+
+    @Test
+    void authUrl_returnsAuthUrl() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        when(connectorService.getAuthUrl("google", "user@example.com"))
+                .thenReturn("https://accounts.google.com/o/oauth2/auth?...");
+
+        ResponseEntity<Map<String, String>> resp = controller.authUrl("google", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).containsKey("authUrl");
+    }
+
+    // ── exchange ───────────────────────────────────────────────────────────────
+
+    @Test
+    void exchange_success_returns200() {
+        Map<String, String> body = Map.of("code", "auth-code", "state", "state-token");
+
+        ResponseEntity<Void> resp = controller.exchange("google", body);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        verify(connectorService).exchangeCode("google", "auth-code", "state-token");
+    }
+
+    @Test
+    void exchange_missingCode_returns400() {
+        ResponseEntity<Void> resp = controller.exchange("google", Map.of("state", "state-token"));
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+        verifyNoInteractions(connectorService);
+    }
+
+    @Test
+    void exchange_missingState_returns400() {
+        ResponseEntity<Void> resp = controller.exchange("google", Map.of("code", "auth-code"));
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+    }
+
+    // ── status ─────────────────────────────────────────────────────────────────
+
+    @Test
+    void status_returnsConnectionStatus() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        when(connectorService.getStatus("user@example.com"))
+                .thenReturn(Map.of("google", true, "telegram", false));
+
+        ResponseEntity<Map<String, Boolean>> resp = controller.status(request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).containsEntry("google", true);
+    }
+
+    // ── disconnect ─────────────────────────────────────────────────────────────
+
+    @Test
+    void disconnect_returns204() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+
+        ResponseEntity<Void> resp = controller.disconnect("google", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(204);
+        verify(connectorService).disconnect("google", "user@example.com");
+    }
+
+    // ── telegramConfig ─────────────────────────────────────────────────────────
+
+    @Test
+    void telegramConfig_returnsBotUsername() {
+        when(telegramService.getBotUsername()).thenReturn("mybot");
+
+        ResponseEntity<Map<String, String>> resp = controller.telegramConfig();
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).containsEntry("botUsername", "mybot");
+    }
+
+    // ── telegramConnect ────────────────────────────────────────────────────────
+
+    @Test
+    void telegramConnect_success_returns200() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        Map<String, Object> authData = Map.of("id", 12345L, "hash", "abc");
+
+        ResponseEntity<Void> resp = controller.telegramConnect(authData, request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        verify(telegramService).validateAndConnect(authData, "user@example.com");
+    }
+
+    @Test
+    void telegramConnect_invalidHash_returns400() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        doThrow(new IllegalArgumentException("invalid hash"))
+                .when(telegramService).validateAndConnect(any(), anyString());
+
+        ResponseEntity<Void> resp = controller.telegramConnect(Map.of(), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+    }
+
+    // ── createGoogleDoc ────────────────────────────────────────────────────────
+
+    @Test
+    void createGoogleDoc_blankContent_returns400() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+
+        ResponseEntity<Map<String, String>> resp = controller.createGoogleDoc(
+                Map.of("title", "Test", "content", " "), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+    }
+
+    @Test
+    void createGoogleDoc_success_returnsUrl() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        when(googleDocsService.createDocument("Test Doc", "Hello world", "user@example.com"))
+                .thenReturn("https://docs.google.com/document/d/abc");
+
+        ResponseEntity<Map<String, String>> resp = controller.createGoogleDoc(
+                Map.of("title", "Test Doc", "content", "Hello world"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).containsKey("url");
+    }
+
+    @Test
+    void createGoogleDoc_missingContent_returns400() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+
+        ResponseEntity<Map<String, String>> resp = controller.createGoogleDoc(
+                Map.of("title", "Test Doc"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+    }
+
+    // ── createGoogleSheet ──────────────────────────────────────────────────────
+
+    @Test
+    void createGoogleSheet_success_returnsUrl() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        when(googleSheetsService.createSpreadsheet(anyString(), anyString(), anyString()))
+                .thenReturn("https://docs.google.com/spreadsheets/d/abc");
+
+        ResponseEntity<Map<String, String>> resp = controller.createGoogleSheet(
+                Map.of("content", "col1,col2"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).containsKey("url");
+    }
+
+    @Test
+    void createGoogleSheet_blankContent_returns400() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+
+        ResponseEntity<Map<String, String>> resp = controller.createGoogleSheet(
+                Map.of("content", ""), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+    }
+
+    // ── createGoogleSlides ─────────────────────────────────────────────────────
+
+    @Test
+    void createGoogleSlides_success_returnsUrl() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        when(googleSlidesService.createPresentation(anyString(), anyString(), anyString()))
+                .thenReturn("https://docs.google.com/presentation/d/abc");
+
+        ResponseEntity<Map<String, String>> resp = controller.createGoogleSlides(
+                Map.of("content", "Slide content here"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+    }
+
+    @Test
+    void createGoogleSlides_blankContent_returns400() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+
+        ResponseEntity<Map<String, String>> resp = controller.createGoogleSlides(
+                Map.of("title", "Presentation"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+    }
+}
