@@ -150,7 +150,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-[--color-surface]">
+    <div className="relative flex h-screen flex-col items-center justify-center bg-[--color-surface]">
       <div className="w-full max-w-sm rounded-2xl border border-[--color-border] bg-[--color-surface-raised] p-8 shadow-sm">
 
         {/* Logo / title */}
@@ -300,7 +300,7 @@ export default function LoginPage() {
           </form>
         )}
       </div>
-      <p className="mt-6 text-center text-xs text-[--color-muted]">
+      <p className="absolute bottom-6 text-center text-xs text-[--color-muted]">
         &copy; {new Date().getFullYear()} SkyProton
       </p>
     </div>
