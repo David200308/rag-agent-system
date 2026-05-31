@@ -232,11 +232,12 @@ management:
   health:
     circuitbreakers:
       enabled: true
-  # Distributed tracing — 100% sampling in dev; lower in prod via TRACING_SAMPLE_RATE
+  # Distributed tracing — disabled by default (no collector needed in dev).
+  # Set TRACING_SAMPLE_RATE=1.0 in production when a collector is running.
   tracing:
     sampling:
-      probability: ${TRACING_SAMPLE_RATE:1.0}
-  # OTLP exporter — point at Jaeger/Tempo/Grafana agent (silent no-op if unreachable)
+      probability: ${TRACING_SAMPLE_RATE:0.0}
+  # OTLP exporter — point at Jaeger/Tempo/Grafana agent via OTEL_EXPORTER_OTLP_ENDPOINT.
   otlp:
     tracing:
       endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
@@ -309,4 +310,6 @@ logging:
     com.ragagent: DEBUG
     org.springframework.ai: INFO
     org.bsc.langgraph4j: DEBUG
+    # Suppress connection errors when no OTEL collector is running (sample rate = 0 by default)
+    io.opentelemetry.exporter: WARN
   # logback-spring.xml adds traceId/spanId to every line automatically

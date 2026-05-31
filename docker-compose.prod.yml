@@ -221,6 +221,11 @@ services:
       AUTH_PASSKEY_ORIGIN: ${AUTH_PASSKEY_ORIGIN:-http://localhost:3000}
       # ── Resend (RESEND_API_KEY + RESEND_FROM_EMAIL come from secrets)
       # ── Financial / Market data (FINNHUB_API_KEY comes from secrets)
+      # ── Distributed tracing (disabled — no OTEL collector in this stack)
+      # To enable: add an OTEL collector service, then set:
+      #   TRACING_SAMPLE_RATE=1.0
+      #   OTEL_EXPORTER_OTLP_ENDPOINT=http://<collector>:4318/v1/traces
+      TRACING_SAMPLE_RATE: "0.0"
       # ── Web fetch
       WEB_FETCH_ENABLED: ${WEB_FETCH_ENABLED:-true}
       WEB_FETCH_TIMEOUT: ${WEB_FETCH_TIMEOUT:-10}
