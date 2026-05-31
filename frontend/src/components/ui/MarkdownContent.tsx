@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import katex from "katex";
-import { Monitor, Smartphone } from "lucide-react";
+import { Download, Expand, Image, Monitor, Shrink, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MarkdownContentProps {
@@ -19,9 +19,48 @@ interface MarkdownContentProps {
 
 type PreviewMode = "desktop" | "mobile";
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function HtmlPreview({ source }: { source: string }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<PreviewMode>("desktop");
+  const [fullscreen, setFullscreen] = useState(false);
+  const [toImgBusy, setToImgBusy] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  function handleDownload() {
+    const blob = new Blob([source], { type: "text/html" });
+    downloadBlob(blob, "preview.html");
+  }
+
+  async function handleToImage() {
+    if (!iframeRef.current?.contentDocument?.body) return;
+    setToImgBusy(true);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(iframeRef.current.contentDocument.body, {
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+      });
+      canvas.toBlob(blob => {
+        if (blob) downloadBlob(blob, "preview.png");
+      }, "image/png");
+    } finally {
+      setToImgBusy(false);
+    }
+  }
+
+  const modalStyle = fullscreen
+    ? { width: "100vw", height: "100vh", borderRadius: 0 }
+    : { width: "min(90vw, 1100px)", height: "min(90vh, 800px)" };
 
   return (
     <>
@@ -47,49 +86,82 @@ function HtmlPreview({ source }: { source: string }) {
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60"
           onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}
         >
-          <div className="relative flex flex-col bg-white rounded-xl shadow-2xl overflow-hidden"
-            style={{ width: "min(90vw, 1100px)", height: "min(90vh, 800px)" }}
+          <div
+            className="relative flex flex-col bg-white shadow-2xl overflow-hidden transition-all"
+            style={{ ...modalStyle, borderRadius: fullscreen ? 0 : "0.75rem" }}
           >
             {/* Modal toolbar */}
-            <div className="flex shrink-0 items-center gap-3 bg-gray-100 border-b border-gray-200 px-4 py-2">
-              <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">HTML Preview</span>
+            <div className="flex shrink-0 items-center gap-1.5 bg-gray-100 border-b border-gray-200 px-3 py-2">
+              <span className="hidden sm:block text-xs font-semibold text-gray-600 uppercase tracking-wide shrink-0">
+                HTML Preview
+              </span>
 
               {/* Desktop / Mobile toggle */}
-              <div className="ml-auto flex items-center gap-1 rounded-lg bg-gray-200 p-0.5">
+              <div className="flex items-center gap-0.5 rounded-lg bg-gray-200 p-0.5 shrink-0">
                 <button
                   onClick={() => setMode("desktop")}
                   title="Desktop view"
                   className={cn(
-                    "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    "flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
                     mode === "desktop"
                       ? "bg-white text-gray-800 shadow-sm"
                       : "text-gray-500 hover:text-gray-700",
                   )}
                 >
                   <Monitor size={13} />
-                  Desktop
+                  <span className="hidden sm:inline">Desktop</span>
                 </button>
                 <button
                   onClick={() => setMode("mobile")}
                   title="Mobile view"
                   className={cn(
-                    "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    "flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
                     mode === "mobile"
                       ? "bg-white text-gray-800 shadow-sm"
                       : "text-gray-500 hover:text-gray-700",
                   )}
                 >
                   <Smartphone size={13} />
-                  Mobile
+                  <span className="hidden sm:inline">Mobile</span>
                 </button>
               </div>
 
-              <button
-                onClick={() => setOpen(false)}
-                className="rounded px-3 py-1 text-xs font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 transition-colors"
-              >
-                Close
-              </button>
+              {/* Action buttons */}
+              <div className="ml-auto flex items-center gap-0.5">
+                <button
+                  onClick={handleDownload}
+                  title="Download HTML"
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+                >
+                  <Download size={13} />
+                  <span className="hidden sm:inline">Download</span>
+                </button>
+                <button
+                  onClick={handleToImage}
+                  disabled={toImgBusy}
+                  title="Save as PNG image"
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  <Image size={13} />
+                  <span className="hidden sm:inline">{toImgBusy ? "Saving…" : "To Image"}</span>
+                </button>
+                <button
+                  onClick={() => setFullscreen(f => !f)}
+                  title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+                >
+                  {fullscreen ? <Shrink size={13} /> : <Expand size={13} />}
+                  <span className="hidden sm:inline">{fullscreen ? "Exit" : "Fullscreen"}</span>
+                </button>
+                <button
+                  onClick={() => setOpen(false)}
+                  title="Close"
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 transition-colors"
+                >
+                  <span className="hidden sm:inline">Close</span>
+                  <span className="sm:hidden text-gray-500">✕</span>
+                </button>
+              </div>
             </div>
 
             {/* Preview area */}
@@ -99,6 +171,7 @@ function HtmlPreview({ source }: { source: string }) {
             )}>
               {mode === "desktop" ? (
                 <iframe
+                  ref={iframeRef}
                   srcDoc={source}
                   sandbox="allow-scripts"
                   className="w-full h-full border-0"
@@ -106,12 +179,14 @@ function HtmlPreview({ source }: { source: string }) {
                 />
               ) : (
                 /* Phone frame */
-                <div className="relative flex flex-col rounded-[2.5rem] border-[6px] border-gray-800 bg-gray-800 shadow-2xl"
+                <div
+                  className="relative flex flex-col rounded-[2.5rem] border-[6px] border-gray-800 bg-gray-800 shadow-2xl"
                   style={{ width: 390, height: 720 }}
                 >
                   {/* Notch */}
                   <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-gray-800 rounded-b-2xl z-10" />
                   <iframe
+                    ref={iframeRef}
                     srcDoc={source}
                     sandbox="allow-scripts"
                     className="flex-1 w-full border-0 rounded-[2rem]"
