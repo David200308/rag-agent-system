@@ -2,6 +2,7 @@ package com.ragagent.controller;
 
 import com.ragagent.agent.RagAgentGraph;
 import com.ragagent.agent.state.AgentState;
+import com.ragagent.config.AgentMetrics;
 import com.ragagent.config.LlmProperties;
 import com.ragagent.conversation.ConversationService;
 import com.ragagent.conversation.entity.ConversationMessage;
@@ -56,6 +57,7 @@ public class AgentController {
     private final WebFetchService          webFetchService;
     private final UserPreferenceService    userPreferenceService;
     private final LlmProperties            llmProperties;
+    private final AgentMetrics             agentMetrics;
 
     // ── Query ─────────────────────────────────────────────────────────────────
 
@@ -76,6 +78,7 @@ public class AgentController {
 
         conversationService.saveUserMessage(conversationId, request.query());
 
+        long startMs = System.currentTimeMillis();
         try {
             // Seed initial state
             Map<String, Object> initData = new HashMap<>();
@@ -111,11 +114,13 @@ public class AgentController {
             conversationService.saveAssistantMessage(conversationId, raw.answer(), runId);
             AgentResponse response = withConversationId(raw, conversationId);
 
+            agentMetrics.recordQuery(response.fallbackActivated(), System.currentTimeMillis() - startMs);
             log.info("[AgentController] Completed runId={} conversationId={} fallback={}",
                     runId, conversationId, response.fallbackActivated());
             return ResponseEntity.ok(response);
 
         } catch (Exception ex) {
+            agentMetrics.recordQueryError();
             log.error("[AgentController] Pipeline error runId={}: {}", runId, ex.getMessage(), ex);
             return ResponseEntity.internalServerError()
                     .body(buildErrorResponse(runId, request.query(), ex, conversationId));
@@ -339,6 +344,7 @@ public class AgentController {
         String ownerEmail = (String) httpRequest.getAttribute("authenticatedEmail");
         String sourceKey = source != null ? source : file.getOriginalFilename();
         knowledgeSourceService.upsert(sourceKey, file.getOriginalFilename(), category, chunkCount, ownerEmail);
+        agentMetrics.recordIngest();
 
         return ResponseEntity.ok(Map.of(
                 "status",     "ingested",

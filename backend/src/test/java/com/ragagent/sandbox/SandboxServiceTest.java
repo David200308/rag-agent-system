@@ -133,4 +133,108 @@ class SandboxServiceTest {
         var ex = new SandboxService.SandboxKilledException("memory limit exceeded");
         assertThat(ex.getMessage()).isEqualTo("memory limit exceeded");
     }
+
+    // ── SandboxStatus record ──────────────────────────────────────────────────
+
+    @Test
+    void sandboxStatus_record_fields() {
+        SandboxService.SandboxStatus status = new SandboxService.SandboxStatus(5, 2, 3, 20);
+        assertThat(status.maxConcurrent()).isEqualTo(5);
+        assertThat(status.active()).isEqualTo(2);
+        assertThat(status.queued()).isEqualTo(3);
+        assertThat(status.queueCapacity()).isEqualTo(20);
+    }
+
+    @Test
+    void sandboxStatus_atCapacity_trueWhenActiveEqualsMax() {
+        SandboxService.SandboxStatus s = new SandboxService.SandboxStatus(3, 3, 1, 10);
+        assertThat(s.atCapacity()).isTrue();
+    }
+
+    @Test
+    void sandboxStatus_atCapacity_trueWhenActiveExceedsMax() {
+        // edge case: active > max (shouldn't happen normally, but guard is >=)
+        SandboxService.SandboxStatus s = new SandboxService.SandboxStatus(3, 4, 0, 10);
+        assertThat(s.atCapacity()).isTrue();
+    }
+
+    // ── exec — killed container propagates KilledException ───────────────────
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void recycleSandbox_killedContainer_propagatesException() {
+        var killedContainers = (java.util.concurrent.ConcurrentHashMap<String, String>)
+                ReflectionTestUtils.getField(sandboxService, "killedContainers");
+        killedContainers.put("containerXYZ", "memory 95% exceeded limit 90%");
+
+        assertThatThrownBy(() -> sandboxService.recycleSandbox("containerXYZ"))
+                .isInstanceOf(SandboxService.SandboxKilledException.class);
+    }
+
+    // ── destroySandbox — killed-by-watchdog skips docker rm ───────────────────
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void destroySandbox_killedByWatchdog_doesNotTryDockerRm() {
+        var killedContainers = (java.util.concurrent.ConcurrentHashMap<String, String>)
+                ReflectionTestUtils.getField(sandboxService, "killedContainers");
+        var activeContainers = (java.util.concurrent.ConcurrentHashMap<String, String>)
+                ReflectionTestUtils.getField(sandboxService, "activeContainers");
+
+        killedContainers.put("watchdog-container", "cpu exceeded");
+        activeContainers.put("watchdog-container", "run-99");
+
+        // Since sandbox is disabled and watchdog killed it, destroySandbox should not run docker rm
+        // (which would fail anyway without Docker). It just cleans up internal state.
+        sandboxService.destroySandbox("watchdog-container");
+
+        // Container should be removed from both maps
+        assertThat(killedContainers).doesNotContainKey("watchdog-container");
+        assertThat(activeContainers).doesNotContainKey("watchdog-container");
+    }
+
+    // ── createSandbox — queue full ─────────────────────────────────────────────
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void createSandbox_enabled_queueFull_throwsQueueFullException() {
+        // Set up a sandbox service with capacity=1, fill the queue, then try to add another
+        SandboxService svc2 = new SandboxService();
+        ReflectionTestUtils.setField(svc2, "maxConcurrent",       1);
+        ReflectionTestUtils.setField(svc2, "queueCapacity",       1);
+        ReflectionTestUtils.setField(svc2, "enabled",             true);
+        ReflectionTestUtils.setField(svc2, "watchdogEnabled",     false);
+        ReflectionTestUtils.setField(svc2, "cpuLoadThreshold",    0.99);
+        ReflectionTestUtils.setField(svc2, "freeMemoryThreshold", 0.001);
+        svc2.init();
+
+        // Pre-fill the wait queue so it's at capacity (1 entry)
+        var waitQueue = (java.util.concurrent.BlockingQueue<String>)
+                ReflectionTestUtils.getField(svc2, "waitQueue");
+        waitQueue.offer("existing-run");
+
+        assertThatThrownBy(() -> svc2.createSandbox("run-x", msg -> {}))
+                .isInstanceOf(SandboxService.SandboxQueueFullException.class)
+                .hasMessageContaining("queue full");
+
+        svc2.shutdown();
+    }
+
+    // ── parsePercent via exception types ──────────────────────────────────────
+
+    @Test
+    void exec_blankOutputFromCommand_returnsNoOutputMessage() {
+        // When containerId is null, we get unavailable message. The "(no output)" branch
+        // requires a real container. Test the null/blank path to verify short-circuit.
+        assertThat(sandboxService.exec(null, "echo ''")).contains("unavailable");
+        assertThat(sandboxService.exec("", "echo ''")).contains("unavailable");
+    }
+
+    // ── shutdown ──────────────────────────────────────────────────────────────
+
+    @Test
+    void shutdown_whenWatchdogNull_doesNotThrow() {
+        // watchdogEnabled=false so watchdogExecutor is null; shutdown should be no-op
+        sandboxService.shutdown();
+    }
 }

@@ -84,4 +84,49 @@ class ExchangeRateServiceTest {
     void getLastFetched_afterSeeding_isRecent() {
         assertThat(service.getLastFetched()).isAfter(Instant.now().minusSeconds(5));
     }
+
+    // ── convert — zero fromRate ────────────────────────────────────────────────
+
+    @Test
+    void convert_zeroFromRate_returnsAmountUnchanged() {
+        Map<String, Double> rates = new java.util.HashMap<>(Map.of("USD", 1.0, "BAD", 0.0));
+        ReflectionTestUtils.setField(service, "cachedRates", rates);
+        ReflectionTestUtils.setField(service, "lastFetched", Instant.now());
+
+        // If fromRate == 0, dividing by it would cause Infinity; the guard returns amount unchanged
+        double result = service.convert(100.0, "BAD", "USD");
+        assertThat(result).isEqualTo(100.0);
+    }
+
+    // ── getRates — stale cache triggers refetch ────────────────────────────────
+
+    @Test
+    void getRates_whenCacheIsEmpty_attemptsRefetch() {
+        // Clear the cache and set a stale timestamp so fetchRates is called.
+        // fetchRates will fail (no network) but cachedRates stays empty.
+        // The important thing is getRates() doesn't throw.
+        ReflectionTestUtils.setField(service, "cachedRates", new java.util.HashMap<>());
+        ReflectionTestUtils.setField(service, "lastFetched", Instant.EPOCH);
+
+        Map<String, Double> result = service.getRates();
+        // Result may be empty (fetch failed) but should not throw
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    void getRates_whenCacheFresh_returnsCachedRates() {
+        Map<String, Double> cached = Map.of("USD", 1.0, "EUR", 0.92);
+        ReflectionTestUtils.setField(service, "cachedRates", cached);
+        ReflectionTestUtils.setField(service, "lastFetched", Instant.now());
+
+        Map<String, Double> result = service.getRates();
+        assertThat(result).containsEntry("EUR", 0.92);
+    }
+
+    // ── convert — both currencies same ────────────────────────────────────────
+
+    @Test
+    void convert_bothCurrenciesSame_caseInsensitive() {
+        assertThat(service.convert(500.0, "EUR", "eur")).isEqualTo(500.0);
+    }
 }

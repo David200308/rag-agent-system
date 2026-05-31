@@ -225,13 +225,30 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, metrics, circuitbreakers
+        include: health, info, metrics, circuitbreakers, prometheus
   endpoint:
     health:
       show-details: always
   health:
     circuitbreakers:
       enabled: true
+  # Distributed tracing — 100% sampling in dev; lower in prod via TRACING_SAMPLE_RATE
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLE_RATE:1.0}
+  # OTLP exporter — point at Jaeger/Tempo/Grafana agent (silent no-op if unreachable)
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+# ── Rate limiting (Bucket4j token bucket, per authenticated user or client IP) ─
+# agentQueryLimit: max LLM queries per user per minute  (expensive upstream calls)
+# ingestLimit:     max document ingestion calls per user per minute
+# defaultLimit:    all other API calls per user per minute
+rate-limit:
+  agent-query-limit: ${RATE_LIMIT_QUERY:20}
+  ingest-limit: ${RATE_LIMIT_INGEST:10}
+  default-limit: ${RATE_LIMIT_DEFAULT:100}
 
 # ── Auth (email whitelist + OTP login, JWT tokens) ───────────────────────────
 # Set AUTH_ENABLED=false to disable login entirely (open access).
@@ -292,3 +309,4 @@ logging:
     com.ragagent: DEBUG
     org.springframework.ai: INFO
     org.bsc.langgraph4j: DEBUG
+  # logback-spring.xml adds traceId/spanId to every line automatically

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -117,5 +118,103 @@ class MarketPriceServiceTest {
     @Test
     void getCryptoLastFetched_initialState_isEpoch() {
         assertThat(service.getCryptoLastFetched()).isEqualTo(Instant.EPOCH);
+    }
+
+    // ── Currency inference via reflection ─────────────────────────────────────
+
+    @Test
+    void inferCurrency_hkSuffix_returnsHKD() throws Exception {
+        assertThat(callInferCurrency("0700.HK")).isEqualTo("HKD");
+    }
+
+    @Test
+    void inferCurrency_ssSuffix_returnsCNY() throws Exception {
+        assertThat(callInferCurrency("600036.SS")).isEqualTo("CNY");
+    }
+
+    @Test
+    void inferCurrency_szSuffix_returnsCNY() throws Exception {
+        assertThat(callInferCurrency("000001.SZ")).isEqualTo("CNY");
+    }
+
+    @Test
+    void inferCurrency_siSuffix_returnsSGD() throws Exception {
+        assertThat(callInferCurrency("D05.SI")).isEqualTo("SGD");
+    }
+
+    @Test
+    void inferCurrency_tSuffix_returnsJPY() throws Exception {
+        assertThat(callInferCurrency("7203.T")).isEqualTo("JPY");
+    }
+
+    @Test
+    void inferCurrency_lSuffix_returnsGBP() throws Exception {
+        assertThat(callInferCurrency("BP.L")).isEqualTo("GBP");
+    }
+
+    @Test
+    void inferCurrency_axSuffix_returnsAUD() throws Exception {
+        assertThat(callInferCurrency("BHP.AX")).isEqualTo("AUD");
+    }
+
+    @Test
+    void inferCurrency_toSuffix_returnsCAD() throws Exception {
+        assertThat(callInferCurrency("RY.TO")).isEqualTo("CAD");
+    }
+
+    @Test
+    void inferCurrency_noSuffix_returnsUSD() throws Exception {
+        assertThat(callInferCurrency("AAPL")).isEqualTo("USD");
+        assertThat(callInferCurrency("TSLA")).isEqualTo("USD");
+        assertThat(callInferCurrency("MSFT")).isEqualTo("USD");
+    }
+
+    @Test
+    void inferCurrency_lowercase_isUppercasedBeforeMatch() throws Exception {
+        assertThat(callInferCurrency("0700.hk")).isEqualTo("HKD");
+    }
+
+    // ── getStockPrice — case-insensitive lookup ───────────────────────────────
+
+    @Test
+    void getStockPrice_caseInsensitive_returnsValue() {
+        Map<String, Double> prices = new ConcurrentHashMap<>(Map.of("AAPL", 195.0));
+        ReflectionTestUtils.setField(service, "stockPrices", prices);
+
+        assertThat(service.getStockPrice("aapl")).hasValue(195.0);
+        assertThat(service.getStockPrice("Aapl")).hasValue(195.0);
+    }
+
+    @Test
+    void getCryptoPrice_caseInsensitive_returnsValue() {
+        Map<String, Double> prices = new ConcurrentHashMap<>(Map.of("ETH", 3500.0));
+        ReflectionTestUtils.setField(service, "cryptoPrices", prices);
+
+        assertThat(service.getCryptoPrice("eth")).hasValue(3500.0);
+        assertThat(service.getCryptoPrice("Eth")).hasValue(3500.0);
+    }
+
+    // ── refreshStockPrices/refreshCryptoPrices — empty list ───────────────────
+
+    @Test
+    void refreshStockPrices_emptyList_doesNothing() {
+        service.refreshStockPrices(List.of());
+        // No HTTP call should happen; stock prices remain empty
+        assertThat(service.getStockPrice("AAPL")).isEmpty();
+    }
+
+    @Test
+    void refreshCryptoPrices_emptyList_doesNothing() {
+        service.refreshCryptoPrices(List.of());
+        assertThat(service.getCryptoPrice("BTC")).isEmpty();
+    }
+
+    // ── reflection helper ─────────────────────────────────────────────────────
+
+    private String callInferCurrency(String symbol) throws Exception {
+        java.lang.reflect.Method m = MarketPriceService.class.getDeclaredMethod(
+                "inferCurrency", String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(null, symbol);  // static method
     }
 }

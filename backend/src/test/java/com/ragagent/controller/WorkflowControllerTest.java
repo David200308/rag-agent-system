@@ -22,6 +22,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -246,5 +247,129 @@ class WorkflowControllerTest {
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody().maxConcurrent()).isEqualTo(3);
+    }
+
+    // ── upsertAgent ────────────────────────────────────────────────────────────
+
+    @Test
+    void upsertAgent_createsNewAgent() {
+        WorkflowAgent saved = new WorkflowAgent();
+        saved.setName("Research Agent");
+        when(workflowService.upsertAgent(
+                eq("wf-1"), isNull(), eq("Research Agent"),
+                any(WorkflowAgent.AgentRole.class), any(), any(), any(),
+                anyInt(), anyDouble(), anyDouble()))
+                .thenReturn(saved);
+
+        Map<String, Object> body = Map.of(
+                "name",         "Research Agent",
+                "role",         "PEER",
+                "systemPrompt", "You are a research specialist."
+        );
+
+        ResponseEntity<WorkflowAgent> resp = controller.upsertAgent("wf-1", body);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody().getName()).isEqualTo("Research Agent");
+    }
+
+    @Test
+    void upsertAgent_withAgentId_updatesExistingAgent() {
+        WorkflowAgent saved = new WorkflowAgent();
+        when(workflowService.upsertAgent(
+                eq("wf-1"), eq(42L), any(), any(), any(), any(), any(),
+                anyInt(), anyDouble(), anyDouble()))
+                .thenReturn(saved);
+
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("id", 42);
+        body.put("name", "Updated Agent");
+        body.put("role", "MAIN");
+
+        ResponseEntity<WorkflowAgent> resp = controller.upsertAgent("wf-1", body);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        verify(workflowService).upsertAgent(eq("wf-1"), eq(42L), any(), any(), any(), any(), any(),
+                anyInt(), anyDouble(), anyDouble());
+    }
+
+    @Test
+    void upsertAgent_withToolsAndSkills_passesThemCorrectly() {
+        WorkflowAgent saved = new WorkflowAgent();
+        when(workflowService.upsertAgent(
+                eq("wf-1"), any(), any(), any(), any(),
+                eq(List.of("BASH", "CURL")), eq(List.of("skill-1")),
+                anyInt(), anyDouble(), anyDouble()))
+                .thenReturn(saved);
+
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("name", "Agent");
+        body.put("tools", List.of("BASH", "CURL"));
+        body.put("skillIds", List.of("skill-1"));
+
+        controller.upsertAgent("wf-1", body);
+
+        verify(workflowService).upsertAgent(
+                eq("wf-1"), any(), any(), any(), any(),
+                eq(List.of("BASH", "CURL")), eq(List.of("skill-1")),
+                anyInt(), anyDouble(), anyDouble());
+    }
+
+    @Test
+    void upsertAgent_withPositionCoordinates_passesThemCorrectly() {
+        WorkflowAgent saved = new WorkflowAgent();
+        when(workflowService.upsertAgent(
+                eq("wf-1"), any(), any(), any(), any(), any(), any(),
+                eq(2), eq(100.0), eq(200.0)))
+                .thenReturn(saved);
+
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("name", "Agent");
+        body.put("orderIndex", 2);
+        body.put("posX", 100.0);
+        body.put("posY", 200.0);
+
+        controller.upsertAgent("wf-1", body);
+
+        verify(workflowService).upsertAgent(
+                eq("wf-1"), any(), any(), any(), any(), any(), any(),
+                eq(2), eq(100.0), eq(200.0));
+    }
+
+    // ── createWorkflow — TEAM pattern ──────────────────────────────────────────
+
+    @Test
+    void createWorkflow_teamPattern_withSequentialMode() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        Workflow created = makeWorkflow("wf-team");
+        when(workflowService.create(anyString(), anyString(), anyString(),
+                eq(Workflow.AgentPattern.TEAM), eq(Workflow.TeamExecMode.SEQUENTIAL)))
+                .thenReturn(created);
+
+        Map<String, Object> body = Map.of(
+                "name",         "Team Workflow",
+                "agentPattern", "TEAM",
+                "teamExecMode", "SEQUENTIAL"
+        );
+
+        ResponseEntity<Workflow> resp = controller.createWorkflow(body, request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        verify(workflowService).create(anyString(), anyString(), anyString(),
+                eq(Workflow.AgentPattern.TEAM), eq(Workflow.TeamExecMode.SEQUENTIAL));
+    }
+
+    // ── startRun — emailNotify ─────────────────────────────────────────────────
+
+    @Test
+    void startRun_emailNotifyTrue_passesFlag() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        when(runService.startRun(eq("wf-1"), anyString(), anyString(), eq(true))).thenReturn("run-1");
+
+        ResponseEntity<Map<String, String>> resp = controller.startRun("wf-1",
+                Map.of("userInput", "Run now", "emailNotify", true), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        verify(runService).startRun(eq("wf-1"), anyString(), anyString(), eq(true));
     }
 }

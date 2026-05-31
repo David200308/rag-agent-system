@@ -693,4 +693,133 @@ class WorkflowRunServiceTest {
         m.setAccessible(true);
         return (String) m.invoke(service, skillIds);
     }
+
+    // ── streamLogs ────────────────────────────────────────────────────────────
+
+    @Test
+    void streamLogs_returnsEmitter() {
+        var emitter = service.streamLogs("run-1");
+        assertThat(emitter).isNotNull();
+    }
+
+    @Test
+    void streamLogs_differentRunIds_returnDifferentEmitters() {
+        var emitter1 = service.streamLogs("run-a");
+        var emitter2 = service.streamLogs("run-b");
+        assertThat(emitter1).isNotSameAs(emitter2);
+    }
+
+    // ── buildOrchestratorPrompt ───────────────────────────────────────────────
+
+    @Test
+    void buildOrchestratorPrompt_withSystemPrompt_includesPrompt() throws Exception {
+        com.ragagent.workflow.entity.WorkflowAgent main = new com.ragagent.workflow.entity.WorkflowAgent();
+        main.setSystemPrompt("You are the orchestrator.");
+        main.setName("Main");
+
+        when(workflowService.parseSkillIds(main)).thenReturn(List.of());
+        when(workflowService.parseTools(main)).thenReturn(List.of());
+
+        String prompt = callBuildOrchestratorPrompt(main, List.of());
+
+        assertThat(prompt).contains("You are the orchestrator.");
+    }
+
+    @Test
+    void buildOrchestratorPrompt_noSystemPrompt_usesDefault() throws Exception {
+        com.ragagent.workflow.entity.WorkflowAgent main = new com.ragagent.workflow.entity.WorkflowAgent();
+        main.setSystemPrompt(null);
+        main.setName("Main");
+
+        when(workflowService.parseSkillIds(main)).thenReturn(List.of());
+        when(workflowService.parseTools(main)).thenReturn(List.of());
+
+        String prompt = callBuildOrchestratorPrompt(main, List.of());
+
+        assertThat(prompt).contains("helpful orchestrator agent");
+    }
+
+    @Test
+    void buildOrchestratorPrompt_withSubAgents_includesSubAgentSection() throws Exception {
+        com.ragagent.workflow.entity.WorkflowAgent main = new com.ragagent.workflow.entity.WorkflowAgent();
+        main.setSystemPrompt("You are the orchestrator.");
+        main.setName("Main");
+
+        com.ragagent.workflow.entity.WorkflowAgent sub = new com.ragagent.workflow.entity.WorkflowAgent();
+        sub.setName("Researcher");
+        sub.setSystemPrompt("You are a research specialist.");
+
+        when(workflowService.parseSkillIds(main)).thenReturn(List.of());
+        when(workflowService.parseTools(main)).thenReturn(List.of());
+
+        String prompt = callBuildOrchestratorPrompt(main, List.of(sub));
+
+        assertThat(prompt).contains("Sub-Agents");
+        assertThat(prompt).contains("Researcher");
+        assertThat(prompt).contains("delegate");
+    }
+
+    @Test
+    void buildOrchestratorPrompt_subAgentLongPrompt_truncatesPreview() throws Exception {
+        com.ragagent.workflow.entity.WorkflowAgent main = new com.ragagent.workflow.entity.WorkflowAgent();
+        main.setName("Main");
+        when(workflowService.parseSkillIds(main)).thenReturn(List.of());
+        when(workflowService.parseTools(main)).thenReturn(List.of());
+
+        com.ragagent.workflow.entity.WorkflowAgent sub = new com.ragagent.workflow.entity.WorkflowAgent();
+        sub.setName("Sub");
+        sub.setSystemPrompt("A".repeat(200));  // longer than 120 chars
+
+        String prompt = callBuildOrchestratorPrompt(main, List.of(sub));
+
+        assertThat(prompt).contains("…");
+    }
+
+    @Test
+    void buildOrchestratorPrompt_withTools_includesToolSection() throws Exception {
+        com.ragagent.workflow.entity.WorkflowAgent main = new com.ragagent.workflow.entity.WorkflowAgent();
+        main.setName("Main");
+        when(workflowService.parseSkillIds(main)).thenReturn(List.of());
+        when(workflowService.parseTools(main)).thenReturn(List.of("BASH", "CURL"));
+
+        String prompt = callBuildOrchestratorPrompt(main, List.of());
+
+        assertThat(prompt).contains("Available Tools");
+    }
+
+    @Test
+    void buildOrchestratorPrompt_withSkills_includesSkillSection() throws Exception {
+        com.ragagent.workflow.entity.WorkflowAgent main = new com.ragagent.workflow.entity.WorkflowAgent();
+        main.setName("Main");
+        when(workflowService.parseSkillIds(main)).thenReturn(List.of("skill-1"));
+        when(workflowService.parseTools(main)).thenReturn(List.of());
+        when(skillService.getContent("skill-1")).thenReturn(java.util.Optional.of("Skill content"));
+
+        String prompt = callBuildOrchestratorPrompt(main, List.of());
+
+        assertThat(prompt).contains("Knowledge");
+    }
+
+    // ── buildToolSection — schedule format ───────────────────────────────────
+
+    @Test
+    void buildToolSection_scheduleWithSandboxAndConnector_includesAllSections() throws Exception {
+        String result = callBuildToolSection(List.of("BASH", "SCHEDULE", "CONNECTOR_TELEGRAM"));
+
+        assertThat(result).contains("use_tool name=\"bash\"");
+        assertThat(result).contains("use_tool name=\"SCHEDULE\"");
+        assertThat(result).contains("TELEGRAM_SEND");
+    }
+
+    // ── reflection helpers ────────────────────────────────────────────────────
+
+    private String callBuildOrchestratorPrompt(
+            com.ragagent.workflow.entity.WorkflowAgent main,
+            List<com.ragagent.workflow.entity.WorkflowAgent> subs) throws Exception {
+        Method m = WorkflowRunService.class.getDeclaredMethod(
+                "buildOrchestratorPrompt",
+                com.ragagent.workflow.entity.WorkflowAgent.class, List.class);
+        m.setAccessible(true);
+        return (String) m.invoke(service, main, subs);
+    }
 }

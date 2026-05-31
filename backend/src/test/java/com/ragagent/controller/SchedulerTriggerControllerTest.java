@@ -3,6 +3,7 @@ package com.ragagent.controller;
 import com.ragagent.agent.RagAgentGraph;
 import com.ragagent.config.SchedulerProperties;
 import com.ragagent.conversation.ConversationService;
+import com.ragagent.schema.AgentResponse;
 import com.ragagent.workflow.WorkflowRunService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 
+import java.lang.reflect.Method;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -105,5 +109,75 @@ class SchedulerTriggerControllerTest {
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("runId", "run-xyz");
+    }
+
+    // ── withConversationId ────────────────────────────────────────────────────
+
+    @Test
+    void withConversationId_injectsConversationIdIntoMetadata() throws Exception {
+        AgentResponse.RunMetadata meta = new AgentResponse.RunMetadata(
+                "run-1", Instant.now(), 100L, 3, "gpt-4", null);
+        AgentResponse raw = new AgentResponse(
+                "Answer text", List.of(), new AgentResponse.RouteDecision("DIRECT", "direct", 0.9),
+                false, null, meta);
+
+        AgentResponse result = callWithConversationId(raw, "conv-injected");
+
+        assertThat(result.answer()).isEqualTo("Answer text");
+        assertThat(result.metadata().conversationId()).isEqualTo("conv-injected");
+        assertThat(result.metadata().runId()).isEqualTo("run-1");
+        assertThat(result.metadata().documentsRetrieved()).isEqualTo(3);
+    }
+
+    @Test
+    void withConversationId_preservesAllOtherFields() throws Exception {
+        AgentResponse.RunMetadata meta = new AgentResponse.RunMetadata(
+                "run-42", Instant.now(), 250L, 5, "claude-opus-4-6", "old-conv");
+        AgentResponse.SourceDocument src = new AgentResponse.SourceDocument(
+                "doc-1", "content", "file.pdf", 0.9, null);
+        AgentResponse raw = new AgentResponse(
+                "The answer", List.of(src),
+                new AgentResponse.RouteDecision("RETRIEVE", "retrieval", 0.95),
+                false, null, meta);
+
+        AgentResponse result = callWithConversationId(raw, "new-conv");
+
+        assertThat(result.sources()).hasSize(1);
+        assertThat(result.routeDecision().route()).isEqualTo("RETRIEVE");
+        assertThat(result.metadata().conversationId()).isEqualTo("new-conv");
+        assertThat(result.metadata().modelUsed()).isEqualTo("claude-opus-4-6");
+        assertThat(result.metadata().durationMs()).isEqualTo(250L);
+    }
+
+    // ── TriggerRequest record ─────────────────────────────────────────────────
+
+    @Test
+    void triggerRequest_record_fields() {
+        var req = new SchedulerTriggerController.TriggerRequest(
+                "user@test.com", "conv-1", "Hello?", 5, true, false);
+        assertThat(req.userEmail()).isEqualTo("user@test.com");
+        assertThat(req.conversationId()).isEqualTo("conv-1");
+        assertThat(req.message()).isEqualTo("Hello?");
+        assertThat(req.topK()).isEqualTo(5);
+        assertThat(req.useKnowledgeBase()).isTrue();
+        assertThat(req.useWebFetch()).isFalse();
+    }
+
+    @Test
+    void workflowTriggerRequest_record_fields() {
+        var req = new SchedulerTriggerController.WorkflowTriggerRequest(
+                "owner@test.com", "wf-1", "Run analysis");
+        assertThat(req.userEmail()).isEqualTo("owner@test.com");
+        assertThat(req.workflowId()).isEqualTo("wf-1");
+        assertThat(req.workflowInput()).isEqualTo("Run analysis");
+    }
+
+    // ── reflection helper ─────────────────────────────────────────────────────
+
+    private AgentResponse callWithConversationId(AgentResponse raw, String convId) throws Exception {
+        Method m = SchedulerTriggerController.class.getDeclaredMethod(
+                "withConversationId", AgentResponse.class, String.class);
+        m.setAccessible(true);
+        return (AgentResponse) m.invoke(controller, raw, convId);
     }
 }
