@@ -9,8 +9,8 @@ import (
 )
 
 var workflowCmd = &cobra.Command{
-	Use:   "workflow",
-	Short: "View workflows and run history",
+	Use:     "workflow",
+	Short:   "View workflows and run history",
 	Aliases: []string{"wf"},
 }
 

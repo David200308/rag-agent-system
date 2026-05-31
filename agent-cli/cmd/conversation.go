@@ -2,15 +2,15 @@ package cmd
 
 import (
 	"fmt"
-	"text/tabwriter"
 	"os"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
 
 var conversationCmd = &cobra.Command{
-	Use:   "conversation",
-	Short: "Manage your conversations",
+	Use:     "conversation",
+	Short:   "Manage your conversations",
 	Aliases: []string{"conv"},
 }
 

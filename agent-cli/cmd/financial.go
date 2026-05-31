@@ -10,8 +10,8 @@ import (
 )
 
 var financialCmd = &cobra.Command{
-	Use:   "financial",
-	Short: "Manage your financial portfolio",
+	Use:     "financial",
+	Short:   "Manage your financial portfolio",
 	Aliases: []string{"fin"},
 }
 
@@ -104,10 +104,10 @@ var stocksListCmd = &cobra.Command{
 }
 
 var stocksAddCmd = &cobra.Command{
-	Use:  "add",
+	Use:   "add",
 	Short: "Add a stock investment",
-	Long: "Add a stock investment.\n\nExample:\n  agent-cli financial stocks add --data '{\"symbol\":\"AAPL\",\"stockAmount\":10,\"investAmount\":1500,\"currency\":\"USD\"}'",
-	RunE: financialCreate("POST", "/api/v1/financial/stocks"),
+	Long:  "Add a stock investment.\n\nExample:\n  agent-cli financial stocks add --data '{\"symbol\":\"AAPL\",\"stockAmount\":10,\"investAmount\":1500,\"currency\":\"USD\"}'",
+	RunE:  financialCreate("POST", "/api/v1/financial/stocks"),
 }
 
 var stocksUpdateCmd = &cobra.Command{
@@ -162,10 +162,10 @@ var cryptoListCmd = &cobra.Command{
 }
 
 var cryptoAddCmd = &cobra.Command{
-	Use:  "add",
+	Use:   "add",
 	Short: "Add a crypto investment",
-	Long: "Add a crypto investment.\n\nExample:\n  agent-cli financial crypto add --data '{\"symbol\":\"BTC\",\"name\":\"Bitcoin\",\"amount\":0.5,\"investAmount\":25000,\"currency\":\"USD\"}'",
-	RunE: financialCreate("POST", "/api/v1/financial/crypto"),
+	Long:  "Add a crypto investment.\n\nExample:\n  agent-cli financial crypto add --data '{\"symbol\":\"BTC\",\"name\":\"Bitcoin\",\"amount\":0.5,\"investAmount\":25000,\"currency\":\"USD\"}'",
+	RunE:  financialCreate("POST", "/api/v1/financial/crypto"),
 }
 
 var cryptoUpdateCmd = &cobra.Command{
@@ -216,10 +216,10 @@ var cardsListCmd = &cobra.Command{
 }
 
 var cardsAddCmd = &cobra.Command{
-	Use:  "add",
+	Use:   "add",
 	Short: "Add a payment card",
-	Long: "Add a payment card.\n\nExample:\n  agent-cli financial cards add --data '{\"bank\":\"Chase\",\"cardName\":\"Sapphire Reserve\",\"network\":\"Visa\"}'",
-	RunE: financialCreate("POST", "/api/v1/financial/cards"),
+	Long:  "Add a payment card.\n\nExample:\n  agent-cli financial cards add --data '{\"bank\":\"Chase\",\"cardName\":\"Sapphire Reserve\",\"network\":\"Visa\"}'",
+	RunE:  financialCreate("POST", "/api/v1/financial/cards"),
 }
 
 var cardsUpdateCmd = &cobra.Command{
