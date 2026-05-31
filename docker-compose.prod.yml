@@ -64,7 +64,7 @@ services:
   # ── Vector store ─────────────────────────────────────────────────────────────
   weaviate:
     image: semitechnologies/weaviate:latest
-    container_name: weaviate
+    container_name: agent-system-weaviate
     ports:
       - "8080:8080"
       - "50051:50051"
@@ -89,7 +89,7 @@ services:
   # MySQL natively supports *_FILE env vars for its own password config.
   mysql:
     image: mysql:latest
-    container_name: ragagent-mysql
+    container_name: agent-system-mysql
     ports:
       - "3307:3306"
     restart: unless-stopped
@@ -113,7 +113,7 @@ services:
   # ── Redis (Asynq task queue backend) ─────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: ragagent-redis
+    container_name: agent-system-redis
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -126,7 +126,7 @@ services:
     build:
       context: ./scheduler
       dockerfile: Dockerfile
-    container_name: ragagent-scheduler
+    container_name: agent-system-scheduler
     ports:
       - "8082:8082"
     restart: unless-stopped
@@ -163,7 +163,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: ragagent-backend
+    container_name: agent-system-backend
     ports:
       - "8081:8081"
     restart: unless-stopped
@@ -255,7 +255,7 @@ services:
         BACKEND_URL: http://backend:8081
         AUTH_ENABLED: ${AUTH_ENABLED:-true}
         AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
-    container_name: ragagent-frontend
+    container_name: agent-system-frontend
     ports:
       - "3000:3000"
     restart: unless-stopped
@@ -273,7 +273,7 @@ services:
   # ── Prometheus ────────────────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
-    container_name: ragagent-prometheus
+    container_name: agent-system-prometheus
     ports:
       - "9090:9090"
     volumes:
@@ -291,7 +291,7 @@ services:
   # ── Grafana ───────────────────────────────────────────────────────────────────
   grafana:
     image: grafana/grafana:latest
-    container_name: ragagent-grafana
+    container_name: agent-system-grafana
     ports:
       - "3001:3000"
     volumes:
