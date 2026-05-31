@@ -1,6 +1,6 @@
 # RAG Agent System
 
-![frontend](./image/frontend.png)
+![frontend](./images/frontend.png)
 
 ## Tech Stack
 

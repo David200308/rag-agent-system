@@ -49,7 +49,7 @@ services:
   # ── Spring Boot backend ───────────────────────────────────────────────────────
   backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: ragagent-backend
     ports:

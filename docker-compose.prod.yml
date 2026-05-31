@@ -161,7 +161,7 @@ services:
   # docker-entrypoint.sh reads /run/secrets/* → env vars before the JVM starts.
   backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: ragagent-backend
     ports:

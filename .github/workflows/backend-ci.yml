@@ -4,17 +4,17 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/**'
-      - 'pom.xml'
-      - 'Dockerfile'
-      - 'docker-entrypoint.sh'
+      - 'backend/src/**'
+      - 'backend/pom.xml'
+      - 'backend/Dockerfile'
+      - 'backend/docker-entrypoint.sh'
   pull_request:
     branches: [main]
     paths:
-      - 'src/**'
-      - 'pom.xml'
-      - 'Dockerfile'
-      - 'docker-entrypoint.sh'
+      - 'backend/src/**'
+      - 'backend/pom.xml'
+      - 'backend/Dockerfile'
+      - 'backend/docker-entrypoint.sh'
 
 env:
   REGISTRY: ghcr.io
@@ -38,6 +38,7 @@ jobs:
           cache: maven
 
       - name: Run tests
+        working-directory: backend
         run: mvn test -B
 
       - name: Upload test reports
@@ -45,7 +46,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
-          path: target/surefire-reports/
+          path: backend/target/surefire-reports/
           retention-days: 7
 
   # ── Build & Push Docker image ────────────────────────────────────────────────
@@ -86,8 +87,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./backend
+          file: ./backend/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
