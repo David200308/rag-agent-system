@@ -136,11 +136,12 @@ var wfLogsCmd = &cobra.Command{
 		for _, l := range logs {
 			ts, _ := l["createdAt"].(string)
 			agent, _ := l["agentName"].(string)
-			msg, _ := l["message"].(string)
+			logType, _ := l["logType"].(string)
+			content, _ := l["content"].(string)
 			if agent != "" {
-				fmt.Printf("[%s] [%s] %s\n", ts, agent, msg)
+				fmt.Printf("[%s] [%s] [%s] %s\n", ts, agent, logType, content)
 			} else {
-				fmt.Printf("[%s] %s\n", ts, msg)
+				fmt.Printf("[%s] [%s] %s\n", ts, logType, content)
 			}
 		}
 		return nil
