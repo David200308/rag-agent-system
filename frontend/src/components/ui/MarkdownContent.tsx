@@ -7,6 +7,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import katex from "katex";
+import { Monitor, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MarkdownContentProps {
@@ -16,8 +17,11 @@ interface MarkdownContentProps {
   compact?: boolean;
 }
 
+type PreviewMode = "desktop" | "mobile";
+
 function HtmlPreview({ source }: { source: string }) {
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<PreviewMode>("desktop");
 
   return (
     <>
@@ -49,20 +53,73 @@ function HtmlPreview({ source }: { source: string }) {
             {/* Modal toolbar */}
             <div className="flex shrink-0 items-center gap-3 bg-gray-100 border-b border-gray-200 px-4 py-2">
               <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">HTML Preview</span>
+
+              {/* Desktop / Mobile toggle */}
+              <div className="ml-auto flex items-center gap-1 rounded-lg bg-gray-200 p-0.5">
+                <button
+                  onClick={() => setMode("desktop")}
+                  title="Desktop view"
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    mode === "desktop"
+                      ? "bg-white text-gray-800 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700",
+                  )}
+                >
+                  <Monitor size={13} />
+                  Desktop
+                </button>
+                <button
+                  onClick={() => setMode("mobile")}
+                  title="Mobile view"
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    mode === "mobile"
+                      ? "bg-white text-gray-800 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700",
+                  )}
+                >
+                  <Smartphone size={13} />
+                  Mobile
+                </button>
+              </div>
+
               <button
                 onClick={() => setOpen(false)}
-                className="ml-auto rounded px-3 py-1 text-xs font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 transition-colors"
+                className="rounded px-3 py-1 text-xs font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 transition-colors"
               >
                 Close
               </button>
             </div>
-            {/* Sandboxed iframe */}
-            <iframe
-              srcDoc={source}
-              sandbox="allow-scripts"
-              className="flex-1 w-full border-0"
-              title="HTML Preview"
-            />
+
+            {/* Preview area */}
+            <div className={cn(
+              "flex-1 overflow-auto",
+              mode === "mobile" ? "flex items-center justify-center bg-gray-200" : "",
+            )}>
+              {mode === "desktop" ? (
+                <iframe
+                  srcDoc={source}
+                  sandbox="allow-scripts"
+                  className="w-full h-full border-0"
+                  title="HTML Preview — Desktop"
+                />
+              ) : (
+                /* Phone frame */
+                <div className="relative flex flex-col rounded-[2.5rem] border-[6px] border-gray-800 bg-gray-800 shadow-2xl"
+                  style={{ width: 390, height: 720 }}
+                >
+                  {/* Notch */}
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-gray-800 rounded-b-2xl z-10" />
+                  <iframe
+                    srcDoc={source}
+                    sandbox="allow-scripts"
+                    className="flex-1 w-full border-0 rounded-[2rem]"
+                    title="HTML Preview — Mobile"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
