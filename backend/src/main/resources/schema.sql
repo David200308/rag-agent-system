@@ -299,6 +299,19 @@ ALTER TABLE scheduled_messages ADD COLUMN workflow_id    VARCHAR(36) NULL;
 ALTER TABLE scheduled_messages ADD COLUMN workflow_input TEXT        NULL;
 ALTER TABLE scheduled_messages ADD INDEX  idx_sched_workflow (workflow_id);
 
+-- ── CLI public keys ──────────────────────────────────────────────────────────
+-- Stores one Ed25519 public key per user, registered by agent-cli at login.
+-- Used by CliSignatureFilter to verify X-Cli-Signature on every CLI request.
+CREATE TABLE IF NOT EXISTS cli_public_keys (
+    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_email       VARCHAR(255) NOT NULL UNIQUE,
+    public_key_base64 VARCHAR(64) NOT NULL,           -- Base64-encoded raw Ed25519 public key (44 chars)
+    fingerprint      VARCHAR(8)   NOT NULL,            -- first 8 chars of Base64, shown in `auth status`
+    registered_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at     TIMESTAMP    NULL,
+    INDEX idx_cpk_email (user_email)
+);
+
 -- ── Schema migration: financial default currency preference ───────────────────
 ALTER TABLE user_preferences ADD COLUMN default_currency VARCHAR(10) NOT NULL DEFAULT 'USD';
 

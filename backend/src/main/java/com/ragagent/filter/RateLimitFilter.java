@@ -27,8 +27,8 @@ import java.util.concurrent.TimeUnit;
  * Token-bucket rate limiter (Bucket4j) scoped per authenticated user email,
  * or per client IP for unauthenticated/shared paths.
  *
- * Runs at Order(2), immediately after AuthFilter (Order(1)), so the email
- * attribute is already set when this filter executes.
+ * Runs at Order(3), after AuthFilter (Order(1)) and CliSignatureFilter (Order(2)),
+ * so the email attribute is already set when this filter executes.
  *
  * Skipped for auth, scheduler, actuator, Swagger, and MCP paths —
  * the same exemption list as AuthFilter.
@@ -40,7 +40,7 @@ import java.util.concurrent.TimeUnit;
  */
 @Slf4j
 @Component
-@Order(2)
+@Order(3)
 @RequiredArgsConstructor
 public class RateLimitFilter extends OncePerRequestFilter {
 

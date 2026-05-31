@@ -1,8 +1,10 @@
 package com.ragagent.auth.controller;
 
 import com.ragagent.auth.service.AuthService;
+import com.ragagent.auth.service.CliKeyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +19,7 @@ import java.util.Map;
  *  POST /api/v1/auth/verify-otp   — validate OTP, return signed JWT
  *  POST /api/v1/auth/logout        — client-side only (JWT is stateless)
  *  GET  /api/v1/auth/validate      — check if a JWT is still valid
+ *  POST /api/v1/auth/register-key  — register CLI Ed25519 public key (JWT required)
  */
 @Slf4j
 @RestController
@@ -25,7 +28,8 @@ import java.util.Map;
 @Tag(name = "Auth", description = "Email OTP login endpoints (JWT)")
 public class AuthController {
 
-    private final AuthService authService;
+    private final AuthService  authService;
+    private final CliKeyService cliKeyService;
 
     // ── Request OTP ──────────────────────────────────────────────────────────────
 
@@ -105,6 +109,35 @@ public class AuthController {
             return ResponseEntity.ok(Map.of("valid", false));
         }
         return ResponseEntity.ok(Map.of("valid", true, "email", email));
+    }
+
+    // ── Register CLI public key ───────────────────────────────────────────────────
+
+    @PostMapping("/register-key")
+    @Operation(summary = "Register an Ed25519 public key for CLI request signing (JWT required)")
+    public ResponseEntity<Map<String, String>> registerKey(
+            @RequestBody Map<String, String> body,
+            HttpServletRequest httpRequest) {
+
+        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        if (email == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+        }
+
+        String publicKey = body.get("publicKey");
+        if (publicKey == null || publicKey.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "publicKey is required"));
+        }
+
+        try {
+            String fingerprint = cliKeyService.registerKey(email, publicKey);
+            return ResponseEntity.ok(Map.of(
+                    "message",     "CLI key registered",
+                    "fingerprint", fingerprint
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     // ── Helper ───────────────────────────────────────────────────────────────────
