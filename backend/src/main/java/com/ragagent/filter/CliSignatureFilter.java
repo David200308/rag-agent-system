@@ -46,6 +46,20 @@ public class CliSignatureFilter extends OncePerRequestFilter {
     private final ObjectMapper  objectMapper;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        // Mirror AuthFilter's exemptions — these paths have no JWT, so there is
+        // no authenticatedEmail attribute to look up the public key against.
+        String path = request.getRequestURI();
+        return path.startsWith("/api/v1/auth/")
+            || path.startsWith("/api/v1/share/")
+            || path.startsWith("/api/v1/scheduler/")
+            || path.startsWith("/actuator/")
+            || path.startsWith("/v3/api-docs")
+            || path.startsWith("/swagger-ui")
+            || path.startsWith("/mcp/");
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest  request,
                                     HttpServletResponse response,
                                     FilterChain         chain)
