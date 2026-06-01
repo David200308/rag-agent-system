@@ -215,6 +215,10 @@ services:
       AUTH_ENABLED: ${AUTH_ENABLED:-true}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
       AUTH_OTP_EXPIRY_MINUTES: ${AUTH_OTP_EXPIRY_MINUTES:-10}
+      # ── Client identity
+      CLIENT_IDENTITY_ENABLED: ${CLIENT_IDENTITY_ENABLED:-false}
+      CLIENT_IOS_SECRET: ${CLIENT_IOS_SECRET:-}
+      CLIENT_WEB_SECRET: ${CLIENT_WEB_SECRET:-}
       # ── Passkey (WebAuthn)
       AUTH_PASSKEY_RP_ID: ${AUTH_PASSKEY_RP_ID:-localhost}
       AUTH_PASSKEY_RP_NAME: ${AUTH_PASSKEY_RP_NAME:-RAG Agent}
@@ -269,6 +273,7 @@ services:
       SCHEDULER_URL: http://scheduler:8082
       AUTH_ENABLED: ${AUTH_ENABLED:-true}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
+      CLIENT_WEB_SECRET: ${CLIENT_WEB_SECRET:-}
 
   # ── Prometheus ────────────────────────────────────────────────────────────────
   prometheus:

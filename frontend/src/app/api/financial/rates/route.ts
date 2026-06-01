@@ -1,4 +1,4 @@
-import { request } from "undici";
+import { request } from "@/lib/backend-client";
 
 // Proxies to open.er-api.com (free, no API key required).
 // Cached for 1 hour via Next.js route cache.

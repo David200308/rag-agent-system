@@ -211,6 +211,20 @@ if [ "$MODE" = "local" ]; then
 
   [ -z "$AUTH_JWT_SECRET" ] && AUTH_JWT_SECRET="changeme-use-a-long-random-base64-string-in-production"
 
+  # ── Client identity ────────────────────────────────────────────────────────
+  header "Client Identity"
+  CLIENT_IDENTITY_ENABLED=false
+  CLIENT_IOS_SECRET="changeme-ios-shared-secret"
+  CLIENT_WEB_SECRET="changeme-web-shared-secret"
+  if confirm "Enable client identity enforcement? (CLI/iOS/Web header verification)"; then
+    CLIENT_IDENTITY_ENABLED=true
+    CLIENT_IOS_SECRET="$(openssl rand -base64 32 | tr -d '\n')"
+    CLIENT_WEB_SECRET="$(openssl rand -base64 32 | tr -d '\n')"
+    echo -e "  ${DIM}iOS and web secrets auto-generated.${NC}"
+    echo -e "  ${YELLOW}Copy CLIENT_IOS_SECRET into mobile/ios/Configs/Debug.xcconfig and Release.xcconfig${NC}"
+    echo -e "  ${YELLOW}Copy CLIENT_WEB_SECRET into frontend/.env.local${NC}"
+  fi
+
   # ── Weaviate ───────────────────────────────────────────────────────────────
   header "Weaviate"
   echo -e "  ${DIM}Leave blank for anonymous access (default).${NC}"
@@ -322,6 +336,11 @@ AUTH_ENABLED=$AUTH_ENABLED
 AUTH_JWT_SECRET=$AUTH_JWT_SECRET
 AUTH_JWT_EXPIRY_HOURS=$AUTH_JWT_EXPIRY_HOURS
 AUTH_OTP_EXPIRY_MINUTES=$AUTH_OTP_EXPIRY_MINUTES
+
+# ── Client identity ────────────────────────────────────────────────────────────
+CLIENT_IDENTITY_ENABLED=$CLIENT_IDENTITY_ENABLED
+CLIENT_IOS_SECRET=$CLIENT_IOS_SECRET
+CLIENT_WEB_SECRET=$CLIENT_WEB_SECRET
 
 # ── Passkey (WebAuthn) ────────────────────────────────────────────────────────
 # For local dev the defaults (localhost / http://localhost:3000) are used.
@@ -606,6 +625,38 @@ else
     echo -e "  ${DIM}Keeping existing Auth secrets.${NC}"
   fi
 
+  # ── Client identity ──────────────────────────────────────────────────────
+  header "Client Identity"
+  CLIENT_IDENTITY_ENABLED="$(read_prod CLIENT_IDENTITY_ENABLED false)"
+  if has_secret client_ios_secret; then
+    echo -e "  ${DIM}Client identity already configured (enabled: $CLIENT_IDENTITY_ENABLED).${NC}"
+    if confirm "Regenerate client secrets?"; then
+      CLIENT_IOS_SECRET="$(openssl rand -base64 32 | tr -d '\n')"
+      CLIENT_WEB_SECRET="$(openssl rand -base64 32 | tr -d '\n')"
+      write_secret client_ios_secret "$CLIENT_IOS_SECRET"
+      write_secret client_web_secret "$CLIENT_WEB_SECRET"
+      echo -e "  ${DIM}Secrets regenerated.${NC}"
+    else
+      CLIENT_IOS_SECRET="$(read_secret client_ios_secret)"
+      CLIENT_WEB_SECRET="$(read_secret client_web_secret)"
+    fi
+  else
+    if confirm "Enable client identity enforcement? (CLI/iOS/Web header verification)"; then
+      CLIENT_IDENTITY_ENABLED=true
+      CLIENT_IOS_SECRET="$(openssl rand -base64 32 | tr -d '\n')"
+      CLIENT_WEB_SECRET="$(openssl rand -base64 32 | tr -d '\n')"
+      write_secret client_ios_secret "$CLIENT_IOS_SECRET"
+      write_secret client_web_secret "$CLIENT_WEB_SECRET"
+      echo -e "  ${DIM}Secrets auto-generated and saved.${NC}"
+      echo -e "  ${YELLOW}Copy CLIENT_IOS_SECRET into mobile/ios/Configs/Release.xcconfig${NC}"
+    else
+      CLIENT_IDENTITY_ENABLED=false
+      CLIENT_IOS_SECRET=""; CLIENT_WEB_SECRET=""
+      write_secret client_ios_secret ""
+      write_secret client_web_secret ""
+    fi
+  fi
+
   # ── Passkey (WebAuthn) ────────────────────────────────────────────────────
   header "Passkey (WebAuthn)"
   UPDATE_PASSKEY=true
@@ -831,6 +882,11 @@ LOCAL_EMBEDDING_MODEL=${LOCAL_EMBEDDING_MODEL:-nomic-embed-text}
 AUTH_ENABLED=$AUTH_ENABLED
 AUTH_JWT_EXPIRY_HOURS=$AUTH_JWT_EXPIRY_HOURS
 AUTH_OTP_EXPIRY_MINUTES=$AUTH_OTP_EXPIRY_MINUTES
+
+# ── Client identity ────────────────────────────────────────────────────────────
+CLIENT_IDENTITY_ENABLED=$CLIENT_IDENTITY_ENABLED
+CLIENT_IOS_SECRET=$CLIENT_IOS_SECRET
+CLIENT_WEB_SECRET=$CLIENT_WEB_SECRET
 
 # ── Passkey (WebAuthn) ────────────────────────────────────────────────────────
 AUTH_PASSKEY_RP_ID=$AUTH_PASSKEY_RP_ID

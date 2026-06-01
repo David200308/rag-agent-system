@@ -1,4 +1,4 @@
-import { request } from "undici";
+import { request } from "@/lib/backend-client";
 import type { NextRequest } from "next/server";
 
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8081";

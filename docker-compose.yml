@@ -90,6 +90,10 @@ services:
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-changeme-use-a-long-random-base64-string-in-production}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
       AUTH_OTP_EXPIRY_MINUTES: ${AUTH_OTP_EXPIRY_MINUTES:-10}
+      # ── Client identity (set CLIENT_IDENTITY_ENABLED=true to enforce)
+      CLIENT_IDENTITY_ENABLED: ${CLIENT_IDENTITY_ENABLED:-false}
+      CLIENT_IOS_SECRET: ${CLIENT_IOS_SECRET:-changeme-ios-shared-secret}
+      CLIENT_WEB_SECRET: ${CLIENT_WEB_SECRET:-changeme-web-shared-secret}
       # ── Resend (email OTP)
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-noreply@example.com}
@@ -183,6 +187,7 @@ services:
       SCHEDULER_URL: http://scheduler:8082
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
+      CLIENT_WEB_SECRET: ${CLIENT_WEB_SECRET:-changeme-web-shared-secret}
 
   # ── Prometheus (scrapes /actuator/prometheus every 15s) ──────────────────────
   prometheus:

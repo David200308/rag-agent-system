@@ -1,3 +1,4 @@
+import { backendFetch } from "@/lib/backend-client";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 
@@ -14,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const store = await cookies();
   const token = store.get("rag-session")?.value;
 
-  const upstream = await fetch(`${BACKEND}/api/v1/workflow/runs/${runId}/stream`, {
+  const upstream = await backendFetch(`${BACKEND}/api/v1/workflow/runs/${runId}/stream`, {
     headers: {
       accept: "text/event-stream",
       ...(token ? { authorization: `Bearer ${token}` } : {}),

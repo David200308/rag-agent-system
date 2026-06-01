@@ -1,4 +1,4 @@
-import { request } from "undici";
+import { request } from "@/lib/backend-client";
 import { cookies } from "next/headers";
 
 const SCHEDULER = process.env.SCHEDULER_URL ?? "http://localhost:8082";

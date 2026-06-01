@@ -1,3 +1,4 @@
+import { backendFetch } from "@/lib/backend-client";
 import { cookies } from "next/headers";
 import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
   const token = (await cookies()).get("rag-session")?.value;
   const body  = await req.json();
 
-  const res = await fetch(`${BACKEND}/api/v1/connectors/telegram/connect`, {
+  const res = await backendFetch(`${BACKEND}/api/v1/connectors/telegram/connect`, {
     method:  "POST",
     headers: {
       "content-type": "application/json",

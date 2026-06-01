@@ -1,3 +1,4 @@
+import { backendFetch } from "@/lib/backend-client";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 
@@ -6,7 +7,7 @@ const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8081";
 export async function GET(_req: NextRequest) {
   const token = (await cookies()).get("rag-session")?.value;
 
-  const res = await fetch(`${BACKEND}/api/v1/connectors/status`, {
+  const res = await backendFetch(`${BACKEND}/api/v1/connectors/status`, {
     headers: token ? { authorization: `Bearer ${token}` } : {},
     cache: "no-store",
   });

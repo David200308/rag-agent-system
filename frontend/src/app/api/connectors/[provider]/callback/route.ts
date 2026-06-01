@@ -1,3 +1,4 @@
+import { backendFetch } from "@/lib/backend-client";
 import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
 
@@ -27,7 +28,7 @@ export async function GET(
   }
 
   try {
-    const res = await fetch(`${BACKEND}/api/v1/connectors/${provider}/exchange`, {
+    const res = await backendFetch(`${BACKEND}/api/v1/connectors/${provider}/exchange`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ code, state }),

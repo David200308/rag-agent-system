@@ -251,6 +251,16 @@ rate-limit:
   ingest-limit: ${RATE_LIMIT_INGEST:10}
   default-limit: ${RATE_LIMIT_DEFAULT:100}
 
+# ── Client identity enforcement ───────────────────────────────────────────────
+# Requires every authenticated request to carry a signed client header.
+# CLI uses Ed25519 (registered key). iOS + web use HMAC-SHA256 shared secrets.
+# Set CLIENT_IDENTITY_ENABLED=true to enforce; false = disabled (default).
+client:
+  identity:
+    enabled: ${CLIENT_IDENTITY_ENABLED:false}
+    ios-secret: ${CLIENT_IOS_SECRET:}
+    web-secret: ${CLIENT_WEB_SECRET:}
+
 # ── Auth (email whitelist + OTP login, JWT tokens) ───────────────────────────
 # Set AUTH_ENABLED=false to disable login entirely (open access).
 auth:
