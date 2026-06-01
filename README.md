@@ -1,10 +1,20 @@
-# RAG Agent System
+# SkyProton Agent System
 
 | Chat Mode                | Workflow Mode                    |
 | ------------------------ | -------------------------------- |
 | ![chat](./images/chat.png) | ![workflow](./images/workflow.png) |
 
 ## Tech Stack
+
+### Agent CLI
+
+| Layer    | Technology                                                         |
+| -------- | ------------------------------------------------------------------ |
+| Runtime  | Go 1.22                                                            |
+| CLI      | Cobra                                                              |
+| Auth     | OTP email + JWT (stored in `~/.agent-cli/config.json`)             |
+| Identity | Ed25519 key pair — CLI signs requests after login                  |
+| Release  | GitHub Actions cross-compile (linux/darwin/windows × amd64/arm64) |
 
 ### Backend
 
@@ -46,25 +56,27 @@
 
 ### Infrastructure
 
-| Component        | Technology                                  |
-| ---------------- | ------------------------------------------- |
-| Vector DB        | Weaviate (Docker)                           |
-| Relational DB    | MySQL (Docker) — app + schedule data       |
-| Task queue       | Redis 7 (Docker) — Asynq backend           |
-| Scheduler        | Go microservice backed by Asynq (`:8082`) |
-| Containerization | Docker Compose                              |
+| Component        | Technology                                    |
+| ---------------- | --------------------------------------------- |
+| Vector DB        | Weaviate (Docker)                             |
+| Relational DB    | MySQL (Docker) — app + schedule data         |
+| Task queue       | Redis 7 (Docker) — Asynq backend             |
+| Scheduler        | Go microservice backed by Asynq (`:8082`)   |
+| Observability    | Prometheus + Grafana + Loki + Promtail        |
+| Containerization | Docker Compose                                |
 
 ---
 
 ## System Architecture
 
 ```
-  ┌──────────────────────────┐
-  │     Frontend (Next.js)   │
-  │  /  /upload  /workflow…  │
-  └────────────┬─────────────┘
-               │ HTTP / SSE
-               │
+  ┌──────────────────────────┐   ┌──────────────────────────┐
+  │     Frontend (Next.js)   │   │     agent-cli (Go)        │
+  │  /  /upload  /workflow…  │   │  auth / chat / workflow   │
+  └────────────┬─────────────┘   │  conversation / financial │
+               │ HTTP / SSE      └────────────┬──────────────┘
+               │                              │ HTTP + JWT
+               └──────────────┬───────────────┘
 ┌──────────────▼───────────────────────────────────────────────┐
 │                   Spring Boot Backend (:8081)                 │
 │                                                              │
@@ -201,6 +213,73 @@ Conversations can be shared via a link with configurable access controls.
 | `accessType` | `EVERYONE` / `WHITELIST`    | Public link or restricted to specified emails |
 
 When `accessType` is `WHITELIST`, only listed emails may access the shared link. `INTERACTIVE` shares notify the conversation owner via Telegram (if connected) when a new participant joins.
+
+---
+
+## Agent CLI
+
+A standalone Go binary that wraps the backend REST API for terminal use. Config is stored in `~/.agent-cli/config.json`. On first login an Ed25519 key pair is generated and the public key is registered with the server.
+
+### Install
+
+**macOS (Apple Silicon)**
+```bash
+curl -L https://github.com/David200308/rag-agent-system/releases/latest/download/agent-cli_darwin_arm64 \
+  -o agent-cli && chmod +x agent-cli && sudo mv agent-cli /usr/local/bin/
+```
+
+**macOS (Intel)**
+```bash
+curl -L https://github.com/David200308/rag-agent-system/releases/latest/download/agent-cli_darwin_amd64 \
+  -o agent-cli && chmod +x agent-cli && sudo mv agent-cli /usr/local/bin/
+```
+
+**Linux (amd64)**
+```bash
+curl -L https://github.com/David200308/rag-agent-system/releases/latest/download/agent-cli_linux_amd64 \
+  -o agent-cli && chmod +x agent-cli && sudo mv agent-cli /usr/local/bin/
+```
+
+**Windows** — download `agent-cli_windows_amd64.exe` from the [Releases](https://github.com/David200308/rag-agent-system/releases) page.
+
+### First-time setup
+
+```bash
+agent-cli auth config --url https://api.agent.skyproton.com
+agent-cli auth login
+```
+
+### Commands
+
+| Command | Subcommands | Description |
+| ------- | ----------- | ----------- |
+| `auth` | `login` `logout` `status` `config` | Authenticate via email OTP; manage server URL |
+| `chat` | *(interactive REPL)* `ask <question>` | Chat with the RAG agent; `-c <id>` continues a conversation |
+| `conversation` (alias `conv`) | `list` `get` `delete` `archive` `unarchive` | Manage conversations |
+| `workflow` (alias `wf`) | `list` `get` `delete` `runs` `logs` | View workflows, run history, and agent logs |
+| `financial` (alias `fin`) | `deposits` `stocks` `crypto` `cards` `prices` | Manage financial portfolio entries |
+
+#### Examples
+
+```bash
+# Interactive chat session
+agent-cli chat
+
+# Single-shot query, continuing an existing conversation
+agent-cli chat ask "Summarise the last earnings call" -c <conversation-id>
+
+# List recent conversations
+agent-cli conversation list
+
+# View logs for a workflow run
+agent-cli workflow logs <run-id>
+
+# Add a stock position
+agent-cli financial stocks add --data '{"symbol":"AAPL","stockAmount":10,"investAmount":1500,"currency":"USD"}'
+
+# Force-refresh live market prices
+agent-cli financial prices refresh
+```
 
 ---
 
