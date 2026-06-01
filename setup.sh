@@ -269,6 +269,16 @@ if [ "$MODE" = "local" ]; then
   prompt GRAFANA_USER     "Grafana admin username" "admin"
   prompt GRAFANA_PASSWORD "Grafana admin password" "$(openssl rand -base64 12 | tr -d '\n')" true
   echo ""
+  echo -e "  ${BOLD}GitHub OAuth${NC}  ${DIM}(optional — lets you log into Grafana with your GitHub account)${NC}"
+  echo -e "  ${DIM}Create an OAuth App at: GitHub → Settings → Developer settings → OAuth Apps${NC}"
+  echo -e "  ${DIM}Callback URL: http://localhost:3001/login/github${NC}"
+  echo ""
+  GRAFANA_GITHUB_CLIENT_ID=""; GRAFANA_GITHUB_CLIENT_SECRET=""
+  if confirm "Configure Grafana GitHub OAuth?"; then
+    prompt GRAFANA_GITHUB_CLIENT_ID     "GitHub OAuth Client ID"     "" false
+    prompt GRAFANA_GITHUB_CLIENT_SECRET "GitHub OAuth Client Secret" "" true
+  fi
+  echo ""
   echo -e "  ${BOLD}Rate limits${NC}  ${DIM}(requests per user per minute — override with env vars)${NC}"
   prompt RATE_LIMIT_QUERY   "LLM query limit   (RATE_LIMIT_QUERY)"   "20"
   prompt RATE_LIMIT_INGEST  "Ingest limit      (RATE_LIMIT_INGEST)"  "10"
@@ -357,6 +367,8 @@ CONNECTOR_CALLBACK_BASE_URL=$CONNECTOR_CALLBACK_BASE_URL
 # Grafana UI: http://localhost:3001  Prometheus: http://localhost:9090
 GRAFANA_USER=$GRAFANA_USER
 GRAFANA_PASSWORD=$GRAFANA_PASSWORD
+GRAFANA_GITHUB_CLIENT_ID=$GRAFANA_GITHUB_CLIENT_ID
+GRAFANA_GITHUB_CLIENT_SECRET=$GRAFANA_GITHUB_CLIENT_SECRET
 
 # ── Rate limiting (requests per user per minute) ──────────────────────────────
 RATE_LIMIT_QUERY=$RATE_LIMIT_QUERY
@@ -760,6 +772,16 @@ else
     prompt GRAFANA_USER     "Grafana admin username" "admin"
     prompt GRAFANA_PASSWORD "Grafana admin password" "$(openssl rand -base64 12 | tr -d '\n')" true
     echo ""
+    echo -e "  ${BOLD}GitHub OAuth${NC}  ${DIM}(optional — lets you log into Grafana with your GitHub account)${NC}"
+    echo -e "  ${DIM}Create an OAuth App at: GitHub → Settings → Developer settings → OAuth Apps${NC}"
+    echo -e "  ${DIM}Callback URL: https://<your-grafana-domain>/login/github${NC}"
+    echo ""
+    GRAFANA_GITHUB_CLIENT_ID=""; GRAFANA_GITHUB_CLIENT_SECRET=""
+    if confirm "Configure Grafana GitHub OAuth?"; then
+      prompt GRAFANA_GITHUB_CLIENT_ID     "GitHub OAuth Client ID"     "" false
+      prompt GRAFANA_GITHUB_CLIENT_SECRET "GitHub OAuth Client Secret" "" true
+    fi
+    echo ""
     echo -e "  ${BOLD}Rate limits${NC}  ${DIM}(requests per user per minute)${NC}"
     prompt RATE_LIMIT_QUERY   "LLM query limit   (RATE_LIMIT_QUERY)"   "20"
     prompt RATE_LIMIT_INGEST  "Ingest limit      (RATE_LIMIT_INGEST)"  "10"
@@ -770,6 +792,8 @@ else
   else
     GRAFANA_USER="$(read_prod GRAFANA_USER admin)"
     GRAFANA_PASSWORD="$(read_prod GRAFANA_PASSWORD admin)"
+    GRAFANA_GITHUB_CLIENT_ID="$(read_prod GRAFANA_GITHUB_CLIENT_ID "")"
+    GRAFANA_GITHUB_CLIENT_SECRET="$(read_prod GRAFANA_GITHUB_CLIENT_SECRET "")"
     RATE_LIMIT_QUERY="$(read_prod RATE_LIMIT_QUERY 20)"
     RATE_LIMIT_INGEST="$(read_prod RATE_LIMIT_INGEST 10)"
     RATE_LIMIT_DEFAULT="$(read_prod RATE_LIMIT_DEFAULT 100)"
@@ -831,6 +855,8 @@ TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-}
 # Grafana UI: http://<host>:3001  Prometheus: http://<host>:9090
 GRAFANA_USER=$GRAFANA_USER
 GRAFANA_PASSWORD=$GRAFANA_PASSWORD
+GRAFANA_GITHUB_CLIENT_ID=${GRAFANA_GITHUB_CLIENT_ID:-}
+GRAFANA_GITHUB_CLIENT_SECRET=${GRAFANA_GITHUB_CLIENT_SECRET:-}
 
 # ── Rate limiting (requests per user per minute) ──────────────────────────────
 RATE_LIMIT_QUERY=$RATE_LIMIT_QUERY
