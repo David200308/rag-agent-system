@@ -266,18 +266,15 @@ if [ "$MODE" = "local" ]; then
   echo -e "  Prometheus scrapes ${BOLD}/actuator/prometheus${NC} every 15s."
   echo -e "  Grafana auto-loads the RAG Agent dashboard on first boot."
   echo ""
-  prompt GRAFANA_USER     "Grafana admin username" "admin"
-  prompt GRAFANA_PASSWORD "Grafana admin password" "$(openssl rand -base64 12 | tr -d '\n')" true
+  prompt GRAFANA_USER     "Grafana admin username (emergency fallback only)" "admin"
+  prompt GRAFANA_PASSWORD "Grafana admin password (emergency fallback only)" "$(openssl rand -base64 12 | tr -d '\n')" true
   echo ""
-  echo -e "  ${BOLD}GitHub OAuth${NC}  ${DIM}(optional — lets you log into Grafana with your GitHub account)${NC}"
+  echo -e "  ${BOLD}GitHub OAuth${NC}  ${DIM}(only login method — password form is disabled)${NC}"
   echo -e "  ${DIM}Create an OAuth App at: GitHub → Settings → Developer settings → OAuth Apps${NC}"
   echo -e "  ${DIM}Callback URL: http://localhost:3001/login/github  (scopes: user:email,read:org)${NC}"
   echo ""
-  GRAFANA_GITHUB_CLIENT_ID=""; GRAFANA_GITHUB_CLIENT_SECRET=""
-  if confirm "Configure Grafana GitHub OAuth?"; then
-    prompt GRAFANA_GITHUB_CLIENT_ID     "GitHub OAuth Client ID"     "" false
-    prompt GRAFANA_GITHUB_CLIENT_SECRET "GitHub OAuth Client Secret" "" true
-  fi
+  prompt GRAFANA_GITHUB_CLIENT_ID     "GitHub OAuth Client ID"     ""
+  prompt GRAFANA_GITHUB_CLIENT_SECRET "GitHub OAuth Client Secret" "" true
   echo ""
   echo -e "  ${BOLD}Rate limits${NC}  ${DIM}(requests per user per minute — override with env vars)${NC}"
   prompt RATE_LIMIT_QUERY   "LLM query limit   (RATE_LIMIT_QUERY)"   "20"
@@ -769,18 +766,16 @@ else
     if ! confirm "Update Grafana credentials?"; then UPDATE_OBS=false; fi
   fi
   if $UPDATE_OBS; then
-    prompt GRAFANA_USER     "Grafana admin username" "admin"
-    prompt GRAFANA_PASSWORD "Grafana admin password" "$(openssl rand -base64 12 | tr -d '\n')" true
+    prompt GRAFANA_USER     "Grafana admin username (emergency fallback only)" "admin"
+    prompt GRAFANA_PASSWORD "Grafana admin password (emergency fallback only)" "$(openssl rand -base64 12 | tr -d '\n')" true
     echo ""
-    echo -e "  ${BOLD}GitHub OAuth${NC}  ${DIM}(optional — lets you log into Grafana with your GitHub account)${NC}"
+    echo -e "  ${BOLD}GitHub OAuth${NC}  ${DIM}(only login method — password form is disabled)${NC}"
     echo -e "  ${DIM}Create an OAuth App at: GitHub → Settings → Developer settings → OAuth Apps${NC}"
-    echo -e "  ${DIM}Callback URL: https://<your-grafana-domain>/login/github${NC}"
+    echo -e "  ${DIM}Callback URL: https://<your-grafana-domain>/login/github  (scopes: user:email,read:org)${NC}"
     echo ""
-    GRAFANA_GITHUB_CLIENT_ID=""; GRAFANA_GITHUB_CLIENT_SECRET=""
-    if confirm "Configure Grafana GitHub OAuth?"; then
-      prompt GRAFANA_GITHUB_CLIENT_ID     "GitHub OAuth Client ID"     "" false
-      prompt GRAFANA_GITHUB_CLIENT_SECRET "GitHub OAuth Client Secret" "" true
-    fi
+    prompt GRAFANA_ROOT_URL           "Grafana public URL (e.g. https://metric.skyproton.com)" "https://metric.skyproton.com"
+    prompt GRAFANA_GITHUB_CLIENT_ID   "GitHub OAuth Client ID"     ""
+    prompt GRAFANA_GITHUB_CLIENT_SECRET "GitHub OAuth Client Secret" "" true
     echo ""
     echo -e "  ${BOLD}Rate limits${NC}  ${DIM}(requests per user per minute)${NC}"
     prompt RATE_LIMIT_QUERY   "LLM query limit   (RATE_LIMIT_QUERY)"   "20"
@@ -792,6 +787,7 @@ else
   else
     GRAFANA_USER="$(read_prod GRAFANA_USER admin)"
     GRAFANA_PASSWORD="$(read_prod GRAFANA_PASSWORD admin)"
+    GRAFANA_ROOT_URL="$(read_prod GRAFANA_ROOT_URL https://metric.skyproton.com)"
     GRAFANA_GITHUB_CLIENT_ID="$(read_prod GRAFANA_GITHUB_CLIENT_ID "")"
     GRAFANA_GITHUB_CLIENT_SECRET="$(read_prod GRAFANA_GITHUB_CLIENT_SECRET "")"
     RATE_LIMIT_QUERY="$(read_prod RATE_LIMIT_QUERY 20)"
@@ -855,6 +851,7 @@ TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-}
 # Grafana UI: http://<host>:3001  Prometheus: http://<host>:9090
 GRAFANA_USER=$GRAFANA_USER
 GRAFANA_PASSWORD=$GRAFANA_PASSWORD
+GRAFANA_ROOT_URL=${GRAFANA_ROOT_URL:-https://metric.skyproton.com}
 GRAFANA_GITHUB_CLIENT_ID=${GRAFANA_GITHUB_CLIENT_ID:-}
 GRAFANA_GITHUB_CLIENT_SECRET=${GRAFANA_GITHUB_CLIENT_SECRET:-}
 
