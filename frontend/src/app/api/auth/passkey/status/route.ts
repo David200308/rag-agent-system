@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
 
   const { statusCode, body } = await request(
     `${BACKEND}/api/v1/auth/passkey/status?email=${encodeURIComponent(email)}`,
+    { method: "GET" },
   );
   const text = await body.text();
   return new Response(text, {
