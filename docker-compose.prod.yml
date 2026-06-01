@@ -326,7 +326,7 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
-      GF_USERS_ALLOW_SIGN_UP: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
       GF_USERS_AUTO_ASSIGN_ORG: "true"
       GF_USERS_AUTO_ASSIGN_ORG_ID: "1"
       GF_USERS_AUTO_ASSIGN_ORG_ROLE: "Admin"
@@ -339,7 +339,9 @@ services:
       GF_AUTH_GITHUB_AUTH_URL: "https://github.com/login/oauth/authorize"
       GF_AUTH_GITHUB_TOKEN_URL: "https://github.com/login/oauth/access_token"
       GF_AUTH_GITHUB_API_URL: "https://api.github.com/user"
-      GF_AUTH_GITHUB_ALLOW_SIGN_UP: "true"
+      GF_AUTH_GITHUB_ALLOW_SIGN_UP: "false"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_AUTH_BASIC_ENABLED: "false"
     restart: unless-stopped
     depends_on:
       - prometheus
