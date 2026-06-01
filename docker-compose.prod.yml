@@ -328,6 +328,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
       GF_USERS_ALLOW_SIGN_UP: "false"
       # GitHub OAuth — only existing Grafana users (matched by email) can authenticate
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://metric.skyproton.com}
       GF_AUTH_GITHUB_ENABLED: "true"
       GF_AUTH_GITHUB_CLIENT_ID: ${GRAFANA_GITHUB_CLIENT_ID}
       GF_AUTH_GITHUB_CLIENT_SECRET: ${GRAFANA_GITHUB_CLIENT_SECRET}
