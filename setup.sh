@@ -271,7 +271,7 @@ if [ "$MODE" = "local" ]; then
   echo ""
   echo -e "  ${BOLD}GitHub OAuth${NC}  ${DIM}(optional — lets you log into Grafana with your GitHub account)${NC}"
   echo -e "  ${DIM}Create an OAuth App at: GitHub → Settings → Developer settings → OAuth Apps${NC}"
-  echo -e "  ${DIM}Callback URL: http://localhost:3001/login/github${NC}"
+  echo -e "  ${DIM}Callback URL: http://localhost:3001/login/github  (scopes: user:email,read:org)${NC}"
   echo ""
   GRAFANA_GITHUB_CLIENT_ID=""; GRAFANA_GITHUB_CLIENT_SECRET=""
   if confirm "Configure Grafana GitHub OAuth?"; then
