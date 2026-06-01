@@ -3,9 +3,6 @@ name: Agent CLI CI/CD
 on:
   push:
     branches: [main]
-    paths:
-      - 'agent-cli/**'
-      - '.github/workflows/agent-cli-ci.yml'
     tags:
       - 'agent-cli/v*'
   pull_request:
