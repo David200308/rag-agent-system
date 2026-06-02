@@ -874,22 +874,8 @@ function SalaryLineChart({ records, hide }: { records: SalaryUsageRecord[]; hide
   const fmtTotal = (v: number) => hide ? "***"
     : new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(v);
 
-  return (
-    <div className="grid grid-cols-3 gap-4">
-      {/* ── Left: summary cards (1/3) ── */}
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-1 flex-col justify-center rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-5 py-4">
-          <p className="text-xs text-[--color-muted]">Total Salary &amp; Bonus</p>
-          <p className="mt-1.5 text-lg font-semibold tabular-nums">{fmtTotal(totalSalaryBonus)}</p>
-        </div>
-        <div className="flex flex-1 flex-col justify-center rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-5 py-4">
-          <p className="text-xs text-[--color-muted]">Total Expense</p>
-          <p className="mt-1.5 text-lg font-semibold tabular-nums">{fmtTotal(totalExpense)}</p>
-        </div>
-      </div>
-
-      {/* ── Right: chart (2/3) ── */}
-      <div className="col-span-2 rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4">
+  const chartInner = (
+    <>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 200 }}>
         {yTicks.map((v, i) => (
           <g key={i}>
@@ -929,8 +915,45 @@ function SalaryLineChart({ records, hide }: { records: SalaryUsageRecord[]; hide
           </span>
         ))}
       </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile: 2-col summary cards + full-width chart */}
+      <div className="flex flex-col gap-4 sm:hidden">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-4 py-3">
+            <p className="text-xs text-[--color-muted]">Total Salary &amp; Bonus</p>
+            <p className="mt-1 text-base font-semibold tabular-nums">{fmtTotal(totalSalaryBonus)}</p>
+          </div>
+          <div className="rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-4 py-3">
+            <p className="text-xs text-[--color-muted]">Total Expense</p>
+            <p className="mt-1 text-base font-semibold tabular-nums">{fmtTotal(totalExpense)}</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4">
+          {chartInner}
+        </div>
       </div>
-    </div>
+
+      {/* Desktop: 1/3 stacked cards + 2/3 chart */}
+      <div className="hidden sm:grid sm:grid-cols-3 sm:gap-4">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-1 flex-col justify-center rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-5 py-4">
+            <p className="text-xs text-[--color-muted]">Total Salary &amp; Bonus</p>
+            <p className="mt-1.5 text-lg font-semibold tabular-nums">{fmtTotal(totalSalaryBonus)}</p>
+          </div>
+          <div className="flex flex-1 flex-col justify-center rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-5 py-4">
+            <p className="text-xs text-[--color-muted]">Total Expense</p>
+            <p className="mt-1.5 text-lg font-semibold tabular-nums">{fmtTotal(totalExpense)}</p>
+          </div>
+        </div>
+        <div className="col-span-2 rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4">
+          {chartInner}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -1583,7 +1606,7 @@ export function FinancialManager() {
 
             {/* ── Salary & Expense ── */}
             {tab === "salary" && (
-              <>
+              <div className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs text-[--color-muted]">From</span>
                   <input type="month" value={salaryFrom}
@@ -1664,12 +1687,12 @@ export function FinancialManager() {
                     </tbody>
                   </table>
                 </div>
-                <p className="mt-2 text-[11px] text-[--color-muted]">
+                <p className="text-[11px] text-[--color-muted]">
                   * House Rent: some months are paid in the following month.
                 </p>
               </>
                 )}
-              </>
+              </div>
             )}
 
             {/* ── Cards ── */}
