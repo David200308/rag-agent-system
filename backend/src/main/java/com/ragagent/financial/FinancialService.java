@@ -3,14 +3,17 @@ package com.ragagent.financial;
 import com.ragagent.financial.dto.CardDto;
 import com.ragagent.financial.dto.CashDepositDto;
 import com.ragagent.financial.dto.CryptoInvestmentDto;
+import com.ragagent.financial.dto.SalaryUsageRecordDto;
 import com.ragagent.financial.dto.StockInvestmentDto;
 import com.ragagent.financial.entity.Card;
 import com.ragagent.financial.entity.CashDeposit;
 import com.ragagent.financial.entity.CryptoInvestment;
+import com.ragagent.financial.entity.SalaryUsageRecord;
 import com.ragagent.financial.entity.StockInvestment;
 import com.ragagent.financial.repository.CardRepository;
 import com.ragagent.financial.repository.CashDepositRepository;
 import com.ragagent.financial.repository.CryptoInvestmentRepository;
+import com.ragagent.financial.repository.SalaryUsageRecordRepository;
 import com.ragagent.financial.repository.StockInvestmentRepository;
 import com.ragagent.financial.service.ExchangeRateService;
 import com.ragagent.financial.service.MarketPriceService;
@@ -33,12 +36,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class FinancialService {
 
-    private final CashDepositRepository      depositRepo;
-    private final StockInvestmentRepository  stockRepo;
-    private final CryptoInvestmentRepository cryptoRepo;
-    private final CardRepository             cardRepo;
-    private final ExchangeRateService        fxService;
-    private final MarketPriceService         priceService;
+    private final CashDepositRepository       depositRepo;
+    private final StockInvestmentRepository   stockRepo;
+    private final CryptoInvestmentRepository  cryptoRepo;
+    private final CardRepository              cardRepo;
+    private final SalaryUsageRecordRepository salaryRepo;
+    private final ExchangeRateService         fxService;
+    private final MarketPriceService          priceService;
 
     // ── Cash Deposits ─────────────────────────────────────────────────────────
 
@@ -329,6 +333,69 @@ public class FinancialService {
         );
     }
 
+    // ── Salary Usage Records ──────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public List<SalaryUsageRecordDto> listSalary(String ownerEmail) {
+        return salaryRepo.findByOwnerEmailOrderByYearDescMonthDesc(ownerEmail)
+                .stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public SalaryUsageRecord createSalary(String ownerEmail, Map<String, Object> body) {
+        SalaryUsageRecord r = new SalaryUsageRecord();
+        r.setId(UUID.randomUUID().toString());
+        r.setOwnerEmail(ownerEmail);
+        applySalaryFields(r, body);
+        return salaryRepo.save(r);
+    }
+
+    @Transactional
+    public SalaryUsageRecord updateSalary(String id, String ownerEmail, Map<String, Object> body) {
+        SalaryUsageRecord r = salaryRepo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Not found"));
+        checkOwner(r.getOwnerEmail(), ownerEmail);
+        applySalaryFields(r, body);
+        r.setUpdatedAt(Instant.now());
+        return salaryRepo.save(r);
+    }
+
+    @Transactional
+    public void deleteSalary(String id, String ownerEmail) {
+        salaryRepo.findById(id).ifPresent(r -> {
+            checkOwner(r.getOwnerEmail(), ownerEmail);
+            salaryRepo.delete(r);
+        });
+    }
+
+    private void applySalaryFields(SalaryUsageRecord r, Map<String, Object> body) {
+        if (body.containsKey("year"))          r.setYear(toInt(body.get("year")));
+        if (body.containsKey("month"))         r.setMonth(toInt(body.get("month")));
+        if (body.containsKey("region"))        r.setRegion((String) body.get("region"));
+        if (body.containsKey("currency"))      r.setCurrency((String) body.get("currency"));
+        if (body.containsKey("salary"))        r.setSalary(bd(body.get("salary")));
+        if (body.containsKey("retirementSavingEmployee")) r.setRetirementSavingEmployee(bd(body.get("retirementSavingEmployee")));
+        if (body.containsKey("retirementSavingEmployer")) r.setRetirementSavingEmployer(bd(body.get("retirementSavingEmployer")));
+        if (body.containsKey("tax"))           r.setTax(bd(body.get("tax")));
+        if (body.containsKey("houseRent"))     r.setHouseRent(bd(body.get("houseRent")));
+        if (body.containsKey("livingExpense")) r.setLivingExpense(bd(body.get("livingExpense")));
+        if (body.containsKey("otherExpense"))  r.setOtherExpense(bd(body.get("otherExpense")));
+        if (body.containsKey("totalExpense"))  r.setTotalExpense(bd(body.get("totalExpense")));
+        else r.setTotalExpense(
+                r.getRetirementSavingEmployee().add(r.getTax()).add(r.getHouseRent())
+                 .add(r.getLivingExpense()).add(r.getOtherExpense()));
+    }
+
+    private SalaryUsageRecordDto toDto(SalaryUsageRecord r) {
+        return new SalaryUsageRecordDto(
+                r.getId(), r.getOwnerEmail(), r.getYear(), r.getMonth(),
+                r.getRegion(), r.getCurrency(), r.getSalary(),
+                r.getRetirementSavingEmployee(), r.getRetirementSavingEmployer(), r.getTax(),
+                r.getHouseRent(), r.getLivingExpense(), r.getOtherExpense(), r.getTotalExpense(),
+                r.getCreatedAt(), r.getUpdatedAt()
+        );
+    }
+
     // ── Price refresh (on-demand) ─────────────────────────────────────────────
 
     public void refreshPrices(String ownerEmail) {
@@ -345,6 +412,14 @@ public class FinancialService {
 
     private static BigDecimal bd(double v) {
         return BigDecimal.valueOf(v).setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal bd(Object v) {
+        return new BigDecimal(v.toString()).setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private static int toInt(Object v) {
+        return Integer.parseInt(v.toString());
     }
 
     private void checkOwner(String recordEmail, String callerEmail) {

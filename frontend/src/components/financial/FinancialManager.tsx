@@ -18,11 +18,12 @@ import {
   type Card,
   type CardType,
   type CardNetwork,
+  type SalaryUsageRecord,
   formatAmount,
   formatPrice,
 } from "@/types/financial";
 
-type Tab = "deposits" | "stocks" | "crypto" | "cards";
+type Tab = "deposits" | "stocks" | "crypto" | "cards" | "salary";
 type SortDir = "asc" | "desc";
 interface SortConfig { column: string; dir: SortDir }
 
@@ -218,11 +219,16 @@ type DepositFields = Omit<CashDeposit, "id"|"ownerEmail"|"convertedAmount"|"conv
 type StockFields   = Omit<StockInvestment, "id"|"ownerEmail"|"currentPrice"|"priceCurrency"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"createdAt"|"updatedAt">;
 type CryptoFields  = Omit<CryptoInvestment, "id"|"ownerEmail"|"currentPrice"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"createdAt"|"updatedAt">;
 type CardFields    = Omit<Card, "id"|"ownerEmail"|"createdAt"|"updatedAt">;
+type SalaryFields  = Omit<SalaryUsageRecord, "id"|"ownerEmail"|"totalExpense"|"createdAt"|"updatedAt">;
 
 const emptyDeposit = (): DepositFields => ({ platform:"", platformType:"", countryRegion:"", depositType:"FIXED", currency:"USD", amount:0 });
 const emptyStock   = (): StockFields   => ({ broker:"", stockType:"US_STOCK", symbol:"", name:"", stockAmount:0, investAmount:0, currency:"USD", fee:0 });
 const emptyCrypto  = (): CryptoFields  => ({ name:"", symbol:"", amount:0, investAmount:0, currency:"USD" });
 const emptyCard    = (): CardFields    => ({ bank:"", countryRegion:"", types:[], cardName:"", network:"Visa", expireDate:"", creditLimit:null, creditLimitCurrency:"HKD", sharedCredit:null });
+const emptySalary  = (): SalaryFields  => {
+  const now = new Date();
+  return { year: now.getFullYear(), month: now.getMonth() + 1, region: "", currency: "HKD", salary: 0, retirementSavingEmployee: 0, retirementSavingEmployer: 0, tax: 0, houseRent: 0, livingExpense: 0, otherExpense: 0 };
+};
 
 const NETWORK_COLORS: Record<CardNetwork, string> = {
   Visa:      "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
@@ -263,7 +269,7 @@ function DepositForm({ initial, suggestions, onSave, onCancel, saving }: {
       </Field>
       <Field label="Country / Region">
         <ComboInput value={f.countryRegion} onChange={(v) => s("countryRegion", v)}
-          suggestions={suggestions.countries} placeholder="e.g. HK, SG, US" />
+          suggestions={suggestions.countries} placeholder="e.g. Hong Kong SAR, Singapore" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Fixed / Flex">
@@ -410,7 +416,7 @@ function CardForm({ initial, banks, onSave, onCancel, saving }: {
         </Field>
         <Field label="Country / Region">
           <ComboInput value={f.countryRegion} onChange={(v) => s("countryRegion", v)}
-            suggestions={[]} placeholder="e.g. HK, SG, US" />
+            suggestions={[]} placeholder="e.g. Hong Kong SAR, United Kingdom" />
         </Field>
       </div>
       <Field label="Card Type *">
@@ -486,6 +492,92 @@ function CardForm({ initial, banks, onSave, onCancel, saving }: {
         <Button type="submit" size="sm" disabled={saving || f.types.length === 0}>
           {saving ? "Saving…" : "Save"}
         </Button>
+      </div>
+    </form>
+  );
+}
+
+function SalaryForm({ initial, onSave, onCancel, saving }: {
+  initial: SalaryFields;
+  onSave: (d: SalaryFields) => void; onCancel: () => void; saving: boolean;
+}) {
+  const [f, setF] = useState(initial);
+  const s = (k: string, v: unknown) => setF((p) => ({ ...p, [k]: v }));
+  const num = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    s(k, parseFloat(e.target.value) || 0);
+
+  const computed = f.retirementSavingEmployee + f.tax + f.houseRent + f.livingExpense + f.otherExpense;
+
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  return (
+    <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); onSave(f); }}>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Year *">
+          <input className={inputCls} type="number" required min="2000" max="2100" step="1"
+            value={f.year} onChange={(e) => s("year", parseInt(e.target.value) || new Date().getFullYear())} />
+        </Field>
+        <Field label="Month *">
+          <select className={selectCls} value={f.month} onChange={(e) => s("month", parseInt(e.target.value))}>
+            {MONTHS.map((m, i) => <option key={i + 1} value={i + 1}>{i + 1} – {m}</option>)}
+          </select>
+        </Field>
+        <Field label="Currency">
+          <select className={selectCls} value={f.currency} onChange={(e) => s("currency", e.target.value)}>
+            {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </Field>
+      </div>
+      <Field label="Region *">
+        <input className={inputCls} required value={f.region}
+          onChange={(e) => s("region", e.target.value)} placeholder="e.g. Hong Kong SAR, Singapore" />
+      </Field>
+      <Field label="Salary (Excl. MPF / Pension) *">
+        <input className={inputCls} type="number" required min="0" step="1"
+          value={f.salary} onChange={num("salary")} />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Retirement Savings (Employee)">
+          <input className={inputCls} type="number" min="0" step="1"
+            value={f.retirementSavingEmployee} onChange={num("retirementSavingEmployee")} />
+        </Field>
+        <Field label="Retirement Savings (Employer)">
+          <input className={inputCls} type="number" min="0" step="1"
+            value={f.retirementSavingEmployer} onChange={num("retirementSavingEmployer")} />
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Tax">
+          <input className={inputCls} type="number" min="0" step="1"
+            value={f.tax} onChange={num("tax")} />
+        </Field>
+        <Field label="House Rent *">
+          <input className={inputCls} type="number" min="0" step="1"
+            value={f.houseRent} onChange={num("houseRent")} />
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Living Expense">
+          <input className={inputCls} type="number" min="0" step="1"
+            value={f.livingExpense} onChange={num("livingExpense")} />
+        </Field>
+        <Field label="Other Expense">
+          <input className={inputCls} type="number" min="0" step="1"
+            value={f.otherExpense} onChange={num("otherExpense")} />
+        </Field>
+      </div>
+      <div className="rounded-md bg-[--color-border]/30 px-3 py-2 text-xs text-[--color-muted]">
+        Total Expense (auto): <span className="font-semibold tabular-nums">
+          {new Intl.NumberFormat("en-US", { style: "currency", currency: f.currency, maximumFractionDigits: 0 }).format(computed)}
+        </span>
+        <span className="ml-1 text-[10px]">(Retirement emp. + Tax + Rent + Living + Other)</span>
+      </div>
+      <p className="text-[11px] text-[--color-muted]">
+        * House Rent: enter the amount paid this month (some months may cover next month&apos;s rent).
+      </p>
+      <div className="mt-1 flex justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" size="sm" disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
       </div>
     </form>
   );
@@ -839,20 +931,32 @@ export function FinancialManager() {
   const [defaultCurrency, setDefaultCurrency] = useState<Currency>("USD");
   const [hideAmounts, setHideAmounts] = useState(false);
 
-  const [deposits, setDeposits] = useState<CashDeposit[]>([]);
-  const [stocks,   setStocks]   = useState<StockInvestment[]>([]);
-  const [crypto,   setCrypto]   = useState<CryptoInvestment[]>([]);
-  const [cards,    setCards]    = useState<Card[]>([]);
+  const [deposits,      setDeposits]      = useState<CashDeposit[]>([]);
+  const [stocks,        setStocks]        = useState<StockInvestment[]>([]);
+  const [crypto,        setCrypto]        = useState<CryptoInvestment[]>([]);
+  const [cards,         setCards]         = useState<Card[]>([]);
+  const [salaryRecords, setSalaryRecords] = useState<SalaryUsageRecord[]>([]);
 
-  const [loading,   setLoading]   = useState(true);
+  const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [saving,    setSaving]    = useState(false);
-  const [fxRates,   setFxRates]   = useState<Record<string, number>>({});
+  const [saving,     setSaving]     = useState(false);
+  const [fxRates,    setFxRates]    = useState<Record<string, number>>({});
+
+  const [salaryEnabled, setSalaryEnabled] = useState(true);
+  useEffect(() => {
+    const stored = localStorage.getItem("salary_tracking_enabled");
+    if (stored !== null) setSalaryEnabled(stored === "true");
+  }, []);
+  const toggleSalary = (v: boolean) => {
+    setSalaryEnabled(v);
+    localStorage.setItem("salary_tracking_enabled", String(v));
+  };
 
   const depositSort = useSort({ column: "platform", dir: "asc" });
   const stockSort   = useSort({ column: "symbol",   dir: "asc" });
   const cryptoSort  = useSort({ column: "symbol",   dir: "asc" });
   const cardSort    = useSort({ column: "bank",     dir: "asc" });
+  const salarySort  = useSort({ column: "year",     dir: "desc" });
 
   const [searchTerm, setSearchTerm] = useState("");
   useEffect(() => { setSearchTerm(""); }, [tab]);
@@ -862,6 +966,7 @@ export function FinancialManager() {
     | { mode: "add-stock" }     | { mode: "edit-stock";    item: StockInvestment }
     | { mode: "add-crypto" }    | { mode: "edit-crypto";   item: CryptoInvestment }
     | { mode: "add-card" }      | { mode: "edit-card";     item: Card }
+    | { mode: "add-salary" }    | { mode: "edit-salary";   item: SalaryUsageRecord }
     | null
   >(null);
 
@@ -875,11 +980,12 @@ export function FinancialManager() {
   const brokerSuggestions = unique(stocks.map((s) => s.broker));
 
   const loadAll = useCallback(async () => {
-    const [deps, stks, cry, cds, cur, rates] = await Promise.all([
+    const [deps, stks, cry, cds, sal, cur, rates] = await Promise.all([
       apiFetch<CashDeposit>("deposits"),
       apiFetch<StockInvestment>("stocks"),
       apiFetch<CryptoInvestment>("crypto"),
       apiFetch<Card>("cards"),
+      apiFetch<SalaryUsageRecord>("salary"),
       fetchUserCurrency(),
       fetchExchangeRates(),
     ]);
@@ -887,6 +993,7 @@ export function FinancialManager() {
     setStocks(stks);
     setCrypto(cry);
     setCards(cds);
+    setSalaryRecords(sal);
     setDefaultCurrency(cur as Currency);
     setFxRates(rates);
   }, []);
@@ -1011,11 +1118,31 @@ export function FinancialManager() {
     } finally { setSaving(false); }
   }
 
+  async function saveSalary(data: SalaryFields) {
+    setSaving(true);
+    const totalExpense = data.retirementSavingEmployee + data.tax + data.houseRent + data.livingExpense + data.otherExpense;
+    try {
+      if (modal?.mode === "edit-salary") {
+        await apiUpdate<SalaryUsageRecord>("salary", modal.item.id, { ...data, totalExpense });
+      } else {
+        await apiCreate<SalaryUsageRecord>("salary", { ...data, totalExpense });
+      }
+      setModal(null);
+      setSalaryRecords(await apiFetch<SalaryUsageRecord>("salary"));
+    } finally { setSaving(false); }
+  }
+
+  const deleteSalary = async (id: string) => {
+    await apiDelete("salary", id);
+    setSalaryRecords((p) => p.filter((r) => r.id !== id));
+  };
+
   // Sorted views
   const sortedDeposits = sortData(deposits, depositSort.sort);
   const sortedStocks   = sortData(stocks,   stockSort.sort);
   const sortedCrypto   = sortData(crypto,   cryptoSort.sort);
   const sortedCards    = sortData(cards,    cardSort.sort);
+  const sortedSalary   = sortData(salaryRecords, salarySort.sort);
 
   // Filtered views
   const q = searchTerm.toLowerCase();
@@ -1039,6 +1166,11 @@ export function FinancialManager() {
         [c.bank, c.countryRegion, c.cardName, c.network, c.types.join(" ")]
           .some((v) => v?.toLowerCase().includes(q)))
     : sortedCards;
+  const filteredSalary = q
+    ? sortedSalary.filter((r) =>
+        [r.region, r.currency, String(r.year), String(r.month).padStart(2, "0")]
+          .some((v) => v?.toLowerCase().includes(q)))
+    : sortedSalary;
 
   // Amount masking helper
   const amt = (formatted: string) => hideAmounts ? "***" : formatted;
@@ -1123,6 +1255,7 @@ export function FinancialManager() {
           <button className={tabCls("stocks")}   onClick={() => setTab("stocks")}>Stocks</button>
           <button className={tabCls("crypto")}   onClick={() => setTab("crypto")}>Crypto</button>
           <button className={tabCls("cards")}    onClick={() => setTab("cards")}>Cards</button>
+          <button className={tabCls("salary")}   onClick={() => setTab("salary")}>Salary</button>
         </div>
       </div>
 
@@ -1137,20 +1270,23 @@ export function FinancialManager() {
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[--color-muted]" />
                 <input
                   className="w-full rounded-md border border-[--color-border] bg-[--color-surface] py-1.5 pl-8 pr-3 text-sm outline-none focus:border-[--color-primary] focus:ring-1 focus:ring-[--color-primary]/30"
-                  placeholder={`Search ${tab === "deposits" ? "deposits" : tab === "stocks" ? "stocks" : tab === "crypto" ? "crypto" : "cards"}…`}
+                  placeholder={`Search ${tab === "deposits" ? "deposits" : tab === "stocks" ? "stocks" : tab === "crypto" ? "crypto" : tab === "cards" ? "cards" : "salary records"}…`}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <Button size="sm" onClick={() => setModal(
-                tab === "deposits" ? { mode: "add-deposit" }
-                : tab === "stocks" ? { mode: "add-stock" }
-                : tab === "crypto" ? { mode: "add-crypto" }
-                : { mode: "add-card" },
-              )}>
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Add {tab === "deposits" ? "Deposit" : tab === "stocks" ? "Stock" : tab === "crypto" ? "Crypto" : "Card"}
-              </Button>
+              {(tab !== "salary" || salaryEnabled) && (
+                <Button size="sm" onClick={() => setModal(
+                  tab === "deposits" ? { mode: "add-deposit" }
+                  : tab === "stocks" ? { mode: "add-stock" }
+                  : tab === "crypto" ? { mode: "add-crypto" }
+                  : tab === "cards"  ? { mode: "add-card" }
+                  : { mode: "add-salary" },
+                )}>
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  Add {tab === "deposits" ? "Deposit" : tab === "stocks" ? "Stock" : tab === "crypto" ? "Crypto" : tab === "cards" ? "Card" : "Record"}
+                </Button>
+              )}
             </div>
 
             {/* ── Cash Deposits ── */}
@@ -1342,6 +1478,89 @@ export function FinancialManager() {
               </div>
             ))}
 
+            {/* ── Salary ── */}
+            {tab === "salary" && (
+              <>
+                <div className="mb-4 flex items-center justify-between rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Salary Tracking</p>
+                    <p className="text-xs text-[--color-muted]">Monthly salary &amp; expense records — no total banner</p>
+                  </div>
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input type="checkbox" className="peer sr-only" checked={salaryEnabled}
+                      onChange={(e) => toggleSalary(e.target.checked)} />
+                    <div className="h-5 w-9 rounded-full bg-[--color-border] transition-colors peer-checked:bg-[--color-primary] peer-focus:ring-2 peer-focus:ring-[--color-primary]/30 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-4" />
+                  </label>
+                </div>
+                {salaryEnabled && (filteredSalary.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-[--color-muted]">
+                    {q ? `No records matching "${searchTerm}".` : "No salary records yet."}
+                  </p>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto rounded-xl border border-[--color-border]">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className={thCls}>
+                            <Th label="Year / Month"      column="year"          sort={salarySort.sort} onSort={salarySort.toggle} />
+                            <Th label="Region / Currency" column="region"        sort={salarySort.sort} onSort={salarySort.toggle} />
+                            <Th label="Salary (Excl. MPF)" column="salary"       sort={salarySort.sort} onSort={salarySort.toggle} right />
+                            <Th label="Retirement (Emp.)" column="retirementSavingEmployee" sort={salarySort.sort} onSort={salarySort.toggle} right />
+                            <Th label="Retirement (Emplr.)" column="retirementSavingEmployer" sort={salarySort.sort} onSort={salarySort.toggle} right />
+                            <Th label="Tax"               column="tax"           sort={salarySort.sort} onSort={salarySort.toggle} right />
+                            <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">
+                              House Rent <span className="opacity-60">*</span>
+                            </th>
+                            <Th label="Living Expense"    column="livingExpense"  sort={salarySort.sort} onSort={salarySort.toggle} right />
+                            <Th label="Other Expense"     column="otherExpense"   sort={salarySort.sort} onSort={salarySort.toggle} right />
+                            <Th label="Total Expense"     column="totalExpense"   sort={salarySort.sort} onSort={salarySort.toggle} right />
+                            <th className="px-4 py-2.5" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredSalary.map((r) => {
+                            const fmtS = (v: number) => v === 0 ? "—"
+                              : new Intl.NumberFormat("en-US", { style: "currency", currency: r.currency, maximumFractionDigits: 0 }).format(v);
+                            return (
+                              <tr key={r.id} className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
+                                <td className="px-4 py-3 font-medium tabular-nums">
+                                  {r.year}/{String(r.month).padStart(2, "0")}
+                                </td>
+                                <td className="px-4 py-3 text-[--color-muted]">{r.region} / {r.currency}</td>
+                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.salary))}</td>
+                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.retirementSavingEmployee))}</td>
+                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.retirementSavingEmployer))}</td>
+                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.tax))}</td>
+                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.houseRent))}</td>
+                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.livingExpense))}</td>
+                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.otherExpense))}</td>
+                                <td className="px-4 py-3 text-right tabular-nums font-semibold">{amt(fmtS(r.totalExpense))}</td>
+                                <td className="px-4 py-3">
+                                  <div className="flex justify-end gap-1">
+                                    <Button size="icon" variant="ghost" className="h-7 w-7"
+                                      onClick={() => setModal({ mode: "edit-salary", item: r })}>
+                                      <Pencil className="h-3.5 w-3.5 text-[--color-muted]" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-7 w-7"
+                                      onClick={() => void deleteSalary(r.id)}>
+                                      <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="mt-2 text-[11px] text-[--color-muted]">
+                      * House Rent: some months are paid in the following month.
+                    </p>
+                  </>
+                ))}
+              </>
+            )}
+
             {/* ── Cards ── */}
             {tab === "cards" && (filteredCards.length === 0 ? (
               <p className="py-12 text-center text-sm text-[--color-muted]">
@@ -1468,6 +1687,21 @@ export function FinancialManager() {
               : emptyCard()}
             banks={unique(cards.map((c) => c.bank))}
             onSave={saveCard} onCancel={() => setModal(null)} saving={saving} />
+        </Modal>
+      )}
+
+      {(modal?.mode === "add-salary" || modal?.mode === "edit-salary") && (
+        <Modal title={modal.mode === "add-salary" ? "Add Salary Record" : "Edit Salary Record"} onClose={() => setModal(null)}>
+          <SalaryForm
+            initial={modal.mode === "edit-salary"
+              ? { year: modal.item.year, month: modal.item.month, region: modal.item.region,
+                  currency: modal.item.currency, salary: modal.item.salary,
+                  retirementSavingEmployee: modal.item.retirementSavingEmployee,
+                  retirementSavingEmployer: modal.item.retirementSavingEmployer,
+                  tax: modal.item.tax, houseRent: modal.item.houseRent,
+                  livingExpense: modal.item.livingExpense, otherExpense: modal.item.otherExpense }
+              : emptySalary()}
+            onSave={saveSalary} onCancel={() => setModal(null)} saving={saving} />
         </Modal>
       )}
 

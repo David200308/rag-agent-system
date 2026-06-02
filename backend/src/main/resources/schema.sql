@@ -376,3 +376,24 @@ CREATE TABLE IF NOT EXISTS financial_cards (
     updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_fin_card_owner (owner_email)
 );
+
+CREATE TABLE IF NOT EXISTS salary_usage_records (
+    id                           VARCHAR(36)   PRIMARY KEY,
+    owner_email                  VARCHAR(255)  NOT NULL,
+    year                         INT           NOT NULL,
+    month                        INT           NOT NULL,
+    region                       VARCHAR(100)  NOT NULL,
+    currency                     VARCHAR(10)   NOT NULL,
+    salary                       DECIMAL(19,2) NOT NULL DEFAULT 0,
+    retirement_saving_employee   DECIMAL(19,2) NOT NULL DEFAULT 0,
+    retirement_saving_employer   DECIMAL(19,2) NOT NULL DEFAULT 0,
+    tax                          DECIMAL(19,2) NOT NULL DEFAULT 0,
+    house_rent                   DECIMAL(19,2) NOT NULL DEFAULT 0,
+    living_expense               DECIMAL(19,2) NOT NULL DEFAULT 0,
+    other_expense                DECIMAL(19,2) NOT NULL DEFAULT 0,
+    total_expense                DECIMAL(19,2) NOT NULL DEFAULT 0,
+    created_at                   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_sal_owner (owner_email),
+    UNIQUE KEY uq_sal_owner_ym (owner_email, year, month)
+);

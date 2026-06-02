@@ -3,10 +3,12 @@ package com.ragagent.financial;
 import com.ragagent.financial.dto.CardDto;
 import com.ragagent.financial.dto.CashDepositDto;
 import com.ragagent.financial.dto.CryptoInvestmentDto;
+import com.ragagent.financial.dto.SalaryUsageRecordDto;
 import com.ragagent.financial.dto.StockInvestmentDto;
 import com.ragagent.financial.entity.Card;
 import com.ragagent.financial.entity.CashDeposit;
 import com.ragagent.financial.entity.CryptoInvestment;
+import com.ragagent.financial.entity.SalaryUsageRecord;
 import com.ragagent.financial.entity.StockInvestment;
 import com.ragagent.user.UserPreferenceService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -168,6 +170,43 @@ public class FinancialController {
     public ResponseEntity<Void> deleteCard(@PathVariable String id, HttpServletRequest req) {
         try {
             service.deleteCard(id, email(req));
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        }
+    }
+
+    // ── Salary Usage Records ──────────────────────────────────────────────────
+
+    @GetMapping("/salary")
+    @Operation(summary = "List salary usage records")
+    public ResponseEntity<List<SalaryUsageRecordDto>> listSalary(HttpServletRequest req) {
+        return ResponseEntity.ok(service.listSalary(email(req)));
+    }
+
+    @PostMapping("/salary")
+    @Operation(summary = "Create a salary usage record")
+    public ResponseEntity<SalaryUsageRecord> createSalary(
+            @RequestBody Map<String, Object> body, HttpServletRequest req) {
+        return ResponseEntity.status(201).body(service.createSalary(email(req), body));
+    }
+
+    @PutMapping("/salary/{id}")
+    public ResponseEntity<SalaryUsageRecord> updateSalary(
+            @PathVariable String id,
+            @RequestBody Map<String, Object> body,
+            HttpServletRequest req) {
+        try {
+            return ResponseEntity.ok(service.updateSalary(id, email(req), body));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        }
+    }
+
+    @DeleteMapping("/salary/{id}")
+    public ResponseEntity<Void> deleteSalary(@PathVariable String id, HttpServletRequest req) {
+        try {
+            service.deleteSalary(id, email(req));
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();

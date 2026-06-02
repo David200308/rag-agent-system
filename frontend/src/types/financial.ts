@@ -1,5 +1,6 @@
 export const CURRENCIES = ["HKD", "CNY", "USD", "JPY", "SGD", "GBP", "AUD", "EUR", "CAD"] as const;
 
+
 export const CARD_TYPES = ["Credit", "Debit", "ATM"] as const;
 export type CardType = typeof CARD_TYPES[number];
 
@@ -98,6 +99,25 @@ export interface CryptoInvestment {
   convertedCurrency: string;
   /** (convertedCurrentValue - convertedInvestAmount) / convertedInvestAmount * 100; null if price unavailable */
   pnlPercent: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SalaryUsageRecord {
+  id: string;
+  ownerEmail: string;
+  year: number;
+  month: number;
+  region: string;
+  currency: string;
+  salary: number;
+  retirementSavingEmployee: number;
+  retirementSavingEmployer: number;
+  tax: number;
+  houseRent: number;
+  livingExpense: number;
+  otherExpense: number;
+  totalExpense: number;
   createdAt: string;
   updatedAt: string;
 }
