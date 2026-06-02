@@ -868,9 +868,28 @@ function SalaryLineChart({ records, hide }: { records: SalaryUsageRecord[]; hide
 
   const yTicks = Array.from({ length: 5 }, (_, i) => (maxV * i) / 4);
 
+  const totalSalaryBonus = records.reduce((s, r) => s + r.salary + r.bonus, 0);
+  const totalExpense     = records.reduce((s, r) => s + r.totalExpense, 0);
+  const currency = records[0]?.currency ?? "USD";
+  const fmtTotal = (v: number) => hide ? "***"
+    : new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(v);
+
   return (
-    <div className="rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4">
-      <p className="mb-2 text-xs font-medium text-[--color-muted]">Salary &amp; Expense Trend</p>
+    <div className="flex gap-3">
+      {/* ── Left: summary cards ── */}
+      <div className="flex w-44 shrink-0 flex-col gap-3">
+        <div className="flex flex-1 flex-col justify-center rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-4 py-3">
+          <p className="text-xs text-[--color-muted]">Total Salary &amp; Bonus</p>
+          <p className="mt-1 text-base font-semibold tabular-nums">{fmtTotal(totalSalaryBonus)}</p>
+        </div>
+        <div className="flex flex-1 flex-col justify-center rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-4 py-3">
+          <p className="text-xs text-[--color-muted]">Total Expense</p>
+          <p className="mt-1 text-base font-semibold tabular-nums">{fmtTotal(totalExpense)}</p>
+        </div>
+      </div>
+
+      {/* ── Right: chart ── */}
+      <div className="min-w-0 flex-1 rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 200 }}>
         {yTicks.map((v, i) => (
           <g key={i}>
@@ -909,6 +928,7 @@ function SalaryLineChart({ records, hide }: { records: SalaryUsageRecord[]; hide
             {s.label}
           </span>
         ))}
+      </div>
       </div>
     </div>
   );
@@ -1031,6 +1051,8 @@ export function FinancialManager() {
   const cryptoSort  = useSort({ column: "symbol",   dir: "asc" });
   const cardSort    = useSort({ column: "bank",     dir: "asc" });
   const salarySort  = useSort({ column: "year",     dir: "desc" });
+  const [salaryFrom, setSalaryFrom] = useState("");   // "YYYY-MM" or ""
+  const [salaryTo,   setSalaryTo]   = useState("");
 
   const [searchTerm, setSearchTerm] = useState("");
   useEffect(() => { setSearchTerm(""); }, [tab]);
@@ -1241,11 +1263,17 @@ export function FinancialManager() {
         [c.bank, c.countryRegion, c.cardName, c.network, c.types.join(" ")]
           .some((v) => v?.toLowerCase().includes(q)))
     : sortedCards;
+  const salaryInRange = sortedSalary.filter((r) => {
+    const ym = `${r.year}-${String(r.month).padStart(2, "0")}`;
+    if (salaryFrom && ym < salaryFrom) return false;
+    if (salaryTo   && ym > salaryTo)   return false;
+    return true;
+  });
   const filteredSalary = q
-    ? sortedSalary.filter((r) =>
+    ? salaryInRange.filter((r) =>
         [r.region, r.currency, String(r.year), String(r.month).padStart(2, "0")]
           .some((v) => v?.toLowerCase().includes(q)))
-    : sortedSalary;
+    : salaryInRange;
 
   // Amount masking helper
   const amt = (formatted: string) => hideAmounts ? "***" : formatted;
@@ -1554,12 +1582,30 @@ export function FinancialManager() {
             ))}
 
             {/* ── Salary & Expense ── */}
-            {tab === "salary" && (filteredSalary.length === 0 ? (
-              <p className="py-12 text-center text-sm text-[--color-muted]">
-                {q ? `No records matching "${searchTerm}".` : "No salary records yet."}
-              </p>
-            ) : (
+            {tab === "salary" && (
               <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-[--color-muted]">From</span>
+                  <input type="month" value={salaryFrom}
+                    onChange={(e) => setSalaryFrom(e.target.value)}
+                    className="rounded-md border border-[--color-border] bg-[--color-surface] px-2.5 py-1.5 text-xs outline-none focus:border-[--color-primary] focus:ring-1 focus:ring-[--color-primary]/30" />
+                  <span className="text-xs text-[--color-muted]">To</span>
+                  <input type="month" value={salaryTo}
+                    onChange={(e) => setSalaryTo(e.target.value)}
+                    className="rounded-md border border-[--color-border] bg-[--color-surface] px-2.5 py-1.5 text-xs outline-none focus:border-[--color-primary] focus:ring-1 focus:ring-[--color-primary]/30" />
+                  {(salaryFrom || salaryTo) && (
+                    <button onClick={() => { setSalaryFrom(""); setSalaryTo(""); }}
+                      className="text-xs text-[--color-muted] hover:text-red-500">
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {filteredSalary.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-[--color-muted]">
+                    {q ? `No records matching "${searchTerm}".` : "No salary records yet."}
+                  </p>
+                ) : (
+                  <>
                 <SalaryLineChart records={filteredSalary} hide={hideAmounts} />
                 <div className="overflow-x-auto rounded-xl border border-[--color-border]">
                   <table className="w-full text-sm">
@@ -1622,7 +1668,9 @@ export function FinancialManager() {
                   * House Rent: some months are paid in the following month.
                 </p>
               </>
-            ))}
+                )}
+              </>
+            )}
 
             {/* ── Cards ── */}
             {tab === "cards" && (filteredCards.length === 0 ? (
