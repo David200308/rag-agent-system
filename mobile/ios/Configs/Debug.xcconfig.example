@@ -1,0 +1,5 @@
+// xcconfig files treat // as a comment, so URLs must use this workaround
+_SLASH = /
+SERVER_BASE_URL = https:$(_SLASH)$(_SLASH)api.xxx.com
+// Generate with: openssl rand -base64 32  (must match CLIENT_IOS_SECRET in backend .env)
+CLIENT_IOS_SECRET = changeme-ios-shared-secret

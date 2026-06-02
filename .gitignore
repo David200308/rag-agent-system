@@ -71,3 +71,6 @@ cli/.eggs/
 .venv/
 venv/
 env/
+
+Debug.xcconfig
+Release.xcconfig
