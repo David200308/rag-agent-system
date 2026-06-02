@@ -532,43 +532,43 @@ function SalaryForm({ initial, onSave, onCancel, saving }: {
         <input className={inputCls} required value={f.region}
           onChange={(e) => s("region", e.target.value)} placeholder="e.g. Hong Kong SAR, Singapore" />
       </Field>
-      <Field label="Salary (Excl. MPF / Pension) *">
-        <input className={inputCls} type="number" required min="0" step="1"
+      <Field label="Salary (Excl. Retirement / Pension) *">
+        <input className={inputCls} type="number" required min="0" step="0.01"
           value={f.salary} onChange={num("salary")} />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Retirement Savings (Employee)">
-          <input className={inputCls} type="number" min="0" step="1"
+          <input className={inputCls} type="number" min="0" step="0.01"
             value={f.retirementSavingEmployee} onChange={num("retirementSavingEmployee")} />
         </Field>
         <Field label="Retirement Savings (Employer)">
-          <input className={inputCls} type="number" min="0" step="1"
+          <input className={inputCls} type="number" min="0" step="0.01"
             value={f.retirementSavingEmployer} onChange={num("retirementSavingEmployer")} />
         </Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Tax">
-          <input className={inputCls} type="number" min="0" step="1"
+          <input className={inputCls} type="number" min="0" step="0.01"
             value={f.tax} onChange={num("tax")} />
         </Field>
         <Field label="House Rent *">
-          <input className={inputCls} type="number" min="0" step="1"
+          <input className={inputCls} type="number" min="0" step="0.01"
             value={f.houseRent} onChange={num("houseRent")} />
         </Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Living Expense">
-          <input className={inputCls} type="number" min="0" step="1"
+          <input className={inputCls} type="number" min="0" step="0.01"
             value={f.livingExpense} onChange={num("livingExpense")} />
         </Field>
         <Field label="Other Expense">
-          <input className={inputCls} type="number" min="0" step="1"
+          <input className={inputCls} type="number" min="0" step="0.01"
             value={f.otherExpense} onChange={num("otherExpense")} />
         </Field>
       </div>
       <div className="rounded-md bg-[--color-border]/30 px-3 py-2 text-xs text-[--color-muted]">
         Total Expense (auto): <span className="font-semibold tabular-nums">
-          {new Intl.NumberFormat("en-US", { style: "currency", currency: f.currency, maximumFractionDigits: 0 }).format(computed)}
+          {new Intl.NumberFormat("en-US", { style: "currency", currency: f.currency, maximumFractionDigits: 2 }).format(computed)}
         </span>
         <span className="ml-1 text-[10px]">(Retirement emp. + Tax + Rent + Living + Other)</span>
       </div>
