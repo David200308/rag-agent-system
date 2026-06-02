@@ -875,21 +875,21 @@ function SalaryLineChart({ records, hide }: { records: SalaryUsageRecord[]; hide
     : new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(v);
 
   return (
-    <div className="flex gap-3">
-      {/* ── Left: summary cards ── */}
-      <div className="flex w-44 shrink-0 flex-col gap-3">
-        <div className="flex flex-1 flex-col justify-center rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-4 py-3">
+    <div className="grid grid-cols-3 gap-4">
+      {/* ── Left: summary cards (1/3) ── */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-1 flex-col justify-center rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-5 py-4">
           <p className="text-xs text-[--color-muted]">Total Salary &amp; Bonus</p>
-          <p className="mt-1 text-base font-semibold tabular-nums">{fmtTotal(totalSalaryBonus)}</p>
+          <p className="mt-1.5 text-lg font-semibold tabular-nums">{fmtTotal(totalSalaryBonus)}</p>
         </div>
-        <div className="flex flex-1 flex-col justify-center rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-4 py-3">
+        <div className="flex flex-1 flex-col justify-center rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-5 py-4">
           <p className="text-xs text-[--color-muted]">Total Expense</p>
-          <p className="mt-1 text-base font-semibold tabular-nums">{fmtTotal(totalExpense)}</p>
+          <p className="mt-1.5 text-lg font-semibold tabular-nums">{fmtTotal(totalExpense)}</p>
         </div>
       </div>
 
-      {/* ── Right: chart ── */}
-      <div className="min-w-0 flex-1 rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4">
+      {/* ── Right: chart (2/3) ── */}
+      <div className="col-span-2 rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 200 }}>
         {yTicks.map((v, i) => (
           <g key={i}>
