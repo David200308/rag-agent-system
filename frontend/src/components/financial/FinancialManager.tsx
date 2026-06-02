@@ -628,13 +628,14 @@ function unique(arr: string[]): string[] {
 
 // ── Export helpers ────────────────────────────────────────────────────────────
 
-type DownloadSection = "deposits" | "stocks" | "crypto" | "cards";
+type DownloadSection = "deposits" | "stocks" | "crypto" | "cards" | "salary";
 
 const SECTION_LABELS: Record<DownloadSection, string> = {
   deposits: "Cash Deposits",
   stocks:   "Stocks",
   crypto:   "Crypto",
   cards:    "Cards",
+  salary:   "Salary & Expense",
 };
 
 function pct(part: number, total: number): string {
@@ -648,6 +649,7 @@ function buildMarkdown(
   stocks: StockInvestment[],
   crypto: CryptoInvestment[],
   cards: Card[],
+  salary: SalaryUsageRecord[],
   currency: string,
   grandTotal: number,
 ): string {
@@ -655,7 +657,7 @@ function buildMarkdown(
   const date = new Date().toISOString().slice(0, 10);
   const lines: string[] = [`# Financial Report — ${date}`, ""];
 
-  const financialSections = sections.filter((s) => s !== "cards");
+  const financialSections = sections.filter((s) => s !== "cards" && s !== "salary");
   if (financialSections.length > 1) {
     const totalDep = has("deposits") ? deposits.reduce((s, d) => s + (d.convertedAmount ?? 0), 0) : 0;
     const totalStk = has("stocks")   ? stocks.reduce((s, st) => s + (st.convertedCurrentValue ?? st.convertedInvestAmount ?? 0), 0) : 0;
@@ -716,6 +718,18 @@ function buildMarkdown(
     lines.push("");
   }
 
+  if (has("salary") && salary.length > 0) {
+    const sorted = [...salary].sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+    lines.push("## Salary & Expense", "");
+    lines.push("| Year/Month | Region | Currency | Salary | Bonus | Retirement (Emp.) | Retirement (Emplr.) | Tax | House Rent | Living Expense | Other Expense | Total Expense |");
+    lines.push("|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+    for (const r of sorted) {
+      const f = (v: number) => v === 0 ? "—" : formatAmount(v, r.currency);
+      lines.push(`| ${r.year}/${String(r.month).padStart(2,"0")} | ${r.region} | ${r.currency} | ${f(r.salary)} | ${f(r.bonus)} | ${f(r.retirementSavingEmployee)} | ${f(r.retirementSavingEmployer)} | ${f(r.tax)} | ${f(r.houseRent)} | ${f(r.livingExpense)} | ${f(r.otherExpense)} | ${f(r.totalExpense)} |`);
+    }
+    lines.push("");
+  }
+
   return lines.join("\n");
 }
 
@@ -733,6 +747,7 @@ function exportPdf(
   stocks: StockInvestment[],
   crypto: CryptoInvestment[],
   cards: Card[],
+  salary: SalaryUsageRecord[],
   currency: string,
   grandTotal: number,
   title = "Financial Report",
@@ -745,7 +760,7 @@ function exportPdf(
   const td  = `border:1px solid #ccc;padding:4px 8px`;
   const tdR = `border:1px solid #ccc;padding:4px 8px;text-align:right`;
 
-  const financialSections = sections.filter((s) => s !== "cards");
+  const financialSections = sections.filter((s) => s !== "cards" && s !== "salary");
   let summaryHtml = "";
   if (financialSections.length > 1) {
     const tDep = has("deposits") ? deposits.reduce((s, d) => s + (d.convertedAmount ?? 0), 0) : 0;
@@ -830,6 +845,27 @@ ${has("cards") && cards.length > 0 ? `<h2>Cards</h2><table style="${ts}"><thead>
   <th style="${th}">Types</th><th style="${th}">Network</th><th style="${th}">Expiry</th>
   <th style="${th}">Credit Limit</th><th style="${th}">Shared Credit</th>
 </tr></thead><tbody>${cardRows}</tbody></table>` : ""}
+${has("salary") && salary.length > 0 ? (() => {
+  const sorted = [...salary].sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+  const f = (v: number, cur: string) => v === 0 ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: cur, maximumFractionDigits: 2 }).format(v);
+  const rows = sorted.map(r => `<tr>
+    <td style="${td}">${r.year}/${String(r.month).padStart(2,"0")}</td>
+    <td style="${td}">${r.region}</td><td style="${td}">${r.currency}</td>
+    <td style="${tdR}">${f(r.salary,r.currency)}</td><td style="${tdR}">${f(r.bonus,r.currency)}</td>
+    <td style="${tdR}">${f(r.retirementSavingEmployee,r.currency)}</td>
+    <td style="${tdR}">${f(r.retirementSavingEmployer,r.currency)}</td>
+    <td style="${tdR}">${f(r.tax,r.currency)}</td><td style="${tdR}">${f(r.houseRent,r.currency)}</td>
+    <td style="${tdR}">${f(r.livingExpense,r.currency)}</td><td style="${tdR}">${f(r.otherExpense,r.currency)}</td>
+    <td style="${tdR};font-weight:bold">${f(r.totalExpense,r.currency)}</td></tr>`).join("");
+  return `<h2>Salary &amp; Expense</h2><table style="${ts}"><thead><tr>
+  <th style="${th}">Year/Month</th><th style="${th}">Region</th><th style="${th}">Currency</th>
+  <th style="${th}">Salary</th><th style="${th}">Bonus</th>
+  <th style="${th}">Retirement (Emp.)</th><th style="${th}">Retirement (Emplr.)</th>
+  <th style="${th}">Tax</th><th style="${th}">House Rent</th>
+  <th style="${th}">Living Expense</th><th style="${th}">Other Expense</th>
+  <th style="${th}">Total Expense</th>
+</tr></thead><tbody>${rows}</tbody></table>`;
+})() : ""}
 </body></html>`;
 
   const w = window.open("", "_blank");
@@ -959,11 +995,41 @@ function SalaryLineChart({ records, hide }: { records: SalaryUsageRecord[]; hide
 
 // ── Download modal ────────────────────────────────────────────────────────────
 
-function DownloadModal({ deposits, stocks, crypto, cards, currency, grandTotal, onClose }: {
-  deposits: CashDeposit[]; stocks: StockInvestment[]; crypto: CryptoInvestment[]; cards: Card[];
+function SegBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      className={`flex-1 rounded-md py-1.5 text-xs font-medium transition-colors ${
+        active
+          ? "bg-black text-white dark:bg-white dark:text-black"
+          : "text-[--color-muted] hover:bg-[--color-border]/50"
+      }`}>
+      {label}
+    </button>
+  );
+}
+
+function SwitchRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) {
+  return (
+    <div className="flex items-center justify-between py-2.5">
+      <span className="text-sm">{label}</span>
+      <button role="switch" aria-checked={checked} onClick={onChange}
+        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
+          checked ? "bg-black dark:bg-white" : "bg-neutral-300 dark:bg-neutral-600"
+        }`}>
+        <span className={`inline-block h-5 w-5 transform rounded-full shadow transition-transform duration-200 ${
+          checked ? "translate-x-[22px] bg-white dark:bg-black" : "translate-x-0.5 bg-white"
+        }`} />
+      </button>
+    </div>
+  );
+}
+
+function DownloadModal({ deposits, stocks, crypto, cards, salary, currency, grandTotal, onClose }: {
+  deposits: CashDeposit[]; stocks: StockInvestment[]; crypto: CryptoInvestment[];
+  cards: Card[]; salary: SalaryUsageRecord[];
   currency: string; grandTotal: number; onClose: () => void;
 }) {
-  const [sections, setSections] = useState<DownloadSection[]>(["deposits", "stocks", "crypto", "cards"]);
+  const [sections, setSections] = useState<DownloadSection[]>(["deposits", "stocks", "crypto", "cards", "salary"]);
   const [format,   setFormat]   = useState<"markdown" | "pdf">("markdown");
   const [mode,     setMode]     = useState<"combined" | "separate">("combined");
 
@@ -975,16 +1041,16 @@ function DownloadModal({ deposits, stocks, crypto, cards, currency, grandTotal, 
     const date = new Date().toISOString().slice(0, 10);
     if (mode === "combined") {
       if (format === "markdown") {
-        downloadFile(buildMarkdown(sections, deposits, stocks, crypto, cards, currency, grandTotal), `financial-${date}.md`, "text/markdown");
+        downloadFile(buildMarkdown(sections, deposits, stocks, crypto, cards, salary, currency, grandTotal), `financial-${date}.md`, "text/markdown");
       } else {
-        exportPdf(sections, deposits, stocks, crypto, cards, currency, grandTotal, "Financial Report");
+        exportPdf(sections, deposits, stocks, crypto, cards, salary, currency, grandTotal, "Financial Report");
       }
     } else {
       for (const section of sections) {
         if (format === "markdown") {
-          downloadFile(buildMarkdown([section], deposits, stocks, crypto, cards, currency, grandTotal), `financial-${section}-${date}.md`, "text/markdown");
+          downloadFile(buildMarkdown([section], deposits, stocks, crypto, cards, salary, currency, grandTotal), `financial-${section}-${date}.md`, "text/markdown");
         } else {
-          exportPdf([section], deposits, stocks, crypto, cards, currency, grandTotal, SECTION_LABELS[section]);
+          exportPdf([section], deposits, stocks, crypto, cards, salary, currency, grandTotal, SECTION_LABELS[section]);
         }
       }
     }
@@ -994,51 +1060,42 @@ function DownloadModal({ deposits, stocks, crypto, cards, currency, grandTotal, 
   return (
     <Modal title="Download Report" onClose={onClose}>
       <div className="flex flex-col gap-4">
+
+        {/* Sections */}
         <div>
-          <p className="mb-2 text-xs text-[--color-muted]">Sections</p>
-          <div className="grid grid-cols-2 gap-2">
-            {(["deposits", "stocks", "crypto", "cards"] as DownloadSection[]).map((s) => (
-              <label key={s} className={`flex cursor-pointer select-none items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                sections.includes(s)
-                  ? "border-[--color-primary] bg-[--color-primary]/5"
-                  : "border-[--color-border] hover:bg-[--color-border]/30"
-              }`}>
-                <input type="checkbox" className="accent-[--color-primary]"
-                  checked={sections.includes(s)} onChange={() => toggle(s)} />
-                {SECTION_LABELS[s]}
-              </label>
+          <p className="mb-1 text-xs text-[--color-muted]">Sections</p>
+          <div className="divide-y divide-[--color-border] rounded-xl border border-[--color-border] px-3">
+            {(["deposits", "stocks", "crypto", "cards", "salary"] as DownloadSection[]).map((s) => (
+              <SwitchRow key={s} label={SECTION_LABELS[s]}
+                checked={sections.includes(s)} onChange={() => toggle(s)} />
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="mb-2 text-xs text-[--color-muted]">Format</p>
-            <div className="flex flex-col gap-2">
-              {(["markdown", "pdf"] as const).map((f) => (
-                <label key={f} className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
-                  <input type="radio" name="dl-format" checked={format === f} onChange={() => setFormat(f)} />
-                  {f === "markdown" ? "Markdown (.md)" : "PDF (print)"}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="mb-2 text-xs text-[--color-muted]">Output</p>
-            <div className="flex flex-col gap-2">
-              {(["combined", "separate"] as const).map((m) => (
-                <label key={m} className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
-                  <input type="radio" name="dl-mode" checked={mode === m} onChange={() => setMode(m)} />
-                  {m === "combined" ? "Combined" : "Separate files"}
-                </label>
-              ))}
-            </div>
+
+        {/* Format */}
+        <div>
+          <p className="mb-1 text-xs text-[--color-muted]">Format</p>
+          <div className="flex gap-1 rounded-xl border border-[--color-border] p-1">
+            <SegBtn label="Markdown (.md)" active={format === "markdown"} onClick={() => setFormat("markdown")} />
+            <SegBtn label="PDF (print)"    active={format === "pdf"}      onClick={() => setFormat("pdf")} />
           </div>
         </div>
+
+        {/* Output */}
+        <div>
+          <p className="mb-1 text-xs text-[--color-muted]">Output</p>
+          <div className="flex gap-1 rounded-xl border border-[--color-border] p-1">
+            <SegBtn label="Combined"       active={mode === "combined"}  onClick={() => setMode("combined")} />
+            <SegBtn label="Separate files" active={mode === "separate"} onClick={() => setMode("separate")} />
+          </div>
+        </div>
+
         {mode === "separate" && format === "pdf" && (
           <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
             Separate PDF opens one window per section — allow popups if prompted.
           </p>
         )}
+
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
           <Button size="sm" disabled={sections.length === 0} onClick={handleDownload}>
@@ -1846,6 +1903,7 @@ export function FinancialManager() {
           stocks={stocks}
           crypto={crypto}
           cards={cards}
+          salary={salaryRecords}
           currency={defaultCurrency}
           grandTotal={grandTotal}
           onClose={() => setShowDownload(false)}
