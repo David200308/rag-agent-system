@@ -836,6 +836,84 @@ ${has("cards") && cards.length > 0 ? `<h2>Cards</h2><table style="${ts}"><thead>
   if (w) { w.document.write(html); w.document.close(); }
 }
 
+// ── Salary line chart ─────────────────────────────────────────────────────────
+
+function SalaryLineChart({ records, hide }: { records: SalaryUsageRecord[]; hide: boolean }) {
+  const sorted = [...records].sort((a, b) =>
+    a.year !== b.year ? a.year - b.year : a.month - b.month,
+  );
+
+  const W = 800, H = 200;
+  const pad = { top: 16, right: 16, bottom: 38, left: 64 };
+  const iW = W - pad.left - pad.right;
+  const iH = H - pad.top - pad.bottom;
+
+  const series = [
+    { getValue: (r: SalaryUsageRecord) => r.salary + r.bonus, color: "#3b82f6", label: "Salary + Bonus" },
+    { getValue: (r: SalaryUsageRecord) => r.totalExpense,      color: "#f97316", label: "Total Expense" },
+  ];
+
+  const allVals = sorted.flatMap((r) => series.map((s) => s.getValue(r)));
+  const maxV = Math.max(...allVals, 1) * 1.1;
+
+  const xPos = (i: number) =>
+    sorted.length === 1 ? pad.left + iW / 2 : pad.left + (i / (sorted.length - 1)) * iW;
+  const yPos = (v: number) => pad.top + iH - (v / maxV) * iH;
+
+  const compact = (v: number) => {
+    if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+    if (v >= 1_000) return `${Math.round(v / 1_000)}K`;
+    return String(Math.round(v));
+  };
+
+  const yTicks = Array.from({ length: 5 }, (_, i) => (maxV * i) / 4);
+
+  return (
+    <div className="rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4">
+      <p className="mb-2 text-xs font-medium text-[--color-muted]">Salary &amp; Expense Trend</p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 200 }}>
+        {yTicks.map((v, i) => (
+          <g key={i}>
+            <line x1={pad.left} x2={W - pad.right} y1={yPos(v)} y2={yPos(v)}
+              stroke="currentColor" strokeOpacity={0.08} strokeWidth={1} />
+            <text x={pad.left - 6} y={yPos(v) + 4} textAnchor="end"
+              fontSize={10} fill="currentColor" fillOpacity={0.45}>
+              {hide ? "***" : compact(v)}
+            </text>
+          </g>
+        ))}
+        {sorted.map((r, i) => (
+          <text key={i} x={xPos(i)} y={H - 4} textAnchor="middle"
+            fontSize={9} fill="currentColor" fillOpacity={0.45}>
+            {r.year}/{String(r.month).padStart(2, "0")}
+          </text>
+        ))}
+        {series.map((s) => (
+          <g key={s.label}>
+            {sorted.length > 1 && (
+              <polyline
+                points={sorted.map((r, i) => `${xPos(i)},${yPos(s.getValue(r))}`).join(" ")}
+                fill="none" stroke={s.color} strokeWidth={2}
+                strokeLinecap="round" strokeLinejoin="round" />
+            )}
+            {sorted.map((r, i) => (
+              <circle key={i} cx={xPos(i)} cy={yPos(s.getValue(r))} r={3.5} fill={s.color} />
+            ))}
+          </g>
+        ))}
+      </svg>
+      <div className="mt-2 flex justify-center gap-5">
+        {series.map((s) => (
+          <span key={s.label} className="flex items-center gap-1.5 text-xs text-[--color-muted]">
+            <span className="inline-block h-2 w-5 rounded-full" style={{ backgroundColor: s.color }} />
+            {s.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Download modal ────────────────────────────────────────────────────────────
 
 function DownloadModal({ deposits, stocks, crypto, cards, currency, grandTotal, onClose }: {
@@ -947,16 +1025,6 @@ export function FinancialManager() {
   const [refreshing, setRefreshing] = useState(false);
   const [saving,     setSaving]     = useState(false);
   const [fxRates,    setFxRates]    = useState<Record<string, number>>({});
-
-  const [salaryEnabled, setSalaryEnabled] = useState(true);
-  useEffect(() => {
-    const stored = localStorage.getItem("salary_tracking_enabled");
-    if (stored !== null) setSalaryEnabled(stored === "true");
-  }, []);
-  const toggleSalary = (v: boolean) => {
-    setSalaryEnabled(v);
-    localStorage.setItem("salary_tracking_enabled", String(v));
-  };
 
   const depositSort = useSort({ column: "platform", dir: "asc" });
   const stockSort   = useSort({ column: "symbol",   dir: "asc" });
@@ -1262,7 +1330,7 @@ export function FinancialManager() {
           <button className={tabCls("stocks")}   onClick={() => setTab("stocks")}>Stocks</button>
           <button className={tabCls("crypto")}   onClick={() => setTab("crypto")}>Crypto</button>
           <button className={tabCls("cards")}    onClick={() => setTab("cards")}>Cards</button>
-          <button className={tabCls("salary")}   onClick={() => setTab("salary")}>Salary</button>
+          <button className={tabCls("salary")}   onClick={() => setTab("salary")}>Salary &amp; Expense</button>
         </div>
       </div>
 
@@ -1282,7 +1350,7 @@ export function FinancialManager() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              {(tab !== "salary" || salaryEnabled) && (
+              {(
                 <Button size="sm" onClick={() => setModal(
                   tab === "deposits" ? { mode: "add-deposit" }
                   : tab === "stocks" ? { mode: "add-stock" }
@@ -1485,90 +1553,76 @@ export function FinancialManager() {
               </div>
             ))}
 
-            {/* ── Salary ── */}
-            {tab === "salary" && (
+            {/* ── Salary & Expense ── */}
+            {tab === "salary" && (filteredSalary.length === 0 ? (
+              <p className="py-12 text-center text-sm text-[--color-muted]">
+                {q ? `No records matching "${searchTerm}".` : "No salary records yet."}
+              </p>
+            ) : (
               <>
-                <div className="mb-4 flex items-center justify-between rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium">Salary Tracking</p>
-                    <p className="text-xs text-[--color-muted]">Monthly salary &amp; expense records — no total banner</p>
-                  </div>
-                  <label className="relative inline-flex cursor-pointer items-center">
-                    <input type="checkbox" className="peer sr-only" checked={salaryEnabled}
-                      onChange={(e) => toggleSalary(e.target.checked)} />
-                    <div className="h-5 w-9 rounded-full bg-[--color-border] transition-colors peer-checked:bg-[--color-primary] peer-focus:ring-2 peer-focus:ring-[--color-primary]/30 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-4" />
-                  </label>
-                </div>
-                {salaryEnabled && (filteredSalary.length === 0 ? (
-                  <p className="py-12 text-center text-sm text-[--color-muted]">
-                    {q ? `No records matching "${searchTerm}".` : "No salary records yet."}
-                  </p>
-                ) : (
-                  <>
-                    <div className="overflow-x-auto rounded-xl border border-[--color-border]">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className={thCls}>
-                            <Th label="Year / Month"      column="year"          sort={salarySort.sort} onSort={salarySort.toggle} />
-                            <Th label="Region / Currency" column="region"        sort={salarySort.sort} onSort={salarySort.toggle} />
-                            <Th label="Salary (Excl. Retirement)" column="salary"  sort={salarySort.sort} onSort={salarySort.toggle} right />
-                            <Th label="Bonus"              column="bonus"   sort={salarySort.sort} onSort={salarySort.toggle} right />
-                            <Th label="Retirement (Emp.)" column="retirementSavingEmployee" sort={salarySort.sort} onSort={salarySort.toggle} right />
-                            <Th label="Retirement (Emplr.)" column="retirementSavingEmployer" sort={salarySort.sort} onSort={salarySort.toggle} right />
-                            <Th label="Tax"               column="tax"           sort={salarySort.sort} onSort={salarySort.toggle} right />
-                            <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">
-                              House Rent <span className="opacity-60">*</span>
-                            </th>
-                            <Th label="Living Expense"    column="livingExpense"  sort={salarySort.sort} onSort={salarySort.toggle} right />
-                            <Th label="Other Expense"     column="otherExpense"   sort={salarySort.sort} onSort={salarySort.toggle} right />
-                            <Th label="Total Expense"     column="totalExpense"   sort={salarySort.sort} onSort={salarySort.toggle} right />
-                            <th className="px-4 py-2.5" />
+                <SalaryLineChart records={filteredSalary} hide={hideAmounts} />
+                <div className="overflow-x-auto rounded-xl border border-[--color-border]">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className={thCls}>
+                        <Th label="Year / Month"      column="year"          sort={salarySort.sort} onSort={salarySort.toggle} />
+                        <Th label="Region / Currency" column="region"        sort={salarySort.sort} onSort={salarySort.toggle} />
+                        <Th label="Salary (Excl. Retirement)" column="salary"  sort={salarySort.sort} onSort={salarySort.toggle} right />
+                        <Th label="Bonus"              column="bonus"         sort={salarySort.sort} onSort={salarySort.toggle} right />
+                        <Th label="Retirement (Emp.)" column="retirementSavingEmployee" sort={salarySort.sort} onSort={salarySort.toggle} right />
+                        <Th label="Retirement (Emplr.)" column="retirementSavingEmployer" sort={salarySort.sort} onSort={salarySort.toggle} right />
+                        <Th label="Tax"               column="tax"           sort={salarySort.sort} onSort={salarySort.toggle} right />
+                        <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">
+                          House Rent <span className="opacity-60">*</span>
+                        </th>
+                        <Th label="Living Expense"    column="livingExpense"  sort={salarySort.sort} onSort={salarySort.toggle} right />
+                        <Th label="Other Expense"     column="otherExpense"   sort={salarySort.sort} onSort={salarySort.toggle} right />
+                        <Th label="Total Expense"     column="totalExpense"   sort={salarySort.sort} onSort={salarySort.toggle} right />
+                        <th className="px-4 py-2.5" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSalary.map((r) => {
+                        const fmtS = (v: number) => v === 0 ? "—"
+                          : new Intl.NumberFormat("en-US", { style: "currency", currency: r.currency, maximumFractionDigits: 2 }).format(v);
+                        return (
+                          <tr key={r.id} className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
+                            <td className="px-4 py-3 font-medium tabular-nums">
+                              {r.year}/{String(r.month).padStart(2, "0")}
+                            </td>
+                            <td className="px-4 py-3 text-[--color-muted]">{r.region} / {r.currency}</td>
+                            <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.salary))}</td>
+                            <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.bonus))}</td>
+                            <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.retirementSavingEmployee))}</td>
+                            <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.retirementSavingEmployer))}</td>
+                            <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.tax))}</td>
+                            <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.houseRent))}</td>
+                            <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.livingExpense))}</td>
+                            <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.otherExpense))}</td>
+                            <td className="px-4 py-3 text-right tabular-nums font-semibold">{amt(fmtS(r.totalExpense))}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex justify-end gap-1">
+                                <Button size="icon" variant="ghost" className="h-7 w-7"
+                                  onClick={() => setModal({ mode: "edit-salary", item: r })}>
+                                  <Pencil className="h-3.5 w-3.5 text-[--color-muted]" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7"
+                                  onClick={() => void deleteSalary(r.id)}>
+                                  <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                                </Button>
+                              </div>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {filteredSalary.map((r) => {
-                            const fmtS = (v: number) => v === 0 ? "—"
-                              : new Intl.NumberFormat("en-US", { style: "currency", currency: r.currency, maximumFractionDigits: 0 }).format(v);
-                            return (
-                              <tr key={r.id} className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
-                                <td className="px-4 py-3 font-medium tabular-nums">
-                                  {r.year}/{String(r.month).padStart(2, "0")}
-                                </td>
-                                <td className="px-4 py-3 text-[--color-muted]">{r.region} / {r.currency}</td>
-                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.salary))}</td>
-                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.bonus))}</td>
-                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.retirementSavingEmployee))}</td>
-                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.retirementSavingEmployer))}</td>
-                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.tax))}</td>
-                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.houseRent))}</td>
-                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.livingExpense))}</td>
-                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.otherExpense))}</td>
-                                <td className="px-4 py-3 text-right tabular-nums font-semibold">{amt(fmtS(r.totalExpense))}</td>
-                                <td className="px-4 py-3">
-                                  <div className="flex justify-end gap-1">
-                                    <Button size="icon" variant="ghost" className="h-7 w-7"
-                                      onClick={() => setModal({ mode: "edit-salary", item: r })}>
-                                      <Pencil className="h-3.5 w-3.5 text-[--color-muted]" />
-                                    </Button>
-                                    <Button size="icon" variant="ghost" className="h-7 w-7"
-                                      onClick={() => void deleteSalary(r.id)}>
-                                      <Trash2 className="h-3.5 w-3.5 text-red-400" />
-                                    </Button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <p className="mt-2 text-[11px] text-[--color-muted]">
-                      * House Rent: some months are paid in the following month.
-                    </p>
-                  </>
-                ))}
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-2 text-[11px] text-[--color-muted]">
+                  * House Rent: some months are paid in the following month.
+                </p>
               </>
-            )}
+            ))}
 
             {/* ── Cards ── */}
             {tab === "cards" && (filteredCards.length === 0 ? (
