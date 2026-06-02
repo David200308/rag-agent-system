@@ -374,6 +374,7 @@ public class FinancialService {
         if (body.containsKey("region"))        r.setRegion((String) body.get("region"));
         if (body.containsKey("currency"))      r.setCurrency((String) body.get("currency"));
         if (body.containsKey("salary"))        r.setSalary(bd(body.get("salary")));
+        if (body.containsKey("bonus"))          r.setBonus(bd(body.get("bonus")));
         if (body.containsKey("retirementSavingEmployee")) r.setRetirementSavingEmployee(bd(body.get("retirementSavingEmployee")));
         if (body.containsKey("retirementSavingEmployer")) r.setRetirementSavingEmployer(bd(body.get("retirementSavingEmployer")));
         if (body.containsKey("tax"))           r.setTax(bd(body.get("tax")));
@@ -382,14 +383,13 @@ public class FinancialService {
         if (body.containsKey("otherExpense"))  r.setOtherExpense(bd(body.get("otherExpense")));
         if (body.containsKey("totalExpense"))  r.setTotalExpense(bd(body.get("totalExpense")));
         else r.setTotalExpense(
-                r.getRetirementSavingEmployee().add(r.getTax()).add(r.getHouseRent())
-                 .add(r.getLivingExpense()).add(r.getOtherExpense()));
+                r.getLivingExpense().add(r.getHouseRent()).add(r.getOtherExpense()));
     }
 
     private SalaryUsageRecordDto toDto(SalaryUsageRecord r) {
         return new SalaryUsageRecordDto(
                 r.getId(), r.getOwnerEmail(), r.getYear(), r.getMonth(),
-                r.getRegion(), r.getCurrency(), r.getSalary(),
+                r.getRegion(), r.getCurrency(), r.getSalary(), r.getBonus(),
                 r.getRetirementSavingEmployee(), r.getRetirementSavingEmployer(), r.getTax(),
                 r.getHouseRent(), r.getLivingExpense(), r.getOtherExpense(), r.getTotalExpense(),
                 r.getCreatedAt(), r.getUpdatedAt()

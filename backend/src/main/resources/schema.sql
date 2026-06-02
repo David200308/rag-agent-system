@@ -385,6 +385,7 @@ CREATE TABLE IF NOT EXISTS salary_usage_records (
     region                       VARCHAR(100)  NOT NULL,
     currency                     VARCHAR(10)   NOT NULL,
     salary                       DECIMAL(19,2) NOT NULL DEFAULT 0,
+    bonus                        DECIMAL(19,2) NOT NULL DEFAULT 0,
     retirement_saving_employee   DECIMAL(19,2) NOT NULL DEFAULT 0,
     retirement_saving_employer   DECIMAL(19,2) NOT NULL DEFAULT 0,
     tax                          DECIMAL(19,2) NOT NULL DEFAULT 0,

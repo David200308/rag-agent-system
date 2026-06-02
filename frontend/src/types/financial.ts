@@ -111,6 +111,7 @@ export interface SalaryUsageRecord {
   region: string;
   currency: string;
   salary: number;
+  bonus: number;
   retirementSavingEmployee: number;
   retirementSavingEmployer: number;
   tax: number;

@@ -227,7 +227,7 @@ const emptyCrypto  = (): CryptoFields  => ({ name:"", symbol:"", amount:0, inves
 const emptyCard    = (): CardFields    => ({ bank:"", countryRegion:"", types:[], cardName:"", network:"Visa", expireDate:"", creditLimit:null, creditLimitCurrency:"HKD", sharedCredit:null });
 const emptySalary  = (): SalaryFields  => {
   const now = new Date();
-  return { year: now.getFullYear(), month: now.getMonth() + 1, region: "", currency: "HKD", salary: 0, retirementSavingEmployee: 0, retirementSavingEmployer: 0, tax: 0, houseRent: 0, livingExpense: 0, otherExpense: 0 };
+  return { year: now.getFullYear(), month: now.getMonth() + 1, region: "", currency: "HKD", salary: 0, bonus: 0, retirementSavingEmployee: 0, retirementSavingEmployer: 0, tax: 0, houseRent: 0, livingExpense: 0, otherExpense: 0 };
 };
 
 const NETWORK_COLORS: Record<CardNetwork, string> = {
@@ -497,8 +497,8 @@ function CardForm({ initial, banks, onSave, onCancel, saving }: {
   );
 }
 
-function SalaryForm({ initial, onSave, onCancel, saving }: {
-  initial: SalaryFields;
+function SalaryForm({ initial, regions, onSave, onCancel, saving }: {
+  initial: SalaryFields; regions: string[];
   onSave: (d: SalaryFields) => void; onCancel: () => void; saving: boolean;
 }) {
   const [f, setF] = useState(initial);
@@ -506,7 +506,7 @@ function SalaryForm({ initial, onSave, onCancel, saving }: {
   const num = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     s(k, parseFloat(e.target.value) || 0);
 
-  const computed = f.retirementSavingEmployee + f.tax + f.houseRent + f.livingExpense + f.otherExpense;
+  const computed = f.livingExpense + f.houseRent + f.otherExpense;
 
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -529,13 +529,19 @@ function SalaryForm({ initial, onSave, onCancel, saving }: {
         </Field>
       </div>
       <Field label="Region *">
-        <input className={inputCls} required value={f.region}
-          onChange={(e) => s("region", e.target.value)} placeholder="e.g. Hong Kong SAR, Singapore" />
+        <ComboInput value={f.region} onChange={(v) => s("region", v)}
+          suggestions={regions} placeholder="e.g. Hong Kong SAR, Singapore" required />
       </Field>
-      <Field label="Salary (Excl. Retirement / Pension) *">
-        <input className={inputCls} type="number" required min="0" step="0.01"
-          value={f.salary} onChange={num("salary")} />
-      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Salary (Excl. Retirement / Pension) *">
+          <input className={inputCls} type="number" required min="0" step="0.01"
+            value={f.salary} onChange={num("salary")} />
+        </Field>
+        <Field label="Bonus">
+          <input className={inputCls} type="number" min="0" step="0.01"
+            value={f.bonus} onChange={num("bonus")} />
+        </Field>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Retirement Savings (Employee)">
           <input className={inputCls} type="number" min="0" step="0.01"
@@ -551,7 +557,7 @@ function SalaryForm({ initial, onSave, onCancel, saving }: {
           <input className={inputCls} type="number" min="0" step="0.01"
             value={f.tax} onChange={num("tax")} />
         </Field>
-        <Field label="House Rent *">
+        <Field label="House Rent">
           <input className={inputCls} type="number" min="0" step="0.01"
             value={f.houseRent} onChange={num("houseRent")} />
         </Field>
@@ -570,10 +576,10 @@ function SalaryForm({ initial, onSave, onCancel, saving }: {
         Total Expense (auto): <span className="font-semibold tabular-nums">
           {new Intl.NumberFormat("en-US", { style: "currency", currency: f.currency, maximumFractionDigits: 2 }).format(computed)}
         </span>
-        <span className="ml-1 text-[10px]">(Retirement emp. + Tax + Rent + Living + Other)</span>
+        <span className="ml-1 text-[10px]">(Living + House Rent + Other)</span>
       </div>
       <p className="text-[11px] text-[--color-muted]">
-        * House Rent: enter the amount paid this month (some months may cover next month&apos;s rent).
+        House Rent is optional — some months may cover next month&apos;s rent.
       </p>
       <div className="mt-1 flex justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
@@ -977,6 +983,7 @@ export function FinancialManager() {
     platformTypes: unique(deposits.map((d) => d.platformType)),
     countries:     unique(deposits.map((d) => d.countryRegion)),
   };
+  const regionSuggestions = unique(salaryRecords.map((r) => r.region));
   const brokerSuggestions = unique(stocks.map((s) => s.broker));
 
   const loadAll = useCallback(async () => {
@@ -1120,7 +1127,7 @@ export function FinancialManager() {
 
   async function saveSalary(data: SalaryFields) {
     setSaving(true);
-    const totalExpense = data.retirementSavingEmployee + data.tax + data.houseRent + data.livingExpense + data.otherExpense;
+    const totalExpense = data.livingExpense + data.houseRent + data.otherExpense;
     try {
       if (modal?.mode === "edit-salary") {
         await apiUpdate<SalaryUsageRecord>("salary", modal.item.id, { ...data, totalExpense });
@@ -1504,7 +1511,8 @@ export function FinancialManager() {
                           <tr className={thCls}>
                             <Th label="Year / Month"      column="year"          sort={salarySort.sort} onSort={salarySort.toggle} />
                             <Th label="Region / Currency" column="region"        sort={salarySort.sort} onSort={salarySort.toggle} />
-                            <Th label="Salary (Excl. MPF)" column="salary"       sort={salarySort.sort} onSort={salarySort.toggle} right />
+                            <Th label="Salary (Excl. Retirement)" column="salary"  sort={salarySort.sort} onSort={salarySort.toggle} right />
+                            <Th label="Bonus"              column="bonus"   sort={salarySort.sort} onSort={salarySort.toggle} right />
                             <Th label="Retirement (Emp.)" column="retirementSavingEmployee" sort={salarySort.sort} onSort={salarySort.toggle} right />
                             <Th label="Retirement (Emplr.)" column="retirementSavingEmployer" sort={salarySort.sort} onSort={salarySort.toggle} right />
                             <Th label="Tax"               column="tax"           sort={salarySort.sort} onSort={salarySort.toggle} right />
@@ -1528,6 +1536,7 @@ export function FinancialManager() {
                                 </td>
                                 <td className="px-4 py-3 text-[--color-muted]">{r.region} / {r.currency}</td>
                                 <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.salary))}</td>
+                                <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.bonus))}</td>
                                 <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.retirementSavingEmployee))}</td>
                                 <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.retirementSavingEmployer))}</td>
                                 <td className="px-4 py-3 text-right tabular-nums">{amt(fmtS(r.tax))}</td>
@@ -1695,12 +1704,13 @@ export function FinancialManager() {
           <SalaryForm
             initial={modal.mode === "edit-salary"
               ? { year: modal.item.year, month: modal.item.month, region: modal.item.region,
-                  currency: modal.item.currency, salary: modal.item.salary,
+                  currency: modal.item.currency, salary: modal.item.salary, bonus: modal.item.bonus,
                   retirementSavingEmployee: modal.item.retirementSavingEmployee,
                   retirementSavingEmployer: modal.item.retirementSavingEmployer,
                   tax: modal.item.tax, houseRent: modal.item.houseRent,
                   livingExpense: modal.item.livingExpense, otherExpense: modal.item.otherExpense }
               : emptySalary()}
+            regions={regionSuggestions}
             onSave={saveSalary} onCancel={() => setModal(null)} saving={saving} />
         </Modal>
       )}

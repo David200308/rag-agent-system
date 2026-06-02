@@ -11,6 +11,7 @@ public record SalaryUsageRecordDto(
         String     region,
         String     currency,
         BigDecimal salary,
+        BigDecimal bonus,
         BigDecimal retirementSavingEmployee,
         BigDecimal retirementSavingEmployer,
         BigDecimal tax,

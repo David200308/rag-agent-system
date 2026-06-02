@@ -37,6 +37,9 @@ public class SalaryUsageRecord {
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal salary = BigDecimal.ZERO;
 
+    @Column(nullable = false, precision = 19, scale = 2)
+    private BigDecimal bonus = BigDecimal.ZERO;
+
     @Column(name = "retirement_saving_employee", nullable = false, precision = 19, scale = 2)
     private BigDecimal retirementSavingEmployee = BigDecimal.ZERO;
 
