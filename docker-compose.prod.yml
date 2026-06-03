@@ -172,8 +172,6 @@ services:
         condition: service_healthy
       weaviate:
         condition: service_healthy
-      tempo:
-        condition: service_started
     secrets:
       - mysql_password
       - weaviate_api_key
@@ -227,9 +225,11 @@ services:
       AUTH_PASSKEY_ORIGIN: ${AUTH_PASSKEY_ORIGIN:-http://localhost:3000}
       # ── Resend (RESEND_API_KEY + RESEND_FROM_EMAIL come from secrets)
       # ── Financial / Market data (FINNHUB_API_KEY comes from secrets)
-      # ── Distributed tracing (OpenTelemetry → Tempo)
-      TRACING_SAMPLE_RATE: ${TRACING_SAMPLE_RATE:-1.0}
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318/v1/traces
+      # ── Distributed tracing (disabled — no OTEL collector in this stack)
+      # To enable: add an OTEL collector service, then set:
+      #   TRACING_SAMPLE_RATE=1.0
+      #   OTEL_EXPORTER_OTLP_ENDPOINT=http://<collector>:4318/v1/traces
+      TRACING_SAMPLE_RATE: "0.0"
       # ── Web fetch
       WEB_FETCH_ENABLED: ${WEB_FETCH_ENABLED:-true}
       WEB_FETCH_TIMEOUT: ${WEB_FETCH_TIMEOUT:-10}
@@ -274,20 +274,6 @@ services:
       AUTH_ENABLED: ${AUTH_ENABLED:-true}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
       CLIENT_WEB_SECRET: ${CLIENT_WEB_SECRET:-}
-
-  # ── Tempo (distributed tracing backend, receives OTLP from backend) ──────────
-  tempo:
-    image: grafana/tempo:latest
-    container_name: agent-system-tempo
-    ports:
-      - "3200:3200"   # Tempo HTTP API (queried by Grafana)
-      - "4317:4317"   # OTLP gRPC receiver
-      - "4318:4318"   # OTLP HTTP receiver
-    command: ["-config.file=/etc/tempo/config.yml"]
-    volumes:
-      - ./observability/tempo/config.yml:/etc/tempo/config.yml:ro
-      - tempo_data:/var/tempo
-    restart: unless-stopped
 
   # ── Prometheus ────────────────────────────────────────────────────────────────
   prometheus:
@@ -365,7 +351,6 @@ services:
     depends_on:
       - prometheus
       - loki
-      - tempo
 
 volumes:
   weaviate_data:
@@ -373,4 +358,3 @@ volumes:
   prometheus_data:
   grafana_data:
   loki_data:
-  tempo_data:
