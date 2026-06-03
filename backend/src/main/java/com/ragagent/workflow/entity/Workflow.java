@@ -30,6 +30,10 @@ public class Workflow {
     @Column(name = "owner_email")
     private String ownerEmail;
 
+    /** Org slug when in team mode; null = personal. */
+    @Column(name = "org_id", length = 100)
+    private String orgId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "agent_pattern", nullable = false, length = 20)
     private AgentPattern agentPattern;

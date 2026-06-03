@@ -63,8 +63,10 @@ public class AuthController {
     public ResponseEntity<Map<String, String>> verifyOtp(
             @RequestBody Map<String, String> body) {
 
-        String email = body.get("email");
-        String code  = body.get("code");
+        String email  = body.get("email");
+        String code   = body.get("code");
+        String mode   = body.getOrDefault("mode", "PERSONAL");
+        String orgId  = body.get("orgId");
 
         if (email == null || email.isBlank() || code == null || code.isBlank()) {
             return ResponseEntity.badRequest()
@@ -72,7 +74,7 @@ public class AuthController {
         }
 
         try {
-            String jwt = authService.verifyOtp(email, code);
+            String jwt = authService.verifyOtp(email, code, mode, orgId);
             return ResponseEntity.ok(Map.of("token", jwt));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(401)

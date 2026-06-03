@@ -38,6 +38,10 @@ public class KnowledgeSource {
     @Column(name = "owner_email", length = 255)
     private String ownerEmail;
 
+    /** Org slug when in team mode; null = personal. */
+    @Column(name = "org_id", length = 100)
+    private String orgId;
+
     @Column(name = "ingested_at", nullable = false)
     private Instant ingestedAt = Instant.now();
 
@@ -45,11 +49,17 @@ public class KnowledgeSource {
     private List<KnowledgeSourceShare> shares = new ArrayList<>();
 
     public KnowledgeSource(String source, String label, String category, int chunkCount, String ownerEmail) {
+        this(source, label, category, chunkCount, ownerEmail, null);
+    }
+
+    public KnowledgeSource(String source, String label, String category, int chunkCount,
+                           String ownerEmail, String orgId) {
         this.source     = source;
         this.label      = label;
         this.category   = category;
         this.chunkCount = chunkCount;
         this.ownerEmail = ownerEmail;
+        this.orgId      = orgId;
         this.ingestedAt = Instant.now();
     }
 

@@ -61,7 +61,8 @@ public class AuthFilter extends OncePerRequestFilter {
 
         String path  = request.getRequestURI();
         String token = extractToken(request);
-        String email = (token != null) ? authService.validateToken(token) : null;
+        var    claims = (token != null) ? authService.validateTokenFull(token) : null;
+        String email  = (claims != null) ? claims.email() : null;
 
         // Connector routes are JWT-optional: a valid token sets the email so tokens
         // are stored/looked up under the real user, but the request is never blocked.
@@ -76,8 +77,10 @@ public class AuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (email != null) {
-            request.setAttribute("authenticatedEmail", email);
+        if (claims != null) {
+            request.setAttribute("authenticatedEmail", claims.email());
+            request.setAttribute("authenticatedMode",  claims.mode());
+            request.setAttribute("authenticatedOrgId", claims.orgId());
         }
         chain.doFilter(request, response);
     }

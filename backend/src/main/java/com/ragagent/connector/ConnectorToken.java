@@ -20,6 +20,10 @@ public class ConnectorToken {
     private String ownerEmail;
     private String provider;
 
+    /** Org slug when in team mode; null = personal. */
+    @Column(name = "org_id", length = 100)
+    private String orgId;
+
     @Column(columnDefinition = "TEXT")
     private String accessToken;
 

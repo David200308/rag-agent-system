@@ -299,6 +299,40 @@ ALTER TABLE scheduled_messages ADD COLUMN workflow_id    VARCHAR(36) NULL;
 ALTER TABLE scheduled_messages ADD COLUMN workflow_input TEXT        NULL;
 ALTER TABLE scheduled_messages ADD INDEX  idx_sched_workflow (workflow_id);
 
+-- ── Organizations & team members ─────────────────────────────────────────────
+-- org_id is a human-readable slug (e.g. "google", "skyproton", "xxx-family").
+-- Pre-created by admins; no auto-creation at login time.
+CREATE TABLE IF NOT EXISTS organizations (
+    org_id     VARCHAR(100) PRIMARY KEY,
+    name       VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS org_members (
+    org_id    VARCHAR(100) NOT NULL,
+    email     VARCHAR(255) NOT NULL,
+    role      VARCHAR(20)  NOT NULL DEFAULT 'MEMBER',  -- OWNER | MEMBER
+    joined_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (org_id, email),
+    CONSTRAINT fk_om_org FOREIGN KEY (org_id) REFERENCES organizations(org_id) ON DELETE CASCADE,
+    INDEX idx_om_email (email)
+);
+
+-- ── Schema migration: team mode org_id on shared resources ────────────────────
+-- NULL = personal mode; non-null = org-scoped (team mode).
+ALTER TABLE knowledge_sources   ADD COLUMN org_id VARCHAR(100) NULL;
+ALTER TABLE workflows           ADD COLUMN org_id VARCHAR(100) NULL;
+ALTER TABLE web_fetch_whitelist ADD COLUMN org_id VARCHAR(100) NULL;
+ALTER TABLE skills              ADD COLUMN org_id VARCHAR(100) NULL;
+
+-- ── Schema migration: team mode org_id on private-in-team resources ───────────
+-- Conversations, runs, and connector tokens are per-user but scoped to a context
+-- (personal = NULL, team = org slug) so that the same email has separate data
+-- in each mode.
+ALTER TABLE conversations    ADD COLUMN org_id VARCHAR(100) NULL;
+ALTER TABLE workflow_runs    ADD COLUMN org_id VARCHAR(100) NULL;
+ALTER TABLE connector_tokens ADD COLUMN org_id VARCHAR(100) NULL;
+
 -- ── CLI public keys ──────────────────────────────────────────────────────────
 -- Stores one Ed25519 public key per user, registered by agent-cli at login.
 -- Used by CliSignatureFilter to verify X-Cli-Signature on every CLI request.

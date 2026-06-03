@@ -4,6 +4,7 @@ import com.ragagent.auth.AuthProperties;
 import com.ragagent.auth.entity.OtpCode;
 import com.ragagent.auth.repository.EmailWhitelistRepository;
 import com.ragagent.auth.repository.OtpCodeRepository;
+import com.ragagent.org.OrganizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -23,6 +24,7 @@ public class AuthService {
     private final OtpCodeRepository        otpRepo;
     private final EmailService             emailService;
     private final JwtService               jwtService;
+    private final OrganizationService      orgService;
 
     private final SecureRandom random = new SecureRandom();
 
@@ -57,12 +59,23 @@ public class AuthService {
     // ── Verify OTP ───────────────────────────────────────────────────────────────
 
     /**
-     * Validates the OTP and returns a signed JWT on success.
+     * Validates the OTP and returns a signed JWT on success (personal mode).
      *
      * @throws IllegalArgumentException if the code is wrong or expired
      */
     @Transactional
     public String verifyOtp(String email, String code) {
+        return verifyOtp(email, code, "PERSONAL", null);
+    }
+
+    /**
+     * Validates the OTP and returns a signed JWT on success with explicit mode/org.
+     * For TEAM mode, validates that the org exists and the email is a member.
+     *
+     * @throws IllegalArgumentException if the code is wrong, expired, or org/membership invalid
+     */
+    @Transactional
+    public String verifyOtp(String email, String code, String mode, String orgId) {
         String normalised = email.trim().toLowerCase();
 
         OtpCode otp = otpRepo.findValidOtp(normalised, LocalDateTime.now())
@@ -73,23 +86,36 @@ public class AuthService {
             throw new IllegalArgumentException("Invalid or expired code.");
         }
 
-        // Mark used and clean up remaining codes
+        if ("TEAM".equals(mode)) {
+            if (orgId == null || orgId.isBlank()) {
+                throw new IllegalArgumentException("orgId is required for team mode.");
+            }
+            if (!orgService.isMember(orgId.trim(), normalised)) {
+                throw new IllegalArgumentException(
+                        "You are not a member of organization: " + orgId.trim());
+            }
+        }
+
         otp.setUsed(true);
         otpRepo.save(otp);
         otpRepo.deleteAllByEmail(normalised);
 
-        String jwt = jwtService.generate(normalised);
-        log.info("[AuthService] JWT issued for {}", normalised);
+        String resolvedOrgId = "TEAM".equals(mode) ? orgId.trim() : null;
+        String jwt = jwtService.generate(normalised, mode, resolvedOrgId);
+        log.info("[AuthService] JWT issued for {} (mode={}, org={})", normalised, mode, resolvedOrgId);
         return jwt;
     }
 
     // ── Validate JWT ─────────────────────────────────────────────────────────────
 
-    /**
-     * Returns the email from the JWT if valid, or {@code null} if invalid/expired.
-     */
+    /** Returns the email from the JWT if valid, or {@code null} if invalid/expired. */
     public String validateToken(String token) {
         return jwtService.validate(token);
+    }
+
+    /** Returns full claims from the JWT, or {@code null} if invalid/expired. */
+    public JwtService.TokenClaims validateTokenFull(String token) {
+        return jwtService.validateFull(token);
     }
 
     // ── Scheduled cleanup ────────────────────────────────────────────────────────

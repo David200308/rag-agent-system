@@ -1,6 +1,7 @@
 package com.ragagent.webfetch;
 
 import com.ragagent.config.WebFetchProperties;
+import com.ragagent.org.OrgContext;
 import com.ragagent.schema.DocumentResult;
 import com.ragagent.webfetch.entity.WebFetchWhitelist;
 import com.ragagent.webfetch.repository.WebFetchWhitelistRepository;
@@ -32,10 +33,14 @@ public class WebFetchService {
 
     // ── Whitelist CRUD ────────────────────────────────────────────────────────
 
-    /**
-     * Lists whitelisted domains owned by {@code userEmail}.
-     * When {@code userEmail} is null (auth disabled), returns all entries globally.
-     */
+    @Transactional(readOnly = true)
+    public List<WebFetchWhitelist> listWhitelist(OrgContext ctx) {
+        if (ctx == null || ctx.email() == null) return whitelistRepo.findAllByOrderByDomainAsc();
+        if (ctx.isTeam()) return whitelistRepo.findAllByOrgIdOrderByDomainAsc(ctx.orgId());
+        return whitelistRepo.findAllByAddedByOrderByDomainAsc(ctx.email());
+    }
+
+    /** Backward-compatible personal-mode overload. */
     @Transactional(readOnly = true)
     public List<WebFetchWhitelist> listWhitelist(String userEmail) {
         if (userEmail == null) return whitelistRepo.findAllByOrderByDomainAsc();
@@ -43,8 +48,15 @@ public class WebFetchService {
     }
 
     @Transactional
-    public WebFetchWhitelist addDomain(String domain, String addedBy) {
+    public WebFetchWhitelist addDomain(String domain, OrgContext ctx) {
         String normalized = normalizeDomain(domain);
+        if (ctx != null && ctx.isTeam()) {
+            if (whitelistRepo.existsByDomainAndOrgId(normalized, ctx.orgId())) {
+                throw new IllegalArgumentException("Domain already in org whitelist: " + normalized);
+            }
+            return whitelistRepo.save(new WebFetchWhitelist(normalized, ctx.email(), ctx.orgId()));
+        }
+        String addedBy = ctx != null ? ctx.email() : null;
         boolean exists = addedBy != null
                 ? whitelistRepo.existsByDomainAndAddedBy(normalized, addedBy)
                 : whitelistRepo.existsByDomain(normalized);
@@ -54,13 +66,22 @@ public class WebFetchService {
         return whitelistRepo.save(new WebFetchWhitelist(normalized, addedBy));
     }
 
-    /**
-     * Removes a domain from {@code userEmail}'s whitelist.
-     * When {@code userEmail} is null (auth disabled), removes globally.
-     */
     @Transactional
-    public void removeDomain(String domain, String userEmail) {
+    public WebFetchWhitelist addDomain(String domain, String addedBy) {
+        return addDomain(domain, new OrgContext(addedBy, "PERSONAL", null));
+    }
+
+    @Transactional
+    public void removeDomain(String domain, OrgContext ctx) {
         String normalized = normalizeDomain(domain);
+        if (ctx != null && ctx.isTeam()) {
+            if (!whitelistRepo.existsByDomainAndOrgId(normalized, ctx.orgId())) {
+                throw new IllegalArgumentException("Domain not found in org whitelist: " + normalized);
+            }
+            whitelistRepo.deleteByDomainAndOrgId(normalized, ctx.orgId());
+            return;
+        }
+        String userEmail = ctx != null ? ctx.email() : null;
         if (userEmail != null) {
             if (!whitelistRepo.existsByDomainAndAddedBy(normalized, userEmail)) {
                 throw new IllegalArgumentException("Domain not found in your whitelist: " + normalized);
@@ -72,6 +93,11 @@ public class WebFetchService {
             }
             whitelistRepo.deleteByDomain(normalized);
         }
+    }
+
+    @Transactional
+    public void removeDomain(String domain, String userEmail) {
+        removeDomain(domain, new OrgContext(userEmail, "PERSONAL", null));
     }
 
     // ── Fetch ─────────────────────────────────────────────────────────────────
@@ -124,24 +150,32 @@ public class WebFetchService {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /**
-     * Returns true if {@code host} matches an entry in {@code userEmail}'s whitelist.
-     * When {@code userEmail} is null (auth disabled), checks the global whitelist.
-     */
-    public boolean isAllowed(String host, String userEmail) {
+    public boolean isAllowed(String host, OrgContext ctx) {
         String h = host.toLowerCase();
-        List<WebFetchWhitelist> entries = userEmail != null
-                ? whitelistRepo.findAllByAddedByOrderByDomainAsc(userEmail)
-                : whitelistRepo.findAllByOrderByDomainAsc();
+        List<WebFetchWhitelist> entries;
+        if (ctx != null && ctx.isTeam()) {
+            entries = whitelistRepo.findAllByOrgIdOrderByDomainAsc(ctx.orgId());
+        } else if (ctx != null && ctx.email() != null) {
+            entries = whitelistRepo.findAllByAddedByOrderByDomainAsc(ctx.email());
+        } else {
+            entries = whitelistRepo.findAllByOrderByDomainAsc();
+        }
         return entries.stream()
                 .anyMatch(w -> h.equals(w.getDomain()) || h.endsWith("." + w.getDomain()));
     }
 
-    /**
-     * Returns true if the URL's domain is in {@code userEmail}'s whitelist.
-     * Returns false for malformed URLs or unsupported schemes.
-     * When {@code userEmail} is null (auth disabled), checks globally.
-     */
+    public boolean isAllowed(String host, String userEmail) {
+        return isAllowed(host, new OrgContext(userEmail, "PERSONAL", null));
+    }
+
+    public boolean isUrlAllowed(String url, OrgContext ctx) {
+        try {
+            return isAllowed(extractHost(url), ctx);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
     public boolean isUrlAllowed(String url, String userEmail) {
         try {
             return isAllowed(extractHost(url), userEmail);

@@ -37,11 +37,20 @@ public class WebFetchWhitelist {
     @Column(name = "added_by", length = 255)
     private String addedBy;
 
+    /** Org slug when in team mode; null = personal. */
+    @Column(name = "org_id", length = 100)
+    private String orgId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
     public WebFetchWhitelist(String domain, String addedBy) {
+        this(domain, addedBy, null);
+    }
+
+    public WebFetchWhitelist(String domain, String addedBy, String orgId) {
         this.domain  = domain.toLowerCase().strip();
         this.addedBy = addedBy;
+        this.orgId   = orgId;
     }
 }

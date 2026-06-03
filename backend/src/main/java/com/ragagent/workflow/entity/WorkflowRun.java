@@ -26,6 +26,10 @@ public class WorkflowRun {
     @Column(name = "owner_email")
     private String ownerEmail;
 
+    /** Org slug when in team mode; null = personal. */
+    @Column(name = "org_id", length = 100)
+    private String orgId;
+
     @Column(name = "user_input", columnDefinition = "TEXT", nullable = false)
     private String userInput;
 

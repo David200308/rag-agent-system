@@ -21,6 +21,10 @@ public class Conversation {
     @Column(name = "user_email")
     private String userEmail;
 
+    /** Org slug when in team mode; null = personal. */
+    @Column(name = "org_id", length = 100)
+    private String orgId;
+
     @Column(name = "archived", nullable = false)
     private boolean archived = false;
 

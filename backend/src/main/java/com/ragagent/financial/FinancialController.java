@@ -10,6 +10,7 @@ import com.ragagent.financial.entity.CashDeposit;
 import com.ragagent.financial.entity.CryptoInvestment;
 import com.ragagent.financial.entity.SalaryUsageRecord;
 import com.ragagent.financial.entity.StockInvestment;
+import com.ragagent.org.OrgContext;
 import com.ragagent.user.UserPreferenceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -227,6 +228,14 @@ public class FinancialController {
     private String email(HttpServletRequest req) {
         String email = (String) req.getAttribute("authenticatedEmail");
         return email != null ? email : "anonymous";
+    }
+
+    private ResponseEntity<Map<String, String>> requirePersonalMode(HttpServletRequest req) {
+        OrgContext ctx = OrgContext.from(req);
+        if (ctx.isTeam()) {
+            return ResponseEntity.status(403).body(Map.of("error", "Financial is not available in team mode."));
+        }
+        return null;
     }
 
     private String defaultCurrency(HttpServletRequest req) {

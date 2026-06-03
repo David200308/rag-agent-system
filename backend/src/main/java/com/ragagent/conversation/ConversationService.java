@@ -6,6 +6,7 @@ import com.ragagent.conversation.entity.ConversationShare;
 import com.ragagent.conversation.repository.ConversationMessageRepository;
 import com.ragagent.conversation.repository.ConversationRepository;
 import com.ragagent.conversation.repository.ConversationShareRepository;
+import com.ragagent.org.OrgContext;
 import com.ragagent.schema.AgentRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,11 +35,11 @@ public class ConversationService {
     private final ConversationShareRepository   shareRepo;
 
     /**
-     * Resolve or create a conversation.
+     * Resolve or create a conversation (org-context aware).
      * Returns the (possibly new) conversationId.
      */
     @Transactional
-    public String resolveConversation(String conversationId, String userEmail) {
+    public String resolveConversation(String conversationId, OrgContext ctx) {
         if (conversationId != null && !conversationId.isBlank()) {
             if (conversationRepo.existsById(conversationId)) {
                 return conversationId;
@@ -46,9 +47,16 @@ public class ConversationService {
             log.warn("[ConversationService] Unknown conversationId={}, creating new one", conversationId);
         }
         String newId = UUID.randomUUID().toString();
-        conversationRepo.save(new Conversation(newId, userEmail));
+        Conversation conv = new Conversation(newId, ctx != null ? ctx.email() : null);
+        if (ctx != null && ctx.isTeam()) conv.setOrgId(ctx.orgId());
+        conversationRepo.save(conv);
         log.debug("[ConversationService] Created conversation id={}", newId);
         return newId;
+    }
+
+    @Transactional
+    public String resolveConversation(String conversationId, String userEmail) {
+        return resolveConversation(conversationId, new OrgContext(userEmail, "PERSONAL", null));
     }
 
     /** Save the user's query message. */
@@ -82,13 +90,31 @@ public class ConversationService {
         return messageRepo.findByConversationIdOrderByCreatedAtAsc(conversationId);
     }
 
-    /** Return non-archived conversations for a user, newest first. */
+    /** Return non-archived conversations for a user in the correct mode context. */
+    @Transactional(readOnly = true)
+    public List<Conversation> listConversations(OrgContext ctx) {
+        if (ctx.isTeam()) {
+            return conversationRepo.findByUserEmailAndOrgIdAndArchivedFalseOrderByUpdatedAtDesc(
+                    ctx.email(), ctx.orgId());
+        }
+        return conversationRepo.findByUserEmailAndOrgIdIsNullAndArchivedFalseOrderByUpdatedAtDesc(ctx.email());
+    }
+
     @Transactional(readOnly = true)
     public List<Conversation> listConversations(String userEmail) {
         return conversationRepo.findByUserEmailAndArchivedFalseOrderByUpdatedAtDesc(userEmail);
     }
 
-    /** Return archived conversations for a user, newest first. */
+    /** Return archived conversations for a user in the correct mode context. */
+    @Transactional(readOnly = true)
+    public List<Conversation> listArchivedConversations(OrgContext ctx) {
+        if (ctx.isTeam()) {
+            return conversationRepo.findByUserEmailAndOrgIdAndArchivedTrueOrderByUpdatedAtDesc(
+                    ctx.email(), ctx.orgId());
+        }
+        return conversationRepo.findByUserEmailAndOrgIdIsNullAndArchivedTrueOrderByUpdatedAtDesc(ctx.email());
+    }
+
     @Transactional(readOnly = true)
     public List<Conversation> listArchivedConversations(String userEmail) {
         return conversationRepo.findByUserEmailAndArchivedTrueOrderByUpdatedAtDesc(userEmail);

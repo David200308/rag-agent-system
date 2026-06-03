@@ -2,6 +2,7 @@ package com.ragagent.workflow;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ragagent.org.OrgContext;
 import com.ragagent.workflow.entity.Workflow;
 import com.ragagent.workflow.entity.WorkflowAgent;
 import com.ragagent.workflow.repository.WorkflowAgentRepository;
@@ -27,6 +28,12 @@ public class WorkflowService {
 
     // ── Workflow CRUD ─────────────────────────────────────────────────────────
 
+    public List<Workflow> list(OrgContext ctx) {
+        if (ctx.isTeam()) return workflowRepo.findByOrgIdOrderByUpdatedAtDesc(ctx.orgId());
+        return workflowRepo.findByOwnerEmailAndOrgIdIsNullOrderByUpdatedAtDesc(ctx.email());
+    }
+
+    /** Backward-compatible alias. */
     public List<Workflow> listByOwner(String ownerEmail) {
         return workflowRepo.findByOwnerEmailOrderByUpdatedAtDesc(ownerEmail);
     }
@@ -36,20 +43,29 @@ public class WorkflowService {
     }
 
     @Transactional
-    public Workflow create(String name, String description, String ownerEmail,
+    public Workflow create(String name, String description, OrgContext ctx,
                            Workflow.AgentPattern pattern, Workflow.TeamExecMode teamExecMode) {
-        Workflow wf = new Workflow(UUID.randomUUID().toString(), name, ownerEmail, pattern);
+        Workflow wf = new Workflow(UUID.randomUUID().toString(), name, ctx.email(), pattern);
         wf.setDescription(description);
         wf.setTeamExecMode(teamExecMode);
+        if (ctx.isTeam()) wf.setOrgId(ctx.orgId());
         return workflowRepo.save(wf);
     }
 
     @Transactional
-    public Workflow update(String id, String ownerEmail, Map<String, Object> patch) {
+    public Workflow create(String name, String description, String ownerEmail,
+                           Workflow.AgentPattern pattern, Workflow.TeamExecMode teamExecMode) {
+        return create(name, description, new OrgContext(ownerEmail, "PERSONAL", null), pattern, teamExecMode);
+    }
+
+    @Transactional
+    public Workflow update(String id, OrgContext ctx, Map<String, Object> patch) {
         Workflow wf = workflowRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Workflow not found: " + id));
-        if (!ownerEmail.equals(wf.getOwnerEmail())) throw new SecurityException("Not the owner");
-
+        // Team mode: any member can edit; personal mode: only owner
+        if (!ctx.isTeam() && !ctx.email().equals(wf.getOwnerEmail())) {
+            throw new SecurityException("Not the owner");
+        }
         if (patch.containsKey("name"))        wf.setName((String) patch.get("name"));
         if (patch.containsKey("description")) wf.setDescription((String) patch.get("description"));
         if (patch.containsKey("agentPattern")) {
@@ -67,11 +83,23 @@ public class WorkflowService {
     }
 
     @Transactional
-    public void delete(String id, String ownerEmail) {
+    public Workflow update(String id, String ownerEmail, Map<String, Object> patch) {
+        return update(id, new OrgContext(ownerEmail, "PERSONAL", null), patch);
+    }
+
+    @Transactional
+    public void delete(String id, OrgContext ctx) {
         Workflow wf = workflowRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Workflow not found"));
-        if (!ownerEmail.equals(wf.getOwnerEmail())) throw new SecurityException("Not the owner");
+        if (!ctx.isTeam() && !ctx.email().equals(wf.getOwnerEmail())) {
+            throw new SecurityException("Not the owner");
+        }
         workflowRepo.delete(wf);
+    }
+
+    @Transactional
+    public void delete(String id, String ownerEmail) {
+        delete(id, new OrgContext(ownerEmail, "PERSONAL", null));
     }
 
     // ── Agent CRUD ────────────────────────────────────────────────────────────

@@ -21,6 +21,10 @@ public class Skill {
     @Column(name = "owner_email", length = 255)
     private String ownerEmail;
 
+    /** Org slug when in team mode; null = personal. */
+    @Column(name = "org_id", length = 100)
+    private String orgId;
+
     @Column(nullable = false, length = 255)
     private String name;
 
