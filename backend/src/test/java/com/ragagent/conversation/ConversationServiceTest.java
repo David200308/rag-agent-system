@@ -218,7 +218,7 @@ class ConversationServiceTest {
     }
 
     @Test
-    void createShare_interactiveMode_setsShareMode() {
+    void createShare_readOnlyMode_setsShareMode() {
         Conversation conv = new Conversation("c1", "owner@test.com");
         when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
         when(shareRepo.findByConversationIdAndOwnerEmail("c1", "owner@test.com"))
@@ -226,9 +226,9 @@ class ConversationServiceTest {
         when(shareRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         ConversationShare share = conversationService.createShare(
-                "c1", "owner@test.com", null, "INTERACTIVE", "EVERYONE", List.of());
+                "c1", "owner@test.com", null, "READ_ONLY", "EVERYONE", List.of());
 
-        assertThat(share.getShareMode()).isEqualTo("INTERACTIVE");
+        assertThat(share.getShareMode()).isEqualTo("READ_ONLY");
     }
 
     @Test
