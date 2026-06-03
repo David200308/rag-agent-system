@@ -31,6 +31,14 @@ public class PasskeyChallenge {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    /** Login mode stored at challenge-begin time so finish can issue the correct JWT. */
+    @Column(length = 20)
+    private String mode = "PERSONAL";
+
+    /** Org slug for TEAM mode; null for PERSONAL. */
+    @Column(name = "org_id", length = 100)
+    private String orgId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 }

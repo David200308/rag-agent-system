@@ -11,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -73,7 +74,7 @@ class PasskeyControllerTest {
 
     @Test
     void authenticateBegin_unknownEmail_returns404() throws Exception {
-        when(passkeyService.startAuthentication("notfound@example.com"))
+        when(passkeyService.startAuthentication("notfound@example.com", "PERSONAL", null))
                 .thenThrow(new IllegalArgumentException("No passkey registered"));
         var resp = controller.authenticateBegin(Map.of("email", "notfound@example.com"));
         assertThat(resp.getStatusCode().value()).isEqualTo(404);
@@ -81,7 +82,7 @@ class PasskeyControllerTest {
 
     @Test
     void authenticateBegin_internalError_returns500() throws Exception {
-        when(passkeyService.startAuthentication(anyString()))
+        when(passkeyService.startAuthentication(anyString(), anyString(), any()))
                 .thenThrow(new RuntimeException("unexpected"));
         var resp = controller.authenticateBegin(Map.of("email", "user@example.com"));
         assertThat(resp.getStatusCode().value()).isEqualTo(500);
@@ -89,9 +90,18 @@ class PasskeyControllerTest {
 
     @Test
     void authenticateBegin_success_returnsOptionsJson() throws Exception {
-        when(passkeyService.startAuthentication("user@example.com"))
+        when(passkeyService.startAuthentication("user@example.com", "PERSONAL", null))
                 .thenReturn("{\"challenge\":\"abc123\"}");
         var resp = controller.authenticateBegin(Map.of("email", "user@example.com"));
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+    }
+
+    @Test
+    void authenticateBegin_teamMode_passesOrgId() throws Exception {
+        when(passkeyService.startAuthentication("user@example.com", "TEAM", "myorg"))
+                .thenReturn("{\"challenge\":\"xyz\"}");
+        var resp = controller.authenticateBegin(
+                Map.of("email", "user@example.com", "mode", "TEAM", "orgId", "myorg"));
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
 

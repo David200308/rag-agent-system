@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, MessageSquare, Trash2, BookOpen, LogOut, PanelLeftClose, Settings, X, Archive, ArchiveRestore, ChevronDown, ChevronRight, Workflow, Zap, Cable, DollarSign } from "lucide-react";
+import { Plus, MessageSquare, Trash2, BookOpen, LogOut, PanelLeftClose, Settings, X, Archive, ArchiveRestore, ChevronDown, ChevronRight, Workflow, Zap, Cable, DollarSign, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -325,6 +325,20 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
           <Zap className="h-3.5 w-3.5" />
           Skills
         </Link>
+        {isTeamMode && (
+          <Link
+            href="/team"
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors",
+              pathname === "/team"
+                ? "bg-black text-white dark:bg-white dark:text-black"
+                : "text-[--color-muted] hover:bg-[--color-border]/50",
+            )}
+          >
+            <Users className="h-3.5 w-3.5" />
+            Team
+          </Link>
+        )}
         {!isTeamMode && (
           <Link
             href="/financial"

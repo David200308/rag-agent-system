@@ -6,18 +6,29 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { ChatInterface } from "@/components/chat/ChatInterface";
 import { useChatStore } from "@/store/chatStore";
 import { fetchConversations, fetchConversationMessages } from "@/lib/api";
-import type { BackendMessage } from "@/types/agent";
+import type { BackendConversation, BackendMessage } from "@/types/agent";
 
 export default function HomePage() {
   const { activeId, newConversation, selectConversation, syncFromBackend } = useChatStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // On mount: load conversations from the backend to enable cross-device sync
+  // On mount: load conversations from the backend to enable cross-device sync.
+  // When auth is enabled the backend is the source of truth — always call
+  // syncFromBackend so stale local conversations from a different mode/account
+  // (e.g., personal conversations leaking into team mode) are cleared.
   useEffect(() => {
     async function loadFromBackend() {
-      const backendConversations = await fetchConversations();
+      const [authConfig, backendConversations] = await Promise.all([
+        fetch("/api/auth/config").then((r) => r.json() as Promise<{ enabled: boolean }>).catch(() => ({ enabled: false })),
+        fetchConversations().catch(() => [] as BackendConversation[]),
+      ]);
+
       if (backendConversations.length === 0) {
-        if (!activeId) newConversation();
+        if (authConfig.enabled) {
+          // Auth on → backend is source of truth → wipe any stale local state
+          syncFromBackend([], {});
+        }
+        newConversation();
         return;
       }
 

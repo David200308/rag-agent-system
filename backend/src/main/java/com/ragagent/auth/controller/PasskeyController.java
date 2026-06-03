@@ -46,8 +46,11 @@ public class PasskeyController {
         if (email == null || email.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "email is required"));
         }
+        String mode  = body.getOrDefault("mode", "PERSONAL");
+        String orgId = body.get("orgId");
         try {
-            String optionsJson = passkeyService.startAuthentication(email.trim().toLowerCase());
+            String optionsJson = passkeyService.startAuthentication(
+                    email.trim().toLowerCase(), mode, orgId);
             JsonNode node = objectMapper.readTree(optionsJson);
             return ResponseEntity.ok(node);
         } catch (IllegalArgumentException e) {

@@ -333,6 +333,11 @@ ALTER TABLE conversations    ADD COLUMN org_id VARCHAR(100) NULL;
 ALTER TABLE workflow_runs    ADD COLUMN org_id VARCHAR(100) NULL;
 ALTER TABLE connector_tokens ADD COLUMN org_id VARCHAR(100) NULL;
 
+-- ── Schema migration: passkey challenge mode/orgId for team-mode login ───────
+-- mode and org_id must be captured at begin so finish can issue the correct JWT.
+ALTER TABLE passkey_challenges ADD COLUMN mode   VARCHAR(20)  NOT NULL DEFAULT 'PERSONAL';
+ALTER TABLE passkey_challenges ADD COLUMN org_id VARCHAR(100) NULL;
+
 -- ── CLI public keys ──────────────────────────────────────────────────────────
 -- Stores one Ed25519 public key per user, registered by agent-cli at login.
 -- Used by CliSignatureFilter to verify X-Cli-Signature on every CLI request.

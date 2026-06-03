@@ -112,7 +112,11 @@ export default function LoginPage() {
       const beginRes = await fetch("/api/auth/passkey/authenticate/begin", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: trimmed }),
+        body: JSON.stringify({
+          email: trimmed,
+          mode,
+          ...(mode === "TEAM" && orgId ? { orgId: orgId.trim().toLowerCase() } : {}),
+        }),
       });
       if (!beginRes.ok) {
         const d = (await beginRes.json()) as { error?: string };

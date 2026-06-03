@@ -1,0 +1,23 @@
+import { request } from "@/lib/backend-client";
+import { cookies } from "next/headers";
+
+const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8081";
+
+/** POST /api/team/transfer-owner — transfer ownership to another member (owner only) */
+export async function POST(req: Request) {
+  const store = await cookies();
+  const token = store.get("rag-session")?.value;
+
+  const { statusCode, body } = await request(`${BACKEND}/api/v1/team/transfer-owner`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+    body: await req.text(),
+  });
+  return new Response(await body.text(), {
+    status: statusCode,
+    headers: { "content-type": "application/json" },
+  });
+}

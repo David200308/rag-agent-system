@@ -196,7 +196,7 @@ public class PasskeyService implements CredentialRepository {
     // ── Authentication ────────────────────────────────────────────────────────────
 
     @Transactional
-    public String startAuthentication(String email) throws Exception {
+    public String startAuthentication(String email, String mode, String orgId) throws Exception {
         if (!credRepo.existsByEmail(email)) {
             throw new IllegalArgumentException("No passkey registered for this email");
         }
@@ -214,6 +214,8 @@ public class PasskeyService implements CredentialRepository {
         challenge.setEmail(email);
         challenge.setType("AUTHENTICATE");
         challenge.setRequestJson(fullJson);
+        challenge.setMode(mode != null ? mode : "PERSONAL");
+        challenge.setOrgId(orgId);
         challenge.setExpiresAt(Instant.now().plusSeconds(300));
         challengeRepo.save(challenge);
 
@@ -253,8 +255,9 @@ public class PasskeyService implements CredentialRepository {
 
         challengeRepo.deleteByEmailAndType(email, "AUTHENTICATE");
 
-        String jwt = jwtService.generate(challenge.getEmail());
-        log.info("[PasskeyService] Passkey authentication successful for {}", challenge.getEmail());
+        String resolvedMode = challenge.getMode() != null ? challenge.getMode() : "PERSONAL";
+        String jwt = jwtService.generate(challenge.getEmail(), resolvedMode, challenge.getOrgId());
+        log.info("[PasskeyService] Passkey authentication successful for {} mode={}", challenge.getEmail(), resolvedMode);
         return jwt;
     }
 
