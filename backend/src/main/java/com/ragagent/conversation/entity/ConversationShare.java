@@ -35,7 +35,7 @@ public class ConversationShare {
     @Column(name = "expires_at")
     private Instant expiresAt;
 
-    /** READ_ONLY | INTERACTIVE */
+    /** READ_ONLY */
     @Column(name = "share_mode", nullable = false, length = 20)
     private String shareMode = "READ_ONLY";
 

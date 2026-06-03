@@ -235,7 +235,6 @@ public class AgentController {
      * Create or replace a share link for a conversation.
      * Body: {
      *   "expireDays": 7,          // null = never
-     *   "shareMode":  "READ_ONLY" | "INTERACTIVE",
      *   "accessType": "EVERYONE"  | "WHITELIST",
      *   "whitelist":  ["a@b.com"] // required when accessType=WHITELIST
      * }
@@ -250,13 +249,11 @@ public class AgentController {
         String email = (String) httpRequest.getAttribute("authenticatedEmail");
 
         Integer expireDays = null;
-        String shareMode   = "READ_ONLY";
         String accessType  = "EVERYONE";
         java.util.List<String> whitelist = java.util.List.of();
 
         if (body != null) {
             if (body.get("expireDays") instanceof Number n) expireDays = n.intValue();
-            if (body.get("shareMode")  instanceof String s) shareMode  = s;
             if (body.get("accessType") instanceof String s) accessType = s;
             if (body.get("whitelist")  instanceof java.util.List<?> l) {
                 whitelist = l.stream()
@@ -268,7 +265,7 @@ public class AgentController {
 
         try {
             var share = conversationService.createShare(
-                    conversationId, email, expireDays, shareMode, accessType, whitelist);
+                    conversationId, email, expireDays, "READ_ONLY", accessType, whitelist);
             return ResponseEntity.ok(shareToMap(share));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));

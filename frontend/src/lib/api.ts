@@ -187,13 +187,6 @@ export async function fetchSharedConversation(token: string): Promise<ShareMetaR
   return res.json() as Promise<ShareMetaResponse>;
 }
 
-export async function submitSharedQuery(
-  token: string,
-  query: string,
-): Promise<AgentResponse> {
-  return postJson<AgentResponse>(`/api/share/${token}/query`, { query });
-}
-
 // ── Web-fetch whitelist ───────────────────────────────────────────────────────
 
 export async function fetchWebFetchWhitelist(): Promise<WebFetchWhitelistEntry[]> {

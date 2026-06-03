@@ -118,7 +118,7 @@ export interface BackendMessage {
   createdAt: string;
 }
 
-export type ShareMode   = "READ_ONLY" | "INTERACTIVE";
+export type ShareMode   = "READ_ONLY";
 export type AccessType  = "EVERYONE"  | "WHITELIST";
 
 export interface ConversationShare {

@@ -160,7 +160,7 @@ public class ConversationService {
      * @param conversationId target conversation
      * @param ownerEmail     must be the conversation owner
      * @param expireDays     null → never expires; positive integer → expires in N days
-     * @param shareMode      READ_ONLY | INTERACTIVE
+     * @param shareMode      READ_ONLY
      * @param accessType     EVERYONE | WHITELIST
      * @param whitelist      required emails when accessType=WHITELIST
      */
