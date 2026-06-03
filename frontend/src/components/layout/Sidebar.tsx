@@ -36,12 +36,18 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
 
   const { timezone } = useTimezone();
   const [authEnabled, setAuthEnabled] = useState(false);
+  const [isTeamMode,  setIsTeamMode]  = useState(false);
+  const [orgId,       setOrgId]       = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/config")
       .then((r) => r.json())
-      .then((d: { enabled: boolean }) => setAuthEnabled(d.enabled))
+      .then((d: { enabled: boolean; mode?: string; orgId?: string }) => {
+        setAuthEnabled(d.enabled);
+        setIsTeamMode(d.mode === "TEAM");
+        setOrgId(d.orgId ?? null);
+      })
       .catch(() => {});
   }, []);
 
@@ -73,7 +79,14 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[--color-border] px-3 py-3">
-        <span className="text-sm font-semibold">SkyProton Agent System</span>
+        <div className="flex flex-col min-w-0">
+          <span className="text-sm font-semibold truncate">SkyProton Agent System</span>
+          {isTeamMode && orgId && (
+            <span className="text-[10px] text-[--color-muted] font-mono truncate">
+              team: {orgId}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <ThemeToggle />
           <Button size="icon" variant="ghost" onClick={handleNew} title="New conversation">
@@ -312,18 +325,20 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
           <Zap className="h-3.5 w-3.5" />
           Skills
         </Link>
-        <Link
-          href="/financial"
-          className={cn(
-            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors",
-            pathname === "/financial"
-              ? "bg-black text-white dark:bg-white dark:text-black"
-              : "text-[--color-muted] hover:bg-[--color-border]/50",
-          )}
-        >
-          <DollarSign className="h-3.5 w-3.5" />
-          Financial
-        </Link>
+        {!isTeamMode && (
+          <Link
+            href="/financial"
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors",
+              pathname === "/financial"
+                ? "bg-black text-white dark:bg-white dark:text-black"
+                : "text-[--color-muted] hover:bg-[--color-border]/50",
+            )}
+          >
+            <DollarSign className="h-3.5 w-3.5" />
+            Financial
+          </Link>
+        )}
         <Link
           href="/settings"
           className={cn(

@@ -2,6 +2,7 @@ package com.ragagent.auth.controller;
 
 import com.ragagent.auth.service.AuthService;
 import com.ragagent.auth.service.CliKeyService;
+import com.ragagent.org.OrganizationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -27,8 +28,9 @@ import java.util.Map;
 @Tag(name = "Auth", description = "Email OTP login endpoints (JWT)")
 public class AuthController {
 
-    private final AuthService  authService;
-    private final CliKeyService cliKeyService;
+    private final AuthService         authService;
+    private final CliKeyService       cliKeyService;
+    private final OrganizationService orgService;
 
     // ── Request OTP ──────────────────────────────────────────────────────────────
 
@@ -104,12 +106,17 @@ public class AuthController {
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
         String token = extractToken(authHeader);
-        String email = (token != null) ? authService.validateToken(token) : null;
+        var claims = (token != null) ? authService.validateTokenFull(token) : null;
 
-        if (email == null) {
+        if (claims == null) {
             return ResponseEntity.ok(Map.of("valid", false));
         }
-        return ResponseEntity.ok(Map.of("valid", true, "email", email));
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        result.put("valid", true);
+        result.put("email", claims.email());
+        result.put("mode",  claims.mode());
+        if (claims.orgId() != null) result.put("orgId", claims.orgId());
+        return ResponseEntity.ok(result);
     }
 
     // ── Register CLI public key ───────────────────────────────────────────────────
@@ -144,7 +151,25 @@ public class AuthController {
         }
     }
 
+    // ── Check org (used at login — no auth required) ──────────────────────────
+
+    @GetMapping("/org/{orgId}")
+    @Operation(summary = "Check whether an org slug exists (called at team login)")
+    public ResponseEntity<Map<String, Object>> checkOrg(@PathVariable String orgId) {
+        boolean exists = isOrgRegistered(orgId);
+        return ResponseEntity.ok(Map.of("exists", exists));
+    }
+
     // ── Helper ───────────────────────────────────────────────────────────────────
+
+    private boolean isOrgRegistered(String orgId) {
+        try {
+            orgService.requireOrgExists(orgId);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
 
     private String extractToken(String authHeader) {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {

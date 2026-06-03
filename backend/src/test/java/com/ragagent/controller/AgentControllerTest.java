@@ -1,6 +1,7 @@
 package com.ragagent.controller;
 
 import com.ragagent.agent.RagAgentGraph;
+import com.ragagent.org.OrgContext;
 import com.ragagent.config.LlmProperties;
 import com.ragagent.conversation.ConversationService;
 import com.ragagent.conversation.entity.Conversation;
@@ -43,13 +44,19 @@ class AgentControllerTest {
     @Mock HttpServletRequest     request;
     @InjectMocks AgentController controller;
 
+    private void stubRequest(String email) {
+        when(request.getAttribute("authenticatedEmail")).thenReturn(email);
+        when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
+        when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
+    }
+
     // ── listConversations ─────────────────────────────────────────────────────
 
     @Test
     void listConversations_withEmail_returnsConversations() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        stubRequest("user@example.com");
         Conversation conv = new Conversation();
-        when(conversationService.listConversations("user@example.com")).thenReturn(List.of(conv));
+        when(conversationService.listConversations(any(OrgContext.class))).thenReturn(List.of(conv));
 
         ResponseEntity<List<Conversation>> resp = controller.listConversations(request);
 
@@ -79,8 +86,8 @@ class AgentControllerTest {
 
     @Test
     void listArchivedConversations_withEmail_returns200() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
-        when(conversationService.listArchivedConversations("user@example.com")).thenReturn(List.of());
+        stubRequest("user@example.com");
+        when(conversationService.listArchivedConversations(any(OrgContext.class))).thenReturn(List.of());
 
         ResponseEntity<List<Conversation>> resp = controller.listArchivedConversations(request);
 
@@ -324,9 +331,9 @@ class AgentControllerTest {
 
     @Test
     void listKnowledge_returnsAccessibleSources() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        stubRequest("user@example.com");
         KnowledgeSource ks = new KnowledgeSource("doc.pdf", "doc.pdf", null, 10, "user@example.com");
-        when(knowledgeSourceService.listAccessible("user@example.com")).thenReturn(List.of(ks));
+        when(knowledgeSourceService.listAccessible(any(OrgContext.class))).thenReturn(List.of(ks));
 
         ResponseEntity<List<KnowledgeSource>> resp = controller.listKnowledge(request);
 
@@ -347,9 +354,9 @@ class AgentControllerTest {
 
     @Test
     void deleteKnowledge_notOwner_returns403() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("other@example.com");
+        stubRequest("other@example.com");
         doThrow(new SecurityException("not owner"))
-                .when(knowledgeSourceService).delete("doc.pdf", "other@example.com");
+                .when(knowledgeSourceService).delete(anyString(), any(OrgContext.class));
 
         var resp = controller.deleteKnowledge("doc.pdf", request);
 
@@ -360,8 +367,7 @@ class AgentControllerTest {
 
     @Test
     void updateKnowledge_blankSource_returns400() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
-
+        // Returns 400 before reaching service — no request stub needed
         var resp = controller.updateKnowledge(Map.of("source", "  "), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(400);
@@ -369,9 +375,9 @@ class AgentControllerTest {
 
     @Test
     void updateKnowledge_success_returns200() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("owner@example.com");
+        stubRequest("owner@example.com");
         KnowledgeSource updated = new KnowledgeSource("doc.pdf", "New Label", "category", 10, "owner@example.com");
-        when(knowledgeSourceService.updateMetadata("doc.pdf", "New Label", "category", "owner@example.com"))
+        when(knowledgeSourceService.updateMetadata(eq("doc.pdf"), eq("New Label"), eq("category"), any(OrgContext.class)))
                 .thenReturn(updated);
 
         var resp = controller.updateKnowledge(
@@ -382,8 +388,8 @@ class AgentControllerTest {
 
     @Test
     void updateKnowledge_notOwner_returns403() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("other@example.com");
-        when(knowledgeSourceService.updateMetadata(anyString(), any(), any(), anyString()))
+        stubRequest("other@example.com");
+        when(knowledgeSourceService.updateMetadata(anyString(), any(), any(), any(OrgContext.class)))
                 .thenThrow(new SecurityException("not owner"));
 
         var resp = controller.updateKnowledge(Map.of("source", "doc.pdf"), request);
@@ -421,9 +427,9 @@ class AgentControllerTest {
 
     @Test
     void listWebFetchWhitelist_returnsWhitelist() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        stubRequest("user@example.com");
         WebFetchWhitelist entry = new WebFetchWhitelist();
-        when(webFetchService.listWhitelist("user@example.com")).thenReturn(List.of(entry));
+        when(webFetchService.listWhitelist(any(OrgContext.class))).thenReturn(List.of(entry));
 
         var resp = controller.listWebFetchWhitelist(request);
 
@@ -447,9 +453,9 @@ class AgentControllerTest {
 
     @Test
     void addWebFetchDomain_success_returns200() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        stubRequest("user@example.com");
         WebFetchWhitelist entry = new WebFetchWhitelist();
-        when(webFetchService.addDomain("example.com", "user@example.com")).thenReturn(entry);
+        when(webFetchService.addDomain(eq("example.com"), any(OrgContext.class))).thenReturn(entry);
 
         var resp = controller.addWebFetchDomain(Map.of("domain", "example.com"), request);
 
@@ -458,8 +464,8 @@ class AgentControllerTest {
 
     @Test
     void addWebFetchDomain_duplicate_returns400() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
-        when(webFetchService.addDomain(anyString(), anyString()))
+        stubRequest("user@example.com");
+        when(webFetchService.addDomain(anyString(), any(OrgContext.class)))
                 .thenThrow(new IllegalArgumentException("already exists"));
 
         var resp = controller.addWebFetchDomain(Map.of("domain", "example.com"), request);
@@ -480,9 +486,9 @@ class AgentControllerTest {
 
     @Test
     void removeWebFetchDomain_notFound_returns404() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        stubRequest("user@example.com");
         doThrow(new IllegalArgumentException("not found"))
-                .when(webFetchService).removeDomain("example.com", "user@example.com");
+                .when(webFetchService).removeDomain(eq("example.com"), any(OrgContext.class));
 
         ResponseEntity<Void> resp = controller.removeWebFetchDomain("example.com", request);
 

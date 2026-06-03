@@ -1,5 +1,6 @@
 package com.ragagent.skill;
 
+import com.ragagent.org.OrgContext;
 import com.ragagent.skill.entity.Skill;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
@@ -24,17 +25,19 @@ class SkillControllerTest {
     @Mock HttpServletRequest  request;
     @InjectMocks SkillController controller;
 
-    private void stubEmail(String email) {
+    private void stubRequest(String email) {
         when(request.getAttribute("authenticatedEmail")).thenReturn(email);
+        when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
+        when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
     }
 
     // ── list ──────────────────────────────────────────────────────────────────
 
     @Test
     void list_withEmail_returnsSkills() {
-        stubEmail("user@test.com");
+        stubRequest("user@test.com");
         Skill skill = new Skill();
-        when(skillService.list("user@test.com")).thenReturn(List.of(skill));
+        when(skillService.list(any(OrgContext.class))).thenReturn(List.of(skill));
 
         ResponseEntity<List<Skill>> resp = controller.list(request);
 
@@ -43,23 +46,24 @@ class SkillControllerTest {
     }
 
     @Test
-    void list_noEmail_usesAnonymous() {
-        stubEmail(null);
-        when(skillService.list("anonymous")).thenReturn(List.of());
+    void list_noEmail_returnsEmptyList() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn(null);
+        when(request.getAttribute("authenticatedMode")).thenReturn(null);
+        when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
+        when(skillService.list(any(OrgContext.class))).thenReturn(List.of());
 
         ResponseEntity<List<Skill>> resp = controller.list(request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
-        verify(skillService).list("anonymous");
     }
 
     // ── create ────────────────────────────────────────────────────────────────
 
     @Test
     void create_validContent_returns201() {
-        stubEmail("user@test.com");
+        stubRequest("user@test.com");
         Skill created = new Skill();
-        when(skillService.create(anyString(), anyString(), anyString(), anyString(), anyLong(), anyString()))
+        when(skillService.create(any(OrgContext.class), anyString(), anyString(), anyString(), anyLong(), anyString()))
                 .thenReturn(created);
 
         var body = Map.<String, Object>of(
@@ -91,28 +95,28 @@ class SkillControllerTest {
 
     @Test
     void create_fileNameDefaultsToName() {
-        stubEmail("user@test.com");
-        when(skillService.create(eq("user@test.com"), eq("My Skill"), eq("My Skill"),
+        stubRequest("user@test.com");
+        when(skillService.create(any(OrgContext.class), eq("My Skill"), eq("My Skill"),
                 anyString(), anyLong(), anyString()))
                 .thenReturn(new Skill());
 
         var body = Map.<String, Object>of("name", "My Skill", "content", "Hello");
         controller.create(body, request);
 
-        verify(skillService).create(eq("user@test.com"), eq("My Skill"), eq("My Skill"),
+        verify(skillService).create(any(OrgContext.class), eq("My Skill"), eq("My Skill"),
                 anyString(), anyLong(), anyString());
     }
 
     @Test
     void create_fileTypeDefaultsToTxt() {
-        stubEmail("user@test.com");
-        when(skillService.create(anyString(), anyString(), anyString(), eq("txt"), anyLong(), anyString()))
+        stubRequest("user@test.com");
+        when(skillService.create(any(OrgContext.class), anyString(), anyString(), eq("txt"), anyLong(), anyString()))
                 .thenReturn(new Skill());
 
         var body = Map.<String, Object>of("name", "My Skill", "content", "Hello");
         controller.create(body, request);
 
-        verify(skillService).create(anyString(), anyString(), anyString(), eq("txt"), anyLong(), anyString());
+        verify(skillService).create(any(OrgContext.class), anyString(), anyString(), eq("txt"), anyLong(), anyString());
     }
 
     // ── getContent ────────────────────────────────────────────────────────────
@@ -140,8 +144,8 @@ class SkillControllerTest {
 
     @Test
     void delete_success_returns204() {
-        stubEmail("user@test.com");
-        doNothing().when(skillService).delete("skill-1", "user@test.com");
+        stubRequest("user@test.com");
+        doNothing().when(skillService).delete(eq("skill-1"), any(OrgContext.class));
 
         ResponseEntity<Void> resp = controller.delete("skill-1", request);
 
@@ -150,8 +154,8 @@ class SkillControllerTest {
 
     @Test
     void delete_notOwner_returns403() {
-        stubEmail("other@test.com");
-        doThrow(new SecurityException("not owner")).when(skillService).delete(anyString(), anyString());
+        stubRequest("other@test.com");
+        doThrow(new SecurityException("not owner")).when(skillService).delete(anyString(), any(OrgContext.class));
 
         ResponseEntity<Void> resp = controller.delete("skill-1", request);
 

@@ -1,5 +1,6 @@
 package com.ragagent.controller;
 
+import com.ragagent.org.OrgContext;
 import com.ragagent.sandbox.SandboxService;
 import com.ragagent.workflow.WorkflowRunService;
 import com.ragagent.workflow.WorkflowService;
@@ -44,9 +45,11 @@ class WorkflowControllerTest {
     // ── listWorkflows ──────────────────────────────────────────────────────────
 
     @Test
-    void listWorkflows_returnsOwnedWorkflows() {
+    void listWorkflows_returnsWorkflows() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
-        when(workflowService.listByOwner("user@example.com")).thenReturn(List.of(makeWorkflow("wf-1")));
+        when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
+        when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
+        when(workflowService.list(any(OrgContext.class))).thenReturn(List.of(makeWorkflow("wf-1")));
 
         ResponseEntity<List<Workflow>> resp = controller.listWorkflows(request);
 
@@ -55,9 +58,11 @@ class WorkflowControllerTest {
     }
 
     @Test
-    void listWorkflows_noEmailAttribute_usesAnonymous() {
+    void listWorkflows_nullEmail_returnsEmptyList() {
         when(request.getAttribute("authenticatedEmail")).thenReturn(null);
-        when(workflowService.listByOwner("anonymous")).thenReturn(List.of());
+        when(request.getAttribute("authenticatedMode")).thenReturn(null);
+        when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
+        when(workflowService.list(any(OrgContext.class))).thenReturn(List.of());
 
         ResponseEntity<List<Workflow>> resp = controller.listWorkflows(request);
 
@@ -90,8 +95,10 @@ class WorkflowControllerTest {
     @Test
     void createWorkflow_success_returns200() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
+        when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         Workflow created = makeWorkflow("wf-new");
-        when(workflowService.create(anyString(), anyString(), anyString(),
+        when(workflowService.create(anyString(), anyString(), any(OrgContext.class),
                 any(Workflow.AgentPattern.class), any()))
                 .thenReturn(created);
 
@@ -109,12 +116,18 @@ class WorkflowControllerTest {
 
     // ── updateWorkflow ─────────────────────────────────────────────────────────
 
+    private void setupRequest(String email) {
+        when(request.getAttribute("authenticatedEmail")).thenReturn(email);
+        when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
+        when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
+    }
+
     @Test
     void updateWorkflow_success_returns200() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("owner@example.com");
+        setupRequest("owner@example.com");
         Workflow updated = makeWorkflow("wf-1");
         updated.setName("Updated Name");
-        when(workflowService.update(eq("wf-1"), eq("owner@example.com"), any()))
+        when(workflowService.update(eq("wf-1"), any(OrgContext.class), any()))
                 .thenReturn(updated);
 
         ResponseEntity<Workflow> resp = controller.updateWorkflow("wf-1", Map.of("name", "Updated Name"), request);
@@ -124,8 +137,8 @@ class WorkflowControllerTest {
 
     @Test
     void updateWorkflow_notOwner_returns403() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("other@example.com");
-        when(workflowService.update(anyString(), anyString(), any()))
+        setupRequest("other@example.com");
+        when(workflowService.update(anyString(), any(OrgContext.class), any()))
                 .thenThrow(new SecurityException("not owner"));
 
         ResponseEntity<Workflow> resp = controller.updateWorkflow("wf-1", Map.of(), request);
@@ -135,8 +148,8 @@ class WorkflowControllerTest {
 
     @Test
     void updateWorkflow_notFound_returns404() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
-        when(workflowService.update(anyString(), anyString(), any()))
+        setupRequest("user@example.com");
+        when(workflowService.update(anyString(), any(OrgContext.class), any()))
                 .thenThrow(new IllegalArgumentException("not found"));
 
         ResponseEntity<Workflow> resp = controller.updateWorkflow("wf-1", Map.of(), request);
@@ -148,7 +161,7 @@ class WorkflowControllerTest {
 
     @Test
     void deleteWorkflow_success_returns204() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("owner@example.com");
+        setupRequest("owner@example.com");
 
         ResponseEntity<Void> resp = controller.deleteWorkflow("wf-1", request);
 
@@ -157,8 +170,8 @@ class WorkflowControllerTest {
 
     @Test
     void deleteWorkflow_notOwner_returns403() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("other@example.com");
-        doThrow(new SecurityException("not owner")).when(workflowService).delete(anyString(), anyString());
+        setupRequest("other@example.com");
+        doThrow(new SecurityException("not owner")).when(workflowService).delete(anyString(), any(OrgContext.class));
 
         ResponseEntity<Void> resp = controller.deleteWorkflow("wf-1", request);
 
@@ -340,9 +353,9 @@ class WorkflowControllerTest {
 
     @Test
     void createWorkflow_teamPattern_withSequentialMode() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        setupRequest("user@example.com");
         Workflow created = makeWorkflow("wf-team");
-        when(workflowService.create(anyString(), anyString(), anyString(),
+        when(workflowService.create(anyString(), anyString(), any(OrgContext.class),
                 eq(Workflow.AgentPattern.TEAM), eq(Workflow.TeamExecMode.SEQUENTIAL)))
                 .thenReturn(created);
 
@@ -355,7 +368,7 @@ class WorkflowControllerTest {
         ResponseEntity<Workflow> resp = controller.createWorkflow(body, request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
-        verify(workflowService).create(anyString(), anyString(), anyString(),
+        verify(workflowService).create(anyString(), anyString(), any(OrgContext.class),
                 eq(Workflow.AgentPattern.TEAM), eq(Workflow.TeamExecMode.SEQUENTIAL));
     }
 

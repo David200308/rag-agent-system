@@ -1,5 +1,6 @@
 package com.ragagent.controller;
 
+import com.ragagent.org.OrgContext;
 import com.ragagent.sandbox.SandboxService;
 import com.ragagent.workflow.WorkflowRunService;
 import com.ragagent.workflow.WorkflowService;
@@ -40,10 +41,9 @@ public class WorkflowController {
     // ── Workflow CRUD ─────────────────────────────────────────────────────────
 
     @GetMapping
-    @Operation(summary = "List workflows owned by the authenticated user")
+    @Operation(summary = "List workflows for the authenticated user or org")
     public ResponseEntity<List<Workflow>> listWorkflows(HttpServletRequest req) {
-        String email = resolveEmail(req);
-        return ResponseEntity.ok(workflowService.listByOwner(email));
+        return ResponseEntity.ok(workflowService.list(OrgContext.from(req)));
     }
 
     @GetMapping("/{id}")
@@ -60,15 +60,15 @@ public class WorkflowController {
             @RequestBody Map<String, Object> body,
             HttpServletRequest req) {
 
-        String email   = resolveEmail(req);
+        OrgContext ctx = OrgContext.from(req);
         String name    = (String) body.get("name");
         String desc    = (String) body.getOrDefault("description", "");
         Workflow.AgentPattern pattern = Workflow.AgentPattern.valueOf(
                 (String) body.getOrDefault("agentPattern", "ORCHESTRATOR"));
         String modeStr = (String) body.get("teamExecMode");
-        Workflow.TeamExecMode mode = modeStr != null ? Workflow.TeamExecMode.valueOf(modeStr) : null;
+        Workflow.TeamExecMode execMode = modeStr != null ? Workflow.TeamExecMode.valueOf(modeStr) : null;
 
-        Workflow created = workflowService.create(name, desc, email, pattern, mode);
+        Workflow created = workflowService.create(name, desc, ctx, pattern, execMode);
         return ResponseEntity.ok(created);
     }
 
@@ -78,9 +78,8 @@ public class WorkflowController {
             @PathVariable String id,
             @RequestBody Map<String, Object> body,
             HttpServletRequest req) {
-        String email = resolveEmail(req);
         try {
-            return ResponseEntity.ok(workflowService.update(id, email, body));
+            return ResponseEntity.ok(workflowService.update(id, OrgContext.from(req), body));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
         } catch (IllegalArgumentException e) {
@@ -89,10 +88,10 @@ public class WorkflowController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Delete a workflow (owner only)")
+    @Operation(summary = "Delete a workflow (owner or org member only)")
     public ResponseEntity<Void> deleteWorkflow(@PathVariable String id, HttpServletRequest req) {
         try {
-            workflowService.delete(id, resolveEmail(req));
+            workflowService.delete(id, OrgContext.from(req));
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
@@ -165,8 +164,8 @@ public class WorkflowController {
             return ResponseEntity.badRequest().body(Map.of("error", "userInput required"));
         }
         boolean emailNotify = Boolean.TRUE.equals(body.get("emailNotify"));
-        String email = resolveEmail(req);
-        String runId = runService.startRun(workflowId, userInput, email, emailNotify);
+        OrgContext ctx = OrgContext.from(req);
+        String runId = runService.startRun(workflowId, userInput, ctx.email(), emailNotify);
         return ResponseEntity.ok(Map.of("runId", runId));
     }
 
@@ -190,10 +189,4 @@ public class WorkflowController {
         return ResponseEntity.ok(sandboxService.status());
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private String resolveEmail(HttpServletRequest req) {
-        String email = (String) req.getAttribute("authenticatedEmail");
-        return email != null ? email : "anonymous";
-    }
 }

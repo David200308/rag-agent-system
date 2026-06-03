@@ -10,6 +10,7 @@ import com.ragagent.knowledge.KnowledgeSourceService;
 import com.ragagent.knowledge.entity.KnowledgeSource;
 import com.ragagent.mcp.McpConnectorService;
 import com.ragagent.rag.DocumentIngestionService;
+import com.ragagent.org.OrgContext;
 import com.ragagent.schema.AgentRequest;
 import com.ragagent.schema.AgentResponse;
 import com.ragagent.schema.UrlIngestionResult;
@@ -70,11 +71,11 @@ public class AgentController {
         String runId = UUID.randomUUID().toString();
         log.info("[AgentController] Received query runId={} query='{}'", runId, request.query());
 
-        String userEmail = (String) httpRequest.getAttribute("authenticatedEmail");
+        OrgContext ctx = OrgContext.from(httpRequest);
 
         // ── Resolve / create conversation ──────────────────────────────────
         String conversationId = conversationService.resolveConversation(
-                request.conversationId(), userEmail);
+                request.conversationId(), ctx);
 
         conversationService.saveUserMessage(conversationId, request.query());
 
@@ -84,13 +85,15 @@ public class AgentController {
             Map<String, Object> initData = new HashMap<>();
             initData.put("request", request);
             initData.put("runId", runId);
-            if (userEmail != null) {
-                initData.put("userEmail", userEmail);
+            if (ctx.email() != null) {
+                initData.put("userEmail", ctx.email());
+                initData.put("orgId",     ctx.orgId());
+                initData.put("mode",      ctx.mode());
             }
             // Model priority: conversation → user default → configured DEFAULT_MODEL → raw provider
             String selectedModel = conversationService.getConversationModel(conversationId);
-            if (selectedModel == null && userEmail != null) {
-                selectedModel = userPreferenceService.getSelectedModel(userEmail);
+            if (selectedModel == null && ctx.email() != null) {
+                selectedModel = userPreferenceService.getSelectedModel(ctx.email());
             }
             if (selectedModel == null) {
                 String dm = llmProperties.getDefaultModel();
@@ -133,22 +136,18 @@ public class AgentController {
     @Operation(summary = "List active (non-archived) conversations for the authenticated user")
     public ResponseEntity<List<com.ragagent.conversation.entity.Conversation>> listConversations(
             HttpServletRequest httpRequest) {
-        String userEmail = (String) httpRequest.getAttribute("authenticatedEmail");
-        if (userEmail == null) {
-            return ResponseEntity.status(401).build();
-        }
-        return ResponseEntity.ok(conversationService.listConversations(userEmail));
+        OrgContext ctx = OrgContext.from(httpRequest);
+        if (ctx.email() == null) return ResponseEntity.status(401).build();
+        return ResponseEntity.ok(conversationService.listConversations(ctx));
     }
 
     @GetMapping("/conversations/archived")
     @Operation(summary = "List archived conversations for the authenticated user")
     public ResponseEntity<List<com.ragagent.conversation.entity.Conversation>> listArchivedConversations(
             HttpServletRequest httpRequest) {
-        String userEmail = (String) httpRequest.getAttribute("authenticatedEmail");
-        if (userEmail == null) {
-            return ResponseEntity.status(401).build();
-        }
-        return ResponseEntity.ok(conversationService.listArchivedConversations(userEmail));
+        OrgContext ctx = OrgContext.from(httpRequest);
+        if (ctx.email() == null) return ResponseEntity.status(401).build();
+        return ResponseEntity.ok(conversationService.listArchivedConversations(ctx));
     }
 
     @PatchMapping("/conversations/{conversationId}/model")
@@ -338,9 +337,10 @@ public class AgentController {
         Resource resource  = file.getResource();
         int      chunkCount = ingestionService.ingest(resource, metadata, replace);
 
-        String ownerEmail = (String) httpRequest.getAttribute("authenticatedEmail");
+        OrgContext ctx = OrgContext.from(httpRequest);
         String sourceKey = source != null ? source : file.getOriginalFilename();
-        knowledgeSourceService.upsert(sourceKey, file.getOriginalFilename(), category, chunkCount, ownerEmail);
+        knowledgeSourceService.upsert(sourceKey, file.getOriginalFilename(), category, chunkCount,
+                ctx.email(), ctx.orgId());
         agentMetrics.recordIngest();
 
         return ResponseEntity.ok(Map.of(
@@ -356,15 +356,15 @@ public class AgentController {
             @RequestBody Map<String, String> body,
             HttpServletRequest httpRequest) {
 
-        String url        = body.get("url");
-        String category   = body.get("category");
-        String ownerEmail = (String) httpRequest.getAttribute("authenticatedEmail");
+        String url      = body.get("url");
+        String category = body.get("category");
+        OrgContext ctx  = OrgContext.from(httpRequest);
 
         if (url == null || url.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
 
-        UrlIngestionResult result = mcpConnectorService.fetchAndIngest(url, category, ownerEmail);
+        UrlIngestionResult result = mcpConnectorService.fetchAndIngest(url, category, ctx.email());
         return ResponseEntity.ok(result);
     }
 
@@ -383,9 +383,9 @@ public class AgentController {
         }
 
         boolean replace = Boolean.parseBoolean(body.getOrDefault("replace", "false"));
-        String ownerEmail = (String) httpRequest.getAttribute("authenticatedEmail");
+        OrgContext ctx  = OrgContext.from(httpRequest);
         int chunkCount = ingestionService.ingestText(text, sourceId, Map.of(), replace);
-        knowledgeSourceService.upsert(sourceId, sourceId, null, chunkCount, ownerEmail);
+        knowledgeSourceService.upsert(sourceId, sourceId, null, chunkCount, ctx.email(), ctx.orgId());
         return ResponseEntity.ok(Map.of(
                 "status",     "ingested",
                 "source",     sourceId,
@@ -398,8 +398,7 @@ public class AgentController {
     @GetMapping("/knowledge")
     @Operation(summary = "List knowledge sources accessible to the authenticated user")
     public ResponseEntity<List<KnowledgeSource>> listKnowledge(HttpServletRequest httpRequest) {
-        String email = (String) httpRequest.getAttribute("authenticatedEmail");
-        return ResponseEntity.ok(knowledgeSourceService.listAccessible(email));
+        return ResponseEntity.ok(knowledgeSourceService.listAccessible(OrgContext.from(httpRequest)));
     }
 
     @DeleteMapping("/knowledge")
@@ -407,9 +406,8 @@ public class AgentController {
     public ResponseEntity<Map<String, String>> deleteKnowledge(
             @RequestParam("source") String source,
             HttpServletRequest httpRequest) {
-        String email = (String) httpRequest.getAttribute("authenticatedEmail");
         try {
-            knowledgeSourceService.delete(source, email);
+            knowledgeSourceService.delete(source, OrgContext.from(httpRequest));
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
@@ -421,7 +419,6 @@ public class AgentController {
     public ResponseEntity<KnowledgeSource> updateKnowledge(
             @RequestBody Map<String, Object> body,
             HttpServletRequest httpRequest) {
-        String email    = (String) httpRequest.getAttribute("authenticatedEmail");
         String source   = (String) body.get("source");
         String label    = (String) body.get("label");
         String category = (String) body.get("category");
@@ -429,7 +426,8 @@ public class AgentController {
             return ResponseEntity.badRequest().build();
         }
         try {
-            KnowledgeSource updated = knowledgeSourceService.updateMetadata(source, label, category, email);
+            KnowledgeSource updated = knowledgeSourceService.updateMetadata(
+                    source, label, category, OrgContext.from(httpRequest));
             return ResponseEntity.ok(updated);
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
@@ -443,7 +441,8 @@ public class AgentController {
     public ResponseEntity<Map<String, Object>> shareKnowledge(
             @RequestBody Map<String, Object> body,
             HttpServletRequest httpRequest) {
-        String email  = (String) httpRequest.getAttribute("authenticatedEmail");
+        OrgContext ctx = OrgContext.from(httpRequest);
+        String email   = ctx.email();
         String source = (String) body.get("source");
         @SuppressWarnings("unchecked")
         java.util.List<String> emails = (java.util.List<String>) body.getOrDefault("emails", java.util.List.of());
@@ -463,10 +462,9 @@ public class AgentController {
     // ── Web-fetch whitelist ───────────────────────────────────────────────────
 
     @GetMapping("/web-fetch/whitelist")
-    @Operation(summary = "List whitelisted domains for web fetch (scoped to the authenticated user)")
+    @Operation(summary = "List whitelisted domains for web fetch")
     public ResponseEntity<List<WebFetchWhitelist>> listWebFetchWhitelist(HttpServletRequest httpRequest) {
-        String email = (String) httpRequest.getAttribute("authenticatedEmail");
-        return ResponseEntity.ok(webFetchService.listWhitelist(email));
+        return ResponseEntity.ok(webFetchService.listWhitelist(OrgContext.from(httpRequest)));
     }
 
     @PostMapping("/web-fetch/whitelist")
@@ -479,21 +477,19 @@ public class AgentController {
         if (domain == null || domain.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        String email = (String) httpRequest.getAttribute("authenticatedEmail");
         try {
-            return ResponseEntity.ok(webFetchService.addDomain(domain, email));
+            return ResponseEntity.ok(webFetchService.addDomain(domain, OrgContext.from(httpRequest)));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
     }
 
     @DeleteMapping("/web-fetch/whitelist/{domain}")
-    @Operation(summary = "Remove a domain from the authenticated user's web-fetch whitelist")
+    @Operation(summary = "Remove a domain from the web-fetch whitelist")
     public ResponseEntity<Void> removeWebFetchDomain(@PathVariable String domain,
                                                       HttpServletRequest httpRequest) {
-        String email = (String) httpRequest.getAttribute("authenticatedEmail");
         try {
-            webFetchService.removeDomain(domain, email);
+            webFetchService.removeDomain(domain, OrgContext.from(httpRequest));
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();

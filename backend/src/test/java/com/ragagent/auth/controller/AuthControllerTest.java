@@ -1,6 +1,8 @@
 package com.ragagent.auth.controller;
 
 import com.ragagent.auth.service.AuthService;
+import com.ragagent.auth.service.JwtService;
+import com.ragagent.org.OrganizationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -15,7 +17,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AuthControllerTest {
 
-    @Mock  AuthService    authService;
+    @Mock AuthService         authService;
+    @Mock OrganizationService orgService;
     @InjectMocks AuthController controller;
 
     // ── requestOtp ─────────────────────────────────────────────────────────────
@@ -130,17 +133,29 @@ class AuthControllerTest {
     // ── validate ───────────────────────────────────────────────────────────────
 
     @Test
-    void validate_validBearerToken_returnsValidTrueWithEmail() {
-        when(authService.validateToken("my-token")).thenReturn("user@example.com");
+    void validate_validBearerToken_returnsValidTrueWithEmailAndMode() {
+        when(authService.validateTokenFull("my-token"))
+                .thenReturn(new JwtService.TokenClaims("user@example.com", "PERSONAL", null));
         var resp = controller.validate("Bearer my-token");
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("valid", true);
         assertThat(resp.getBody()).containsEntry("email", "user@example.com");
+        assertThat(resp.getBody()).containsEntry("mode", "PERSONAL");
+    }
+
+    @Test
+    void validate_teamToken_returnsOrgId() {
+        when(authService.validateTokenFull("team-token"))
+                .thenReturn(new JwtService.TokenClaims("user@example.com", "TEAM", "skyproton"));
+        var resp = controller.validate("Bearer team-token");
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).containsEntry("mode", "TEAM");
+        assertThat(resp.getBody()).containsEntry("orgId", "skyproton");
     }
 
     @Test
     void validate_expiredToken_returnsValidFalse() {
-        when(authService.validateToken("expired-token")).thenReturn(null);
+        // validateTokenFull returns null by default for unstubbed calls
         var resp = controller.validate("Bearer expired-token");
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("valid", false);

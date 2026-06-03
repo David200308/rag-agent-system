@@ -1,5 +1,6 @@
 package com.ragagent.skill;
 
+import com.ragagent.org.OrgContext;
 import com.ragagent.skill.entity.Skill;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,9 +21,9 @@ public class SkillController {
     private final SkillService skillService;
 
     @GetMapping
-    @Operation(summary = "List skills owned by the authenticated user")
+    @Operation(summary = "List skills for the authenticated user or org")
     public ResponseEntity<List<Skill>> list(HttpServletRequest req) {
-        return ResponseEntity.ok(skillService.list(resolveEmail(req)));
+        return ResponseEntity.ok(skillService.list(OrgContext.from(req)));
     }
 
     @PostMapping
@@ -41,7 +42,7 @@ public class SkillController {
             return ResponseEntity.badRequest().build();
         }
 
-        Skill created = skillService.create(resolveEmail(req), name, fileName, fileType, size, content);
+        Skill created = skillService.create(OrgContext.from(req), name, fileName, fileType, size, content);
         return ResponseEntity.status(201).body(created);
     }
 
@@ -54,18 +55,13 @@ public class SkillController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Delete a skill (owner only)")
+    @Operation(summary = "Delete a skill (owner or org member only)")
     public ResponseEntity<Void> delete(@PathVariable String id, HttpServletRequest req) {
         try {
-            skillService.delete(id, resolveEmail(req));
+            skillService.delete(id, OrgContext.from(req));
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
         }
-    }
-
-    private String resolveEmail(HttpServletRequest req) {
-        String email = (String) req.getAttribute("authenticatedEmail");
-        return email != null ? email : "anonymous";
     }
 }
