@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS workflow_run_logs (
     agent_id    BIGINT,
     agent_name  VARCHAR(255),
     log_type    VARCHAR(30)   NOT NULL,  -- TOOL_CALL | TOOL_RESULT | LLM_RESPONSE | DELEGATION | ERROR | SYSTEM
-    content     TEXT          NOT NULL,
+    content     MEDIUMTEXT    NOT NULL,
     created_at  TIMESTAMP(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     INDEX idx_wrl_run (run_id),
     CONSTRAINT fk_wrl_run FOREIGN KEY (run_id)

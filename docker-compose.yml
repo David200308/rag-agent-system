@@ -60,6 +60,8 @@ services:
         condition: service_healthy
       weaviate:
         condition: service_healthy
+      tempo:
+        condition: service_started
     environment:
       # ── Database
       MYSQL_HOST: mysql
@@ -114,6 +116,9 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
       CONNECTOR_CALLBACK_BASE_URL: ${CONNECTOR_CALLBACK_BASE_URL:-http://localhost:3000}
+      # ── Distributed tracing (OpenTelemetry → Tempo)
+      TRACING_SAMPLE_RATE: ${TRACING_SAMPLE_RATE:-1.0}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318/v1/traces
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8081/actuator/health || exit 1"]
       interval: 15s
@@ -188,6 +193,20 @@ services:
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
       CLIENT_WEB_SECRET: ${CLIENT_WEB_SECRET:-changeme-web-shared-secret}
+
+  # ── Tempo (distributed tracing backend, receives OTLP from backend) ──────────
+  tempo:
+    image: grafana/tempo:latest
+    container_name: agent-system-tempo
+    ports:
+      - "3200:3200"   # Tempo HTTP API (queried by Grafana)
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+    command: ["-config.file=/etc/tempo/config.yml"]
+    volumes:
+      - ./observability/tempo/config.yml:/etc/tempo/config.yml:ro
+      - tempo_data:/var/tempo
+    restart: unless-stopped
 
   # ── Prometheus (scrapes /actuator/prometheus every 15s) ──────────────────────
   prometheus:
@@ -264,6 +283,7 @@ services:
     depends_on:
       - prometheus
       - loki
+      - tempo
 
 volumes:
   weaviate_data:
@@ -271,3 +291,4 @@ volumes:
   prometheus_data:
   grafana_data:
   loki_data:
+  tempo_data:

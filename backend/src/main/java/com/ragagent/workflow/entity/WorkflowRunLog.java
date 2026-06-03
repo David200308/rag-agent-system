@@ -33,7 +33,7 @@ public class WorkflowRunLog {
     @Column(name = "log_type", nullable = false, length = 30)
     private LogType logType;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(nullable = false, columnDefinition = "MEDIUMTEXT")
     private String content;
 
     @Column(name = "created_at", nullable = false, updatable = false)
