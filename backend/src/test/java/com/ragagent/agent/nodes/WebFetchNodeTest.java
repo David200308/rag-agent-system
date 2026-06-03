@@ -94,7 +94,7 @@ class WebFetchNodeTest {
 
     @Test
     void process_allowedExplicitUrl_fetchesAndAddsDocuments() {
-        when(webFetchService.isUrlAllowed("https://example.com", null)).thenReturn(true);
+        when(webFetchService.isUrlAllowed("https://example.com", (String) null)).thenReturn(true);
         when(webFetchService.fetch("https://example.com", null)).thenReturn(doc("https://example.com"));
 
         AgentState state = new AgentState(Map.of(
@@ -112,7 +112,7 @@ class WebFetchNodeTest {
 
     @Test
     void process_urlInQueryText_extractsAndFetches() {
-        when(webFetchService.isUrlAllowed("https://blog.example.com/post", null)).thenReturn(true);
+        when(webFetchService.isUrlAllowed("https://blog.example.com/post", (String) null)).thenReturn(true);
         when(webFetchService.fetch("https://blog.example.com/post", null)).thenReturn(doc("https://blog.example.com/post"));
 
         AgentState state = new AgentState(Map.of(
@@ -159,7 +159,7 @@ class WebFetchNodeTest {
 
     @Test
     void process_domainNotAllowed_urlSkipped() {
-        when(webFetchService.isUrlAllowed("https://blocked.com", null)).thenReturn(false);
+        when(webFetchService.isUrlAllowed("https://blocked.com", (String) null)).thenReturn(false);
 
         AgentState state = new AgentState(Map.of(
                 "request", request("summarise", List.of("https://blocked.com"), true, true)
@@ -175,7 +175,7 @@ class WebFetchNodeTest {
 
     @Test
     void process_fetchThrowsException_urlSkippedAndOthersStillFetched() {
-        when(webFetchService.isUrlAllowed(anyString(), any())).thenReturn(true);
+        when(webFetchService.isUrlAllowed(anyString(), (String) any())).thenReturn(true);
         when(webFetchService.fetch("https://failing.com", null))
                 .thenThrow(new RuntimeException("connection refused"));
         when(webFetchService.fetch("https://ok.com", null)).thenReturn(doc("https://ok.com"));
@@ -197,7 +197,7 @@ class WebFetchNodeTest {
 
     @Test
     void process_fallbackRouteWithFetchedDocs_promotedToRetrieve() {
-        when(webFetchService.isUrlAllowed("https://example.com", null)).thenReturn(true);
+        when(webFetchService.isUrlAllowed("https://example.com", (String) null)).thenReturn(true);
         when(webFetchService.fetch("https://example.com", null)).thenReturn(doc("https://example.com"));
 
         AgentState state = new AgentState(Map.of(
@@ -212,7 +212,7 @@ class WebFetchNodeTest {
 
     @Test
     void process_retrieveRouteWithFetchedDocs_routeNotChanged() {
-        when(webFetchService.isUrlAllowed("https://example.com", null)).thenReturn(true);
+        when(webFetchService.isUrlAllowed("https://example.com", (String) null)).thenReturn(true);
         when(webFetchService.fetch("https://example.com", null)).thenReturn(doc("https://example.com"));
 
         // Default route is RETRIEVE
@@ -240,7 +240,7 @@ class WebFetchNodeTest {
 
     @Test
     void process_kbDisabledWithFetchedDocs_routeForcedToDirect() {
-        when(webFetchService.isUrlAllowed("https://example.com", null)).thenReturn(true);
+        when(webFetchService.isUrlAllowed("https://example.com", (String) null)).thenReturn(true);
         when(webFetchService.fetch("https://example.com", null)).thenReturn(doc("https://example.com"));
 
         AgentState state = new AgentState(Map.of(

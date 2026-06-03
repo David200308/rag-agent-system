@@ -5,6 +5,7 @@ import com.ragagent.auth.entity.EmailWhitelist;
 import com.ragagent.auth.entity.OtpCode;
 import com.ragagent.auth.repository.EmailWhitelistRepository;
 import com.ragagent.auth.repository.OtpCodeRepository;
+import com.ragagent.org.OrganizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +28,7 @@ class AuthServiceTest {
     @Mock OtpCodeRepository        otpRepo;
     @Mock EmailService             emailService;
     @Mock JwtService               jwtService;
+    @Mock OrganizationService      orgService;
 
     // AuthProperties is a record (final) — instantiate directly
     private final AuthProperties authProperties =
@@ -36,7 +38,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(authProperties, whitelistRepo, otpRepo, emailService, jwtService);
+        authService = new AuthService(authProperties, whitelistRepo, otpRepo, emailService, jwtService, orgService);
     }
 
     // ── requestOtp ────────────────────────────────────────────────────────────
@@ -83,7 +85,7 @@ class AuthServiceTest {
                 LocalDateTime.now().plusMinutes(5));
         when(otpRepo.findValidOtp(eq("user@example.com"), any(LocalDateTime.class)))
                 .thenReturn(Optional.of(otp));
-        when(jwtService.generate("user@example.com")).thenReturn("signed-jwt");
+        when(jwtService.generate("user@example.com", "PERSONAL", null)).thenReturn("signed-jwt");
 
         String token = authService.verifyOtp("user@example.com", "123456");
 
@@ -91,6 +93,48 @@ class AuthServiceTest {
         assertThat(otp.isUsed()).isTrue();
         verify(otpRepo).save(otp);
         verify(otpRepo).deleteAllByEmail("user@example.com");
+    }
+
+    @Test
+    void verifyOtp_teamMode_validMember_returnsJwt() {
+        OtpCode otp = new OtpCode("user@example.com", "123456",
+                LocalDateTime.now().plusMinutes(5));
+        when(otpRepo.findValidOtp(eq("user@example.com"), any(LocalDateTime.class)))
+                .thenReturn(Optional.of(otp));
+        when(orgService.isMember("skyproton", "user@example.com")).thenReturn(true);
+        when(jwtService.generate("user@example.com", "TEAM", "skyproton")).thenReturn("team-jwt");
+
+        String token = authService.verifyOtp("user@example.com", "123456", "TEAM", "skyproton");
+
+        assertThat(token).isEqualTo("team-jwt");
+        verify(orgService).isMember("skyproton", "user@example.com");
+    }
+
+    @Test
+    void verifyOtp_teamMode_notMember_throwsIllegalArgument() {
+        OtpCode otp = new OtpCode("user@example.com", "123456",
+                LocalDateTime.now().plusMinutes(5));
+        when(otpRepo.findValidOtp(eq("user@example.com"), any(LocalDateTime.class)))
+                .thenReturn(Optional.of(otp));
+        when(orgService.isMember("unknown-org", "user@example.com")).thenReturn(false);
+
+        assertThatThrownBy(() ->
+                authService.verifyOtp("user@example.com", "123456", "TEAM", "unknown-org"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not a member");
+    }
+
+    @Test
+    void verifyOtp_teamMode_missingOrgId_throwsIllegalArgument() {
+        OtpCode otp = new OtpCode("user@example.com", "123456",
+                LocalDateTime.now().plusMinutes(5));
+        when(otpRepo.findValidOtp(eq("user@example.com"), any(LocalDateTime.class)))
+                .thenReturn(Optional.of(otp));
+
+        assertThatThrownBy(() ->
+                authService.verifyOtp("user@example.com", "123456", "TEAM", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("orgId is required");
     }
 
     @Test
@@ -129,6 +173,14 @@ class AuthServiceTest {
         when(jwtService.validate("bad-token")).thenReturn(null);
 
         assertThat(authService.validateToken("bad-token")).isNull();
+    }
+
+    @Test
+    void validateTokenFull_delegatesToJwtService() {
+        JwtService.TokenClaims claims = new JwtService.TokenClaims("user@example.com", "TEAM", "acme");
+        when(jwtService.validateFull("my-token")).thenReturn(claims);
+
+        assertThat(authService.validateTokenFull("my-token")).isSameAs(claims);
     }
 
     // ── cleanupExpired ────────────────────────────────────────────────────────

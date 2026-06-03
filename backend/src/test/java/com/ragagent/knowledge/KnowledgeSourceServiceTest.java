@@ -2,6 +2,7 @@ package com.ragagent.knowledge;
 
 import com.ragagent.knowledge.entity.KnowledgeSource;
 import com.ragagent.knowledge.repository.KnowledgeSourceRepository;
+import com.ragagent.org.OrgContext;
 import com.ragagent.rag.DocumentIngestionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -83,7 +84,7 @@ class KnowledgeSourceServiceTest {
         KnowledgeSource ks = new KnowledgeSource("doc.pdf", "Doc", "cat", 5, "owner@test.com");
         when(repo.findAllByOrderByIngestedAtDesc()).thenReturn(List.of(ks));
 
-        List<KnowledgeSource> result = service.listAccessible(null);
+        List<KnowledgeSource> result = service.listAccessible((String) null);
 
         assertThat(result).containsExactly(ks);
         verify(repo).findAllByOrderByIngestedAtDesc();
@@ -111,7 +112,7 @@ class KnowledgeSourceServiceTest {
         service.delete("doc.pdf", "owner@test.com");
 
         verify(ingestionService).deleteBySource("doc.pdf");
-        verify(repo).deleteBySource("doc.pdf");
+        verify(repo).delete(ks);
     }
 
     @Test
@@ -133,7 +134,7 @@ class KnowledgeSourceServiceTest {
         service.delete("missing.pdf", "owner@test.com");
 
         verifyNoInteractions(ingestionService);
-        verify(repo, never()).deleteBySource(any());
+        verify(repo, never()).delete(any(KnowledgeSource.class));
     }
 
     // ── updateMetadata ────────────────────────────────────────────────────────
@@ -167,6 +168,33 @@ class KnowledgeSourceServiceTest {
         assertThatThrownBy(() ->
                 service.updateMetadata("ghost.pdf", "Label", "cat", "owner@test.com"))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ── team mode: listAccessible / delete ────────────────────────────────────
+
+    @Test
+    void listAccessible_teamMode_returnsOrgSources() {
+        KnowledgeSource ks = new KnowledgeSource("doc.pdf", "Doc", "cat", 5, "owner@test.com", "skyproton");
+        when(repo.findByOrgId("skyproton")).thenReturn(List.of(ks));
+
+        OrgContext teamCtx = new OrgContext("owner@test.com", "TEAM", "skyproton");
+        List<KnowledgeSource> result = service.listAccessible(teamCtx);
+
+        assertThat(result).containsExactly(ks);
+        verify(repo).findByOrgId("skyproton");
+        verify(repo, never()).findAccessibleByEmail(any());
+    }
+
+    @Test
+    void delete_teamMode_anyMemberCanDelete() {
+        KnowledgeSource ks = new KnowledgeSource("doc.pdf", "Doc", "cat", 5, "owner@test.com", "skyproton");
+        when(repo.findBySourceAndOrgId("doc.pdf", "skyproton")).thenReturn(Optional.of(ks));
+
+        OrgContext teamCtx = new OrgContext("member@test.com", "TEAM", "skyproton");
+        service.delete("doc.pdf", teamCtx);
+
+        verify(ingestionService).deleteBySource("doc.pdf");
+        verify(repo).delete(ks);
     }
 
     // ── updateSharing ─────────────────────────────────────────────────────────

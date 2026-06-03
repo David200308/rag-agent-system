@@ -35,7 +35,7 @@ public class WorkflowService {
 
     /** Backward-compatible alias. */
     public List<Workflow> listByOwner(String ownerEmail) {
-        return workflowRepo.findByOwnerEmailOrderByUpdatedAtDesc(ownerEmail);
+        return workflowRepo.findByOwnerEmailAndOrgIdIsNullOrderByUpdatedAtDesc(ownerEmail);
     }
 
     public Optional<Workflow> findById(String id) {

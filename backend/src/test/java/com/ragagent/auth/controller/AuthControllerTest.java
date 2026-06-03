@@ -73,16 +73,38 @@ class AuthControllerTest {
     }
 
     @Test
-    void verifyOtp_success_returnsToken() {
-        when(authService.verifyOtp("user@example.com", "123456")).thenReturn("signed-jwt");
+    void verifyOtp_success_personalMode_returnsToken() {
+        when(authService.verifyOtp("user@example.com", "123456", "PERSONAL", null))
+                .thenReturn("signed-jwt");
         var resp = controller.verifyOtp(Map.of("email", "user@example.com", "code", "123456"));
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("token", "signed-jwt");
     }
 
     @Test
+    void verifyOtp_success_teamMode_returnsToken() {
+        when(authService.verifyOtp("user@example.com", "123456", "TEAM", "skyproton"))
+                .thenReturn("team-jwt");
+        var resp = controller.verifyOtp(Map.of(
+                "email", "user@example.com", "code", "123456",
+                "mode", "TEAM", "orgId", "skyproton"));
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).containsEntry("token", "team-jwt");
+    }
+
+    @Test
+    void verifyOtp_teamMode_notMember_returns401() {
+        when(authService.verifyOtp("user@example.com", "123456", "TEAM", "unknown-org"))
+                .thenThrow(new IllegalArgumentException("not a member"));
+        var resp = controller.verifyOtp(Map.of(
+                "email", "user@example.com", "code", "123456",
+                "mode", "TEAM", "orgId", "unknown-org"));
+        assertThat(resp.getStatusCode().value()).isEqualTo(401);
+    }
+
+    @Test
     void verifyOtp_invalidCode_returns401() {
-        when(authService.verifyOtp("user@example.com", "000000"))
+        when(authService.verifyOtp("user@example.com", "000000", "PERSONAL", null))
                 .thenThrow(new IllegalArgumentException("Invalid or expired"));
         var resp = controller.verifyOtp(Map.of("email", "user@example.com", "code", "000000"));
         assertThat(resp.getStatusCode().value()).isEqualTo(401);
@@ -90,7 +112,7 @@ class AuthControllerTest {
 
     @Test
     void verifyOtp_unexpectedException_returns500() {
-        when(authService.verifyOtp(anyString(), anyString()))
+        when(authService.verifyOtp(anyString(), anyString(), anyString(), any()))
                 .thenThrow(new RuntimeException("DB error"));
         var resp = controller.verifyOtp(Map.of("email", "user@example.com", "code", "123456"));
         assertThat(resp.getStatusCode().value()).isEqualTo(500);

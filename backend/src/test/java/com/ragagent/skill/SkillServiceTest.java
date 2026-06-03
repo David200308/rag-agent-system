@@ -1,5 +1,6 @@
 package com.ragagent.skill;
 
+import com.ragagent.org.OrgContext;
 import com.ragagent.skill.entity.Skill;
 import com.ragagent.skill.repository.SkillRepository;
 import org.junit.jupiter.api.Test;
@@ -27,9 +28,10 @@ class SkillServiceTest {
     // ── list ──────────────────────────────────────────────────────────────────
 
     @Test
-    void list_withOwnerEmail_returnsOwnerSkills() {
+    void list_withOwnerEmail_returnsPersonalSkills() {
         Skill skill = new Skill("id-1", "owner@test.com", "My Script", "script.py", "python", 100, "print('hi')");
-        when(repo.findByOwnerEmailOrderByCreatedAtDesc("owner@test.com")).thenReturn(List.of(skill));
+        when(repo.findByOwnerEmailAndOrgIdIsNullOrderByCreatedAtDesc("owner@test.com"))
+                .thenReturn(List.of(skill));
 
         List<Skill> result = service.list("owner@test.com");
 
@@ -42,10 +44,46 @@ class SkillServiceTest {
         Skill s2 = new Skill("id-2", "b@test.com", "B", "b.py", "python", 20, "");
         when(repo.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(s1, s2));
 
-        List<Skill> result = service.list(null);
+        List<Skill> result = service.list((String) null);
 
         assertThat(result).containsExactly(s1, s2);
-        verify(repo, never()).findByOwnerEmailOrderByCreatedAtDesc(any());
+        verify(repo, never()).findByOwnerEmailAndOrgIdIsNullOrderByCreatedAtDesc(any());
+    }
+
+    @Test
+    void list_teamMode_returnsOrgSkills() {
+        Skill skill = new Skill("id-1", "creator@test.com", "Shared Tool", "t.py", "python", 50, "");
+        skill.setOrgId("skyproton");
+        when(repo.findByOrgIdOrderByCreatedAtDesc("skyproton")).thenReturn(List.of(skill));
+
+        OrgContext teamCtx = new OrgContext("member@test.com", "TEAM", "skyproton");
+        List<Skill> result = service.list(teamCtx);
+
+        assertThat(result).containsExactly(skill);
+        verify(repo).findByOrgIdOrderByCreatedAtDesc("skyproton");
+    }
+
+    @Test
+    void create_teamMode_setsOrgId() {
+        when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        OrgContext teamCtx = new OrgContext("owner@test.com", "TEAM", "skyproton");
+        Skill result = service.create(teamCtx, "Team Tool", "t.py", "python", 100, "code");
+
+        assertThat(result.getOrgId()).isEqualTo("skyproton");
+        assertThat(result.getOwnerEmail()).isEqualTo("owner@test.com");
+    }
+
+    @Test
+    void delete_teamMode_anyMemberCanDelete() {
+        Skill skill = new Skill("id-1", "creator@test.com", "S", "s.py", "python", 10, "");
+        skill.setOrgId("skyproton");
+        when(repo.findById("id-1")).thenReturn(Optional.of(skill));
+
+        OrgContext teamCtx = new OrgContext("member@test.com", "TEAM", "skyproton");
+        service.delete("id-1", teamCtx);
+
+        verify(repo).deleteById("id-1");
     }
 
     // ── create ────────────────────────────────────────────────────────────────

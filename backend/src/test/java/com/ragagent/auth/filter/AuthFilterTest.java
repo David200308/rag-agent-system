@@ -3,6 +3,7 @@ package com.ragagent.auth.filter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ragagent.auth.AuthProperties;
 import com.ragagent.auth.service.AuthService;
+import com.ragagent.auth.service.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -97,17 +98,41 @@ class AuthFilterTest {
 
     // ── doFilterInternal ───────────────────────────────────────────────────────
 
+    private static JwtService.TokenClaims personal(String email) {
+        return new JwtService.TokenClaims(email, "PERSONAL", null);
+    }
+
+    private static JwtService.TokenClaims team(String email, String orgId) {
+        return new JwtService.TokenClaims(email, "TEAM", orgId);
+    }
+
     @Test
-    void doFilterInternal_validToken_setsEmailAttributeAndContinues() throws Exception {
+    void doFilterInternal_validToken_setsAllAttributesAndContinues() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/agent/query");
         when(request.getHeader("Authorization")).thenReturn("Bearer valid-token");
-        when(authService.validateToken("valid-token")).thenReturn("user@example.com");
+        when(authService.validateTokenFull("valid-token")).thenReturn(personal("user@example.com"));
 
         filterEnabled.doFilterInternal(request, response, chain);
 
         verify(request).setAttribute("authenticatedEmail", "user@example.com");
+        verify(request).setAttribute("authenticatedMode", "PERSONAL");
+        verify(request).setAttribute("authenticatedOrgId", null);
         verify(chain).doFilter(request, response);
         verify(response, never()).setStatus(anyInt());
+    }
+
+    @Test
+    void doFilterInternal_teamToken_setsOrgIdAttribute() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/v1/agent/query");
+        when(request.getHeader("Authorization")).thenReturn("Bearer team-token");
+        when(authService.validateTokenFull("team-token")).thenReturn(team("user@example.com", "skyproton"));
+
+        filterEnabled.doFilterInternal(request, response, chain);
+
+        verify(request).setAttribute("authenticatedEmail", "user@example.com");
+        verify(request).setAttribute("authenticatedMode", "TEAM");
+        verify(request).setAttribute("authenticatedOrgId", "skyproton");
+        verify(chain).doFilter(request, response);
     }
 
     @Test
@@ -126,7 +151,7 @@ class AuthFilterTest {
     void doFilterInternal_invalidToken_returns401() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/agent/query");
         when(request.getHeader("Authorization")).thenReturn("Bearer bad-token");
-        when(authService.validateToken("bad-token")).thenReturn(null);
+        when(authService.validateTokenFull("bad-token")).thenReturn(null);
         when(response.getWriter()).thenReturn(new PrintWriter(new StringWriter()));
 
         filterEnabled.doFilterInternal(request, response, chain);
@@ -147,14 +172,15 @@ class AuthFilterTest {
     }
 
     @Test
-    void doFilterInternal_connectorPath_validToken_setsEmailAndAllows() throws Exception {
+    void doFilterInternal_connectorPath_validToken_setsAllAttributesAndAllows() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/connectors/google/docs");
         when(request.getHeader("Authorization")).thenReturn("Bearer valid-token");
-        when(authService.validateToken("valid-token")).thenReturn("user@example.com");
+        when(authService.validateTokenFull("valid-token")).thenReturn(personal("user@example.com"));
 
         filterEnabled.doFilterInternal(request, response, chain);
 
         verify(request).setAttribute("authenticatedEmail", "user@example.com");
+        verify(request).setAttribute("authenticatedMode", "PERSONAL");
         verify(chain).doFilter(request, response);
     }
 }

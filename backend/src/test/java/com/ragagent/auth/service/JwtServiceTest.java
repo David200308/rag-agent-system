@@ -57,6 +57,51 @@ class JwtServiceTest {
         assertThat(t1).isNotEqualTo(t2);
     }
 
+    // ── generate with mode + orgId ────────────────────────────────────────────
+
+    @Test
+    void generate_personalMode_tokenContainsPersonalClaims() {
+        String token = jwtService.generate("user@example.com", "PERSONAL", null);
+        JwtService.TokenClaims claims = jwtService.validateFull(token);
+        assertThat(claims).isNotNull();
+        assertThat(claims.email()).isEqualTo("user@example.com");
+        assertThat(claims.mode()).isEqualTo("PERSONAL");
+        assertThat(claims.orgId()).isNull();
+    }
+
+    @Test
+    void generate_teamMode_tokenContainsOrgId() {
+        String token = jwtService.generate("user@example.com", "TEAM", "skyproton");
+        JwtService.TokenClaims claims = jwtService.validateFull(token);
+        assertThat(claims).isNotNull();
+        assertThat(claims.email()).isEqualTo("user@example.com");
+        assertThat(claims.mode()).isEqualTo("TEAM");
+        assertThat(claims.orgId()).isEqualTo("skyproton");
+    }
+
+    @Test
+    void generate_noArg_defaultsToPersonalMode() {
+        String token = jwtService.generate("user@example.com");
+        JwtService.TokenClaims claims = jwtService.validateFull(token);
+        assertThat(claims).isNotNull();
+        assertThat(claims.mode()).isEqualTo("PERSONAL");
+        assertThat(claims.orgId()).isNull();
+    }
+
+    // ── validateFull ──────────────────────────────────────────────────────────
+
+    @Test
+    void validateFull_invalidToken_returnsNull() {
+        assertThat(jwtService.validateFull("not.a.valid.token")).isNull();
+    }
+
+    @Test
+    void validateFull_tamperedToken_returnsNull() {
+        String token = jwtService.generate("user@example.com", "TEAM", "acme");
+        String tampered = token.substring(0, token.length() - 5) + "XXXXX";
+        assertThat(jwtService.validateFull(tampered)).isNull();
+    }
+
     @Test
     void validate_expiredToken_returnsNull() {
         // Token signed with 0-hour expiry should be instantly expired

@@ -29,7 +29,7 @@ public class SkillService {
     @Transactional(readOnly = true)
     public List<Skill> list(String ownerEmail) {
         if (ownerEmail == null) return repo.findAllByOrderByCreatedAtDesc();
-        return repo.findByOwnerEmailOrderByCreatedAtDesc(ownerEmail);
+        return repo.findByOwnerEmailAndOrgIdIsNullOrderByCreatedAtDesc(ownerEmail);
     }
 
     @Transactional

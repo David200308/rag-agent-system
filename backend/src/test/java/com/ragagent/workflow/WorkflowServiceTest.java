@@ -1,6 +1,7 @@
 package com.ragagent.workflow;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ragagent.org.OrgContext;
 import com.ragagent.workflow.entity.Workflow;
 import com.ragagent.workflow.entity.WorkflowAgent;
 import com.ragagent.workflow.repository.WorkflowAgentRepository;
@@ -34,17 +35,54 @@ class WorkflowServiceTest {
         service = new WorkflowService(workflowRepo, agentRepo, new ObjectMapper());
     }
 
-    // ── listByOwner ───────────────────────────────────────────────────────────
+    // ── list / listByOwner ────────────────────────────────────────────────────
 
     @Test
-    void listByOwner_delegatesToRepository() {
+    void listByOwner_personalMode_delegatesToPersonalQuery() {
         Workflow wf = new Workflow("w1", "My Flow", "owner@test.com", Workflow.AgentPattern.ORCHESTRATOR);
-        when(workflowRepo.findByOwnerEmailOrderByUpdatedAtDesc("owner@test.com"))
+        when(workflowRepo.findByOwnerEmailAndOrgIdIsNullOrderByUpdatedAtDesc("owner@test.com"))
                 .thenReturn(List.of(wf));
 
         List<Workflow> result = service.listByOwner("owner@test.com");
 
         assertThat(result).containsExactly(wf);
+    }
+
+    @Test
+    void list_teamMode_delegatesToOrgQuery() {
+        Workflow wf = new Workflow("w1", "Team Flow", "owner@test.com", Workflow.AgentPattern.ORCHESTRATOR);
+        wf.setOrgId("skyproton");
+        when(workflowRepo.findByOrgIdOrderByUpdatedAtDesc("skyproton")).thenReturn(List.of(wf));
+
+        OrgContext teamCtx = new OrgContext("owner@test.com", "TEAM", "skyproton");
+        List<Workflow> result = service.list(teamCtx);
+
+        assertThat(result).containsExactly(wf);
+        verify(workflowRepo).findByOrgIdOrderByUpdatedAtDesc("skyproton");
+    }
+
+    @Test
+    void create_teamMode_setsOrgId() {
+        when(workflowRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        OrgContext teamCtx = new OrgContext("owner@test.com", "TEAM", "skyproton");
+        Workflow result = service.create("Team Flow", "desc", teamCtx,
+                Workflow.AgentPattern.ORCHESTRATOR, null);
+
+        assertThat(result.getOrgId()).isEqualTo("skyproton");
+    }
+
+    @Test
+    void update_teamMode_anyMemberCanEdit() {
+        Workflow wf = new Workflow("w1", "Old", "creator@test.com", Workflow.AgentPattern.ORCHESTRATOR);
+        wf.setOrgId("skyproton");
+        when(workflowRepo.findById("w1")).thenReturn(Optional.of(wf));
+        when(workflowRepo.save(wf)).thenReturn(wf);
+
+        OrgContext teamCtx = new OrgContext("member@test.com", "TEAM", "skyproton");
+        service.update("w1", teamCtx, Map.of("name", "Updated"));
+
+        assertThat(wf.getName()).isEqualTo("Updated");
     }
 
     // ── findById ──────────────────────────────────────────────────────────────

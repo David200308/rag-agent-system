@@ -40,7 +40,7 @@ class WebFetchServiceTest {
         WebFetchWhitelist entry = new WebFetchWhitelist("example.com", null);
         when(whitelistRepo.findAllByOrderByDomainAsc()).thenReturn(List.of(entry));
 
-        List<WebFetchWhitelist> result = service.listWhitelist(null);
+        List<WebFetchWhitelist> result = service.listWhitelist((String) null);
 
         assertThat(result).containsExactly(entry);
         verify(whitelistRepo).findAllByOrderByDomainAsc();
@@ -123,7 +123,7 @@ class WebFetchServiceTest {
     void removeDomain_nullUser_deletesGlobally() {
         when(whitelistRepo.existsByDomain("example.com")).thenReturn(true);
 
-        service.removeDomain("example.com", null);
+        service.removeDomain("example.com", (String) null);
 
         verify(whitelistRepo).deleteByDomain("example.com");
     }
@@ -132,7 +132,7 @@ class WebFetchServiceTest {
     void removeDomain_nullUser_notFound_throwsIllegalArgument() {
         when(whitelistRepo.existsByDomain("example.com")).thenReturn(false);
 
-        assertThatThrownBy(() -> service.removeDomain("example.com", null))
+        assertThatThrownBy(() -> service.removeDomain("example.com", (String) null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("not found in whitelist");
     }
