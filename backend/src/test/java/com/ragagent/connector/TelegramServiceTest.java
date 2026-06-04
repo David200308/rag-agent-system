@@ -71,11 +71,11 @@ class TelegramServiceTest {
     void validateAndConnect_validPayload_savesToken() {
         Map<String, Object> authData = buildAuthData("123456", "John", Instant.now().getEpochSecond());
 
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "telegram"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
                 .thenReturn(Optional.empty());
         when(tokenRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        service.validateAndConnect(authData, "user@test.com");
+        service.validateAndConnect(authData, "user@test.com", null);
 
         ArgumentCaptor<ConnectorToken> captor = ArgumentCaptor.forClass(ConnectorToken.class);
         verify(tokenRepo).save(captor.capture());
@@ -91,11 +91,11 @@ class TelegramServiceTest {
 
         ConnectorToken existing = ConnectorToken.builder()
                 .ownerEmail("user@test.com").provider("telegram").accessToken("old-id").build();
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "telegram"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
                 .thenReturn(Optional.of(existing));
         when(tokenRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        service.validateAndConnect(authData, "user@test.com");
+        service.validateAndConnect(authData, "user@test.com", null);
 
         ArgumentCaptor<ConnectorToken> captor = ArgumentCaptor.forClass(ConnectorToken.class);
         verify(tokenRepo).save(captor.capture());
@@ -106,10 +106,10 @@ class TelegramServiceTest {
     void validateAndConnect_nullEmail_normalizedToEmpty() {
         Map<String, Object> authData = buildAuthData("999", null, Instant.now().getEpochSecond());
 
-        when(tokenRepo.findByOwnerEmailAndProvider("", "telegram")).thenReturn(Optional.empty());
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("", "telegram")).thenReturn(Optional.empty());
         when(tokenRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        service.validateAndConnect(authData, null);
+        service.validateAndConnect(authData, null, null);
 
         ArgumentCaptor<ConnectorToken> captor = ArgumentCaptor.forClass(ConnectorToken.class);
         verify(tokenRepo).save(captor.capture());
@@ -120,7 +120,7 @@ class TelegramServiceTest {
     void validateAndConnect_missingHash_throws() {
         Map<String, Object> authData = Map.of("id", "123", "auth_date", "999999999");
 
-        assertThatThrownBy(() -> service.validateAndConnect(authData, "user@test.com"))
+        assertThatThrownBy(() -> service.validateAndConnect(authData, "user@test.com", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Missing hash");
     }
@@ -132,7 +132,7 @@ class TelegramServiceTest {
         authData.put("auth_date", String.valueOf(Instant.now().getEpochSecond()));
         authData.put("hash", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
 
-        assertThatThrownBy(() -> service.validateAndConnect(authData, "user@test.com"))
+        assertThatThrownBy(() -> service.validateAndConnect(authData, "user@test.com", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("hash validation failed");
     }
@@ -142,7 +142,7 @@ class TelegramServiceTest {
         long staleDate = Instant.now().getEpochSecond() - 90_000; // > 24 h
         Map<String, Object> authData = buildAuthData("123456", null, staleDate);
 
-        assertThatThrownBy(() -> service.validateAndConnect(authData, "user@test.com"))
+        assertThatThrownBy(() -> service.validateAndConnect(authData, "user@test.com", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("expired");
     }
@@ -151,47 +151,47 @@ class TelegramServiceTest {
 
     @Test
     void isConnected_tokenPresent_returnsTrue() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "telegram"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
                 .thenReturn(Optional.of(ConnectorToken.builder().build()));
-        assertThat(service.isConnected("user@test.com")).isTrue();
+        assertThat(service.isConnected("user@test.com", null)).isTrue();
     }
 
     @Test
     void isConnected_noToken_returnsFalse() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "telegram"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
                 .thenReturn(Optional.empty());
-        assertThat(service.isConnected("user@test.com")).isFalse();
+        assertThat(service.isConnected("user@test.com", null)).isFalse();
     }
 
     @Test
     void isConnected_nullEmail_normalizedToEmpty() {
-        when(tokenRepo.findByOwnerEmailAndProvider("", "telegram")).thenReturn(Optional.empty());
-        assertThat(service.isConnected(null)).isFalse();
-        verify(tokenRepo).findByOwnerEmailAndProvider("", "telegram");
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("", "telegram")).thenReturn(Optional.empty());
+        assertThat(service.isConnected(null, null)).isFalse();
+        verify(tokenRepo).findByOwnerEmailAndProviderAndOrgIdIsNull("", "telegram");
     }
 
     // ── disconnect ────────────────────────────────────────────────────────────
 
     @Test
     void disconnect_deletesToken() {
-        service.disconnect("user@test.com");
-        verify(tokenRepo).deleteByOwnerEmailAndProvider("user@test.com", "telegram");
+        service.disconnect("user@test.com", null);
+        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "telegram");
     }
 
     @Test
     void disconnect_nullEmail_normalizedToEmpty() {
-        service.disconnect(null);
-        verify(tokenRepo).deleteByOwnerEmailAndProvider("", "telegram");
+        service.disconnect(null, null);
+        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgIdIsNull("", "telegram");
     }
 
     // ── sendMessage ───────────────────────────────────────────────────────────
 
     @Test
     void sendMessage_notConnected_throws() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "telegram"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.sendMessage("user@test.com", "hello"))
+        assertThatThrownBy(() -> service.sendMessage("user@test.com", null, "hello"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("not connected");
     }

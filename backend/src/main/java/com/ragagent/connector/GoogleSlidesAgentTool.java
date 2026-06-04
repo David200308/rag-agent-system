@@ -16,10 +16,14 @@ public class GoogleSlidesAgentTool {
 
     private final GoogleSlidesService googleSlidesService;
 
-    private static final ThreadLocal<String> CURRENT_EMAIL = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_EMAIL  = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_ORG_ID = new ThreadLocal<>();
 
     public void setCurrentEmail(String email) { CURRENT_EMAIL.set(email != null ? email : ""); }
     public void clearCurrentEmail()           { CURRENT_EMAIL.remove(); }
+
+    public void setCurrentOrgId(String orgId)  { CURRENT_ORG_ID.set(orgId); }
+    public void clearCurrentOrgId()            { CURRENT_ORG_ID.remove(); }
 
     /**
      * Creates a new Google Slides presentation with the given content.
@@ -40,7 +44,7 @@ public class GoogleSlidesAgentTool {
         String email = CURRENT_EMAIL.get();
         log.info("[GoogleSlidesAgentTool] Creating presentation '{}' for '{}'", title, email);
         try {
-            String url = googleSlidesService.createPresentation(title, content, email);
+            String url = googleSlidesService.createPresentation(title, content, email, CURRENT_ORG_ID.get());
             return "Presentation created successfully. Open it here: " + url;
         } catch (IllegalStateException e) {
             return "Could not write to Google Slides: " + e.getMessage();
@@ -57,7 +61,7 @@ public class GoogleSlidesAgentTool {
         String email = CURRENT_EMAIL.get();
         log.info("[GoogleSlidesAgentTool] Reading presentation '{}' for '{}'", presUrl, email);
         try {
-            String content = googleSlidesService.readPresentation(presUrl, email);
+            String content = googleSlidesService.readPresentation(presUrl, email, CURRENT_ORG_ID.get());
             return content.isBlank() ? "The presentation appears to be empty." : content;
         } catch (IllegalStateException e) {
             return "Could not read Google Slides: " + e.getMessage();

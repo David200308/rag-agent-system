@@ -33,7 +33,8 @@ public class ConnectorService {
             "https://www.googleapis.com/auth/documents",
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/presentations",
-            "https://www.googleapis.com/auth/drive.file"
+            "https://www.googleapis.com/auth/drive.file",
+            "https://www.googleapis.com/auth/calendar"
     );
 
     private final ConnectorProperties          props;
@@ -44,7 +45,7 @@ public class ConnectorService {
 
     // ── Auth URL generation ───────────────────────────────────────────────────
 
-    public String getAuthUrl(String provider, String ownerEmail) {
+    public String getAuthUrl(String provider, String ownerEmail, String orgId) {
         validateProvider(provider);
 
         // Telegram uses the Login Widget, not an OAuth redirect
@@ -59,6 +60,7 @@ public class ConnectorService {
                 .state(state)
                 .ownerEmail(ownerEmail)
                 .provider(provider)
+                .orgId(orgId)
                 .expiresAt(LocalDateTime.now().plusMinutes(10))
                 .build());
 
@@ -102,6 +104,7 @@ public class ConnectorService {
         }
 
         String ownerEmail = oauthState.getOwnerEmail() != null ? oauthState.getOwnerEmail() : "";
+        String orgId      = oauthState.getOrgId();
         stateRepo.delete(oauthState);
 
         TokenResponse tr = switch (provider) {
@@ -110,11 +113,11 @@ public class ConnectorService {
             default -> throw new IllegalArgumentException("Unknown provider: " + provider);
         };
 
-        ConnectorToken token = tokenRepo
-                .findByOwnerEmailAndProvider(ownerEmail, provider)
+        ConnectorToken token = findToken(ownerEmail, provider, orgId)
                 .orElse(ConnectorToken.builder()
                         .ownerEmail(ownerEmail)
                         .provider(provider)
+                        .orgId(orgId)
                         .build());
 
         token.setAccessToken(tr.accessToken());
@@ -124,50 +127,56 @@ public class ConnectorService {
         token.setExpiresAt(tr.expiresIn() != null
                 ? LocalDateTime.now().plusSeconds(tr.expiresIn()) : null);
 
-        // Migrate any anonymous token that was stored before auth was properly wired
-        if (!ownerEmail.isEmpty()) {
-            tokenRepo.findByOwnerEmailAndProvider("", provider).ifPresent(tokenRepo::delete);
+        // Migrate any anonymous personal token stored before auth was properly wired
+        if (!ownerEmail.isEmpty() && orgId == null) {
+            tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("", provider).ifPresent(tokenRepo::delete);
         }
 
         tokenRepo.save(token);
-        log.info("[ConnectorService] Stored {} token for {}", provider, ownerEmail);
+        log.info("[ConnectorService] Stored {} token for {} orgId={}", provider, ownerEmail, orgId);
     }
 
     // ── Status & disconnect ───────────────────────────────────────────────────
 
-    public Map<String, Boolean> getStatus(String ownerEmail) {
+    public Map<String, Boolean> getStatus(String ownerEmail, String orgId) {
         String email = ownerEmail != null ? ownerEmail : "";
-        Set<String> connected = tokenRepo.findByOwnerEmail(email)
+        Set<String> connected = (orgId != null
+                ? tokenRepo.findByOwnerEmailAndOrgId(email, orgId)
+                : tokenRepo.findByOwnerEmailAndOrgIdIsNull(email))
                 .stream().map(ConnectorToken::getProvider).collect(Collectors.toSet());
 
         Map<String, Boolean> status = new LinkedHashMap<>();
         status.put("google",   connected.contains("google"));
         status.put("figma",    connected.contains("figma"));
-        status.put("telegram", telegramService.isConnected(email));
+        status.put("telegram", telegramService.isConnected(email, orgId));
         return status;
     }
 
     @Transactional
-    public void disconnect(String provider, String ownerEmail) {
+    public void disconnect(String provider, String ownerEmail, String orgId) {
         validateProvider(provider);
         String email = ownerEmail != null ? ownerEmail : "";
         if ("telegram".equals(provider)) {
-            telegramService.disconnect(email);
+            telegramService.disconnect(email, orgId);
             return;
         }
-        tokenRepo.deleteByOwnerEmailAndProvider(email, provider);
-        // Also remove any anonymous token stored before auth was properly wired
-        if (!email.isEmpty()) {
-            tokenRepo.deleteByOwnerEmailAndProvider("", provider);
+        if (orgId != null) {
+            tokenRepo.deleteByOwnerEmailAndProviderAndOrgId(email, provider, orgId);
+        } else {
+            tokenRepo.deleteByOwnerEmailAndProviderAndOrgIdIsNull(email, provider);
+            // Also remove any anonymous personal token stored before auth was properly wired
+            if (!email.isEmpty()) {
+                tokenRepo.deleteByOwnerEmailAndProviderAndOrgIdIsNull("", provider);
+            }
         }
-        log.info("[ConnectorService] Disconnected {} for {}", provider, email);
+        log.info("[ConnectorService] Disconnected {} for {} orgId={}", provider, email, orgId);
     }
 
     // ── Token access (for downstream API calls) ───────────────────────────────
 
-    public Optional<ConnectorToken> getToken(String provider, String ownerEmail) {
+    public Optional<ConnectorToken> getToken(String provider, String ownerEmail, String orgId) {
         String email = ownerEmail != null ? ownerEmail : "";
-        return tokenRepo.findByOwnerEmailAndProvider(email, provider);
+        return findToken(email, provider, orgId);
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────
@@ -217,6 +226,12 @@ public class ConnectorService {
     @Scheduled(fixedDelay = 3_600_000)
     void purgeExpiredStates() {
         stateRepo.deleteExpired(LocalDateTime.now());
+    }
+
+    private Optional<ConnectorToken> findToken(String email, String provider, String orgId) {
+        return orgId != null
+                ? tokenRepo.findByOwnerEmailAndProviderAndOrgId(email, provider, orgId)
+                : tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull(email, provider);
     }
 
     // ── Inner DTO ─────────────────────────────────────────────────────────────

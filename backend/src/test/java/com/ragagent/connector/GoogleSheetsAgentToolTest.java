@@ -8,6 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -27,12 +28,12 @@ class GoogleSheetsAgentToolTest {
     @Test
     void setCurrentEmail_null_setsEmptyString() {
         tool.setCurrentEmail(null);
-        when(googleSheetsService.createSpreadsheet(anyString(), anyString(), eq("")))
+        when(googleSheetsService.createSpreadsheet(anyString(), anyString(), eq(""), isNull()))
                 .thenReturn("https://docs.google.com/spreadsheets/d/abc");
 
         tool.writeToGoogleSheets("Title", "col1,col2");
 
-        verify(googleSheetsService).createSpreadsheet("Title", "col1,col2", "");
+        verify(googleSheetsService).createSpreadsheet("Title", "col1,col2", "", null);
     }
 
     @Test
@@ -40,12 +41,12 @@ class GoogleSheetsAgentToolTest {
         tool.setCurrentEmail("user@example.com");
         tool.clearCurrentEmail();
 
-        when(googleSheetsService.createSpreadsheet(anyString(), anyString(), isNull()))
+        when(googleSheetsService.createSpreadsheet(anyString(), anyString(), isNull(), isNull()))
                 .thenReturn("https://docs.google.com/spreadsheets/d/abc");
 
         tool.writeToGoogleSheets("Title", "col1,col2");
 
-        verify(googleSheetsService).createSpreadsheet("Title", "col1,col2", null);
+        verify(googleSheetsService).createSpreadsheet("Title", "col1,col2", null, null);
     }
 
     // ── writeToGoogleSheets ───────────────────────────────────────────────────
@@ -53,7 +54,7 @@ class GoogleSheetsAgentToolTest {
     @Test
     void writeToGoogleSheets_success_returnsUrlMessage() {
         tool.setCurrentEmail("user@example.com");
-        when(googleSheetsService.createSpreadsheet("Budget", "Name,Amount", "user@example.com"))
+        when(googleSheetsService.createSpreadsheet("Budget", "Name,Amount", "user@example.com", null))
                 .thenReturn("https://docs.google.com/spreadsheets/d/xyz");
 
         String result = tool.writeToGoogleSheets("Budget", "Name,Amount");
@@ -65,7 +66,7 @@ class GoogleSheetsAgentToolTest {
     @Test
     void writeToGoogleSheets_notConnected_returnsErrorMessage() {
         tool.setCurrentEmail("user@example.com");
-        when(googleSheetsService.createSpreadsheet(anyString(), anyString(), anyString()))
+        when(googleSheetsService.createSpreadsheet(anyString(), anyString(), anyString(), any()))
                 .thenThrow(new IllegalStateException("Google Sheets not connected"));
 
         String result = tool.writeToGoogleSheets("Budget", "data");
@@ -77,12 +78,12 @@ class GoogleSheetsAgentToolTest {
     @Test
     void writeToGoogleSheets_usesCurrentEmailFromThreadLocal() {
         tool.setCurrentEmail("sheet-user@example.com");
-        when(googleSheetsService.createSpreadsheet(anyString(), anyString(), eq("sheet-user@example.com")))
+        when(googleSheetsService.createSpreadsheet(anyString(), anyString(), eq("sheet-user@example.com"), isNull()))
                 .thenReturn("https://docs.google.com/spreadsheets/d/new");
 
         tool.writeToGoogleSheets("My Sheet", "data");
 
-        verify(googleSheetsService).createSpreadsheet("My Sheet", "data", "sheet-user@example.com");
+        verify(googleSheetsService).createSpreadsheet("My Sheet", "data", "sheet-user@example.com", null);
     }
 
     // ── readGoogleSheet ───────────────────────────────────────────────────────
@@ -91,7 +92,7 @@ class GoogleSheetsAgentToolTest {
     void readGoogleSheet_success_returnsContent() {
         tool.setCurrentEmail("user@example.com");
         when(googleSheetsService.readSpreadsheet(
-                "https://docs.google.com/spreadsheets/d/abc", "user@example.com"))
+                "https://docs.google.com/spreadsheets/d/abc", "user@example.com", null))
                 .thenReturn("Name\tAge\nAlice\t30");
 
         String result = tool.readGoogleSheet("https://docs.google.com/spreadsheets/d/abc");
@@ -102,7 +103,7 @@ class GoogleSheetsAgentToolTest {
     @Test
     void readGoogleSheet_emptySpreadsheet_returnsEmptyMessage() {
         tool.setCurrentEmail("user@example.com");
-        when(googleSheetsService.readSpreadsheet(anyString(), anyString())).thenReturn("");
+        when(googleSheetsService.readSpreadsheet(anyString(), anyString(), any())).thenReturn("");
 
         String result = tool.readGoogleSheet("https://docs.google.com/spreadsheets/d/abc");
 
@@ -112,7 +113,7 @@ class GoogleSheetsAgentToolTest {
     @Test
     void readGoogleSheet_notConnected_returnsErrorMessage() {
         tool.setCurrentEmail("user@example.com");
-        when(googleSheetsService.readSpreadsheet(anyString(), anyString()))
+        when(googleSheetsService.readSpreadsheet(anyString(), anyString(), any()))
                 .thenThrow(new IllegalStateException("Google Sheets not connected"));
 
         String result = tool.readGoogleSheet("https://docs.google.com/spreadsheets/d/abc");
@@ -124,19 +125,19 @@ class GoogleSheetsAgentToolTest {
     @Test
     void readGoogleSheet_usesCurrentEmailFromThreadLocal() {
         tool.setCurrentEmail("reader@example.com");
-        when(googleSheetsService.readSpreadsheet(anyString(), eq("reader@example.com")))
+        when(googleSheetsService.readSpreadsheet(anyString(), eq("reader@example.com"), isNull()))
                 .thenReturn("data");
 
         tool.readGoogleSheet("https://docs.google.com/spreadsheets/d/abc");
 
         verify(googleSheetsService).readSpreadsheet(
-                "https://docs.google.com/spreadsheets/d/abc", "reader@example.com");
+                "https://docs.google.com/spreadsheets/d/abc", "reader@example.com", null);
     }
 
     @Test
     void readGoogleSheet_blankContent_returnsEmptyMessage() {
         tool.setCurrentEmail("user@example.com");
-        when(googleSheetsService.readSpreadsheet(anyString(), anyString())).thenReturn("   ");
+        when(googleSheetsService.readSpreadsheet(anyString(), anyString(), any())).thenReturn("   ");
 
         String result = tool.readGoogleSheet("https://docs.google.com/spreadsheets/d/abc");
 

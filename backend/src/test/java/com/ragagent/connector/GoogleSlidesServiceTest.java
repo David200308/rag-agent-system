@@ -38,39 +38,37 @@ class GoogleSlidesServiceTest {
 
     @Test
     void isConnected_tokenPresent_returnsTrue() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.of(ConnectorToken.builder().build()));
 
-        assertThat(service.isConnected("user@test.com")).isTrue();
+        assertThat(service.isConnected("user@test.com", null)).isTrue();
     }
 
     @Test
     void isConnected_noToken_returnsFalse() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
-        assertThat(service.isConnected("user@test.com")).isFalse();
+        assertThat(service.isConnected("user@test.com", null)).isFalse();
     }
 
     @Test
     void isConnected_nullEmail_checksEmptyStringInRepo() {
-        when(tokenRepo.findByOwnerEmailAndProvider("", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("", "google"))
                 .thenReturn(Optional.empty());
 
-        assertThat(service.isConnected(null)).isFalse();
+        assertThat(service.isConnected(null, null)).isFalse();
     }
 
     // ── createPresentation — guard: not connected ─────────────────────────────
 
     @Test
     void createPresentation_noToken_throwsIllegalState() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
-                .thenReturn(Optional.empty());
-        when(tokenRepo.findByOwnerEmailAndProvider("", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                service.createPresentation("My Deck", "Slide 1\nbody text\n---\nSlide 2", "user@test.com"))
+                service.createPresentation("My Deck", "Slide 1\nbody text\n---\nSlide 2", "user@test.com", null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("not connected");
     }
@@ -79,13 +77,11 @@ class GoogleSlidesServiceTest {
 
     @Test
     void readPresentation_noToken_throwsIllegalState() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
-                .thenReturn(Optional.empty());
-        when(tokenRepo.findByOwnerEmailAndProvider("", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                service.readPresentation("https://docs.google.com/presentation/d/abc123/edit", "user@test.com"))
+                service.readPresentation("https://docs.google.com/presentation/d/abc123/edit", "user@test.com", null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("not connected");
     }
@@ -100,10 +96,10 @@ class GoogleSlidesServiceTest {
                 .accessToken("valid-token")
                 .expiresAt(LocalDateTime.now().plusHours(1))
                 .build();
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.of(token));
 
-        assertThatThrownBy(() -> service.createPresentation("Title", "Slide 1", "user@test.com"))
+        assertThatThrownBy(() -> service.createPresentation("Title", "Slide 1", "user@test.com", null))
                 .isNotInstanceOf(IllegalStateException.class);
     }
 }

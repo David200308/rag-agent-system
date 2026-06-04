@@ -38,39 +38,36 @@ class GoogleDocsServiceTest {
 
     @Test
     void isConnected_tokenPresent_returnsTrue() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.of(ConnectorToken.builder().build()));
 
-        assertThat(service.isConnected("user@test.com")).isTrue();
+        assertThat(service.isConnected("user@test.com", null)).isTrue();
     }
 
     @Test
     void isConnected_noToken_returnsFalse() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
-        assertThat(service.isConnected("user@test.com")).isFalse();
+        assertThat(service.isConnected("user@test.com", null)).isFalse();
     }
 
     @Test
     void isConnected_nullEmail_checksEmptyStringInRepo() {
-        when(tokenRepo.findByOwnerEmailAndProvider("", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("", "google"))
                 .thenReturn(Optional.empty());
 
-        assertThat(service.isConnected(null)).isFalse();
+        assertThat(service.isConnected(null, null)).isFalse();
     }
 
     // ── createDocument — guard: not connected ────────────────────────────────
 
     @Test
     void createDocument_noToken_throwsIllegalState() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
-                .thenReturn(Optional.empty());
-        // no anonymous fallback either
-        when(tokenRepo.findByOwnerEmailAndProvider("", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.createDocument("My Doc", "content", "user@test.com"))
+        assertThatThrownBy(() -> service.createDocument("My Doc", "content", "user@test.com", null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("not connected");
     }
@@ -79,13 +76,11 @@ class GoogleDocsServiceTest {
 
     @Test
     void readDocument_noToken_throwsIllegalState() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
-                .thenReturn(Optional.empty());
-        when(tokenRepo.findByOwnerEmailAndProvider("", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                service.readDocument("https://docs.google.com/document/d/abc123/edit", "user@test.com"))
+                service.readDocument("https://docs.google.com/document/d/abc123/edit", "user@test.com", null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("not connected");
     }
@@ -100,12 +95,12 @@ class GoogleDocsServiceTest {
                 .accessToken("valid-token")
                 .expiresAt(LocalDateTime.now().plusHours(1))
                 .build();
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.of(token));
 
         // RestClient not set up — service will throw when attempting the HTTP call,
         // which confirms the token guard was passed successfully.
-        assertThatThrownBy(() -> service.createDocument("Title", "Body", "user@test.com"))
+        assertThatThrownBy(() -> service.createDocument("Title", "Body", "user@test.com", null))
                 .isNotInstanceOf(IllegalStateException.class);
     }
 }

@@ -8,6 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -27,12 +28,12 @@ class GoogleSlidesAgentToolTest {
     @Test
     void setCurrentEmail_null_setsEmptyString() {
         tool.setCurrentEmail(null);
-        when(googleSlidesService.createPresentation(anyString(), anyString(), eq("")))
+        when(googleSlidesService.createPresentation(anyString(), anyString(), eq(""), isNull()))
                 .thenReturn("https://docs.google.com/presentation/d/abc");
 
         tool.writeToGoogleSlides("Title", "Slide content");
 
-        verify(googleSlidesService).createPresentation("Title", "Slide content", "");
+        verify(googleSlidesService).createPresentation("Title", "Slide content", "", null);
     }
 
     @Test
@@ -40,12 +41,12 @@ class GoogleSlidesAgentToolTest {
         tool.setCurrentEmail("user@example.com");
         tool.clearCurrentEmail();
 
-        when(googleSlidesService.createPresentation(anyString(), anyString(), isNull()))
+        when(googleSlidesService.createPresentation(anyString(), anyString(), isNull(), isNull()))
                 .thenReturn("https://docs.google.com/presentation/d/abc");
 
         tool.writeToGoogleSlides("Title", "Slide content");
 
-        verify(googleSlidesService).createPresentation("Title", "Slide content", null);
+        verify(googleSlidesService).createPresentation("Title", "Slide content", null, null);
     }
 
     // ── writeToGoogleSlides ───────────────────────────────────────────────────
@@ -53,7 +54,7 @@ class GoogleSlidesAgentToolTest {
     @Test
     void writeToGoogleSlides_success_returnsUrlMessage() {
         tool.setCurrentEmail("user@example.com");
-        when(googleSlidesService.createPresentation("My Deck", "Slide 1\nbody", "user@example.com"))
+        when(googleSlidesService.createPresentation("My Deck", "Slide 1\nbody", "user@example.com", null))
                 .thenReturn("https://docs.google.com/presentation/d/xyz");
 
         String result = tool.writeToGoogleSlides("My Deck", "Slide 1\nbody");
@@ -65,7 +66,7 @@ class GoogleSlidesAgentToolTest {
     @Test
     void writeToGoogleSlides_notConnected_returnsErrorMessage() {
         tool.setCurrentEmail("user@example.com");
-        when(googleSlidesService.createPresentation(anyString(), anyString(), anyString()))
+        when(googleSlidesService.createPresentation(anyString(), anyString(), anyString(), any()))
                 .thenThrow(new IllegalStateException("Google Slides not connected"));
 
         String result = tool.writeToGoogleSlides("My Deck", "content");
@@ -77,13 +78,13 @@ class GoogleSlidesAgentToolTest {
     @Test
     void writeToGoogleSlides_usesCurrentEmailFromThreadLocal() {
         tool.setCurrentEmail("presenter@example.com");
-        when(googleSlidesService.createPresentation(anyString(), anyString(), eq("presenter@example.com")))
+        when(googleSlidesService.createPresentation(anyString(), anyString(), eq("presenter@example.com"), isNull()))
                 .thenReturn("https://docs.google.com/presentation/d/new");
 
         tool.writeToGoogleSlides("Deck", "Slide 1\nbody\n---\nSlide 2\nbody2");
 
         verify(googleSlidesService).createPresentation(
-                "Deck", "Slide 1\nbody\n---\nSlide 2\nbody2", "presenter@example.com");
+                "Deck", "Slide 1\nbody\n---\nSlide 2\nbody2", "presenter@example.com", null);
     }
 
     // ── readGoogleSlide ───────────────────────────────────────────────────────
@@ -92,7 +93,7 @@ class GoogleSlidesAgentToolTest {
     void readGoogleSlide_success_returnsContent() {
         tool.setCurrentEmail("user@example.com");
         when(googleSlidesService.readPresentation(
-                "https://docs.google.com/presentation/d/abc", "user@example.com"))
+                "https://docs.google.com/presentation/d/abc", "user@example.com", null))
                 .thenReturn("[Slide 1] Title\nBody text");
 
         String result = tool.readGoogleSlide("https://docs.google.com/presentation/d/abc");
@@ -103,7 +104,7 @@ class GoogleSlidesAgentToolTest {
     @Test
     void readGoogleSlide_emptyPresentation_returnsEmptyMessage() {
         tool.setCurrentEmail("user@example.com");
-        when(googleSlidesService.readPresentation(anyString(), anyString())).thenReturn("");
+        when(googleSlidesService.readPresentation(anyString(), anyString(), any())).thenReturn("");
 
         String result = tool.readGoogleSlide("https://docs.google.com/presentation/d/abc");
 
@@ -113,7 +114,7 @@ class GoogleSlidesAgentToolTest {
     @Test
     void readGoogleSlide_blankContent_returnsEmptyMessage() {
         tool.setCurrentEmail("user@example.com");
-        when(googleSlidesService.readPresentation(anyString(), anyString())).thenReturn("  ");
+        when(googleSlidesService.readPresentation(anyString(), anyString(), any())).thenReturn("  ");
 
         String result = tool.readGoogleSlide("https://docs.google.com/presentation/d/abc");
 
@@ -123,7 +124,7 @@ class GoogleSlidesAgentToolTest {
     @Test
     void readGoogleSlide_notConnected_returnsErrorMessage() {
         tool.setCurrentEmail("user@example.com");
-        when(googleSlidesService.readPresentation(anyString(), anyString()))
+        when(googleSlidesService.readPresentation(anyString(), anyString(), any()))
                 .thenThrow(new IllegalStateException("Google Slides not connected"));
 
         String result = tool.readGoogleSlide("https://docs.google.com/presentation/d/abc");
@@ -135,12 +136,12 @@ class GoogleSlidesAgentToolTest {
     @Test
     void readGoogleSlide_usesCurrentEmailFromThreadLocal() {
         tool.setCurrentEmail("viewer@example.com");
-        when(googleSlidesService.readPresentation(anyString(), eq("viewer@example.com")))
+        when(googleSlidesService.readPresentation(anyString(), eq("viewer@example.com"), isNull()))
                 .thenReturn("slide content");
 
         tool.readGoogleSlide("https://docs.google.com/presentation/d/abc");
 
         verify(googleSlidesService).readPresentation(
-                "https://docs.google.com/presentation/d/abc", "viewer@example.com");
+                "https://docs.google.com/presentation/d/abc", "viewer@example.com", null);
     }
 }

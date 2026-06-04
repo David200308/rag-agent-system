@@ -8,6 +8,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -27,7 +29,7 @@ class GoogleDocsAgentToolTest {
     void setCurrentEmail_null_setsEmptyString() {
         tool.setCurrentEmail(null);
         // Verify writeToGoogleDocs reads the ThreadLocal (empty email)
-        when(googleDocsService.createDocument(anyString(), anyString(), eq("")))
+        when(googleDocsService.createDocument(anyString(), anyString(), eq(""), isNull()))
                 .thenReturn("https://docs.google.com/document/d/abc");
 
         String result = tool.writeToGoogleDocs("Title", "Content");
@@ -41,12 +43,12 @@ class GoogleDocsAgentToolTest {
         tool.clearCurrentEmail();
 
         // After clear, ThreadLocal returns null → createDocument called with null
-        when(googleDocsService.createDocument(anyString(), anyString(), isNull()))
+        when(googleDocsService.createDocument(anyString(), anyString(), isNull(), isNull()))
                 .thenReturn("https://docs.google.com/document/d/abc");
 
         tool.writeToGoogleDocs("Title", "Content");
 
-        verify(googleDocsService).createDocument("Title", "Content", null);
+        verify(googleDocsService).createDocument("Title", "Content", null, null);
     }
 
     // ── writeToGoogleDocs ─────────────────────────────────────────────────────
@@ -54,7 +56,7 @@ class GoogleDocsAgentToolTest {
     @Test
     void writeToGoogleDocs_success_returnsUrlMessage() {
         tool.setCurrentEmail("user@example.com");
-        when(googleDocsService.createDocument("My Title", "Body text", "user@example.com"))
+        when(googleDocsService.createDocument("My Title", "Body text", "user@example.com", null))
                 .thenReturn("https://docs.google.com/document/d/abc123");
 
         String result = tool.writeToGoogleDocs("My Title", "Body text");
@@ -66,7 +68,7 @@ class GoogleDocsAgentToolTest {
     @Test
     void writeToGoogleDocs_notConnected_returnsErrorMessage() {
         tool.setCurrentEmail("user@example.com");
-        when(googleDocsService.createDocument(anyString(), anyString(), anyString()))
+        when(googleDocsService.createDocument(anyString(), anyString(), anyString(), any()))
                 .thenThrow(new IllegalStateException("Google Docs not connected"));
 
         String result = tool.writeToGoogleDocs("Title", "Content");
@@ -80,7 +82,7 @@ class GoogleDocsAgentToolTest {
     @Test
     void readGoogleDoc_success_returnsContent() {
         tool.setCurrentEmail("user@example.com");
-        when(googleDocsService.readDocument("https://docs.google.com/document/d/abc", "user@example.com"))
+        when(googleDocsService.readDocument("https://docs.google.com/document/d/abc", "user@example.com", null))
                 .thenReturn("Document content here");
 
         String result = tool.readGoogleDoc("https://docs.google.com/document/d/abc");
@@ -91,7 +93,7 @@ class GoogleDocsAgentToolTest {
     @Test
     void readGoogleDoc_emptyDocument_returnsEmptyMessage() {
         tool.setCurrentEmail("user@example.com");
-        when(googleDocsService.readDocument(anyString(), anyString())).thenReturn("");
+        when(googleDocsService.readDocument(anyString(), anyString(), any())).thenReturn("");
 
         String result = tool.readGoogleDoc("https://docs.google.com/document/d/abc");
 
@@ -101,7 +103,7 @@ class GoogleDocsAgentToolTest {
     @Test
     void readGoogleDoc_notConnected_returnsErrorMessage() {
         tool.setCurrentEmail("user@example.com");
-        when(googleDocsService.readDocument(anyString(), anyString()))
+        when(googleDocsService.readDocument(anyString(), anyString(), any()))
                 .thenThrow(new IllegalStateException("Not connected to Google Docs"));
 
         String result = tool.readGoogleDoc("https://docs.google.com/document/d/abc");

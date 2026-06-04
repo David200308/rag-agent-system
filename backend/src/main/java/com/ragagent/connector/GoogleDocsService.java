@@ -46,9 +46,9 @@ public class GoogleDocsService {
      * @param ownerEmail the user whose token to use; {@code ""} when auth is disabled
      * @return the document's browser URL (https://docs.google.com/document/d/{id}/edit)
      */
-    public String createDocument(String title, String content, String ownerEmail) {
+    public String createDocument(String title, String content, String ownerEmail, String orgId) {
         String email = ownerEmail != null ? ownerEmail : "";
-        String token = resolveAccessToken(email);
+        String token = resolveAccessToken(email, orgId);
 
         // ── Step 1: create an empty document ────────────────────────────────
         CreateDocResponse created = restClientBuilder.build()
@@ -100,9 +100,9 @@ public class GoogleDocsService {
      * @param ownerEmail the user whose token to use
      * @return the document title and body text concatenated
      */
-    public String readDocument(String docUrl, String ownerEmail) {
+    public String readDocument(String docUrl, String ownerEmail, String orgId) {
         String email  = ownerEmail != null ? ownerEmail : "";
-        String token  = resolveAccessToken(email);
+        String token  = resolveAccessToken(email, orgId);
         String docId  = extractDocId(docUrl);
 
         DocContent doc = restClientBuilder.build()
@@ -140,17 +140,15 @@ public class GoogleDocsService {
     }
 
     /** Returns true if the user has a valid (possibly refreshable) Google token. */
-    public boolean isConnected(String ownerEmail) {
+    public boolean isConnected(String ownerEmail, String orgId) {
         String email = ownerEmail != null ? ownerEmail : "";
-        return tokenRepo.findByOwnerEmailAndProvider(email, "google").isPresent();
+        return findToken(email, orgId).isPresent();
     }
 
     // ── Token management ──────────────────────────────────────────────────────
 
-    private String resolveAccessToken(String email) {
-        ConnectorToken ct = tokenRepo.findByOwnerEmailAndProvider(email, "google")
-                .or(() -> email.isEmpty() ? java.util.Optional.empty()
-                        : tokenRepo.findByOwnerEmailAndProvider("", "google"))
+    private String resolveAccessToken(String email, String orgId) {
+        ConnectorToken ct = findToken(email, orgId)
                 .orElseThrow(() -> new IllegalStateException(
                         "Google account not connected. Visit /mcp to connect."));
 
@@ -158,6 +156,12 @@ public class GoogleDocsService {
             ct = refreshToken(ct);
         }
         return ct.getAccessToken();
+    }
+
+    private java.util.Optional<ConnectorToken> findToken(String email, String orgId) {
+        return orgId != null
+                ? tokenRepo.findByOwnerEmailAndProviderAndOrgId(email, "google", orgId)
+                : tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull(email, "google");
     }
 
     private boolean isExpiringSoon(ConnectorToken ct) {

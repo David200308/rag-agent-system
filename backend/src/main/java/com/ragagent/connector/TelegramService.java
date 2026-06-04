@@ -16,6 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -60,7 +61,7 @@ public class TelegramService {
      *   valid     = expected == authData["hash"]  AND  (now - auth_date) < 86400s
      */
     @Transactional
-    public void validateAndConnect(Map<String, Object> authData, String ownerEmail) {
+    public void validateAndConnect(Map<String, Object> authData, String ownerEmail, String orgId) {
         String receivedHash = extract(authData, "hash");
         if (receivedHash == null || receivedHash.isBlank()) {
             throw new IllegalArgumentException("Missing hash in Telegram auth data");
@@ -99,21 +100,20 @@ public class TelegramService {
         }
 
         String email = ownerEmail != null ? ownerEmail : "";
-        ConnectorToken token = tokenRepo
-                .findByOwnerEmailAndProvider(email, "telegram")
-                .orElse(ConnectorToken.builder().ownerEmail(email).provider("telegram").build());
+        ConnectorToken token = findToken(email, orgId)
+                .orElse(ConnectorToken.builder().ownerEmail(email).provider("telegram").orgId(orgId).build());
 
         token.setAccessToken(chatId);
         token.setTokenType("telegram");
         tokenRepo.save(token);
-        log.info("[TelegramService] Connected Telegram chat {} for user {}", chatId, email);
+        log.info("[TelegramService] Connected Telegram chat {} for user {} orgId={}", chatId, email, orgId);
     }
 
     // ── Send message ──────────────────────────────────────────────────────────
 
-    public String sendMessage(String ownerEmail, String text) {
+    public String sendMessage(String ownerEmail, String orgId, String text) {
         String email = ownerEmail != null ? ownerEmail : "";
-        ConnectorToken token = tokenRepo.findByOwnerEmailAndProvider(email, "telegram")
+        ConnectorToken token = findToken(email, orgId)
                 .orElseThrow(() -> new IllegalStateException(
                         "Telegram is not connected. Please connect your Telegram account first."));
 
@@ -125,11 +125,8 @@ public class TelegramService {
     /**
      * Sends a message to both the conversation owner and the visitor (shared user).
      * Used by the createTelegramGroupSession tool in interactive shared conversations.
-     *
-     * The bot acts as a relay — it notifies the owner that the visitor sent a message
-     * and confirms to the visitor that the owner was notified.
      */
-    public String sendGroupNotification(String ownerEmail, String visitorEmail, String content) {
+    public String sendGroupNotification(String ownerEmail, String visitorEmail, String orgId, String content) {
         StringBuilder result = new StringBuilder();
 
         // Notify the owner
@@ -137,7 +134,7 @@ public class TelegramService {
             String ownerMsg = (visitorEmail != null && !visitorEmail.isBlank())
                     ? "Message from shared conversation (sent by " + visitorEmail + "):\n\n" + content
                     : "Message from a shared conversation:\n\n" + content;
-            sendMessage(ownerEmail, ownerMsg);
+            sendMessage(ownerEmail, orgId, ownerMsg);
             result.append("Message delivered to the conversation owner via Telegram.");
         } catch (IllegalStateException e) {
             result.append("Conversation owner's Telegram is not connected.");
@@ -147,7 +144,7 @@ public class TelegramService {
         if (visitorEmail != null && !visitorEmail.isBlank()
                 && !visitorEmail.equalsIgnoreCase(ownerEmail)) {
             try {
-                sendMessage(visitorEmail,
+                sendMessage(visitorEmail, orgId,
                         "Your message was forwarded to the conversation owner via Telegram:\n\n" + content);
                 result.append(" Confirmation also sent to your Telegram.");
             } catch (IllegalStateException ignored) {
@@ -161,16 +158,26 @@ public class TelegramService {
 
     // ── Status / disconnect ───────────────────────────────────────────────────
 
-    public boolean isConnected(String ownerEmail) {
+    public boolean isConnected(String ownerEmail, String orgId) {
         String email = ownerEmail != null ? ownerEmail : "";
-        return tokenRepo.findByOwnerEmailAndProvider(email, "telegram").isPresent();
+        return findToken(email, orgId).isPresent();
     }
 
     @Transactional
-    public void disconnect(String ownerEmail) {
+    public void disconnect(String ownerEmail, String orgId) {
         String email = ownerEmail != null ? ownerEmail : "";
-        tokenRepo.deleteByOwnerEmailAndProvider(email, "telegram");
-        log.info("[TelegramService] Disconnected Telegram for {}", email);
+        if (orgId != null) {
+            tokenRepo.deleteByOwnerEmailAndProviderAndOrgId(email, "telegram", orgId);
+        } else {
+            tokenRepo.deleteByOwnerEmailAndProviderAndOrgIdIsNull(email, "telegram");
+        }
+        log.info("[TelegramService] Disconnected Telegram for {} orgId={}", email, orgId);
+    }
+
+    private Optional<ConnectorToken> findToken(String email, String orgId) {
+        return orgId != null
+                ? tokenRepo.findByOwnerEmailAndProviderAndOrgId(email, "telegram", orgId)
+                : tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull(email, "telegram");
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────

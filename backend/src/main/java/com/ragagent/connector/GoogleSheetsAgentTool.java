@@ -16,10 +16,14 @@ public class GoogleSheetsAgentTool {
 
     private final GoogleSheetsService googleSheetsService;
 
-    private static final ThreadLocal<String> CURRENT_EMAIL = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_EMAIL  = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_ORG_ID = new ThreadLocal<>();
 
     public void setCurrentEmail(String email) { CURRENT_EMAIL.set(email != null ? email : ""); }
     public void clearCurrentEmail()           { CURRENT_EMAIL.remove(); }
+
+    public void setCurrentOrgId(String orgId)  { CURRENT_ORG_ID.set(orgId); }
+    public void clearCurrentOrgId()            { CURRENT_ORG_ID.remove(); }
 
     /**
      * Creates a new Google Sheets spreadsheet and writes the given data into it.
@@ -40,7 +44,7 @@ public class GoogleSheetsAgentTool {
         String email = CURRENT_EMAIL.get();
         log.info("[GoogleSheetsAgentTool] Creating sheet '{}' for '{}'", title, email);
         try {
-            String url = googleSheetsService.createSpreadsheet(title, content, email);
+            String url = googleSheetsService.createSpreadsheet(title, content, email, CURRENT_ORG_ID.get());
             return "Spreadsheet created successfully. Open it here: " + url;
         } catch (IllegalStateException e) {
             return "Could not write to Google Sheets: " + e.getMessage();
@@ -57,7 +61,7 @@ public class GoogleSheetsAgentTool {
         String email = CURRENT_EMAIL.get();
         log.info("[GoogleSheetsAgentTool] Reading sheet '{}' for '{}'", sheetUrl, email);
         try {
-            String content = googleSheetsService.readSpreadsheet(sheetUrl, email);
+            String content = googleSheetsService.readSpreadsheet(sheetUrl, email, CURRENT_ORG_ID.get());
             return content.isBlank() ? "The spreadsheet appears to be empty." : content;
         } catch (IllegalStateException e) {
             return "Could not read Google Sheet: " + e.getMessage();

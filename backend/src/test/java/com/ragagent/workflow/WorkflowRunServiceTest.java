@@ -32,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -387,7 +388,7 @@ class WorkflowRunServiceTest {
 
     @Test
     void dispatchConnectorTool_googleDocsWrite_callsCreateDocument() throws Exception {
-        when(googleDocsService.createDocument(eq("My Doc"), eq("Body text"), eq("user@test.com")))
+        when(googleDocsService.createDocument(eq("My Doc"), eq("Body text"), eq("user@test.com"), isNull()))
                 .thenReturn("https://docs.google.com/document/d/abc/edit");
 
         String result = callDispatchConnectorTool(
@@ -396,13 +397,13 @@ class WorkflowRunServiceTest {
                 "user@test.com");
 
         assertThat(result).contains("docs.google.com");
-        verify(googleDocsService).createDocument("My Doc", "Body text", "user@test.com");
+        verify(googleDocsService).createDocument("My Doc", "Body text", "user@test.com", null);
     }
 
     @Test
     void dispatchConnectorTool_googleDocsRead_callsReadDocument() throws Exception {
         String docUrl = "https://docs.google.com/document/d/xyz/edit";
-        when(googleDocsService.readDocument(eq(docUrl), eq("user@test.com")))
+        when(googleDocsService.readDocument(eq(docUrl), eq("user@test.com"), isNull()))
                 .thenReturn("Document content here");
 
         String result = callDispatchConnectorTool(
@@ -411,24 +412,24 @@ class WorkflowRunServiceTest {
                 "user@test.com");
 
         assertThat(result).isEqualTo("Document content here");
-        verify(googleDocsService).readDocument(docUrl, "user@test.com");
+        verify(googleDocsService).readDocument(docUrl, "user@test.com", null);
     }
 
     @Test
     void dispatchConnectorTool_googleDocsRead_acceptsPlainUrl() throws Exception {
         String docUrl = "https://docs.google.com/document/d/abc/edit";
-        when(googleDocsService.readDocument(eq(docUrl), anyString()))
+        when(googleDocsService.readDocument(eq(docUrl), anyString(), isNull()))
                 .thenReturn("Content");
 
         // Plain string payload (not JSON object)
         callDispatchConnectorTool("GOOGLE_DOCS_READ", "\"" + docUrl + "\"", "user@test.com");
 
-        verify(googleDocsService).readDocument(docUrl, "user@test.com");
+        verify(googleDocsService).readDocument(docUrl, "user@test.com", null);
     }
 
     @Test
     void dispatchConnectorTool_googleSheetsWrite_callsCreateSpreadsheet() throws Exception {
-        when(googleSheetsService.createSpreadsheet(eq("Budget"), eq("Name\tAmount"), eq("user@test.com")))
+        when(googleSheetsService.createSpreadsheet(eq("Budget"), eq("Name\tAmount"), eq("user@test.com"), isNull()))
                 .thenReturn("https://docs.google.com/spreadsheets/d/def/edit");
 
         String result = callDispatchConnectorTool(
@@ -437,12 +438,12 @@ class WorkflowRunServiceTest {
                 "user@test.com");
 
         assertThat(result).contains("spreadsheets");
-        verify(googleSheetsService).createSpreadsheet("Budget", "Name\tAmount", "user@test.com");
+        verify(googleSheetsService).createSpreadsheet("Budget", "Name\tAmount", "user@test.com", null);
     }
 
     @Test
     void dispatchConnectorTool_googleSlidesWrite_callsCreatePresentation() throws Exception {
-        when(googleSlidesService.createPresentation(eq("Deck"), eq("Slide 1\nbody"), eq("user@test.com")))
+        when(googleSlidesService.createPresentation(eq("Deck"), eq("Slide 1\nbody"), eq("user@test.com"), isNull()))
                 .thenReturn("https://docs.google.com/presentation/d/ghi/edit");
 
         String result = callDispatchConnectorTool(
@@ -451,12 +452,12 @@ class WorkflowRunServiceTest {
                 "user@test.com");
 
         assertThat(result).contains("presentation");
-        verify(googleSlidesService).createPresentation("Deck", "Slide 1\nbody", "user@test.com");
+        verify(googleSlidesService).createPresentation("Deck", "Slide 1\nbody", "user@test.com", null);
     }
 
     @Test
     void dispatchConnectorTool_telegramSend_callsSendMessage() throws Exception {
-        when(telegramService.sendMessage(eq("user@test.com"), eq("Hello!")))
+        when(telegramService.sendMessage(eq("user@test.com"), isNull(), eq("Hello!")))
                 .thenReturn("Message sent to your Telegram successfully.");
 
         String result = callDispatchConnectorTool(
@@ -465,22 +466,22 @@ class WorkflowRunServiceTest {
                 "user@test.com");
 
         assertThat(result).contains("successfully");
-        verify(telegramService).sendMessage("user@test.com", "Hello!");
+        verify(telegramService).sendMessage("user@test.com", null, "Hello!");
     }
 
     @Test
     void dispatchConnectorTool_telegramSend_acceptsPlainString() throws Exception {
-        when(telegramService.sendMessage(anyString(), eq("Plain message")))
+        when(telegramService.sendMessage(anyString(), isNull(), eq("Plain message")))
                 .thenReturn("Message sent to your Telegram successfully.");
 
         callDispatchConnectorTool("TELEGRAM_SEND", "\"Plain message\"", "user@test.com");
 
-        verify(telegramService).sendMessage("user@test.com", "Plain message");
+        verify(telegramService).sendMessage("user@test.com", null, "Plain message");
     }
 
     @Test
     void dispatchConnectorTool_serviceThrowsIllegalState_returnsConnectorError() throws Exception {
-        when(googleDocsService.createDocument(anyString(), anyString(), anyString()))
+        when(googleDocsService.createDocument(anyString(), anyString(), anyString(), any()))
                 .thenThrow(new IllegalStateException("Google account not connected."));
 
         String result = callDispatchConnectorTool(
@@ -502,12 +503,12 @@ class WorkflowRunServiceTest {
 
     @Test
     void dispatchConnectorTool_missingJsonFields_usesDefaultValues() throws Exception {
-        when(googleDocsService.createDocument(eq("Untitled"), eq(""), eq("user@test.com")))
+        when(googleDocsService.createDocument(eq("Untitled"), eq(""), eq("user@test.com"), isNull()))
                 .thenReturn("https://docs.google.com/document/d/new/edit");
 
         callDispatchConnectorTool("GOOGLE_DOCS_WRITE", "{}", "user@test.com");
 
-        verify(googleDocsService).createDocument("Untitled", "", "user@test.com");
+        verify(googleDocsService).createDocument("Untitled", "", "user@test.com", null);
     }
 
     // ── startRun — emailNotify ────────────────────────────────────────────────
@@ -675,9 +676,9 @@ class WorkflowRunServiceTest {
     private String callDispatchConnectorTool(String toolName, String payload, String ownerEmail)
             throws Exception {
         Method m = WorkflowRunService.class.getDeclaredMethod(
-                "dispatchConnectorTool", String.class, String.class, String.class);
+                "dispatchConnectorTool", String.class, String.class, String.class, String.class);
         m.setAccessible(true);
-        return (String) m.invoke(service, toolName, payload, ownerEmail);
+        return (String) m.invoke(service, toolName, payload, ownerEmail, null);
     }
 
     private String callDispatchScheduleTool(String ownerEmail, String json) throws Exception {

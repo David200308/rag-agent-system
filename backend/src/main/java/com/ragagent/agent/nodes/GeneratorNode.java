@@ -3,6 +3,7 @@ package com.ragagent.agent.nodes;
 import com.ragagent.agent.state.AgentState;
 import com.ragagent.config.ChatModelFactory;
 import com.ragagent.config.LlmProperties;
+import com.ragagent.connector.GoogleCalendarAgentTool;
 import com.ragagent.connector.GoogleDocsAgentTool;
 import com.ragagent.connector.GoogleSheetsAgentTool;
 import com.ragagent.connector.GoogleSlidesAgentTool;
@@ -41,13 +42,14 @@ public class GeneratorNode {
     private final LlmProperties         llmProperties;
     private final ModelConfigService    modelConfigService;
     private final ChatModelFactory      chatModelFactory;
-    private final GoogleDocsAgentTool   googleDocsTool;
-    private final GoogleSheetsAgentTool googleSheetsTool;
-    private final GoogleSlidesAgentTool googleSlidesTool;
-    private final TelegramAgentTool     telegramTool;
+    private final GoogleDocsAgentTool      googleDocsTool;
+    private final GoogleSheetsAgentTool    googleSheetsTool;
+    private final GoogleSlidesAgentTool    googleSlidesTool;
+    private final GoogleCalendarAgentTool  googleCalendarTool;
+    private final TelegramAgentTool        telegramTool;
 
     private static final String SYSTEM_PROMPT = """
-            You are a helpful, accurate AI assistant with access to Google Workspace and Telegram tools.
+            You are a helpful, accurate AI assistant with access to Google Workspace, Google Calendar, and Telegram tools.
 
             GOOGLE WORKSPACE TOOLS — you have these tools available and MUST call them when relevant:
             - readGoogleDoc:       call when the user provides a docs.google.com/document URL
@@ -57,6 +59,13 @@ public class GeneratorNode {
             conversation content to Google Docs
             - writeToGoogleSheets: call when the user asks to save tabular data or tables to Google Sheets
             - writeToGoogleSlides: call when the user asks to create a presentation in Google Slides
+
+            GOOGLE CALENDAR TOOLS:
+            - listUpcomingEvents:  call when the user asks about their schedule, upcoming meetings, \
+            "what's on my calendar", "what do I have today/this week", or similar. Specify maxResults (default 10).
+            - createCalendarEvent: call when the user says "schedule a meeting", "add to my calendar", \
+            "create an event", or similar. Requires title, startDateTime, endDateTime (ISO 8601 / UTC). \
+            description and location are optional.
 
             TELEGRAM TOOLS:
             - sendTelegramMessage: call when the user says "send this to my Telegram", \
@@ -97,6 +106,7 @@ public class GeneratorNode {
 
         String userPrompt = buildPrompt(request.query(), analysis, docs, request.conversationHistory());
         String userEmail       = state.userEmail().orElse(null);
+        String orgId           = state.orgId().orElse(null);
         String shareOwnerEmail = state.shareOwnerEmail().orElse(null);
 
         ModelConfig selectedConfig = state.selectedModelDisplayName()
@@ -110,16 +120,23 @@ public class GeneratorNode {
         log.debug("[GeneratorNode] Generating answer (docs={} model={})", docs.size(),
                 selectedConfig != null ? selectedConfig.getDisplayName() : "default");
 
-        // Inject per-request email so tools know which token to use
+        // Inject per-request email and orgId so tools know which token to use
         googleDocsTool.setCurrentEmail(userEmail);
+        googleDocsTool.setCurrentOrgId(orgId);
         googleSheetsTool.setCurrentEmail(userEmail);
+        googleSheetsTool.setCurrentOrgId(orgId);
         googleSlidesTool.setCurrentEmail(userEmail);
+        googleSlidesTool.setCurrentOrgId(orgId);
+        googleCalendarTool.setCurrentEmail(userEmail);
+        googleCalendarTool.setCurrentOrgId(orgId);
         telegramTool.setCurrentEmail(userEmail);
+        telegramTool.setCurrentOrgId(orgId);
         telegramTool.setShareOwnerEmail(shareOwnerEmail);
         String answer;
         try {
             ToolCallbackProvider tools = MethodToolCallbackProvider.builder()
-                    .toolObjects(googleDocsTool, googleSheetsTool, googleSlidesTool, telegramTool)
+                    .toolObjects(googleDocsTool, googleSheetsTool, googleSlidesTool,
+                                 googleCalendarTool, telegramTool)
                     .build();
 
             answer = effectiveClient.prompt()
@@ -130,9 +147,15 @@ public class GeneratorNode {
                     .content();
         } finally {
             googleDocsTool.clearCurrentEmail();
+            googleDocsTool.clearCurrentOrgId();
             googleSheetsTool.clearCurrentEmail();
+            googleSheetsTool.clearCurrentOrgId();
             googleSlidesTool.clearCurrentEmail();
+            googleSlidesTool.clearCurrentOrgId();
+            googleCalendarTool.clearCurrentEmail();
+            googleCalendarTool.clearCurrentOrgId();
             telegramTool.clearCurrentEmail();
+            telegramTool.clearCurrentOrgId();
             telegramTool.clearShareOwnerEmail();
         }
 

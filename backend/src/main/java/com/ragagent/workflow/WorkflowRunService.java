@@ -461,7 +461,7 @@ public class WorkflowRunService {
                 if ("SCHEDULE".equalsIgnoreCase(toolName)) {
                     toolResult = dispatchScheduleTool(run.getOwnerEmail(), command);
                 } else if (CONNECTOR_TOOL_NAMES.contains(toolName.toUpperCase())) {
-                    toolResult = dispatchConnectorTool(toolName.toUpperCase(), command, run.getOwnerEmail());
+                    toolResult = dispatchConnectorTool(toolName.toUpperCase(), command, run.getOwnerEmail(), run.getOrgId());
                 } else {
                     String blocked = validateNetworkCommand(command, run.getOwnerEmail());
                     if (blocked != null) {
@@ -532,7 +532,7 @@ public class WorkflowRunService {
         }
     }
 
-    private String dispatchConnectorTool(String toolName, String payload, String ownerEmail) {
+    private String dispatchConnectorTool(String toolName, String payload, String ownerEmail, String orgId) {
         try {
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
             com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(payload.trim());
@@ -541,28 +541,28 @@ public class WorkflowRunService {
                 case "GOOGLE_DOCS_WRITE" -> googleDocsService.createDocument(
                         node.path("title").asText("Untitled"),
                         node.path("content").asText(""),
-                        ownerEmail);
+                        ownerEmail, orgId);
 
                 case "GOOGLE_DOCS_READ" -> {
                     String url = node.isTextual() ? node.asText()
                             : node.path("url").asText(payload.trim());
-                    yield googleDocsService.readDocument(url, ownerEmail);
+                    yield googleDocsService.readDocument(url, ownerEmail, orgId);
                 }
 
                 case "GOOGLE_SHEETS_WRITE" -> googleSheetsService.createSpreadsheet(
                         node.path("title").asText("Untitled"),
                         node.path("content").asText(""),
-                        ownerEmail);
+                        ownerEmail, orgId);
 
                 case "GOOGLE_SLIDES_WRITE" -> googleSlidesService.createPresentation(
                         node.path("title").asText("Untitled"),
                         node.path("content").asText(""),
-                        ownerEmail);
+                        ownerEmail, orgId);
 
                 case "TELEGRAM_SEND" -> {
                     String msg = node.isTextual() ? node.asText()
                             : node.path("message").asText(payload.trim());
-                    yield telegramService.sendMessage(ownerEmail, msg);
+                    yield telegramService.sendMessage(ownerEmail, orgId, msg);
                 }
 
                 default -> "Unknown connector tool: " + toolName;

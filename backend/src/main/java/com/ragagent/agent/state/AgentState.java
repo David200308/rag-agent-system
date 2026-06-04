@@ -34,6 +34,7 @@ public class AgentState extends org.bsc.langgraph4j.state.AgentState {
         Map.entry("fallbackReason",           Channels.<String>base((cur, upd) -> upd)),
         Map.entry("runId",                    Channels.<String>base((cur, upd) -> upd)),
         Map.entry("userEmail",                Channels.<String>base((cur, upd) -> upd)),
+        Map.entry("orgId",                    Channels.<String>base((cur, upd) -> upd)),
         Map.entry("shareOwnerEmail",          Channels.<String>base((cur, upd) -> upd)),
         Map.entry("selectedModelDisplayName", Channels.<String>base((cur, upd) -> upd))
     );
@@ -79,6 +80,10 @@ public class AgentState extends org.bsc.langgraph4j.state.AgentState {
 
     public Optional<String> userEmail() {
         return value("userEmail");
+    }
+
+    public Optional<String> orgId() {
+        return value("orgId");
     }
 
     public Optional<String> shareOwnerEmail() {

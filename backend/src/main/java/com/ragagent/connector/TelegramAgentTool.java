@@ -22,10 +22,14 @@ public class TelegramAgentTool {
     private final TelegramService telegramService;
 
     private static final ThreadLocal<String> CURRENT_EMAIL     = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_ORG_ID   = new ThreadLocal<>();
     private static final ThreadLocal<String> SHARE_OWNER_EMAIL = new ThreadLocal<>();
 
     public void setCurrentEmail(String email)     { CURRENT_EMAIL.set(email != null ? email : ""); }
     public void clearCurrentEmail()               { CURRENT_EMAIL.remove(); }
+
+    public void setCurrentOrgId(String orgId)     { CURRENT_ORG_ID.set(orgId); }
+    public void clearCurrentOrgId()               { CURRENT_ORG_ID.remove(); }
 
     public void setShareOwnerEmail(String email)  { SHARE_OWNER_EMAIL.set(email); }
     public void clearShareOwnerEmail()            { SHARE_OWNER_EMAIL.remove(); }
@@ -45,9 +49,10 @@ public class TelegramAgentTool {
             """)
     public String sendTelegramMessage(String message) {
         String email = CURRENT_EMAIL.get();
+        String orgId = CURRENT_ORG_ID.get();
         log.info("[TelegramAgentTool] Sending Telegram message for user '{}'", email);
         try {
-            return telegramService.sendMessage(email, message);
+            return telegramService.sendMessage(email, orgId, message);
         } catch (IllegalStateException e) {
             return "Could not send Telegram message: " + e.getMessage();
         }
@@ -73,6 +78,7 @@ public class TelegramAgentTool {
     public String createTelegramGroupSession(String message) {
         String visitorEmail = CURRENT_EMAIL.get();
         String ownerEmail   = SHARE_OWNER_EMAIL.get();
+        String orgId        = CURRENT_ORG_ID.get();
 
         if (ownerEmail == null || ownerEmail.isBlank()) {
             return sendTelegramMessage(message);
@@ -81,7 +87,7 @@ public class TelegramAgentTool {
         log.info("[TelegramAgentTool] Creating Telegram group session owner='{}' visitor='{}'",
                 ownerEmail, visitorEmail);
         try {
-            return telegramService.sendGroupNotification(ownerEmail, visitorEmail, message);
+            return telegramService.sendGroupNotification(ownerEmail, visitorEmail, orgId, message);
         } catch (Exception e) {
             return "Could not create Telegram group session: " + e.getMessage();
         }

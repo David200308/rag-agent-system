@@ -51,9 +51,9 @@ public class GoogleSheetsService {
      * @param ownerEmail user whose token to use
      * @return the spreadsheet's browser URL
      */
-    public String createSpreadsheet(String title, String content, String ownerEmail) {
+    public String createSpreadsheet(String title, String content, String ownerEmail, String orgId) {
         String email = ownerEmail != null ? ownerEmail : "";
-        String token = resolveAccessToken(email);
+        String token = resolveAccessToken(email, orgId);
 
         // ── Step 1: create spreadsheet ───────────────────────────────────────
         CreateSheetResponse created = restClientBuilder.build()
@@ -104,9 +104,9 @@ public class GoogleSheetsService {
      * @param ownerEmail user whose token to use
      * @return all cell values formatted as a tab-separated table
      */
-    public String readSpreadsheet(String sheetUrl, String ownerEmail) {
+    public String readSpreadsheet(String sheetUrl, String ownerEmail, String orgId) {
         String email   = ownerEmail != null ? ownerEmail : "";
-        String token   = resolveAccessToken(email);
+        String token   = resolveAccessToken(email, orgId);
         String sheetId = extractSheetId(sheetUrl);
 
         // Fetch sheet metadata to discover sheet names
@@ -158,9 +158,9 @@ public class GoogleSheetsService {
         return m.find() ? m.group(1) : input.trim();
     }
 
-    public boolean isConnected(String ownerEmail) {
+    public boolean isConnected(String ownerEmail, String orgId) {
         String email = ownerEmail != null ? ownerEmail : "";
-        return tokenRepo.findByOwnerEmailAndProvider(email, "google").isPresent();
+        return findToken(email, orgId).isPresent();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -178,14 +178,18 @@ public class GoogleSheetsService {
 
     // ── Token management (mirrors GoogleDocsService) ──────────────────────────
 
-    private String resolveAccessToken(String email) {
-        ConnectorToken ct = tokenRepo.findByOwnerEmailAndProvider(email, "google")
-                .or(() -> email.isEmpty() ? java.util.Optional.empty()
-                        : tokenRepo.findByOwnerEmailAndProvider("", "google"))
+    private String resolveAccessToken(String email, String orgId) {
+        ConnectorToken ct = findToken(email, orgId)
                 .orElseThrow(() -> new IllegalStateException(
                         "Google account not connected. Visit /mcp to connect."));
         if (isExpiringSoon(ct)) ct = refreshToken(ct);
         return ct.getAccessToken();
+    }
+
+    private java.util.Optional<ConnectorToken> findToken(String email, String orgId) {
+        return orgId != null
+                ? tokenRepo.findByOwnerEmailAndProviderAndOrgId(email, "google", orgId)
+                : tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull(email, "google");
     }
 
     private boolean isExpiringSoon(ConnectorToken ct) {

@@ -38,39 +38,37 @@ class GoogleSheetsServiceTest {
 
     @Test
     void isConnected_tokenPresent_returnsTrue() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.of(ConnectorToken.builder().build()));
 
-        assertThat(service.isConnected("user@test.com")).isTrue();
+        assertThat(service.isConnected("user@test.com", null)).isTrue();
     }
 
     @Test
     void isConnected_noToken_returnsFalse() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
-        assertThat(service.isConnected("user@test.com")).isFalse();
+        assertThat(service.isConnected("user@test.com", null)).isFalse();
     }
 
     @Test
     void isConnected_nullEmail_checksEmptyStringInRepo() {
-        when(tokenRepo.findByOwnerEmailAndProvider("", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("", "google"))
                 .thenReturn(Optional.empty());
 
-        assertThat(service.isConnected(null)).isFalse();
+        assertThat(service.isConnected(null, null)).isFalse();
     }
 
     // ── createSpreadsheet — guard: not connected ──────────────────────────────
 
     @Test
     void createSpreadsheet_noToken_throwsIllegalState() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
-                .thenReturn(Optional.empty());
-        when(tokenRepo.findByOwnerEmailAndProvider("", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                service.createSpreadsheet("My Sheet", "col1,col2\nval1,val2", "user@test.com"))
+                service.createSpreadsheet("My Sheet", "col1,col2\nval1,val2", "user@test.com", null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("not connected");
     }
@@ -79,13 +77,11 @@ class GoogleSheetsServiceTest {
 
     @Test
     void readSpreadsheet_noToken_throwsIllegalState() {
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
-                .thenReturn(Optional.empty());
-        when(tokenRepo.findByOwnerEmailAndProvider("", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                service.readSpreadsheet("https://docs.google.com/spreadsheets/d/abc123/edit", "user@test.com"))
+                service.readSpreadsheet("https://docs.google.com/spreadsheets/d/abc123/edit", "user@test.com", null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("not connected");
     }
@@ -100,10 +96,10 @@ class GoogleSheetsServiceTest {
                 .accessToken("valid-token")
                 .expiresAt(LocalDateTime.now().plusHours(1))
                 .build();
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.of(token));
 
-        assertThatThrownBy(() -> service.createSpreadsheet("Title", "a,b", "user@test.com"))
+        assertThatThrownBy(() -> service.createSpreadsheet("Title", "a,b", "user@test.com", null))
                 .isNotInstanceOf(IllegalStateException.class);
     }
 }

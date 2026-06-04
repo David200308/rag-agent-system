@@ -2,6 +2,7 @@ package com.ragagent.agent.nodes;
 
 import com.ragagent.config.ChatModelFactory;
 import com.ragagent.config.LlmProperties;
+import com.ragagent.connector.GoogleCalendarAgentTool;
 import com.ragagent.connector.GoogleDocsAgentTool;
 import com.ragagent.connector.GoogleSheetsAgentTool;
 import com.ragagent.connector.GoogleSlidesAgentTool;
@@ -30,17 +31,18 @@ class GeneratorNodeTest {
     @Mock LlmProperties         llmProperties;
     @Mock ModelConfigService    modelConfigService;
     @Mock ChatModelFactory      chatModelFactory;
-    @Mock GoogleDocsAgentTool   googleDocsTool;
-    @Mock GoogleSheetsAgentTool googleSheetsTool;
-    @Mock GoogleSlidesAgentTool googleSlidesTool;
-    @Mock TelegramAgentTool     telegramTool;
+    @Mock GoogleDocsAgentTool      googleDocsTool;
+    @Mock GoogleSheetsAgentTool    googleSheetsTool;
+    @Mock GoogleSlidesAgentTool    googleSlidesTool;
+    @Mock GoogleCalendarAgentTool  googleCalendarTool;
+    @Mock TelegramAgentTool        telegramTool;
 
     GeneratorNode node;
 
     @BeforeEach
     void setUp() {
         node = new GeneratorNode(chatClient, llmProperties, modelConfigService, chatModelFactory,
-                googleDocsTool, googleSheetsTool, googleSlidesTool, telegramTool);
+                googleDocsTool, googleSheetsTool, googleSlidesTool, googleCalendarTool, telegramTool);
     }
 
     // ── buildPrompt — no documents ────────────────────────────────────────────

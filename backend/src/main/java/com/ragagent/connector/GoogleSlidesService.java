@@ -52,9 +52,9 @@ public class GoogleSlidesService {
      * @param ownerEmail user whose token to use
      * @return the presentation's browser URL
      */
-    public String createPresentation(String title, String content, String ownerEmail) {
+    public String createPresentation(String title, String content, String ownerEmail, String orgId) {
         String email = ownerEmail != null ? ownerEmail : "";
-        String token = resolveAccessToken(email);
+        String token = resolveAccessToken(email, orgId);
 
         // ── Step 1: create empty presentation ────────────────────────────────
         CreatePresentationResponse created = restClientBuilder.build()
@@ -98,9 +98,9 @@ public class GoogleSlidesService {
      * @param ownerEmail user whose token to use
      * @return slide-by-slide text content
      */
-    public String readPresentation(String presUrl, String ownerEmail) {
+    public String readPresentation(String presUrl, String ownerEmail, String orgId) {
         String email  = ownerEmail != null ? ownerEmail : "";
-        String token  = resolveAccessToken(email);
+        String token  = resolveAccessToken(email, orgId);
         String presId = extractPresId(presUrl);
 
         PresentationContent pres = restClientBuilder.build()
@@ -147,9 +147,9 @@ public class GoogleSlidesService {
         return m.find() ? m.group(1) : input.trim();
     }
 
-    public boolean isConnected(String ownerEmail) {
+    public boolean isConnected(String ownerEmail, String orgId) {
         String email = ownerEmail != null ? ownerEmail : "";
-        return tokenRepo.findByOwnerEmailAndProvider(email, "google").isPresent();
+        return findToken(email, orgId).isPresent();
     }
 
     // ── Slide building ────────────────────────────────────────────────────────
@@ -255,14 +255,18 @@ public class GoogleSlidesService {
 
     // ── Token management ──────────────────────────────────────────────────────
 
-    private String resolveAccessToken(String email) {
-        ConnectorToken ct = tokenRepo.findByOwnerEmailAndProvider(email, "google")
-                .or(() -> email.isEmpty() ? java.util.Optional.empty()
-                        : tokenRepo.findByOwnerEmailAndProvider("", "google"))
+    private String resolveAccessToken(String email, String orgId) {
+        ConnectorToken ct = findToken(email, orgId)
                 .orElseThrow(() -> new IllegalStateException(
                         "Google account not connected. Visit /mcp to connect."));
         if (isExpiringSoon(ct)) ct = refreshToken(ct);
         return ct.getAccessToken();
+    }
+
+    private java.util.Optional<ConnectorToken> findToken(String email, String orgId) {
+        return orgId != null
+                ? tokenRepo.findByOwnerEmailAndProviderAndOrgId(email, "google", orgId)
+                : tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull(email, "google");
     }
 
     private boolean isExpiringSoon(ConnectorToken ct) {

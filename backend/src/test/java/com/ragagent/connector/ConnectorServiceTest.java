@@ -44,10 +44,10 @@ class ConnectorServiceTest {
 
     @Test
     void getStatus_noTokens_returnsFalseForAll() {
-        when(tokenRepo.findByOwnerEmail("user@test.com")).thenReturn(List.of());
-        when(telegramService.isConnected("user@test.com")).thenReturn(false);
+        when(tokenRepo.findByOwnerEmailAndOrgIdIsNull("user@test.com")).thenReturn(List.of());
+        when(telegramService.isConnected("user@test.com", null)).thenReturn(false);
 
-        Map<String, Boolean> status = service.getStatus("user@test.com");
+        Map<String, Boolean> status = service.getStatus("user@test.com", null);
 
         assertThat(status.get("google")).isFalse();
         assertThat(status.get("figma")).isFalse();
@@ -58,10 +58,10 @@ class ConnectorServiceTest {
     void getStatus_googleConnected_returnsGoogleTrue() {
         ConnectorToken token = ConnectorToken.builder()
                 .ownerEmail("user@test.com").provider("google").accessToken("tok").build();
-        when(tokenRepo.findByOwnerEmail("user@test.com")).thenReturn(List.of(token));
-        when(telegramService.isConnected("user@test.com")).thenReturn(false);
+        when(tokenRepo.findByOwnerEmailAndOrgIdIsNull("user@test.com")).thenReturn(List.of(token));
+        when(telegramService.isConnected("user@test.com", null)).thenReturn(false);
 
-        Map<String, Boolean> status = service.getStatus("user@test.com");
+        Map<String, Boolean> status = service.getStatus("user@test.com", null);
 
         assertThat(status.get("google")).isTrue();
         assertThat(status.get("figma")).isFalse();
@@ -70,10 +70,10 @@ class ConnectorServiceTest {
 
     @Test
     void getStatus_telegramConnected_returnsTelegramTrue() {
-        when(tokenRepo.findByOwnerEmail("user@test.com")).thenReturn(List.of());
-        when(telegramService.isConnected("user@test.com")).thenReturn(true);
+        when(tokenRepo.findByOwnerEmailAndOrgIdIsNull("user@test.com")).thenReturn(List.of());
+        when(telegramService.isConnected("user@test.com", null)).thenReturn(true);
 
-        Map<String, Boolean> status = service.getStatus("user@test.com");
+        Map<String, Boolean> status = service.getStatus("user@test.com", null);
 
         assertThat(status.get("telegram")).isTrue();
         assertThat(status.get("google")).isFalse();
@@ -81,12 +81,12 @@ class ConnectorServiceTest {
 
     @Test
     void getStatus_nullEmail_normalizedToEmptyString() {
-        when(tokenRepo.findByOwnerEmail("")).thenReturn(List.of());
-        when(telegramService.isConnected("")).thenReturn(false);
+        when(tokenRepo.findByOwnerEmailAndOrgIdIsNull("")).thenReturn(List.of());
+        when(telegramService.isConnected("", null)).thenReturn(false);
 
-        service.getStatus(null);
+        service.getStatus(null, null);
 
-        verify(tokenRepo).findByOwnerEmail("");
+        verify(tokenRepo).findByOwnerEmailAndOrgIdIsNull("");
     }
 
     // ── getToken ──────────────────────────────────────────────────────────────
@@ -95,50 +95,50 @@ class ConnectorServiceTest {
     void getToken_delegatesToRepo() {
         ConnectorToken token = ConnectorToken.builder()
                 .ownerEmail("user@test.com").provider("google").build();
-        when(tokenRepo.findByOwnerEmailAndProvider("user@test.com", "google"))
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.of(token));
 
-        assertThat(service.getToken("google", "user@test.com")).contains(token);
+        assertThat(service.getToken("google", "user@test.com", null)).contains(token);
     }
 
     @Test
     void getToken_nullEmail_normalizedToEmptyString() {
-        when(tokenRepo.findByOwnerEmailAndProvider("", "figma")).thenReturn(Optional.empty());
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("", "figma")).thenReturn(Optional.empty());
 
-        assertThat(service.getToken("figma", null)).isEmpty();
+        assertThat(service.getToken("figma", null, null)).isEmpty();
 
-        verify(tokenRepo).findByOwnerEmailAndProvider("", "figma");
+        verify(tokenRepo).findByOwnerEmailAndProviderAndOrgIdIsNull("", "figma");
     }
 
     // ── disconnect ────────────────────────────────────────────────────────────
 
     @Test
     void disconnect_nonEmptyEmail_deletesUserAndAnonymousTokens() {
-        service.disconnect("google", "user@test.com");
+        service.disconnect("google", "user@test.com", null);
 
-        verify(tokenRepo).deleteByOwnerEmailAndProvider("user@test.com", "google");
-        verify(tokenRepo).deleteByOwnerEmailAndProvider("", "google");
+        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google");
+        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgIdIsNull("", "google");
     }
 
     @Test
     void disconnect_nullEmail_onlyDeletesEmptyEmailRecord() {
-        service.disconnect("figma", null);
+        service.disconnect("figma", null, null);
 
-        verify(tokenRepo).deleteByOwnerEmailAndProvider("", "figma");
-        verify(tokenRepo, never()).deleteByOwnerEmailAndProvider(argThat(e -> !e.isEmpty()), any());
+        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgIdIsNull("", "figma");
+        verify(tokenRepo, never()).deleteByOwnerEmailAndProviderAndOrgIdIsNull(argThat(e -> !e.isEmpty()), any());
     }
 
     @Test
     void disconnect_telegram_delegatesToTelegramService() {
-        service.disconnect("telegram", "user@test.com");
+        service.disconnect("telegram", "user@test.com", null);
 
-        verify(telegramService).disconnect("user@test.com");
-        verify(tokenRepo, never()).deleteByOwnerEmailAndProvider(any(), any());
+        verify(telegramService).disconnect("user@test.com", null);
+        verify(tokenRepo, never()).deleteByOwnerEmailAndProviderAndOrgIdIsNull(any(), any());
     }
 
     @Test
     void disconnect_unknownProvider_throwsIllegalArgument() {
-        assertThatThrownBy(() -> service.disconnect("twitter", "user@test.com"))
+        assertThatThrownBy(() -> service.disconnect("twitter", "user@test.com", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown provider");
     }
@@ -149,7 +149,7 @@ class ConnectorServiceTest {
     void getAuthUrl_google_containsExpectedParams() {
         when(stateRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        String url = service.getAuthUrl("google", "user@test.com");
+        String url = service.getAuthUrl("google", "user@test.com", null);
 
         assertThat(url).contains("accounts.google.com");
         assertThat(url).contains("client_id=g-client-id");
@@ -162,7 +162,7 @@ class ConnectorServiceTest {
     void getAuthUrl_figma_containsExpectedParams() {
         when(stateRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        String url = service.getAuthUrl("figma", "user@test.com");
+        String url = service.getAuthUrl("figma", "user@test.com", null);
 
         assertThat(url).contains("figma.com/oauth");
         assertThat(url).contains("client_id=f-client-id");
@@ -174,7 +174,7 @@ class ConnectorServiceTest {
         ArgumentCaptor<ConnectorOAuthState> captor =
                 ArgumentCaptor.forClass(ConnectorOAuthState.class);
 
-        service.getAuthUrl("google", "user@test.com");
+        service.getAuthUrl("google", "user@test.com", null);
 
         verify(stateRepo).save(captor.capture());
         ConnectorOAuthState saved = captor.getValue();
@@ -186,14 +186,14 @@ class ConnectorServiceTest {
 
     @Test
     void getAuthUrl_telegram_throwsIllegalArgument() {
-        assertThatThrownBy(() -> service.getAuthUrl("telegram", "user@test.com"))
+        assertThatThrownBy(() -> service.getAuthUrl("telegram", "user@test.com", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Login Widget");
     }
 
     @Test
     void getAuthUrl_unknownProvider_throwsIllegalArgument() {
-        assertThatThrownBy(() -> service.getAuthUrl("slack", "user@test.com"))
+        assertThatThrownBy(() -> service.getAuthUrl("slack", "user@test.com", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown provider");
     }
@@ -245,10 +245,10 @@ class ConnectorServiceTest {
     void getStatus_figmaConnected_returnsFigmaTrue() {
         ConnectorToken token = ConnectorToken.builder()
                 .ownerEmail("user@test.com").provider("figma").accessToken("tok").build();
-        when(tokenRepo.findByOwnerEmail("user@test.com")).thenReturn(List.of(token));
-        when(telegramService.isConnected("user@test.com")).thenReturn(false);
+        when(tokenRepo.findByOwnerEmailAndOrgIdIsNull("user@test.com")).thenReturn(List.of(token));
+        when(telegramService.isConnected("user@test.com", null)).thenReturn(false);
 
-        Map<String, Boolean> status = service.getStatus("user@test.com");
+        Map<String, Boolean> status = service.getStatus("user@test.com", null);
 
         assertThat(status.get("figma")).isTrue();
         assertThat(status.get("google")).isFalse();
@@ -261,10 +261,10 @@ class ConnectorServiceTest {
                 .ownerEmail("user@test.com").provider("google").accessToken("g-tok").build();
         ConnectorToken figma = ConnectorToken.builder()
                 .ownerEmail("user@test.com").provider("figma").accessToken("f-tok").build();
-        when(tokenRepo.findByOwnerEmail("user@test.com")).thenReturn(List.of(google, figma));
-        when(telegramService.isConnected("user@test.com")).thenReturn(true);
+        when(tokenRepo.findByOwnerEmailAndOrgIdIsNull("user@test.com")).thenReturn(List.of(google, figma));
+        when(telegramService.isConnected("user@test.com", null)).thenReturn(true);
 
-        Map<String, Boolean> status = service.getStatus("user@test.com");
+        Map<String, Boolean> status = service.getStatus("user@test.com", null);
 
         assertThat(status.get("google")).isTrue();
         assertThat(status.get("figma")).isTrue();
@@ -275,10 +275,10 @@ class ConnectorServiceTest {
 
     @Test
     void disconnect_figma_deletesUserAndAnonymousTokens() {
-        service.disconnect("figma", "user@test.com");
+        service.disconnect("figma", "user@test.com", null);
 
-        verify(tokenRepo).deleteByOwnerEmailAndProvider("user@test.com", "figma");
-        verify(tokenRepo).deleteByOwnerEmailAndProvider("", "figma");
+        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "figma");
+        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgIdIsNull("", "figma");
     }
 
     // ── getAuthUrl — scope / prompt params ────────────────────────────────────
@@ -287,7 +287,7 @@ class ConnectorServiceTest {
     void getAuthUrl_google_includesConsentPromptAndOfflineAccess() {
         when(stateRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        String url = service.getAuthUrl("google", "user@test.com");
+        String url = service.getAuthUrl("google", "user@test.com", null);
 
         assertThat(url).contains("prompt=consent");
         assertThat(url).contains("access_type=offline");
@@ -297,7 +297,7 @@ class ConnectorServiceTest {
     void getAuthUrl_figma_includesFileReadScope() {
         when(stateRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        String url = service.getAuthUrl("figma", "user@test.com");
+        String url = service.getAuthUrl("figma", "user@test.com", null);
 
         assertThat(url).contains("scope=file_read");
     }

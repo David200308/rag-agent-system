@@ -22,6 +22,10 @@ public class ConnectorOAuthState {
 
     private String ownerEmail;
     private String provider;
+
+    @Column(name = "org_id", length = 100)
+    private String orgId;
+
     private LocalDateTime expiresAt;
     private LocalDateTime createdAt;
 

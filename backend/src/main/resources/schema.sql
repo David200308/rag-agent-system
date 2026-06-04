@@ -333,6 +333,9 @@ ALTER TABLE conversations    ADD COLUMN org_id VARCHAR(100) NULL;
 ALTER TABLE workflow_runs    ADD COLUMN org_id VARCHAR(100) NULL;
 ALTER TABLE connector_tokens ADD COLUMN org_id VARCHAR(100) NULL;
 
+-- ── Schema migration: connector OAuth state org scoping ─────────────────────
+ALTER TABLE connector_oauth_states ADD COLUMN org_id VARCHAR(100) NULL;
+
 -- ── Schema migration: passkey challenge mode/orgId for team-mode login ───────
 -- mode and org_id must be captured at begin so finish can issue the correct JWT.
 ALTER TABLE passkey_challenges ADD COLUMN mode   VARCHAR(20)  NOT NULL DEFAULT 'PERSONAL';
