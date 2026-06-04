@@ -28,14 +28,36 @@ public interface KnowledgeSourceRepository extends JpaRepository<KnowledgeSource
     List<KnowledgeSource> findAccessibleByEmail(@Param("email") String email);
 
     /**
-     * Team mode: all sources belonging to the given org.
+     * Team mode UI: approved sources + the caller's own pending/rejected submissions.
      */
     @Query("""
         SELECT ks FROM KnowledgeSource ks
         WHERE ks.orgId = :orgId
+          AND (ks.status = 'APPROVED' OR ks.ownerEmail = :callerEmail)
         ORDER BY ks.ingestedAt DESC
         """)
-    List<KnowledgeSource> findByOrgId(@Param("orgId") String orgId);
+    List<KnowledgeSource> findByOrgIdForMember(@Param("orgId") String orgId,
+                                               @Param("callerEmail") String callerEmail);
+
+    /**
+     * Team mode agent retrieval: approved sources only.
+     */
+    @Query("""
+        SELECT ks FROM KnowledgeSource ks
+        WHERE ks.orgId = :orgId AND ks.status = 'APPROVED'
+        ORDER BY ks.ingestedAt DESC
+        """)
+    List<KnowledgeSource> findApprovedByOrgId(@Param("orgId") String orgId);
+
+    /**
+     * Owner approval queue: all pending sources for the org.
+     */
+    @Query("""
+        SELECT ks FROM KnowledgeSource ks
+        WHERE ks.orgId = :orgId AND ks.status = 'PENDING'
+        ORDER BY ks.ingestedAt DESC
+        """)
+    List<KnowledgeSource> findPendingByOrgId(@Param("orgId") String orgId);
 
     Optional<KnowledgeSource> findBySourceAndOrgId(String source, String orgId);
 }

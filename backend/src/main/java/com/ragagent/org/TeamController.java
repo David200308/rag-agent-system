@@ -1,5 +1,7 @@
 package com.ragagent.org;
 
+import com.ragagent.knowledge.KnowledgeSourceService;
+import com.ragagent.skill.SkillService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,14 +13,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * In-app team management — authenticated by JWT, scoped to the caller's org.
- * Only accessible in TEAM mode (orgId must be present in the JWT).
- * Only OWNER role can mutate membership or transfer ownership.
- *
- * GET    /api/v1/team/members                    list members of my org
- * POST   /api/v1/team/members                    add a member (owner only)
- * DELETE /api/v1/team/members/{email}            remove a member (owner only)
- * POST   /api/v1/team/transfer-owner             transfer ownership (owner only)
+ * GET    /api/v1/team/members                           list members
+ * POST   /api/v1/team/members                           add member (owner only)
+ * DELETE /api/v1/team/members/{email}                   remove member (owner only)
+ * POST   /api/v1/team/transfer-owner                    transfer ownership (owner only)
+ * GET    /api/v1/team/approvals                         list pending KB + skills (owner only)
+ * POST   /api/v1/team/approvals/knowledge/{id}/approve  approve KB source (owner only)
+ * POST   /api/v1/team/approvals/knowledge/{id}/reject   reject KB source (owner only)
+ * POST   /api/v1/team/approvals/skills/{id}/approve     approve skill (owner only)
+ * POST   /api/v1/team/approvals/skills/{id}/reject      reject skill (owner only)
  */
 @RestController
 @RequestMapping("/api/v1/team")
@@ -26,7 +29,9 @@ import java.util.Map;
 @Tag(name = "Team", description = "In-app team member management (team mode only)")
 public class TeamController {
 
-    private final OrganizationService service;
+    private final OrganizationService    service;
+    private final KnowledgeSourceService knowledgeSourceService;
+    private final SkillService           skillService;
 
     @GetMapping("/members")
     @Operation(summary = "List members of the current org")
@@ -93,6 +98,86 @@ public class TeamController {
         try {
             service.transferOwner(ctx.orgId(), ctx.email(), newOwner.trim().toLowerCase());
             return ResponseEntity.ok(Map.of("message", "Ownership transferred to " + newOwner.trim().toLowerCase()));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return bad(e.getMessage());
+        }
+    }
+
+    // ── Approval queue ────────────────────────────────────────────────────────
+
+    @GetMapping("/approvals")
+    @Operation(summary = "List all pending KB and skill submissions (owner only)")
+    public ResponseEntity<?> listApprovals(HttpServletRequest req) {
+        OrgContext ctx = OrgContext.from(req);
+        if (!ctx.isTeam()) return teamModeRequired();
+        try {
+            service.requireOwner(ctx.orgId(), ctx.email());
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
+        }
+        return ResponseEntity.ok(Map.of(
+                "knowledge", knowledgeSourceService.listPendingByOrg(ctx.orgId()),
+                "skills",    skillService.listPendingByOrg(ctx.orgId())
+        ));
+    }
+
+    @PostMapping("/approvals/knowledge/{id}/approve")
+    @Operation(summary = "Approve a pending KB source (owner only)")
+    public ResponseEntity<?> approveKnowledge(@PathVariable Long id, HttpServletRequest req) {
+        OrgContext ctx = OrgContext.from(req);
+        if (!ctx.isTeam()) return teamModeRequired();
+        try {
+            service.requireOwner(ctx.orgId(), ctx.email());
+            return ResponseEntity.ok(knowledgeSourceService.approve(id));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return bad(e.getMessage());
+        }
+    }
+
+    @PostMapping("/approvals/knowledge/{id}/reject")
+    @Operation(summary = "Reject a pending KB source (owner only) — removes from Weaviate")
+    public ResponseEntity<?> rejectKnowledge(@PathVariable Long id, HttpServletRequest req) {
+        OrgContext ctx = OrgContext.from(req);
+        if (!ctx.isTeam()) return teamModeRequired();
+        try {
+            service.requireOwner(ctx.orgId(), ctx.email());
+            knowledgeSourceService.reject(id);
+            return ResponseEntity.ok(Map.of("message", "Knowledge source rejected and removed from vector store."));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return bad(e.getMessage());
+        }
+    }
+
+    @PostMapping("/approvals/skills/{id}/approve")
+    @Operation(summary = "Approve a pending skill (owner only)")
+    public ResponseEntity<?> approveSkill(@PathVariable String id, HttpServletRequest req) {
+        OrgContext ctx = OrgContext.from(req);
+        if (!ctx.isTeam()) return teamModeRequired();
+        try {
+            service.requireOwner(ctx.orgId(), ctx.email());
+            return ResponseEntity.ok(skillService.approve(id));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return bad(e.getMessage());
+        }
+    }
+
+    @PostMapping("/approvals/skills/{id}/reject")
+    @Operation(summary = "Reject a pending skill (owner only)")
+    public ResponseEntity<?> rejectSkill(@PathVariable String id, HttpServletRequest req) {
+        OrgContext ctx = OrgContext.from(req);
+        if (!ctx.isTeam()) return teamModeRequired();
+        try {
+            service.requireOwner(ctx.orgId(), ctx.email());
+            skillService.reject(id);
+            return ResponseEntity.ok(Map.of("message", "Skill rejected."));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
         } catch (IllegalArgumentException e) {

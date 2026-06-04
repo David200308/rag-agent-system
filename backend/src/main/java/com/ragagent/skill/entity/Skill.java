@@ -25,6 +25,10 @@ public class Skill {
     @Column(name = "org_id", length = 100)
     private String orgId;
 
+    /** Approval status: PENDING | APPROVED | REJECTED. Always APPROVED in personal mode. */
+    @Column(nullable = false, length = 20)
+    private String status = "APPROVED";
+
     @Column(nullable = false, length = 255)
     private String name;
 

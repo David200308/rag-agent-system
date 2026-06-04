@@ -325,6 +325,12 @@ ALTER TABLE workflows           ADD COLUMN org_id VARCHAR(100) NULL;
 ALTER TABLE web_fetch_whitelist ADD COLUMN org_id VARCHAR(100) NULL;
 ALTER TABLE skills              ADD COLUMN org_id VARCHAR(100) NULL;
 
+-- ── Schema migration: team approval workflow ───────────────────────────────────
+-- PENDING = awaiting owner approval; APPROVED = active; REJECTED = denied.
+-- Personal-mode items default to APPROVED (no approval needed).
+ALTER TABLE knowledge_sources ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'APPROVED';
+ALTER TABLE skills             ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'APPROVED';
+
 -- ── Schema migration: team mode org_id on private-in-team resources ───────────
 -- Conversations, runs, and connector tokens are per-user but scoped to a context
 -- (personal = NULL, team = org slug) so that the same email has separate data

@@ -19,10 +19,15 @@ public class SkillService {
 
     private final SkillRepository repo;
 
+    /**
+     * List skills for the UI.
+     * Team mode: APPROVED skills + caller's own PENDING/REJECTED submissions.
+     * Personal: owned skills only.
+     */
     @Transactional(readOnly = true)
     public List<Skill> list(OrgContext ctx) {
         if (ctx == null || ctx.email() == null) return repo.findAllByOrderByCreatedAtDesc();
-        if (ctx.isTeam()) return repo.findByOrgIdOrderByCreatedAtDesc(ctx.orgId());
+        if (ctx.isTeam()) return repo.findByOrgIdForMember(ctx.orgId(), ctx.email());
         return repo.findByOwnerEmailAndOrgIdIsNullOrderByCreatedAtDesc(ctx.email());
     }
 
@@ -32,16 +37,45 @@ public class SkillService {
         return repo.findByOwnerEmailAndOrgIdIsNullOrderByCreatedAtDesc(ownerEmail);
     }
 
+    /** All PENDING skills for the org (owner approval queue). */
+    @Transactional(readOnly = true)
+    public List<Skill> listPendingByOrg(String orgId) {
+        return repo.findPendingByOrgId(orgId);
+    }
+
     @Transactional
     public Skill create(OrgContext ctx, String name, String fileName,
                         String fileType, long size, String content) {
         Skill skill = new Skill(UUID.randomUUID().toString(), ctx.email(),
                 name, fileName, fileType, size, content);
-        if (ctx.isTeam()) skill.setOrgId(ctx.orgId());
+        if (ctx.isTeam()) {
+            skill.setOrgId(ctx.orgId());
+            skill.setStatus("PENDING");
+        }
         repo.save(skill);
-        log.info("[SkillService] Created skill '{}' (id={}) for {} (org={})",
-                name, skill.getId(), ctx.email(), ctx.orgId());
+        log.info("[SkillService] Created skill '{}' (id={}) for {} (org={}) status={}",
+                name, skill.getId(), ctx.email(), ctx.orgId(), skill.getStatus());
         return skill;
+    }
+
+    /** Approve a pending skill (owner only — caller must enforce ownership). */
+    @Transactional
+    public Skill approve(String id) {
+        Skill skill = repo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Skill not found: " + id));
+        skill.setStatus("APPROVED");
+        log.info("[SkillService] Approved skill id={} name='{}'", id, skill.getName());
+        return repo.save(skill);
+    }
+
+    /** Reject a pending skill: sets REJECTED status. */
+    @Transactional
+    public void reject(String id) {
+        Skill skill = repo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Skill not found: " + id));
+        skill.setStatus("REJECTED");
+        repo.save(skill);
+        log.info("[SkillService] Rejected skill id={} name='{}'", id, skill.getName());
     }
 
     @Transactional

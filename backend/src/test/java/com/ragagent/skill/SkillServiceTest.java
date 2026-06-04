@@ -51,20 +51,20 @@ class SkillServiceTest {
     }
 
     @Test
-    void list_teamMode_returnsOrgSkills() {
+    void list_teamMode_returnsOrgSkillsViaMemberQuery() {
         Skill skill = new Skill("id-1", "creator@test.com", "Shared Tool", "t.py", "python", 50, "");
         skill.setOrgId("skyproton");
-        when(repo.findByOrgIdOrderByCreatedAtDesc("skyproton")).thenReturn(List.of(skill));
+        when(repo.findByOrgIdForMember("skyproton", "member@test.com")).thenReturn(List.of(skill));
 
         OrgContext teamCtx = new OrgContext("member@test.com", "TEAM", "skyproton");
         List<Skill> result = service.list(teamCtx);
 
         assertThat(result).containsExactly(skill);
-        verify(repo).findByOrgIdOrderByCreatedAtDesc("skyproton");
+        verify(repo).findByOrgIdForMember("skyproton", "member@test.com");
     }
 
     @Test
-    void create_teamMode_setsOrgId() {
+    void create_teamMode_setsOrgIdAndPendingStatus() {
         when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         OrgContext teamCtx = new OrgContext("owner@test.com", "TEAM", "skyproton");
@@ -72,6 +72,7 @@ class SkillServiceTest {
 
         assertThat(result.getOrgId()).isEqualTo("skyproton");
         assertThat(result.getOwnerEmail()).isEqualTo("owner@test.com");
+        assertThat(result.getStatus()).isEqualTo("PENDING");
     }
 
     @Test
@@ -173,5 +174,87 @@ class SkillServiceTest {
         service.delete("id-1", "owner@test.com");
 
         verify(repo).deleteById("id-1");
+    }
+
+    // ── create: personal mode stays APPROVED ──────────────────────────────────
+
+    @Test
+    void create_personalMode_statusRemainsApproved() {
+        when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        Skill result = service.create("owner@test.com", "My Tool", "t.py", "python", 100, "code");
+
+        assertThat(result.getStatus()).isEqualTo("APPROVED");
+        assertThat(result.getOrgId()).isNull();
+    }
+
+    // ── listPendingByOrg ──────────────────────────────────────────────────────
+
+    @Test
+    void listPendingByOrg_returnsPendingSkillsForOrg() {
+        Skill pending = new Skill("id-p", "member@test.com", "Draft Tool", "d.py", "python", 50, "code");
+        pending.setOrgId("skyproton");
+        pending.setStatus("PENDING");
+        when(repo.findPendingByOrgId("skyproton")).thenReturn(List.of(pending));
+
+        List<Skill> result = service.listPendingByOrg("skyproton");
+
+        assertThat(result).containsExactly(pending);
+        verify(repo).findPendingByOrgId("skyproton");
+    }
+
+    @Test
+    void listPendingByOrg_emptyWhenNoPending() {
+        when(repo.findPendingByOrgId("skyproton")).thenReturn(List.of());
+
+        assertThat(service.listPendingByOrg("skyproton")).isEmpty();
+    }
+
+    // ── approve ───────────────────────────────────────────────────────────────
+
+    @Test
+    void approve_existingId_setsApproved() {
+        Skill skill = new Skill("id-1", "member@test.com", "Draft", "d.py", "python", 50, "code");
+        skill.setStatus("PENDING");
+        when(repo.findById("id-1")).thenReturn(Optional.of(skill));
+        when(repo.save(skill)).thenReturn(skill);
+
+        Skill result = service.approve("id-1");
+
+        assertThat(result.getStatus()).isEqualTo("APPROVED");
+        verify(repo).save(skill);
+    }
+
+    @Test
+    void approve_notFound_throwsIllegalArgument() {
+        when(repo.findById("ghost")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.approve("ghost"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not found");
+    }
+
+    // ── reject ────────────────────────────────────────────────────────────────
+
+    @Test
+    void reject_existingId_setsRejected() {
+        Skill skill = new Skill("id-1", "member@test.com", "Draft", "d.py", "python", 50, "code");
+        skill.setStatus("PENDING");
+        when(repo.findById("id-1")).thenReturn(Optional.of(skill));
+        when(repo.save(skill)).thenReturn(skill);
+
+        service.reject("id-1");
+
+        assertThat(skill.getStatus()).isEqualTo("REJECTED");
+        verify(repo).save(skill);
+    }
+
+    @Test
+    void reject_notFound_throwsIllegalArgument() {
+        when(repo.findById("ghost")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.reject("ghost"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not found");
     }
 }

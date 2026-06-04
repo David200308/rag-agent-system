@@ -170,18 +170,55 @@ class KnowledgeSourceServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    // ── team mode: upsert ─────────────────────────────────────────────────────
+
+    @Test
+    void upsert_teamMode_newSource_setsPendingStatus() {
+        when(repo.findBySourceAndOrgId("doc.pdf", "skyproton")).thenReturn(Optional.empty());
+        ArgumentCaptor<KnowledgeSource> captor = ArgumentCaptor.forClass(KnowledgeSource.class);
+
+        service.upsert("doc.pdf", "My Doc", "ai", 42, "owner@test.com", "skyproton");
+
+        verify(repo).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo("PENDING");
+        assertThat(captor.getValue().getOrgId()).isEqualTo("skyproton");
+    }
+
+    @Test
+    void upsert_personalMode_newSource_staysApproved() {
+        when(repo.findBySource("doc.pdf")).thenReturn(Optional.empty());
+        ArgumentCaptor<KnowledgeSource> captor = ArgumentCaptor.forClass(KnowledgeSource.class);
+
+        service.upsert("doc.pdf", "My Doc", "ai", 42, "owner@test.com");
+
+        verify(repo).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    void upsert_teamMode_existingSource_doesNotOverrideStatus() {
+        KnowledgeSource existing = new KnowledgeSource("doc.pdf", "Old", "cat", 10, "owner@test.com", "skyproton");
+        existing.setStatus("APPROVED");
+        when(repo.findBySourceAndOrgId("doc.pdf", "skyproton")).thenReturn(Optional.of(existing));
+
+        service.upsert("doc.pdf", "New Label", "new", 20, "owner@test.com", "skyproton");
+
+        // status must not be reset to PENDING on re-ingest of an approved source
+        assertThat(existing.getStatus()).isEqualTo("APPROVED");
+    }
+
     // ── team mode: listAccessible / delete ────────────────────────────────────
 
     @Test
-    void listAccessible_teamMode_returnsOrgSources() {
+    void listAccessible_teamMode_returnsOrgSourcesViaMemberQuery() {
         KnowledgeSource ks = new KnowledgeSource("doc.pdf", "Doc", "cat", 5, "owner@test.com", "skyproton");
-        when(repo.findByOrgId("skyproton")).thenReturn(List.of(ks));
+        when(repo.findByOrgIdForMember("skyproton", "owner@test.com")).thenReturn(List.of(ks));
 
         OrgContext teamCtx = new OrgContext("owner@test.com", "TEAM", "skyproton");
         List<KnowledgeSource> result = service.listAccessible(teamCtx);
 
         assertThat(result).containsExactly(ks);
-        verify(repo).findByOrgId("skyproton");
+        verify(repo).findByOrgIdForMember("skyproton", "owner@test.com");
         verify(repo, never()).findAccessibleByEmail(any());
     }
 
@@ -195,6 +232,71 @@ class KnowledgeSourceServiceTest {
 
         verify(ingestionService).deleteBySource("doc.pdf");
         verify(repo).delete(ks);
+    }
+
+    // ── listPendingByOrg ──────────────────────────────────────────────────────
+
+    @Test
+    void listPendingByOrg_returnsPendingSources() {
+        KnowledgeSource pending = new KnowledgeSource("draft.pdf", "Draft", null, 3, "member@test.com", "skyproton");
+        pending.setStatus("PENDING");
+        when(repo.findPendingByOrgId("skyproton")).thenReturn(List.of(pending));
+
+        List<KnowledgeSource> result = service.listPendingByOrg("skyproton");
+
+        assertThat(result).containsExactly(pending);
+        verify(repo).findPendingByOrgId("skyproton");
+    }
+
+    // ── approve ───────────────────────────────────────────────────────────────
+
+    @Test
+    void approve_existingId_setsApproved() {
+        KnowledgeSource ks = new KnowledgeSource("doc.pdf", "Doc", "cat", 5, "member@test.com", "skyproton");
+        ks.setStatus("PENDING");
+        when(repo.findById(1L)).thenReturn(Optional.of(ks));
+        when(repo.save(ks)).thenReturn(ks);
+
+        KnowledgeSource result = service.approve(1L);
+
+        assertThat(result.getStatus()).isEqualTo("APPROVED");
+        verify(repo).save(ks);
+    }
+
+    @Test
+    void approve_notFound_throwsIllegalArgument() {
+        when(repo.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.approve(99L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not found");
+    }
+
+    // ── reject ────────────────────────────────────────────────────────────────
+
+    @Test
+    void reject_existingId_setsRejectedAndDeletesFromWeaviate() {
+        KnowledgeSource ks = new KnowledgeSource("doc.pdf", "Doc", "cat", 5, "member@test.com", "skyproton");
+        ks.setStatus("PENDING");
+        when(repo.findById(1L)).thenReturn(Optional.of(ks));
+        when(repo.save(ks)).thenReturn(ks);
+
+        service.reject(1L);
+
+        assertThat(ks.getStatus()).isEqualTo("REJECTED");
+        verify(repo).save(ks);
+        verify(ingestionService).deleteBySource("doc.pdf");
+    }
+
+    @Test
+    void reject_notFound_throwsIllegalArgument() {
+        when(repo.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.reject(99L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not found");
+
+        verifyNoInteractions(ingestionService);
     }
 
     // ── updateSharing ─────────────────────────────────────────────────────────

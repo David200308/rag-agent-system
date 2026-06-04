@@ -20,7 +20,10 @@ public class KnowledgeSourceService {
     private final KnowledgeSourceRepository repo;
     private final DocumentIngestionService  ingestionService;
 
-    /** Record (or update) a source after successful ingestion. */
+    /**
+     * Record (or update) a source after successful ingestion.
+     * In team mode, new uploads are set to PENDING until an owner approves.
+     */
     @Transactional
     public void upsert(String source, String label, String category, int chunkCount,
                        String ownerEmail, String orgId) {
@@ -35,7 +38,11 @@ public class KnowledgeSourceService {
                     if (ks.getOwnerEmail() == null && ownerEmail != null) ks.setOwnerEmail(ownerEmail);
                     repo.save(ks);
                 },
-                () -> repo.save(new KnowledgeSource(source, label, category, chunkCount, ownerEmail, orgId))
+                () -> {
+                    KnowledgeSource ks = new KnowledgeSource(source, label, category, chunkCount, ownerEmail, orgId);
+                    if (orgId != null) ks.setStatus("PENDING");
+                    repo.save(ks);
+                }
         );
     }
 
@@ -46,13 +53,14 @@ public class KnowledgeSourceService {
     }
 
     /**
-     * List sources visible given the org context.
-     * Team mode: all org sources. Personal: owned or shared with email. No auth: all.
+     * List sources visible given the org context (for management UI).
+     * Team mode: APPROVED sources + caller's own PENDING/REJECTED submissions.
+     * Personal: owned or shared with email.
      */
     @Transactional(readOnly = true)
     public List<KnowledgeSource> listAccessible(OrgContext ctx) {
         if (ctx == null || ctx.email() == null) return repo.findAllByOrderByIngestedAtDesc();
-        if (ctx.isTeam()) return repo.findByOrgId(ctx.orgId());
+        if (ctx.isTeam()) return repo.findByOrgIdForMember(ctx.orgId(), ctx.email());
         return repo.findAccessibleByEmail(ctx.email());
     }
 
@@ -60,6 +68,34 @@ public class KnowledgeSourceService {
     public List<KnowledgeSource> listAccessible(String email) {
         if (email == null) return repo.findAllByOrderByIngestedAtDesc();
         return repo.findAccessibleByEmail(email);
+    }
+
+    /** All PENDING sources for the org (owner approval queue). */
+    @Transactional(readOnly = true)
+    public List<KnowledgeSource> listPendingByOrg(String orgId) {
+        return repo.findPendingByOrgId(orgId);
+    }
+
+    /** Approve a pending knowledge source (owner only — caller must enforce ownership). */
+    @Transactional
+    public KnowledgeSource approve(Long id) {
+        KnowledgeSource ks = repo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Knowledge source not found: " + id));
+        ks.setStatus("APPROVED");
+        log.info("[KnowledgeSourceService] Approved KB source id={} source='{}'", id, ks.getSource());
+        return repo.save(ks);
+    }
+
+    /** Reject a pending knowledge source: sets REJECTED and removes from Weaviate. */
+    @Transactional
+    public void reject(Long id) {
+        KnowledgeSource ks = repo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Knowledge source not found: " + id));
+        ks.setStatus("REJECTED");
+        repo.save(ks);
+        ingestionService.deleteBySource(ks.getSource());
+        log.info("[KnowledgeSourceService] Rejected KB source id={} source='{}' — removed from Weaviate",
+                id, ks.getSource());
     }
 
     /**

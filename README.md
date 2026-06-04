@@ -30,7 +30,7 @@
 | Document parsing | Apache Tika (PDF, text, HTML)                      |
 | HTML scraping    | Jsoup                                              |
 | Circuit breaker  | Resilience4j 2.2                                   |
-| Auth             | OTP email (Resend) + JJWT stateless tokens         |
+| Auth             | OTP email (Resend) + Passkey (WebAuthn) + JJWT     |
 | Persistence      | MySQL 8 + Spring Data JPA                          |
 | MCP server       | Spring AI MCP WebMVC SSE transport                 |
 | API docs         | SpringDoc OpenAPI (Swagger UI)                     |
@@ -61,7 +61,7 @@
 | Vector DB        | Weaviate (Docker)                             |
 | Relational DB    | MySQL (Docker) — app + schedule data         |
 | Task queue       | Redis 7 (Docker) — Asynq backend             |
-| Scheduler        | Go microservice backed by Asynq (`:8082`)   |
+| Scheduler        | Go microservice backed by Asynq (`:8082`)    |
 | Observability    | Prometheus + Grafana + Loki + Promtail        |
 | Containerization | Docker Compose                                |
 
@@ -73,56 +73,50 @@
   ┌──────────────────────────┐   ┌──────────────────────────┐
   │     Frontend (Next.js)   │   │     agent-cli (Go)        │
   │  /  /upload  /workflow…  │   │  auth / chat / workflow   │
-  └────────────┬─────────────┘   │  conversation / financial │
-               │ HTTP / SSE      └────────────┬──────────────┘
-               │                              │ HTTP + JWT
+  │  /settings  /team  /mcp  │   │  conversation / financial │
+  └────────────┬─────────────┘   └────────────┬──────────────┘
+               │ HTTP / SSE                   │ HTTP + JWT
                └──────────────┬───────────────┘
 ┌──────────────▼───────────────────────────────────────────────┐
 │                   Spring Boot Backend (:8081)                 │
-│                                                              │
-│  AuthFilter (JWT)  ──►  AgentController                     │
-│                               │                             │
-│                    ┌──────────▼──────────┐                  │
-│                    │   RagAgentGraph      │                  │
-│                    │  (LangGraph4j)       │                  │
-│                    │                     │                  │
-│                    │  START              │                  │
-│                    │    └─► analyzeQuery │                  │
-│                    │          ├─[RETRIEVE]─► retrieve       │
-│                    │          │               ├─[found]──►  │
-│                    │          │               └─[empty]──►  │
-│                    │          ├─[DIRECT]──► generate ──►END │
-│                    │          └─[FALLBACK]─► fallback ──►END│
-│                    └─────────────────────┘                  │
-│                                                             │
-│  ┌──────────────────┐   ┌──────────────┐  ┌─────────────┐  │
-│  │ DocumentIngestion│   │  Retrieval   │  │  Fallback   │  │
-│  │ Service (Tika +  │   │  Service     │  │  Service    │  │
-│  │  Jsoup)          │   │  (Weaviate)  │  │ (Resilience4j)│ │
-│  └────────┬─────────┘   └──────┬───────┘  └─────────────┘  │
-│           │                    │                             │
-│  ┌────────▼────────────────────▼──────┐                     │
-│  │        Spring AI Abstraction        │                     │
-│  │  EmbeddingModel  │  ChatModel       │                     │
-│  └──────┬──────────────────┬──────────┘                     │
-│         │                  │                                 │
-│   ┌─────▼────┐      ┌──────▼──────┐                         │
-│   │ Weaviate │      │ OpenAI /    │                         │
-│   │ Vector   │      │ Anthropic / │                         │
-│   │ Store    │      │ OpenRouter  │                         │
-│   └──────────┘      └─────────────┘                         │
-│                                                             │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐ │
-│  │ Auth Module  │  │  MCP Server  │  │  Workflow Engine   │ │
-│  │ OTP + JWT    │  │  (SSE)       │  │  + Sandbox +       │ │
-│  └──────────────┘  └──────────────┘  │  SCHEDULE tool     │ │
-│                                      └────────────────────┘ │
-│  ┌──────────────┐  ┌──────────────┐                         │
-│  │  Connectors  │  │    Model     │                         │
-│  │  (Google /   │  │  Selection   │                         │
-│  │   Telegram)  │  │  (per-user)  │                         │
-│  └──────────────┘  └──────────────┘                         │
-└─────────────────────────────────────────────────────────────┘
+│                                                               │
+│  AuthFilter (JWT: email + mode + orgId)                       │
+│       │                                                       │
+│       ├──► AgentController  ──► RagAgentGraph (LangGraph4j)  │
+│       │         │                    │                        │
+│       │         │          ┌─────────▼──────────┐            │
+│       │         │          │  analyzeQuery       │            │
+│       │         │          │  ├─[RETRIEVE]──►    │            │
+│       │         │          │  │   retrieve        │            │
+│       │         │          │  │   ├─[found]──► generate      │
+│       │         │          │  │   └─[empty]──► fallback      │
+│       │         │          │  ├─[DIRECT]──► generate         │
+│       │         │          │  └─[FALLBACK]──► fallback       │
+│       │         │          └─────────────────────┘           │
+│       │         │                                             │
+│       ├──► ConversationService  (org-scoped)                  │
+│       ├──► OrganizationController / TeamController            │
+│       ├──► ConnectorController  (org-scoped OAuth tokens)     │
+│       ├──► WorkflowController                                 │
+│       └──► AuthController  (OTP + Passkey / WebAuthn)        │
+│                                                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐  │
+│  │ Auth Module  │  │  MCP Server  │  │  Workflow Engine   │  │
+│  │ OTP + Passkey│  │  (SSE)       │  │  + Sandbox +       │  │
+│  │ PERSONAL /   │  │              │  │  SCHEDULE tool     │  │
+│  │ TEAM JWT     │  └──────────────┘  └────────────────────┘  │
+│  └──────────────┘                                             │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  Connectors (org-scoped tokens)                          │ │
+│  │  Google Docs · Sheets · Slides · Calendar · Telegram     │ │
+│  └──────────────────────────────────────────────────────────┘ │
+│  ┌──────────────┐  ┌──────────────┐                           │
+│  │  Team / Org  │  │    Model     │                           │
+│  │  management  │  │  Selection   │                           │
+│  │  (OWNER /    │  │  (per-user   │                           │
+│  │   MEMBER)    │  │   + per-conv)│                           │
+│  └──────────────┘  └──────────────┘                           │
+└──────────────────────────────────────────────────────────────┘
           │                    │                   │
   ┌───────▼──────┐   ┌────────▼────────┐  ┌───────▼─────────────────┐
   │  Weaviate    │   │     MySQL       │  │  Go Scheduler (:8082)   │
@@ -131,14 +125,52 @@
   └──────────────┘   │   skills,       │  │    └─ enqueues tasks    │
                      │   schedules,    │  │  Asynq Worker           │
                      │   model_configs,│  │    └─ rag:trigger       │
-                     │   connectors)   │  │         (MaxRetry=3)    │
-                     └─────────────────┘  │                         │
-                                          │  ┌─────────────────┐    │
-                                          │  │  Redis (:6379)  │    │
-                                          │  │  (task queue)   │    │
-                                          │  └─────────────────┘    │
-                                          └─────────────────────────┘
+                     │   orgs/members, │  │         (MaxRetry=3)    │
+                     │   connectors)   │  │                         │
+                     └─────────────────┘  └─────────────────────────┘
 ```
+
+---
+
+## Authentication
+
+The system supports two login methods, both producing a signed JWT that encodes `email`, `mode` (`PERSONAL` / `TEAM`), and `orgId` (team mode only).
+
+### Email OTP
+
+A 6-digit one-time code is sent via Resend to the user's whitelisted email address.
+
+### Passkey (WebAuthn)
+
+Users can register a passkey (Face ID, Touch ID, or hardware key) from the Settings page. On subsequent logins, the passkey challenge/response flow issues a JWT scoped to the correct mode and org — including team mode passkey logins.
+
+---
+
+## Personal vs Team Mode
+
+Each JWT is scoped to a mode. The backend enforces isolation at every data layer.
+
+| Resource             | Personal mode     | Team mode                        |
+| -------------------- | ----------------- | -------------------------------- |
+| Conversations        | Per-user          | Per-user, scoped to org          |
+| Knowledge base       | Per-user          | Shared across org                |
+| Workflows            | Per-user          | Shared across org                |
+| Skills               | Per-user          | Shared across org                |
+| Web-fetch whitelist  | Per-user          | Shared across org                |
+| Connector tokens     | Per-user          | Per-user, scoped to org          |
+| Financial portfolio  | Per-user          | Hidden in team mode              |
+
+### Organizations
+
+Organizations are pre-created by an admin (`POST /api/v1/admin/organizations`). Members are added by an owner via the in-app Team page or the `POST /api/v1/team/members` API.
+
+**Team member management** (`/team` page — visible only in team mode):
+
+| Action               | Who can perform |
+| -------------------- | --------------- |
+| View member list     | All members     |
+| Add / remove member  | Owner only      |
+| Transfer ownership   | Owner only      |
 
 ---
 
@@ -152,6 +184,40 @@ The LangGraph4j graph determines the execution path per query:
 | `RETRIEVE` (empty) | No matching documents found        | analyzeQuery → retrieve → fallback → END |
 | `DIRECT`           | Query answerable without retrieval | analyzeQuery → generate → END             |
 | `FALLBACK`         | Query out of scope / unsafe        | analyzeQuery → fallback → END             |
+
+---
+
+## Connectors (MCP)
+
+External services are connected via OAuth (Google, Figma) or the Telegram Login Widget. Connector tokens are **org-scoped**: connecting Google in personal mode and in team mode produces two separate, isolated tokens.
+
+| Connector        | Provider key | Features                                              |
+| ---------------- | ------------ | ----------------------------------------------------- |
+| Google Docs      | `google`     | Read documents, write new docs                        |
+| Google Sheets    | `google`     | Read spreadsheets, write new sheets                   |
+| Google Slides    | `google`     | Read presentations, write new slides                  |
+| Google Calendar  | `google`     | List upcoming events, create new events               |
+| Figma            | `figma`      | OAuth token for Figma file access                     |
+| Telegram         | `telegram`   | Send messages to the user's linked Telegram chat      |
+
+All four Google services share a single OAuth token (one `provider="google"` entry per user per org). The OAuth consent includes the Calendar scope alongside Docs/Sheets/Slides/Drive.
+
+### Agent tools
+
+When Google or Telegram is connected, the following tools are available inside the chat agent:
+
+| Tool                    | Trigger examples                                              |
+| ----------------------- | ------------------------------------------------------------- |
+| `readGoogleDoc`         | User pastes a `docs.google.com/document` URL                 |
+| `readGoogleSheet`       | User pastes a `docs.google.com/spreadsheets` URL             |
+| `readGoogleSlide`       | User pastes a `docs.google.com/presentation` URL             |
+| `writeToGoogleDocs`     | "Save this to Google Docs", "Export as a document"           |
+| `writeToGoogleSheets`   | "Save this table to Sheets", "Export as a spreadsheet"       |
+| `writeToGoogleSlides`   | "Create a presentation from this", "Make slides"             |
+| `listUpcomingEvents`    | "What's on my calendar?", "What do I have this week?"        |
+| `createCalendarEvent`   | "Schedule a meeting", "Add to my calendar"                   |
+| `sendTelegramMessage`   | "Send this to my Telegram", "Notify me via Telegram"         |
+| `createTelegramGroupSession` | "Notify both of us on Telegram" (shared conversations) |
 
 ---
 
@@ -180,6 +246,7 @@ Each workflow run executes inside an ephemeral Docker sandbox (`SandboxService`)
 | `GOOGLE_DOCS`   | Read and write Google Docs via connected OAuth token               |
 | `GOOGLE_SHEETS` | Read and write Google Sheets via connected OAuth token             |
 | `GOOGLE_SLIDES` | Read and write Google Slides via connected OAuth token             |
+| `GOOGLE_CALENDAR` | List and create Google Calendar events                           |
 | `TELEGRAM`      | Send messages to a connected Telegram chat                         |
 
 The `SCHEDULE` tool lets a workflow agent manage schedules on behalf of the user:

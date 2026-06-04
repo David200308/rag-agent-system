@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, UserPlus, Trash2, ArrowRightLeft, Menu, Crown, User } from "lucide-react";
+import { Users, UserPlus, Trash2, ArrowRightLeft, Menu, Crown, User, ClipboardCheck, Check, X, BookOpen, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { ResizableLayout } from "@/components/layout/ResizableLayout";
@@ -14,6 +14,30 @@ interface OrgMember {
   email: string;
   role: "OWNER" | "MEMBER";
   joinedAt: string;
+}
+
+interface PendingKnowledge {
+  id: number;
+  source: string;
+  label: string | null;
+  category: string | null;
+  ownerEmail: string;
+  ingestedAt: string;
+}
+
+interface PendingSkill {
+  id: string;
+  name: string;
+  fileName: string;
+  fileType: string;
+  size: number;
+  ownerEmail: string;
+  createdAt: string;
+}
+
+interface ApprovalsData {
+  knowledge: PendingKnowledge[];
+  skills: PendingSkill[];
 }
 
 function SectionCard({ title, icon, children }: {
@@ -53,6 +77,10 @@ export default function TeamPage() {
   const [transferError, setTransferError]     = useState<string | null>(null);
   const [transferDone, setTransferDone]       = useState(false);
 
+  const [approvals, setApprovals]         = useState<ApprovalsData | null>(null);
+  const [approvalsLoading, setApprovalsLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
   const isOwner = members.some(
     (m) => m.email.toLowerCase() === (myEmail ?? "").toLowerCase() && m.role === "OWNER",
   );
@@ -72,6 +100,42 @@ export default function TeamPage() {
     if (!isTeam) { setLoading(false); return; }
     loadMembers();
   }, [isTeam]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (isOwner) loadApprovals();
+  }, [isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadApprovals() {
+    setApprovalsLoading(true);
+    try {
+      const r = await fetch("/api/team/approvals");
+      if (r.ok) setApprovals(await r.json());
+    } catch { /* ignore */ } finally {
+      setApprovalsLoading(false);
+    }
+  }
+
+  async function handleApprovalAction(
+    type: "knowledge" | "skills",
+    id: string | number,
+    action: "approve" | "reject",
+  ) {
+    const key = `${type}-${id}-${action}`;
+    setActionLoading(key);
+    try {
+      const r = await fetch(`/api/team/approvals/${type}/${id}/${action}`, { method: "POST" });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        alert((d as { error?: string }).error ?? "Action failed");
+        return;
+      }
+      await loadApprovals();
+    } catch {
+      alert("Network error");
+    } finally {
+      setActionLoading(null);
+    }
+  }
 
   async function loadMembers() {
     setLoading(true);
@@ -300,6 +364,124 @@ export default function TeamPage() {
                         {transferLoading ? <Spinner className="h-4 w-4" /> : "Transfer Ownership"}
                       </Button>
                     </form>
+                  </SectionCard>
+                )}
+
+                {/* Approval queue — owner only */}
+                {isOwner && (
+                  <SectionCard
+                    title={`Pending Approvals${approvals && (approvals.knowledge.length + approvals.skills.length) > 0 ? ` (${approvals.knowledge.length + approvals.skills.length})` : ""}`}
+                    icon={<ClipboardCheck className="h-4 w-4" />}
+                  >
+                    {approvalsLoading ? (
+                      <div className="flex justify-center py-4"><Spinner /></div>
+                    ) : !approvals || (approvals.knowledge.length === 0 && approvals.skills.length === 0) ? (
+                      <p className="text-sm text-[--color-muted]">No pending submissions.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {approvals.knowledge.length > 0 && (
+                          <div>
+                            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-[--color-muted] uppercase tracking-wide">
+                              <BookOpen className="h-3 w-3" />
+                              Knowledge Base
+                            </div>
+                            <div className="space-y-2">
+                              {approvals.knowledge.map((ks) => (
+                                <div
+                                  key={ks.id}
+                                  className="flex items-center justify-between gap-3 rounded-lg border border-[--color-border] px-3 py-2.5"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium">{ks.label ?? ks.source}</p>
+                                    <p className="text-[10px] text-[--color-muted]">
+                                      by {ks.ownerEmail}
+                                      {ks.category && ` · ${ks.category}`}
+                                    </p>
+                                  </div>
+                                  <div className="flex shrink-0 gap-1.5">
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-green-400 hover:bg-green-500/10"
+                                      onClick={() => handleApprovalAction("knowledge", ks.id, "approve")}
+                                      disabled={actionLoading !== null}
+                                      title="Approve"
+                                    >
+                                      {actionLoading === `knowledge-${ks.id}-approve`
+                                        ? <Spinner className="h-3.5 w-3.5" />
+                                        : <Check className="h-3.5 w-3.5" />}
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-red-400 hover:bg-red-500/10"
+                                      onClick={() => handleApprovalAction("knowledge", ks.id, "reject")}
+                                      disabled={actionLoading !== null}
+                                      title="Reject"
+                                    >
+                                      {actionLoading === `knowledge-${ks.id}-reject`
+                                        ? <Spinner className="h-3.5 w-3.5" />
+                                        : <X className="h-3.5 w-3.5" />}
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {approvals.skills.length > 0 && (
+                          <div>
+                            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-[--color-muted] uppercase tracking-wide">
+                              <Wrench className="h-3 w-3" />
+                              Skills
+                            </div>
+                            <div className="space-y-2">
+                              {approvals.skills.map((skill) => (
+                                <div
+                                  key={skill.id}
+                                  className="flex items-center justify-between gap-3 rounded-lg border border-[--color-border] px-3 py-2.5"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium">{skill.name}</p>
+                                    <p className="text-[10px] text-[--color-muted]">
+                                      by {skill.ownerEmail}
+                                      {skill.fileName && ` · ${skill.fileName}`}
+                                    </p>
+                                  </div>
+                                  <div className="flex shrink-0 gap-1.5">
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-green-400 hover:bg-green-500/10"
+                                      onClick={() => handleApprovalAction("skills", skill.id, "approve")}
+                                      disabled={actionLoading !== null}
+                                      title="Approve"
+                                    >
+                                      {actionLoading === `skills-${skill.id}-approve`
+                                        ? <Spinner className="h-3.5 w-3.5" />
+                                        : <Check className="h-3.5 w-3.5" />}
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-red-400 hover:bg-red-500/10"
+                                      onClick={() => handleApprovalAction("skills", skill.id, "reject")}
+                                      disabled={actionLoading !== null}
+                                      title="Reject"
+                                    >
+                                      {actionLoading === `skills-${skill.id}-reject`
+                                        ? <Spinner className="h-3.5 w-3.5" />
+                                        : <X className="h-3.5 w-3.5" />}
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </SectionCard>
                 )}
               </>
