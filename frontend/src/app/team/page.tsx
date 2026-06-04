@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   Users, UserPlus, Trash2, ArrowRightLeft, Menu, Crown,
-  User, Check, X, BookOpen, Wrench, ClipboardCheck,
+  User, Check, X, BookOpen, Wrench, ClipboardCheck, Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
@@ -107,6 +107,8 @@ function MembersTab({
   onAdd: (email: string, role: "MEMBER" | "OWNER") => Promise<string | null>;
   onTransfer: (email: string) => Promise<string | null>;
 }) {
+  const [search, setSearch] = useState("");
+
   const [addEmail, setAddEmail] = useState("");
   const [addRole, setAddRole]   = useState<"MEMBER" | "OWNER">("MEMBER");
   const [addLoading, setAddLoading] = useState(false);
@@ -138,10 +140,35 @@ function MembersTab({
     setTransferLoading(false);
   }
 
+  const filtered = members.filter((m) =>
+    m.email.toLowerCase().includes(search.toLowerCase()),
+  );
+
   return (
     <div className="space-y-6">
       {/* Member table */}
       <div className="overflow-hidden rounded-xl border border-[--color-border]">
+        {/* Search bar */}
+        <div className="border-b border-[--color-border] bg-[--color-surface] px-3 py-2">
+          <div className="flex items-center gap-2 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-2.5 py-1.5">
+            <Search className="h-3.5 w-3.5 shrink-0 text-[--color-muted]" />
+            <input
+              type="text"
+              placeholder="Search members…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-[--color-muted]"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="shrink-0 text-[--color-muted] hover:text-[--color-fg]"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        </div>
         <table className="w-full table-fixed">
           <thead className="border-b border-[--color-border] bg-[--color-surface]">
             <tr>
@@ -153,7 +180,7 @@ function MembersTab({
             </tr>
           </thead>
           <tbody className="divide-y divide-[--color-border]">
-            {members.map((m) => {
+            {filtered.map((m) => {
               const isMe = m.email.toLowerCase() === (myEmail ?? "").toLowerCase();
               return (
                 <tr key={m.email} className="bg-[--color-surface] hover:bg-[--color-surface-raised] transition-colors">
@@ -162,11 +189,13 @@ function MembersTab({
                       ? <Crown className="h-3.5 w-3.5 text-amber-400" />
                       : <User className="h-3.5 w-3.5 text-[--color-muted]" />}
                   </td>
-                  <td className={tdCls}>
-                    <span className={cn("font-medium", isMe && "text-[--color-accent]")}>
-                      {m.email}
-                    </span>
-                    {isMe && <span className="ml-1.5 text-[10px] text-[--color-muted]">(you)</span>}
+                  <td className={cn(tdCls, "max-w-0")}>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className={cn("truncate font-medium", isMe && "text-[--color-accent]")}>
+                        {m.email}
+                      </span>
+                      {isMe && <span className="text-[10px] text-[--color-muted] shrink-0">(you)</span>}
+                    </div>
                   </td>
                   <td className={tdCls}>
                     <span className={cn(
@@ -197,10 +226,10 @@ function MembersTab({
                 </tr>
               );
             })}
-            {members.length === 0 && (
+            {filtered.length === 0 && (
               <tr>
                 <td colSpan={isOwner ? 5 : 4} className="px-3 py-8 text-center text-sm text-[--color-muted]">
-                  No members yet.
+                  {search ? `No members matching "${search}".` : "No members yet."}
                 </td>
               </tr>
             )}
@@ -361,12 +390,14 @@ function ApprovalsTab({
             <tbody className="divide-y divide-[--color-border]">
               {approvals!.knowledge.map((ks) => (
                 <tr key={ks.id} className="bg-[--color-surface] hover:bg-[--color-surface-raised] transition-colors">
-                  <td className={tdCls}>
-                    <p className="truncate font-medium">{ks.label ?? ks.source}</p>
-                    {ks.category && <p className="text-[10px] text-[--color-muted]">{ks.category}</p>}
+                  <td className={cn(tdCls, "max-w-0")}>
+                    <div className="truncate font-medium">{ks.label ?? ks.source}</div>
+                    {ks.category && <div className="truncate text-[10px] text-[--color-muted]">{ks.category}</div>}
                   </td>
-                  <td className={cn(tdCls, "text-xs text-[--color-muted] truncate")}>{ks.ownerEmail}</td>
-                  <td className={cn(tdCls, "text-xs text-[--color-muted]")}>
+                  <td className={cn(tdCls, "max-w-0 text-xs text-[--color-muted]")}>
+                    <div className="truncate">{ks.ownerEmail}</div>
+                  </td>
+                  <td className={cn(tdCls, "text-xs text-[--color-muted] whitespace-nowrap")}>
                     {new Date(ks.ingestedAt).toLocaleDateString()}
                   </td>
                   <td className={tdCls}>
@@ -402,15 +433,19 @@ function ApprovalsTab({
             <tbody className="divide-y divide-[--color-border]">
               {approvals!.skills.map((skill) => (
                 <tr key={skill.id} className="bg-[--color-surface] hover:bg-[--color-surface-raised] transition-colors">
-                  <td className={tdCls}>
-                    <p className="truncate font-medium">{skill.name}</p>
+                  <td className={cn(tdCls, "max-w-0")}>
+                    <div className="truncate font-medium">{skill.name}</div>
                   </td>
-                  <td className={cn(tdCls, "text-xs text-[--color-muted]")}>
-                    <span className="font-mono">{skill.fileType.toUpperCase()}</span>
-                    <span className="ml-1 truncate">{skill.fileName}</span>
+                  <td className={cn(tdCls, "max-w-0 text-xs text-[--color-muted]")}>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="font-mono shrink-0">{skill.fileType.toUpperCase()}</span>
+                      <span className="truncate">{skill.fileName}</span>
+                    </div>
                   </td>
-                  <td className={cn(tdCls, "text-xs text-[--color-muted] truncate")}>{skill.ownerEmail}</td>
-                  <td className={cn(tdCls, "text-xs text-[--color-muted]")}>
+                  <td className={cn(tdCls, "max-w-0 text-xs text-[--color-muted]")}>
+                    <div className="truncate">{skill.ownerEmail}</div>
+                  </td>
+                  <td className={cn(tdCls, "text-xs text-[--color-muted] whitespace-nowrap")}>
                     {new Date(skill.createdAt).toLocaleDateString()}
                   </td>
                   <td className={tdCls}>
