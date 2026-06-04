@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import {
   Upload, Trash2, FileText, CheckCircle2, XCircle,
-  RefreshCw, Zap, Eye, X, ChevronRight, File, Folder,
+  RefreshCw, Zap, Eye, X, ChevronRight, File, Folder, Clock, Ban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchSkills, uploadSkill, deleteSkill, fetchSkillContent } from "@/lib/api";
@@ -343,9 +343,26 @@ function ManagePanel({
             key={skill.id}
             className="flex items-center gap-3 rounded-md border border-[--color-border] px-3 py-2.5"
           >
-            <Zap className="h-4 w-4 shrink-0 text-amber-500" />
+            <Zap className={cn(
+              "h-4 w-4 shrink-0",
+              (!skill.status || skill.status === "APPROVED") ? "text-amber-500" : "text-[--color-muted]",
+            )} />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{skill.name}</p>
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-medium">{skill.name}</p>
+                {skill.status === "PENDING" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-semibold text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400">
+                    <Clock className="h-2.5 w-2.5" />
+                    Pending
+                  </span>
+                )}
+                {skill.status === "REJECTED" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-900/40 dark:text-red-400">
+                    <Ban className="h-2.5 w-2.5" />
+                    Rejected
+                  </span>
+                )}
+              </div>
               <p className="text-[10px] text-[--color-muted]">
                 <span className="font-mono select-all">{skill.id}</span>
                 {" · "}{skill.fileName} · {skill.fileType.toUpperCase()} ·{" "}
@@ -400,9 +417,11 @@ export function SkillsManager() {
 
   useEffect(() => { loadSkills(); }, []);
 
+  const approvedCount = skills.filter(s => !s.status || s.status === "APPROVED").length;
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "upload", label: "Upload" },
-    { key: "manage", label: `Manage (${skills.length})` },
+    { key: "manage", label: `Manage (${approvedCount})` },
   ];
 
   return (

@@ -53,7 +53,9 @@ export function AgentConfigPanel({ agent, pattern, onSave, onDelete, onClose }: 
   const { setAgentSkills } = useSkillsStore();
 
   useEffect(() => {
-    fetchSkills().then(setSkills).catch(() => {});
+    fetchSkills()
+      .then(skills => setSkills(skills.filter(s => !s.status || s.status === "APPROVED")))
+      .catch(() => {});
     fetchConnectorStatus().then(setConnectorStatus).catch(() => {});
   }, []);
 

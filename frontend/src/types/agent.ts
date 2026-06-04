@@ -303,6 +303,9 @@ export interface Skill {
   fileType: "txt" | "md" | "zip";
   size: number;
   createdAt: string;
+  /** Team mode approval status. Undefined / absent means APPROVED (personal mode). */
+  status?: "PENDING" | "APPROVED" | "REJECTED";
+  ownerEmail?: string;
 }
 
 export interface IngestionResult {

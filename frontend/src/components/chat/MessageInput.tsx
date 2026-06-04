@@ -194,9 +194,11 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load skills once
+  // Load skills once — only show APPROVED skills in the picker
   useEffect(() => {
-    fetchSkills().then(setAllSkills).catch(() => {});
+    fetchSkills()
+      .then(skills => setAllSkills(skills.filter(s => !s.status || s.status === "APPROVED")))
+      .catch(() => {});
   }, []);
 
   const selectedIds = useMemo(() => new Set(selectedSkills.map((s) => s.id)), [selectedSkills]);
