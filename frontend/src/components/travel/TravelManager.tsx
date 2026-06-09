@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
-import { Plus, Pencil, Trash2, MapPin, X } from "lucide-react";
+import { Plus, Pencil, Trash2, MapPin, X, BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
   type TravelRecord, type TransportType,
@@ -456,6 +456,157 @@ function Legend() {
   );
 }
 
+// ── Travel analysis ────────────────────────────────────────────────────────────
+
+function computeAnalysis(records: TravelRecord[]) {
+  if (records.length === 0) return null;
+
+  const totalDays = records.reduce((sum, r) => sum + tripDays(r), 0);
+
+  const countryCounts: Record<string, number> = {};
+  const cityCounts:    Record<string, number> = {};
+  const transportCounts: Partial<Record<TransportType, number>> = {};
+
+  for (const r of records) {
+    for (const s of r.stops) {
+      countryCounts[s.country] = (countryCounts[s.country] ?? 0) + 1;
+      cityCounts[s.city]       = (cityCounts[s.city]       ?? 0) + 1;
+      if (s.transport) transportCounts[s.transport] = (transportCounts[s.transport] ?? 0) + 1;
+    }
+  }
+
+  const countries = Object.keys(countryCounts).sort();
+  const topCountry = Object.entries(countryCounts).sort((a, b) => b[1] - a[1])[0];
+  const topCity    = Object.entries(cityCounts).sort((a, b) => b[1] - a[1])[0];
+
+  const sorted = [...records].sort((a, b) => tripDays(b) - tripDays(a));
+  const longestTrip  = sorted[0]!;
+  const shortestTrip = sorted[sorted.length - 1]!;
+
+  const years = [...new Set(records.map((r) => r.startDate.slice(0, 4)))].sort().reverse();
+
+  return {
+    totalTrips:    records.length,
+    totalDays,
+    totalCountries: countries.length,
+    totalCities:    Object.keys(cityCounts).length,
+    countries,
+    topCountry,
+    topCity,
+    transportCounts,
+    longestTrip,
+    shortestTrip,
+    years,
+  };
+}
+
+function AnalysisModal({ records, onClose }: { records: TravelRecord[]; onClose: () => void }) {
+  const stats = computeAnalysis(records);
+
+  return (
+    <Modal title="Travel Analysis" onClose={onClose}>
+      {!stats ? (
+        <p className="text-sm text-[--color-muted] text-center py-8">No trips to analyse yet.</p>
+      ) : (
+        <div className="flex flex-col gap-5">
+
+          {/* Summary numbers */}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: "Trips",     value: stats.totalTrips },
+              { label: "Days",      value: stats.totalDays },
+              { label: "Countries", value: stats.totalCountries },
+              { label: "Cities",    value: stats.totalCities },
+            ].map(({ label, value }) => (
+              <div
+                key={label}
+                className="rounded-lg border border-[--color-border] bg-[--color-surface] p-4 text-center"
+              >
+                <p className="text-2xl font-bold">{value}</p>
+                <p className="text-xs text-[--color-muted] mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Highlights */}
+          <div className="rounded-lg border border-[--color-border] bg-[--color-surface] p-4 space-y-2.5">
+            <p className="text-xs font-semibold text-[--color-muted] uppercase tracking-wide">Highlights</p>
+            {stats.topCountry && (
+              <div className="flex justify-between text-sm">
+                <span className="text-[--color-muted]">Most visited country</span>
+                <span className="font-medium">{stats.topCountry[0]} <span className="text-[--color-muted] text-xs">({stats.topCountry[1]}x)</span></span>
+              </div>
+            )}
+            {stats.topCity && (
+              <div className="flex justify-between text-sm">
+                <span className="text-[--color-muted]">Most visited city</span>
+                <span className="font-medium">{stats.topCity[0]} <span className="text-[--color-muted] text-xs">({stats.topCity[1]}x)</span></span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm">
+              <span className="text-[--color-muted]">Longest trip</span>
+              <span className="font-medium">{stats.longestTrip.title} <span className="text-[--color-muted] text-xs">({tripDays(stats.longestTrip)}d)</span></span>
+            </div>
+            {stats.longestTrip.id !== stats.shortestTrip.id && (
+              <div className="flex justify-between text-sm">
+                <span className="text-[--color-muted]">Shortest trip</span>
+                <span className="font-medium">{stats.shortestTrip.title} <span className="text-[--color-muted] text-xs">({tripDays(stats.shortestTrip)}d)</span></span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm">
+              <span className="text-[--color-muted]">Active years</span>
+              <span className="font-medium">{stats.years.join(", ")}</span>
+            </div>
+          </div>
+
+          {/* Transport breakdown */}
+          {Object.keys(stats.transportCounts).length > 0 && (
+            <div className="rounded-lg border border-[--color-border] bg-[--color-surface] p-4 space-y-2.5">
+              <p className="text-xs font-semibold text-[--color-muted] uppercase tracking-wide">Transport Breakdown</p>
+              {(Object.entries(stats.transportCounts) as [TransportType, number][])
+                .sort((a, b) => b[1] - a[1])
+                .map(([type, count]) => {
+                  const total = Object.values(stats.transportCounts).reduce((s, n) => s + (n ?? 0), 0);
+                  const pct   = Math.round((count / total) * 100);
+                  return (
+                    <div key={type}>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span>{TRANSPORT_EMOJI[type]} {TRANSPORT_LABELS[type]}</span>
+                        <span className="text-[--color-muted] text-xs">{count} leg{count !== 1 ? "s" : ""} · {pct}%</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-[--color-border]">
+                        <div
+                          className="h-1.5 rounded-full bg-[--color-primary]"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+
+          {/* Countries list */}
+          <div className="rounded-lg border border-[--color-border] bg-[--color-surface] p-4">
+            <p className="text-xs font-semibold text-[--color-muted] uppercase tracking-wide mb-2">Countries Visited</p>
+            <div className="flex flex-wrap gap-1.5">
+              {stats.countries.map((c) => (
+                <span
+                  key={c}
+                  className="inline-flex items-center rounded-full border border-[--color-border] px-2.5 py-0.5 text-xs"
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+          </div>
+
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export function TravelManager() {
@@ -469,6 +620,8 @@ export function TravelManager() {
     | { mode: "edit"; record: TravelRecord }
     | null
   >(null);
+
+  const [analysisOpen, setAnalysisOpen] = useState(false);
 
   const load = useCallback(async () => {
     const data = await apiList();
@@ -522,9 +675,16 @@ export function TravelManager() {
             </p>
           )}
         </div>
-        <Button size="sm" onClick={() => setModal({ mode: "add" })}>
-          <Plus className="h-3.5 w-3.5 mr-1" /> Add Trip
-        </Button>
+        <div className="flex items-center gap-2">
+          {records.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => setAnalysisOpen(true)}>
+              <BarChart2 className="h-3.5 w-3.5 mr-1" /> Analysis
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setModal({ mode: "add" })}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> Add Trip
+          </Button>
+        </div>
       </div>
 
       {/* Map */}
@@ -596,6 +756,11 @@ export function TravelManager() {
             saving={saving}
           />
         </Modal>
+      )}
+
+      {/* Analysis modal */}
+      {analysisOpen && (
+        <AnalysisModal records={records} onClose={() => setAnalysisOpen(false)} />
       )}
     </div>
   );
