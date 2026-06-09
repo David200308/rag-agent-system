@@ -6,6 +6,7 @@ import com.ragagent.conversation.entity.ConversationShare;
 import com.ragagent.conversation.repository.ConversationMessageRepository;
 import com.ragagent.conversation.repository.ConversationRepository;
 import com.ragagent.conversation.repository.ConversationShareRepository;
+import com.ragagent.org.OrgContext;
 import com.ragagent.schema.AgentRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -337,6 +338,221 @@ class ConversationServiceTest {
                 .thenReturn(List.of(c));
 
         List<Conversation> result = conversationService.listConversations("user@test.com");
+
+        assertThat(result).containsExactly(c);
+    }
+
+    // ── getSharedMessages ─────────────────────────────────────────────────────
+
+    @Test
+    void getSharedMessages_activeToken_returnsMessages() {
+        ConversationShare share = new ConversationShare("c1", "tok-1", "owner@test.com", null, "READ_ONLY", "EVERYONE");
+        ConversationMessage msg = new ConversationMessage("c1", "user", "Hello", null);
+        when(shareRepo.findByToken("tok-1")).thenReturn(Optional.of(share));
+        when(messageRepo.findByConversationIdOrderByCreatedAtAsc("c1")).thenReturn(List.of(msg));
+
+        List<ConversationMessage> result = conversationService.getSharedMessages("tok-1");
+
+        assertThat(result).containsExactly(msg);
+    }
+
+    @Test
+    void getSharedMessages_expiredToken_throwsIllegalArgument() {
+        when(shareRepo.findByToken("expired")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> conversationService.getSharedMessages("expired"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Share link not found or expired");
+    }
+
+    // ── getShareByToken ───────────────────────────────────────────────────────
+
+    @Test
+    void getShareByToken_activeShare_returnsShare() {
+        ConversationShare share = new ConversationShare("c1", "tok-1", "owner@test.com", null, "READ_ONLY", "EVERYONE");
+        when(shareRepo.findByToken("tok-1")).thenReturn(Optional.of(share));
+
+        ConversationShare result = conversationService.getShareByToken("tok-1");
+
+        assertThat(result).isEqualTo(share);
+    }
+
+    @Test
+    void getShareByToken_expired_throwsIllegalArgument() {
+        when(shareRepo.findByToken("expired")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> conversationService.getShareByToken("expired"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Share link not found or expired");
+    }
+
+    // ── validateShareAccess ───────────────────────────────────────────────────
+
+    @Test
+    void validateShareAccess_everyoneMode_anyEmailAllowed() {
+        ConversationShare share = new ConversationShare("c1", "tok-1", "owner@test.com", null, "READ_ONLY", "EVERYONE");
+        when(shareRepo.findByToken("tok-1")).thenReturn(Optional.of(share));
+
+        ConversationShare result = conversationService.validateShareAccess("tok-1", "anyone@test.com");
+
+        assertThat(result).isEqualTo(share);
+    }
+
+    @Test
+    void validateShareAccess_whitelistMode_allowedEmail() {
+        ConversationShare share = new ConversationShare("c1", "tok-1", "owner@test.com", null, "READ_ONLY", "WHITELIST");
+        share.getWhitelist().add("allowed@test.com");
+        when(shareRepo.findByToken("tok-1")).thenReturn(Optional.of(share));
+
+        ConversationShare result = conversationService.validateShareAccess("tok-1", "allowed@test.com");
+
+        assertThat(result).isEqualTo(share);
+    }
+
+    @Test
+    void validateShareAccess_whitelistMode_notAllowed_throwsSecurityException() {
+        ConversationShare share = new ConversationShare("c1", "tok-1", "owner@test.com", null, "READ_ONLY", "WHITELIST");
+        share.getWhitelist().add("allowed@test.com");
+        when(shareRepo.findByToken("tok-1")).thenReturn(Optional.of(share));
+
+        assertThatThrownBy(() -> conversationService.validateShareAccess("tok-1", "notallowed@test.com"))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("not on the whitelist");
+    }
+
+    @Test
+    void validateShareAccess_whitelistMode_nullEmail_throwsSecurityException() {
+        ConversationShare share = new ConversationShare("c1", "tok-1", "owner@test.com", null, "READ_ONLY", "WHITELIST");
+        share.getWhitelist().add("allowed@test.com");
+        when(shareRepo.findByToken("tok-1")).thenReturn(Optional.of(share));
+
+        assertThatThrownBy(() -> conversationService.validateShareAccess("tok-1", null))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Authentication required");
+    }
+
+    // ── getShare ──────────────────────────────────────────────────────────────
+
+    @Test
+    void getShare_found_returnsShare() {
+        ConversationShare share = new ConversationShare("c1", "tok-1", "owner@test.com", null, "READ_ONLY", "EVERYONE");
+        when(shareRepo.findByConversationIdAndOwnerEmail("c1", "owner@test.com"))
+                .thenReturn(Optional.of(share));
+
+        ConversationShare result = conversationService.getShare("c1", "owner@test.com");
+
+        assertThat(result).isEqualTo(share);
+    }
+
+    @Test
+    void getShare_notFound_throwsIllegalArgument() {
+        when(shareRepo.findByConversationIdAndOwnerEmail("c1", "owner@test.com"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> conversationService.getShare("c1", "owner@test.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No active share");
+    }
+
+    // ── revokeShare ───────────────────────────────────────────────────────────
+
+    @Test
+    void revokeShare_ownerCanRevoke() {
+        ConversationShare share = new ConversationShare("c1", "tok-1", "owner@test.com", null, "READ_ONLY", "EVERYONE");
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        when(shareRepo.findByConversationIdAndOwnerEmail("c1", "owner@test.com"))
+                .thenReturn(Optional.of(share));
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+
+        conversationService.revokeShare("c1", "owner@test.com");
+
+        verify(shareRepo).delete(share);
+    }
+
+    @Test
+    void revokeShare_nonOwner_throwsSecurityException() {
+        ConversationShare share = new ConversationShare("c1", "tok-1", "owner@test.com", null, "READ_ONLY", "EVERYONE");
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        when(shareRepo.findByConversationIdAndOwnerEmail("c1", "intruder@test.com"))
+                .thenReturn(Optional.of(share));
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+
+        assertThatThrownBy(() -> conversationService.revokeShare("c1", "intruder@test.com"))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Only the owner");
+    }
+
+    // ── resolveConversation with OrgContext ───────────────────────────────────
+
+    @Test
+    void resolveConversation_teamContext_setsOrgId() {
+        OrgContext ctx = new OrgContext("user@test.com", "TEAM", "skyproton");
+        ArgumentCaptor<Conversation> captor = ArgumentCaptor.forClass(Conversation.class);
+        when(conversationRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        String result = conversationService.resolveConversation(null, ctx);
+
+        assertThat(result).isNotBlank();
+        verify(conversationRepo).save(captor.capture());
+        assertThat(captor.getValue().getOrgId()).isEqualTo("skyproton");
+    }
+
+    // ── listConversations(OrgContext) ─────────────────────────────────────────
+
+    @Test
+    void listConversations_teamMode_queriesTeamRepo() {
+        OrgContext ctx = new OrgContext("user@test.com", "TEAM", "skyproton");
+        Conversation c = new Conversation("c1", "user@test.com");
+        when(conversationRepo.findByUserEmailAndOrgIdAndArchivedFalseOrderByUpdatedAtDesc(
+                "user@test.com", "skyproton")).thenReturn(List.of(c));
+
+        List<Conversation> result = conversationService.listConversations(ctx);
+
+        assertThat(result).containsExactly(c);
+        verify(conversationRepo).findByUserEmailAndOrgIdAndArchivedFalseOrderByUpdatedAtDesc(
+                "user@test.com", "skyproton");
+    }
+
+    @Test
+    void listConversations_personalMode_queriesPersonalRepo() {
+        OrgContext ctx = new OrgContext("user@test.com", "PERSONAL", null);
+        Conversation c = new Conversation("c1", "user@test.com");
+        when(conversationRepo.findByUserEmailAndOrgIdIsNullAndArchivedFalseOrderByUpdatedAtDesc(
+                "user@test.com")).thenReturn(List.of(c));
+
+        List<Conversation> result = conversationService.listConversations(ctx);
+
+        assertThat(result).containsExactly(c);
+        verify(conversationRepo).findByUserEmailAndOrgIdIsNullAndArchivedFalseOrderByUpdatedAtDesc(
+                "user@test.com");
+    }
+
+    // ── listArchivedConversations(OrgContext) ─────────────────────────────────
+
+    @Test
+    void listArchivedConversations_teamMode_queriesTeamRepo() {
+        OrgContext ctx = new OrgContext("user@test.com", "TEAM", "skyproton");
+        Conversation c = new Conversation("c1", "user@test.com");
+        when(conversationRepo.findByUserEmailAndOrgIdAndArchivedTrueOrderByUpdatedAtDesc(
+                "user@test.com", "skyproton")).thenReturn(List.of(c));
+
+        List<Conversation> result = conversationService.listArchivedConversations(ctx);
+
+        assertThat(result).containsExactly(c);
+        verify(conversationRepo).findByUserEmailAndOrgIdAndArchivedTrueOrderByUpdatedAtDesc(
+                "user@test.com", "skyproton");
+    }
+
+    @Test
+    void listArchivedConversations_emailOverload_returnsResults() {
+        Conversation c = new Conversation("c1", "user@test.com");
+        // ConversationService.listArchivedConversations(String) calls
+        // conversationRepo.findByUserEmailAndArchivedTrueOrderByUpdatedAtDesc (the default interface method)
+        // On a mock, we stub the default method directly
+        when(conversationRepo.findByUserEmailAndArchivedTrueOrderByUpdatedAtDesc("user@test.com"))
+                .thenReturn(List.of(c));
+
+        List<Conversation> result = conversationService.listArchivedConversations("user@test.com");
 
         assertThat(result).containsExactly(c);
     }

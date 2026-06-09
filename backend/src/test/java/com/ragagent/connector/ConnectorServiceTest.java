@@ -329,4 +329,65 @@ class ConnectorServiceTest {
         // State must be deleted even when expired
         verify(stateRepo).delete(expired);
     }
+
+    // ── getStatus with orgId ──────────────────────────────────────────────────
+
+    @Test
+    void getStatus_withOrgId_usesOrgScopedRepo() {
+        ConnectorToken token = ConnectorToken.builder()
+                .ownerEmail("user@test.com").provider("google").accessToken("tok").build();
+        when(tokenRepo.findByOwnerEmailAndOrgId("user@test.com", "org-1")).thenReturn(List.of(token));
+        when(telegramService.isConnected("user@test.com", "org-1")).thenReturn(false);
+
+        Map<String, Boolean> status = service.getStatus("user@test.com", "org-1");
+
+        assertThat(status.get("google")).isTrue();
+        verify(tokenRepo).findByOwnerEmailAndOrgId("user@test.com", "org-1");
+        verify(tokenRepo, never()).findByOwnerEmailAndOrgIdIsNull(anyString());
+    }
+
+    // ── getToken with orgId ───────────────────────────────────────────────────
+
+    @Test
+    void getToken_withOrgId_usesOrgScopedRepo() {
+        ConnectorToken token = ConnectorToken.builder()
+                .ownerEmail("user@test.com").provider("google").orgId("org-1").build();
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgId("user@test.com", "google", "org-1"))
+                .thenReturn(Optional.of(token));
+
+        assertThat(service.getToken("google", "user@test.com", "org-1")).contains(token);
+        verify(tokenRepo).findByOwnerEmailAndProviderAndOrgId("user@test.com", "google", "org-1");
+    }
+
+    // ── disconnect with orgId ─────────────────────────────────────────────────
+
+    @Test
+    void disconnect_withOrgId_callsOrgScopedDelete() {
+        service.disconnect("google", "user@test.com", "org-1");
+
+        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgId("user@test.com", "google", "org-1");
+        verify(tokenRepo, never()).deleteByOwnerEmailAndProviderAndOrgIdIsNull(anyString(), anyString());
+    }
+
+    @Test
+    void disconnect_telegram_withOrgId_delegatesToTelegramService() {
+        service.disconnect("telegram", "user@test.com", "org-1");
+
+        verify(telegramService).disconnect("user@test.com", "org-1");
+        verify(tokenRepo, never()).deleteByOwnerEmailAndProviderAndOrgId(any(), any(), any());
+    }
+
+    // ── getAuthUrl with orgId ─────────────────────────────────────────────────
+
+    @Test
+    void getAuthUrl_withOrgId_savesOrgIdInState() {
+        when(stateRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        ArgumentCaptor<ConnectorOAuthState> captor =
+                ArgumentCaptor.forClass(ConnectorOAuthState.class);
+
+        service.getAuthUrl("google", "user@test.com", "org-1");
+
+        verify(stateRepo).save(captor.capture());
+        assertThat(captor.getValue().getOrgId()).isEqualTo("org-1");
+    }
 }

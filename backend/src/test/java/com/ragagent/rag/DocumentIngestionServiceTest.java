@@ -130,4 +130,46 @@ class DocumentIngestionServiceTest {
         // vectorStore.delete should be called (with the custom source from metadata)
         verify(vectorStore).delete(any(Expression.class));
     }
+
+    // ── ingestText — empty metadata map ──────────────────────────────────────
+
+    @Test
+    void ingestText_emptyMetadataMap_stillSetsSource() {
+        service.ingestText("Some content here.", "src-1", Map.of(), false);
+
+        ArgumentCaptor<List<Document>> captor = ArgumentCaptor.forClass(List.class);
+        verify(vectorStore).add(captor.capture());
+        assertThat(captor.getValue().get(0).getMetadata()).containsEntry("source", "src-1");
+    }
+
+    // ── deleteBySource — multiple calls ──────────────────────────────────────
+
+    @Test
+    void deleteBySource_calledMultipleTimes_eachCallInvokesDelete() {
+        service.deleteBySource("source-a");
+        service.deleteBySource("source-b");
+
+        verify(vectorStore, times(2)).delete(any(Expression.class));
+    }
+
+    // ── ingestText — returns correct chunk count ──────────────────────────────
+
+    @Test
+    void ingestText_shortText_returnsAtLeastOneChunk() {
+        int chunks = service.ingestText("Short text.", "short-source", null, false);
+        assertThat(chunks).isEqualTo(1);
+    }
+
+    // ── ingestText — replace false + metadata ────────────────────────────────
+
+    @Test
+    void ingestText_noReplace_withMetadata_addsWithoutDeleting() {
+        Map<String, Object> meta = new java.util.HashMap<>();
+        meta.put("category", "finance");
+
+        service.ingestText("Financial report content.", "finance-doc", meta, false);
+
+        verify(vectorStore, never()).delete(any(Expression.class));
+        verify(vectorStore).add(anyList());
+    }
 }

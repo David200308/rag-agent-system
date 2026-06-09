@@ -116,6 +116,54 @@ class WorkflowScheduleClientTest {
         assertThat(expected).contains("sched-42").contains("deleted successfully");
     }
 
+    // ── createSchedule — blank cron/timezone error path ──────────────────────
+
+    @Test
+    void createSchedule_blankCron_restClientThrows_returnsFailed() {
+        RestClient mockRestClient = mock(RestClient.class);
+        when(mockRestClient.post()).thenThrow(new RuntimeException("server down"));
+        ReflectionTestUtils.setField(client, "restClient", mockRestClient);
+
+        // Blank cron and timezone → defaults applied; result is "Failed to create schedule"
+        String result = client.createSchedule("u@test.com", "c1", "msg", "", "", 5, true, false);
+
+        assertThat(result).contains("Failed to create schedule");
+    }
+
+    @Test
+    void createSchedule_nonPositiveTopK_restClientThrows_returnsFailed() {
+        RestClient mockRestClient = mock(RestClient.class);
+        when(mockRestClient.post()).thenThrow(new RuntimeException("timeout"));
+        ReflectionTestUtils.setField(client, "restClient", mockRestClient);
+
+        // topK=0 → default 5 used; result is "Failed to create schedule"
+        String result = client.createSchedule("u@test.com", "c1", "msg", "0 9 * * *", "UTC", 0, true, false);
+
+        assertThat(result).contains("Failed to create schedule");
+    }
+
+    // ── listSchedules — error handling returns not null ───────────────────────
+
+    @Test
+    void listSchedules_restClientThrows_returnsErrorNotNull() {
+        RestClient mockRestClient = mock(RestClient.class);
+        when(mockRestClient.get()).thenThrow(new RuntimeException("network error"));
+        ReflectionTestUtils.setField(client, "restClient", mockRestClient);
+
+        String result = client.listSchedules("u@test.com", "c1");
+
+        assertThat(result).isNotNull();
+        assertThat(result).contains("Failed to list schedules");
+    }
+
+    // ── extractField — value at end ───────────────────────────────────────────
+
+    @Test
+    void extractField_valueAtEndNoTrailingComma_extractsCorrectly() throws Exception {
+        String result = callExtractField("{\"id\":\"last-value\"}", "id");
+        assertThat(result).isEqualTo("last-value");
+    }
+
     // ── reflection helper ─────────────────────────────────────────────────────
 
     private String callExtractField(String json, String field) throws Exception {

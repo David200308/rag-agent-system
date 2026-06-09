@@ -90,8 +90,9 @@ require_cmd() {
 # ── banner ────────────────────────────────────────────────────────────────────
 clear
 echo ""
-echo -e "${BOLD}  RAG Agent System — Setup${NC}"
+echo -e "${BOLD}  SkyProton Agent System — Setup${NC}"
 echo -e "  ${DIM}Spring AI · LangGraph4j · Weaviate · MySQL · Redis (Asynq) · Prometheus · Grafana${NC}"
+echo -e "  ${DIM}Features: Chat · Workflow · Knowledge · Skills · Financial · Travel${NC}"
 echo ""
 
 # ── mode selection ────────────────────────────────────────────────────────────
@@ -278,7 +279,7 @@ if [ "$MODE" = "local" ]; then
   # ── Observability ─────────────────────────────────────────────────────────
   header "Observability (Prometheus + Grafana)"
   echo -e "  Prometheus scrapes ${BOLD}/actuator/prometheus${NC} every 15s."
-  echo -e "  Grafana auto-loads the RAG Agent dashboard on first boot."
+  echo -e "  Grafana auto-loads the SkyProton Agent dashboard on first boot."
   echo ""
   prompt GRAFANA_USER     "Grafana admin username (emergency fallback only)" "admin"
   prompt GRAFANA_PASSWORD "Grafana admin password (emergency fallback only)" "$(openssl rand -base64 12 | tr -d '\n')" true
@@ -354,6 +355,10 @@ RESEND_FROM_EMAIL=$RESEND_FROM_EMAIL
 
 # ── Financial / Market data ───────────────────────────────────────────────────
 FINNHUB_API_KEY=$FINNHUB_API_KEY
+
+# ── Travel ────────────────────────────────────────────────────────────────────
+# No API keys required — map tiles served by CartoDB (free, no account needed).
+# Travel records are stored in MySQL alongside financial data.
 
 # ── Weaviate ──────────────────────────────────────────────────────────────────
 WEAVIATE_API_KEY=$WEAVIATE_API_KEY
@@ -990,6 +995,9 @@ echo ""
 echo -e "  ${BOLD}Service URLs${NC}"
 echo -e "  ───────────────────────────────────────────────"
 echo -e "  Frontend    →  ${CYAN}http://localhost:3000${NC}"
+echo -e "    Chat      →  ${CYAN}http://localhost:3000/${NC}"
+echo -e "    Financial →  ${CYAN}http://localhost:3000/financial${NC}"
+echo -e "    Travel    →  ${CYAN}http://localhost:3000/travel${NC}"
 echo -e "  Backend API →  ${CYAN}http://localhost:8081/swagger-ui/index.html${NC}"
 echo -e "  Scheduler   →  ${CYAN}http://localhost:8082/health${NC}"
 echo -e "  Grafana     →  ${CYAN}http://localhost:3001${NC}  ${DIM}(admin / your password)${NC}"

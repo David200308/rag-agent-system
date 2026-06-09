@@ -19,7 +19,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class SchedulerTriggerControllerTest {
@@ -170,6 +170,40 @@ class SchedulerTriggerControllerTest {
         assertThat(req.userEmail()).isEqualTo("owner@test.com");
         assertThat(req.workflowId()).isEqualTo("wf-1");
         assertThat(req.workflowInput()).isEqualTo("Run analysis");
+    }
+
+    // ── trigger: valid key paths ──────────────────────────────────────────────
+
+    @Test
+    void trigger_validKey_pipelineThrowsException_returns500() {
+        // agentGraph.getGraph() throws — covers the catch(Exception) branch in trigger()
+        when(conversationService.resolveConversation(anyString(), anyString())).thenReturn("conv-resolved");
+        when(conversationService.loadHistory(anyString())).thenReturn(List.of());
+        when(agentGraph.getGraph()).thenThrow(new RuntimeException("Graph init failed"));
+
+        var body = new SchedulerTriggerController.TriggerRequest(
+                "user@example.com", "conv-1", "Hello?", 5, true, false);
+
+        ResponseEntity<?> resp = controller.trigger("secret-key", body);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(500);
+    }
+
+    @Test
+    void trigger_validKey_nullUserEmail_processesWithoutNPE() {
+        // null email path: initData.put("userEmail",...) is skipped when null
+        // resolveConversation is called with (conversationId, null) when userEmail is null
+        when(conversationService.resolveConversation(anyString(), (String) isNull())).thenReturn("conv-resolved");
+        when(conversationService.loadHistory(anyString())).thenReturn(List.of());
+        when(agentGraph.getGraph()).thenThrow(new RuntimeException("expected failure"));
+
+        var body = new SchedulerTriggerController.TriggerRequest(
+                null, "conv-1", "Hello?", 5, true, false);
+
+        ResponseEntity<?> resp = controller.trigger("secret-key", body);
+
+        // Still returns 500 — graph failure is handled gracefully
+        assertThat(resp.getStatusCode().value()).isEqualTo(500);
     }
 
     // ── reflection helper ─────────────────────────────────────────────────────

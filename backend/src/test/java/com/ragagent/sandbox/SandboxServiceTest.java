@@ -4,6 +4,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.lang.reflect.Method;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -236,5 +238,79 @@ class SandboxServiceTest {
     void shutdown_whenWatchdogNull_doesNotThrow() {
         // watchdogEnabled=false so watchdogExecutor is null; shutdown should be no-op
         sandboxService.shutdown();
+    }
+
+    // ── parsePercent (private via reflection) ─────────────────────────────────
+
+    @Test
+    void parsePercent_validPercent_parsesCorrectly() throws Exception {
+        assertThat(callParsePercent("85.5%")).isEqualTo(85.5);
+    }
+
+    @Test
+    void parsePercent_withoutPercentSign_parsesCorrectly() throws Exception {
+        assertThat(callParsePercent("80.0")).isEqualTo(80.0);
+    }
+
+    @Test
+    void parsePercent_invalidString_returnsZero() throws Exception {
+        assertThat(callParsePercent("N/A")).isEqualTo(0.0);
+    }
+
+    // ── shortId (private via reflection) ─────────────────────────────────────
+
+    @Test
+    void shortId_longId_returnsFirst12Chars() throws Exception {
+        String result = callShortId("abcdefghijklmnopqrstuvwxyz");
+        assertThat(result).isEqualTo("abcdefghijkl");
+    }
+
+    @Test
+    void shortId_shortId_returnsUnchanged() throws Exception {
+        String result = callShortId("abc123");
+        assertThat(result).isEqualTo("abc123");
+    }
+
+    // ── truncate (private via reflection) ────────────────────────────────────
+
+    @Test
+    void truncate_shortString_returnsUnchanged() throws Exception {
+        assertThat(callTruncate("hello", 100)).isEqualTo("hello");
+    }
+
+    @Test
+    void truncate_longString_cutsAndAddsEllipsis() throws Exception {
+        assertThat(callTruncate("abcdefghij", 5)).isEqualTo("abcde…");
+    }
+
+    // ── checkContainerResources no-op path ───────────────────────────────────
+
+    @Test
+    void checkContainerResources_noActiveContainers_isNoOp() throws Exception {
+        // activeContainers is empty (no containers spawned), so method is a no-op
+        Method m = SandboxService.class.getDeclaredMethod("checkContainerResources");
+        m.setAccessible(true);
+        // Should complete without throwing
+        m.invoke(sandboxService);
+    }
+
+    // ── reflection helpers ────────────────────────────────────────────────────
+
+    private double callParsePercent(String s) throws Exception {
+        Method m = SandboxService.class.getDeclaredMethod("parsePercent", String.class);
+        m.setAccessible(true);
+        return (double) m.invoke(sandboxService, s);
+    }
+
+    private String callShortId(String id) throws Exception {
+        Method m = SandboxService.class.getDeclaredMethod("shortId", String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(sandboxService, id);
+    }
+
+    private String callTruncate(String s, int max) throws Exception {
+        Method m = SandboxService.class.getDeclaredMethod("truncate", String.class, int.class);
+        m.setAccessible(true);
+        return (String) m.invoke(sandboxService, s, max);
     }
 }

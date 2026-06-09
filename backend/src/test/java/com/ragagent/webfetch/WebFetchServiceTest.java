@@ -1,6 +1,7 @@
 package com.ragagent.webfetch;
 
 import com.ragagent.config.WebFetchProperties;
+import com.ragagent.org.OrgContext;
 import com.ragagent.webfetch.entity.WebFetchWhitelist;
 import com.ragagent.webfetch.repository.WebFetchWhitelistRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -215,5 +216,155 @@ class WebFetchServiceTest {
         assertThatThrownBy(() -> service.fetch("https://example.com/page", "user@test.com"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("not whitelisted");
+    }
+
+    // ── listWhitelist(OrgContext) ─────────────────────────────────────────────
+
+    @Test
+    void listWhitelist_orgContext_nullContext_returnsGlobal() {
+        WebFetchWhitelist entry = new WebFetchWhitelist("global.com", null);
+        when(whitelistRepo.findAllByOrderByDomainAsc()).thenReturn(List.of(entry));
+
+        List<WebFetchWhitelist> result = service.listWhitelist((OrgContext) null);
+
+        assertThat(result).containsExactly(entry);
+        verify(whitelistRepo).findAllByOrderByDomainAsc();
+    }
+
+    @Test
+    void listWhitelist_orgContext_teamMode_returnsOrgList() {
+        OrgContext ctx = new OrgContext("user@test.com", "TEAM", "skyproton");
+        WebFetchWhitelist entry = new WebFetchWhitelist("example.com", "user@test.com", "skyproton");
+        when(whitelistRepo.findAllByOrgIdOrderByDomainAsc("skyproton")).thenReturn(List.of(entry));
+
+        List<WebFetchWhitelist> result = service.listWhitelist(ctx);
+
+        assertThat(result).containsExactly(entry);
+        verify(whitelistRepo).findAllByOrgIdOrderByDomainAsc("skyproton");
+    }
+
+    @Test
+    void listWhitelist_orgContext_personalMode_returnsUserList() {
+        OrgContext ctx = new OrgContext("user@test.com", "PERSONAL", null);
+        WebFetchWhitelist entry = new WebFetchWhitelist("example.com", "user@test.com");
+        when(whitelistRepo.findAllByAddedByOrderByDomainAsc("user@test.com")).thenReturn(List.of(entry));
+
+        List<WebFetchWhitelist> result = service.listWhitelist(ctx);
+
+        assertThat(result).containsExactly(entry);
+        verify(whitelistRepo).findAllByAddedByOrderByDomainAsc("user@test.com");
+    }
+
+    // ── addDomain(OrgContext) ─────────────────────────────────────────────────
+
+    @Test
+    void addDomain_teamMode_success() {
+        OrgContext ctx = new OrgContext("user@test.com", "TEAM", "skyproton");
+        when(whitelistRepo.existsByDomainAndOrgId("example.com", "skyproton")).thenReturn(false);
+        when(whitelistRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        WebFetchWhitelist result = service.addDomain("example.com", ctx);
+
+        ArgumentCaptor<WebFetchWhitelist> captor = ArgumentCaptor.forClass(WebFetchWhitelist.class);
+        verify(whitelistRepo).save(captor.capture());
+        assertThat(captor.getValue().getDomain()).isEqualTo("example.com");
+        assertThat(captor.getValue().getOrgId()).isEqualTo("skyproton");
+    }
+
+    @Test
+    void addDomain_teamMode_duplicateThrows() {
+        OrgContext ctx = new OrgContext("user@test.com", "TEAM", "skyproton");
+        when(whitelistRepo.existsByDomainAndOrgId("example.com", "skyproton")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.addDomain("example.com", ctx))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("already in org whitelist");
+    }
+
+    // ── removeDomain(OrgContext) ──────────────────────────────────────────────
+
+    @Test
+    void removeDomain_orgContext_teamMode_success() {
+        OrgContext ctx = new OrgContext("user@test.com", "TEAM", "skyproton");
+        when(whitelistRepo.existsByDomainAndOrgId("example.com", "skyproton")).thenReturn(true);
+
+        service.removeDomain("example.com", ctx);
+
+        verify(whitelistRepo).deleteByDomainAndOrgId("example.com", "skyproton");
+    }
+
+    @Test
+    void removeDomain_orgContext_personalWithEmail_success() {
+        OrgContext ctx = new OrgContext("user@test.com", "PERSONAL", null);
+        when(whitelistRepo.existsByDomainAndAddedBy("example.com", "user@test.com")).thenReturn(true);
+
+        service.removeDomain("example.com", ctx);
+
+        verify(whitelistRepo).deleteByDomainAndAddedBy("example.com", "user@test.com");
+    }
+
+    @Test
+    void removeDomain_orgContext_globalMode_success() {
+        OrgContext ctx = new OrgContext(null, "PERSONAL", null);
+        when(whitelistRepo.existsByDomain("example.com")).thenReturn(true);
+
+        service.removeDomain("example.com", ctx);
+
+        verify(whitelistRepo).deleteByDomain("example.com");
+    }
+
+    @Test
+    void removeDomain_orgContext_globalMode_notFoundThrows() {
+        OrgContext ctx = new OrgContext(null, "PERSONAL", null);
+        when(whitelistRepo.existsByDomain("example.com")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.removeDomain("example.com", ctx))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not found in whitelist");
+    }
+
+    // ── isAllowed(OrgContext) ─────────────────────────────────────────────────
+
+    @Test
+    void isAllowed_teamMode_allowedDomain() {
+        OrgContext ctx = new OrgContext("user@test.com", "TEAM", "skyproton");
+        WebFetchWhitelist entry = new WebFetchWhitelist("example.com", "user@test.com", "skyproton");
+        when(whitelistRepo.findAllByOrgIdOrderByDomainAsc("skyproton")).thenReturn(List.of(entry));
+
+        assertThat(service.isAllowed("example.com", ctx)).isTrue();
+    }
+
+    @Test
+    void isAllowed_teamMode_notAllowedDomain() {
+        OrgContext ctx = new OrgContext("user@test.com", "TEAM", "skyproton");
+        when(whitelistRepo.findAllByOrgIdOrderByDomainAsc("skyproton")).thenReturn(List.of());
+
+        assertThat(service.isAllowed("evil.com", ctx)).isFalse();
+    }
+
+    // ── isUrlAllowed(OrgContext) ──────────────────────────────────────────────
+
+    @Test
+    void isUrlAllowed_orgContext_allowedUrl() {
+        OrgContext ctx = new OrgContext("user@test.com", "TEAM", "skyproton");
+        WebFetchWhitelist entry = new WebFetchWhitelist("example.com", "user@test.com", "skyproton");
+        when(whitelistRepo.findAllByOrgIdOrderByDomainAsc("skyproton")).thenReturn(List.of(entry));
+
+        assertThat(service.isUrlAllowed("https://example.com/page", ctx)).isTrue();
+    }
+
+    @Test
+    void isUrlAllowed_stringEmail_allowedUrl() {
+        WebFetchWhitelist entry = new WebFetchWhitelist("example.com", "user@test.com");
+        when(whitelistRepo.findAllByAddedByOrderByDomainAsc("user@test.com")).thenReturn(List.of(entry));
+
+        assertThat(service.isUrlAllowed("https://example.com/page", "user@test.com")).isTrue();
+    }
+
+    @Test
+    void isUrlAllowed_orgContext_malformedUrl_returnsFalse() {
+        OrgContext ctx = new OrgContext("user@test.com", "PERSONAL", null);
+
+        assertThat(service.isUrlAllowed("not-a-valid-url", ctx)).isFalse();
     }
 }

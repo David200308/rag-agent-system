@@ -99,6 +99,7 @@ services:
       RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-noreply@example.com}
       # ── Financial / Market data
       FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
+      # ── Travel (no API keys — records stored in MySQL, map tiles via CartoDB)
       # ── Web fetch
       WEB_FETCH_ENABLED: ${WEB_FETCH_ENABLED:-true}
       WEB_FETCH_TIMEOUT: ${WEB_FETCH_TIMEOUT:-10}

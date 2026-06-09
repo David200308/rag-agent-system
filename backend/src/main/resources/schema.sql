@@ -446,3 +446,18 @@ CREATE TABLE IF NOT EXISTS salary_usage_records (
     INDEX idx_sal_owner (owner_email),
     UNIQUE KEY uq_sal_owner_ym (owner_email, year, month)
 );
+
+-- ── Travel records ────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS travel_records (
+    id          VARCHAR(36)   PRIMARY KEY,
+    owner_email VARCHAR(255)  NOT NULL,
+    title       VARCHAR(255)  NOT NULL,
+    start_date  VARCHAR(10)   NOT NULL,   -- YYYY-MM-DD
+    end_date    VARCHAR(10)   NOT NULL,   -- YYYY-MM-DD
+    stops_json  TEXT,                     -- JSON array of stops
+    notes       TEXT,
+    created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_travel_owner (owner_email)
+);

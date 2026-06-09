@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class GoogleDocsServiceTest {
+class GoogleCalendarServiceTest {
 
     @Mock ConnectorTokenRepository tokenRepo;
     @Mock RestClient.Builder       restClientBuilder;
@@ -28,11 +28,11 @@ class GoogleDocsServiceTest {
             "https://app.example.com"
     );
 
-    GoogleDocsService service;
+    GoogleCalendarService service;
 
     @BeforeEach
     void setUp() {
-        service = new GoogleDocsService(tokenRepo, props, restClientBuilder);
+        service = new GoogleCalendarService(tokenRepo, props, restClientBuilder);
     }
 
     // ── isConnected ───────────────────────────────────────────────────────────
@@ -61,52 +61,6 @@ class GoogleDocsServiceTest {
         assertThat(service.isConnected(null, null)).isFalse();
     }
 
-    // ── createDocument — guard: not connected ────────────────────────────────
-
-    @Test
-    void createDocument_noToken_throwsIllegalState() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
-                .thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.createDocument("My Doc", "content", "user@test.com", null))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("not connected");
-    }
-
-    // ── readDocument — guard: not connected ──────────────────────────────────
-
-    @Test
-    void readDocument_noToken_throwsIllegalState() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
-                .thenReturn(Optional.empty());
-
-        assertThatThrownBy(() ->
-                service.readDocument("https://docs.google.com/document/d/abc123/edit", "user@test.com", null))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("not connected");
-    }
-
-    // ── token expiry: non-expiring token passes through ───────────────────────
-
-    @Test
-    void createDocument_nonExpiringToken_doesNotRefresh() {
-        ConnectorToken token = ConnectorToken.builder()
-                .ownerEmail("user@test.com")
-                .provider("google")
-                .accessToken("valid-token")
-                .expiresAt(LocalDateTime.now().plusHours(1))
-                .build();
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
-                .thenReturn(Optional.of(token));
-
-        // RestClient not set up — service will throw when attempting the HTTP call,
-        // which confirms the token guard was passed successfully.
-        assertThatThrownBy(() -> service.createDocument("Title", "Body", "user@test.com", null))
-                .isNotInstanceOf(IllegalStateException.class);
-    }
-
-    // ── isConnected with orgId ────────────────────────────────────────────────
-
     @Test
     void isConnected_withOrgId_usesOrgScopedRepo() {
         when(tokenRepo.findByOwnerEmailAndProviderAndOrgId("user@test.com", "google", "org-1"))
@@ -123,34 +77,69 @@ class GoogleDocsServiceTest {
         assertThat(service.isConnected("user@test.com", "org-1")).isFalse();
     }
 
-    // ── extractDocId via reflection ───────────────────────────────────────────
+    // ── listEvents — guard: not connected ────────────────────────────────────
 
     @Test
-    void extractDocId_fullUrl_extractsId() throws Exception {
-        String id = callExtractDocId("https://docs.google.com/document/d/abc123xyz/edit");
-        assertThat(id).isEqualTo("abc123xyz");
+    void listEvents_noToken_throwsIllegalState() {
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.listEvents("user@test.com", null, 10))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not connected");
+    }
+
+    // ── createEvent — guard: not connected ───────────────────────────────────
+
+    @Test
+    void createEvent_noToken_throwsIllegalState() {
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                service.createEvent("user@test.com", null, "Meeting",
+                        "2025-06-10T14:00:00Z", "2025-06-10T15:00:00Z", null, null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not connected");
+    }
+
+    // ── non-expiring token passes the guard ───────────────────────────────────
+
+    @Test
+    void listEvents_nonExpiringToken_attemptsHttpCall() {
+        ConnectorToken token = ConnectorToken.builder()
+                .ownerEmail("user@test.com")
+                .provider("google")
+                .accessToken("valid-token")
+                .expiresAt(LocalDateTime.now().plusHours(1))
+                .build();
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+                .thenReturn(Optional.of(token));
+
+        // RestClient not set up — service will throw when attempting the HTTP call,
+        // which confirms the token guard was passed successfully.
+        assertThatThrownBy(() -> service.listEvents("user@test.com", null, 10))
+                .isNotInstanceOf(IllegalStateException.class);
     }
 
     @Test
-    void extractDocId_rawId_returnsAsIs() throws Exception {
-        String id = callExtractDocId("abc123xyz");
-        assertThat(id).isEqualTo("abc123xyz");
+    void createEvent_nonExpiringToken_attemptsHttpCall() {
+        ConnectorToken token = ConnectorToken.builder()
+                .ownerEmail("user@test.com")
+                .provider("google")
+                .accessToken("valid-token")
+                .expiresAt(LocalDateTime.now().plusHours(1))
+                .build();
+        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+                .thenReturn(Optional.of(token));
+
+        assertThatThrownBy(() ->
+                service.createEvent("user@test.com", null, "Meeting",
+                        "2025-06-10T14:00:00Z", "2025-06-10T15:00:00Z", "Discuss", "Office"))
+                .isNotInstanceOf(IllegalStateException.class);
     }
 
-    @Test
-    void extractDocId_urlWithQueryParams_extractsCorrectly() throws Exception {
-        String id = callExtractDocId(
-                "https://docs.google.com/document/d/1ABC-xyz_789/edit?usp=sharing");
-        assertThat(id).isEqualTo("1ABC-xyz_789");
-    }
-
-    @Test
-    void extractDocId_bareIdWithSpaces_trimmed() throws Exception {
-        String id = callExtractDocId("  docId123  ");
-        assertThat(id).isEqualTo("docId123");
-    }
-
-    // ── isExpiringSoon via reflection ─────────────────────────────────────────
+    // ── isExpiringSoon (via reflection) ───────────────────────────────────────
 
     @Test
     void isExpiringSoon_tokenExpiresInOneHour_returnsFalse() throws Exception {
@@ -169,7 +158,7 @@ class GoogleDocsServiceTest {
     }
 
     @Test
-    void isExpiringSoon_tokenExpiresIn100Seconds_returnsTrue() throws Exception {
+    void isExpiringSoon_tokenExpiresSoon_returnsTrue() throws Exception {
         ConnectorToken ct = ConnectorToken.builder()
                 .expiresAt(LocalDateTime.now().plusSeconds(100))
                 .build();
@@ -178,21 +167,34 @@ class GoogleDocsServiceTest {
 
     @Test
     void isExpiringSoon_nullExpiresAt_returnsFalse() throws Exception {
-        ConnectorToken ct = ConnectorToken.builder().expiresAt(null).build();
+        ConnectorToken ct = ConnectorToken.builder().build();
         assertThat(callIsExpiringSoon(ct)).isFalse();
     }
 
-    // ── Reflection helpers ────────────────────────────────────────────────────
+    // ── refreshToken — no refresh token returns original ─────────────────────
 
-    private String callExtractDocId(String input) throws Exception {
-        Method m = GoogleDocsService.class.getDeclaredMethod("extractDocId", String.class);
-        m.setAccessible(true);
-        return (String) m.invoke(service, input);
+    @Test
+    void refreshToken_noRefreshToken_returnsOriginalToken() throws Exception {
+        ConnectorToken ct = ConnectorToken.builder()
+                .accessToken("access-token")
+                .build();
+
+        ConnectorToken result = callRefreshToken(ct);
+
+        assertThat(result).isSameAs(ct);
     }
 
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
     private boolean callIsExpiringSoon(ConnectorToken ct) throws Exception {
-        Method m = GoogleDocsService.class.getDeclaredMethod("isExpiringSoon", ConnectorToken.class);
+        Method m = GoogleCalendarService.class.getDeclaredMethod("isExpiringSoon", ConnectorToken.class);
         m.setAccessible(true);
         return (boolean) m.invoke(service, ct);
+    }
+
+    private ConnectorToken callRefreshToken(ConnectorToken ct) throws Exception {
+        Method m = GoogleCalendarService.class.getDeclaredMethod("refreshToken", ConnectorToken.class);
+        m.setAccessible(true);
+        return (ConnectorToken) m.invoke(service, ct);
     }
 }

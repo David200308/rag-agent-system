@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, MessageSquare, Trash2, BookOpen, LogOut, PanelLeftClose, Settings, X, Archive, ArchiveRestore, ChevronDown, ChevronRight, Workflow, Zap, Cable, DollarSign, Users } from "lucide-react";
+import { Plus, MessageSquare, Trash2, BookOpen, LogOut, PanelLeftClose, Settings, X, Archive, ArchiveRestore, ChevronDown, ChevronRight, Workflow, Zap, Cable, DollarSign, Users, Plane } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -351,6 +351,20 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
           >
             <DollarSign className="h-3.5 w-3.5" />
             Financial
+          </Link>
+        )}
+        {!isTeamMode && (
+          <Link
+            href="/travel"
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors",
+              pathname === "/travel"
+                ? "bg-black text-white dark:bg-white dark:text-black"
+                : "text-[--color-muted] hover:bg-[--color-border]/50",
+            )}
+          >
+            <Plane className="h-3.5 w-3.5" />
+            Travel
           </Link>
         )}
         <Link

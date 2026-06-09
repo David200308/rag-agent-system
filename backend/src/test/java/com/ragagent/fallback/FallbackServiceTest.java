@@ -12,6 +12,8 @@ import org.springframework.ai.chat.client.ChatClient;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class FallbackServiceTest {
@@ -78,5 +80,42 @@ class FallbackServiceTest {
                 new RuntimeException("connection refused"));
 
         assertThat(result).contains("unable to answer");
+    }
+
+    // ── tryDirectAnswer ───────────────────────────────────────────────────────
+
+    @Test
+    void tryDirectAnswer_noSelectedModel_callsDefaultClient() {
+        ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(requestSpec.call()).thenReturn(callSpec);
+        when(callSpec.content()).thenReturn("Direct LLM answer");
+
+        String result = fallbackService.tryDirectAnswer("test query", "no cache", Optional.empty());
+
+        assertThat(result).isEqualTo("Direct LLM answer");
+    }
+
+    @Test
+    void tryDirectAnswer_cachesAnswerAfterCall() {
+        ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(requestSpec.call()).thenReturn(callSpec);
+        when(callSpec.content()).thenReturn("Cached Direct Answer");
+
+        // First call populates the cache
+        fallbackService.tryDirectAnswer("unique query xyz", "no cache", Optional.empty());
+
+        // Second call via resolveFallback should return cached result
+        String cached = fallbackService.resolveFallback("unique query xyz", "reason", Optional.empty());
+
+        assertThat(cached).startsWith("(Cached) ");
+        assertThat(cached).contains("Cached Direct Answer");
     }
 }

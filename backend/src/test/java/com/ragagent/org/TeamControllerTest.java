@@ -311,4 +311,161 @@ class TeamControllerTest {
 
         assertThat(resp.getStatusCode().value()).isEqualTo(403);
     }
+
+    // ── addMember ─────────────────────────────────────────────────────────────
+
+    @Test
+    void addMember_personalMode_returns403() {
+        stubPersonalRequest("owner@test.com");
+
+        ResponseEntity<?> resp = controller.addMember(Map.of("email", "new@test.com"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+        verifyNoInteractions(orgService);
+    }
+
+    @Test
+    void addMember_missingEmail_returns400() {
+        stubTeamRequest("owner@test.com");
+
+        ResponseEntity<?> resp = controller.addMember(Map.of("role", "MEMBER"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+        @SuppressWarnings("unchecked")
+        Map<String, String> body = (Map<String, String>) resp.getBody();
+        assertThat(body).containsEntry("error", "email is required");
+    }
+
+    @Test
+    void addMember_notOwner_returns403() {
+        stubTeamRequest("member@test.com");
+        doThrow(new SecurityException("Only the organization owner can perform this action."))
+                .when(orgService).requireOwner("skyproton", "member@test.com");
+
+        ResponseEntity<?> resp = controller.addMember(Map.of("email", "new@test.com"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+    }
+
+    @Test
+    void addMember_success_returns201() {
+        stubTeamRequest("owner@test.com");
+        doNothing().when(orgService).requireOwner("skyproton", "owner@test.com");
+        OrgMember member = new OrgMember("skyproton", "new@test.com", OrgMember.Role.MEMBER);
+        when(orgService.addMember("skyproton", "new@test.com", OrgMember.Role.MEMBER)).thenReturn(member);
+
+        ResponseEntity<?> resp = controller.addMember(Map.of("email", "new@test.com", "role", "MEMBER"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(201);
+        assertThat(resp.getBody()).isEqualTo(member);
+    }
+
+    @Test
+    void addMember_badRole_returns400() {
+        stubTeamRequest("owner@test.com");
+        doNothing().when(orgService).requireOwner("skyproton", "owner@test.com");
+
+        // OrgMember.Role.valueOf("SUPERADMIN") will throw IllegalArgumentException
+        ResponseEntity<?> resp = controller.addMember(
+                Map.of("email", "new@test.com", "role", "SUPERADMIN"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+    }
+
+    // ── removeMember ──────────────────────────────────────────────────────────
+
+    @Test
+    void removeMember_personalMode_returns403() {
+        stubPersonalRequest("owner@test.com");
+
+        ResponseEntity<?> resp = controller.removeMember("member@test.com", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+        verifyNoInteractions(orgService);
+    }
+
+    @Test
+    void removeMember_ownerRemovesSelf_returns400() {
+        stubTeamRequest("owner@test.com");
+        doNothing().when(orgService).requireOwner("skyproton", "owner@test.com");
+
+        ResponseEntity<?> resp = controller.removeMember("owner@test.com", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+        @SuppressWarnings("unchecked")
+        Map<String, String> body = (Map<String, String>) resp.getBody();
+        assertThat(body.get("error")).contains("cannot remove themselves");
+    }
+
+    @Test
+    void removeMember_notOwner_returns403() {
+        stubTeamRequest("member@test.com");
+        doThrow(new SecurityException("Only the organization owner can perform this action."))
+                .when(orgService).requireOwner("skyproton", "member@test.com");
+
+        ResponseEntity<?> resp = controller.removeMember("other@test.com", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+    }
+
+    @Test
+    void removeMember_success_returns204() {
+        stubTeamRequest("owner@test.com");
+        doNothing().when(orgService).requireOwner("skyproton", "owner@test.com");
+        doNothing().when(orgService).removeMember("skyproton", "member@test.com");
+
+        ResponseEntity<?> resp = controller.removeMember("member@test.com", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(204);
+        verify(orgService).removeMember("skyproton", "member@test.com");
+    }
+
+    // ── transferOwner ─────────────────────────────────────────────────────────
+
+    @Test
+    void transferOwner_personalMode_returns403() {
+        stubPersonalRequest("owner@test.com");
+
+        ResponseEntity<?> resp = controller.transferOwner(Map.of("email", "new@test.com"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+        verifyNoInteractions(orgService);
+    }
+
+    @Test
+    void transferOwner_missingEmail_returns400() {
+        stubTeamRequest("owner@test.com");
+
+        ResponseEntity<?> resp = controller.transferOwner(Map.of("role", "OWNER"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+        @SuppressWarnings("unchecked")
+        Map<String, String> body = (Map<String, String>) resp.getBody();
+        assertThat(body).containsEntry("error", "email is required");
+    }
+
+    @Test
+    void transferOwner_notOwner_returns403() {
+        stubTeamRequest("member@test.com");
+        doThrow(new SecurityException("Only the organization owner can perform this action."))
+                .when(orgService).transferOwner("skyproton", "member@test.com", "new@test.com");
+
+        ResponseEntity<?> resp = controller.transferOwner(Map.of("email", "new@test.com"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+    }
+
+    @Test
+    void transferOwner_success_returns200() {
+        stubTeamRequest("owner@test.com");
+        doNothing().when(orgService).transferOwner("skyproton", "owner@test.com", "new@test.com");
+
+        ResponseEntity<?> resp = controller.transferOwner(Map.of("email", "new@test.com"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (Map<String, Object>) resp.getBody();
+        assertThat(body.get("message").toString()).contains("new@test.com");
+        verify(orgService).transferOwner("skyproton", "owner@test.com", "new@test.com");
+    }
 }

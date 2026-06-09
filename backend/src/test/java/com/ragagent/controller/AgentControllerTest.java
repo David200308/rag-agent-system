@@ -1,6 +1,7 @@
 package com.ragagent.controller;
 
 import com.ragagent.agent.RagAgentGraph;
+import com.ragagent.config.AgentMetrics;
 import com.ragagent.org.OrgContext;
 import com.ragagent.config.LlmProperties;
 import com.ragagent.conversation.ConversationService;
@@ -11,6 +12,7 @@ import com.ragagent.knowledge.KnowledgeSourceService;
 import com.ragagent.knowledge.entity.KnowledgeSource;
 import com.ragagent.mcp.McpConnectorService;
 import com.ragagent.rag.DocumentIngestionService;
+import com.ragagent.schema.AgentResponse;
 import com.ragagent.schema.UrlIngestionResult;
 import com.ragagent.user.UserPreferenceService;
 import com.ragagent.webfetch.WebFetchService;
@@ -23,6 +25,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 
+import java.lang.reflect.Method;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -41,6 +45,7 @@ class AgentControllerTest {
     @Mock WebFetchService        webFetchService;
     @Mock UserPreferenceService  userPreferenceService;
     @Mock LlmProperties          llmProperties;
+    @Mock AgentMetrics           agentMetrics;
     @Mock HttpServletRequest     request;
     @InjectMocks AgentController controller;
 
@@ -546,5 +551,91 @@ class AgentControllerTest {
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("status", "ingested");
         assertThat(resp.getBody()).containsEntry("chunkCount", 5);
+    }
+
+    // ── withConversationId via reflection ─────────────────────────────────────
+
+    @Test
+    void withConversationId_injectsConversationIdIntoMetadata() throws Exception {
+        AgentResponse.RunMetadata meta = new AgentResponse.RunMetadata(
+                "run-1", Instant.now(), 100L, 3, "gpt-4", null);
+        AgentResponse raw = new AgentResponse(
+                "Answer here", List.of(),
+                new AgentResponse.RouteDecision("RETRIEVE", "found docs", 0.9),
+                false, null, meta);
+
+        AgentResponse result = callWithConversationId(raw, "conv-42");
+
+        assertThat(result.metadata().conversationId()).isEqualTo("conv-42");
+    }
+
+    @Test
+    void withConversationId_preservesAllOtherFields() throws Exception {
+        AgentResponse.RunMetadata meta = new AgentResponse.RunMetadata(
+                "run-abc", Instant.now(), 250L, 5, "gpt-4o", null);
+        AgentResponse raw = new AgentResponse(
+                "The answer", List.of(),
+                new AgentResponse.RouteDecision("DIRECT", "no docs needed", 0.8),
+                true, "fallback reason", meta);
+
+        AgentResponse result = callWithConversationId(raw, "conv-99");
+
+        assertThat(result.answer()).isEqualTo("The answer");
+        assertThat(result.fallbackActivated()).isTrue();
+        assertThat(result.fallbackReason()).isEqualTo("fallback reason");
+        assertThat(result.metadata().runId()).isEqualTo("run-abc");
+        assertThat(result.metadata().durationMs()).isEqualTo(250L);
+        assertThat(result.metadata().documentsRetrieved()).isEqualTo(5);
+        assertThat(result.metadata().modelUsed()).isEqualTo("gpt-4o");
+        assertThat(result.metadata().conversationId()).isEqualTo("conv-99");
+    }
+
+    // ── buildErrorResponse via reflection ────────────────────────────────────
+
+    @Test
+    void buildErrorResponse_containsErrorInfo() throws Exception {
+        RuntimeException ex = new RuntimeException("Graph failed unexpectedly");
+
+        AgentResponse result = callBuildErrorResponse("run-err", "my query", ex, "conv-1");
+
+        assertThat(result.answer()).contains("An internal error occurred");
+        assertThat(result.answer()).contains("Graph failed unexpectedly");
+        assertThat(result.metadata().runId()).isEqualTo("run-err");
+        assertThat(result.metadata().conversationId()).isEqualTo("conv-1");
+        assertThat(result.metadata().modelUsed()).isEqualTo("error");
+    }
+
+    @Test
+    void buildErrorResponse_fallbackActivatedIsTrue() throws Exception {
+        Exception ex = new Exception("something went wrong");
+
+        AgentResponse result = callBuildErrorResponse("run-2", "query", ex, "conv-2");
+
+        assertThat(result.fallbackActivated()).isTrue();
+        assertThat(result.fallbackReason()).isEqualTo("something went wrong");
+        assertThat(result.routeDecision().route()).isEqualTo("ERROR");
+    }
+
+    @Test
+    void buildErrorResponse_emptySourcesList() throws Exception {
+        AgentResponse result = callBuildErrorResponse("r", "q", new RuntimeException("err"), "c");
+        assertThat(result.sources()).isEmpty();
+    }
+
+    // ── Reflection helpers ────────────────────────────────────────────────────
+
+    private AgentResponse callWithConversationId(AgentResponse raw, String convId) throws Exception {
+        Method m = AgentController.class.getDeclaredMethod(
+                "withConversationId", AgentResponse.class, String.class);
+        m.setAccessible(true);
+        return (AgentResponse) m.invoke(controller, raw, convId);
+    }
+
+    private AgentResponse callBuildErrorResponse(String runId, String query, Exception ex,
+                                                  String convId) throws Exception {
+        Method m = AgentController.class.getDeclaredMethod(
+                "buildErrorResponse", String.class, String.class, Exception.class, String.class);
+        m.setAccessible(true);
+        return (AgentResponse) m.invoke(controller, runId, query, ex, convId);
     }
 }

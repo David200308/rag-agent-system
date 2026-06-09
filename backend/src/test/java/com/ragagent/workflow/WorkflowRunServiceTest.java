@@ -11,6 +11,7 @@ import com.ragagent.model.ModelConfigService;
 import com.ragagent.sandbox.SandboxService;
 import com.ragagent.skill.SkillService;
 import com.ragagent.webfetch.WebFetchService;
+import com.ragagent.workflow.entity.Workflow;
 import com.ragagent.workflow.entity.WorkflowRun;
 import com.ragagent.workflow.entity.WorkflowRunLog;
 import com.ragagent.workflow.repository.WorkflowAgentRepository;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -810,6 +812,261 @@ class WorkflowRunServiceTest {
         assertThat(result).contains("use_tool name=\"bash\"");
         assertThat(result).contains("use_tool name=\"SCHEDULE\"");
         assertThat(result).contains("TELEGRAM_SEND");
+    }
+
+    // ── executeRun via reflection ─────────────────────────────────────────────
+
+    @Test
+    void executeRun_orchestratorPattern_completesSuccessfully() throws Exception {
+        Workflow workflow = new Workflow();
+        workflow.setId("wf-1");
+        workflow.setName("Test Workflow");
+        workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
+        workflow.setSelectedModel(null);
+
+        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        mainAgent.setId(1L);
+        mainAgent.setName("Main");
+        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+        mainAgent.setSystemPrompt("You are helpful.");
+
+        when(workflowService.findById("wf-1")).thenReturn(java.util.Optional.of(workflow));
+        when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-1")).thenReturn(List.of(mainAgent));
+        when(workflowService.parseTools(any())).thenReturn(List.of());
+        when(workflowService.parseSkillIds(any())).thenReturn(List.of());
+        when(sandboxService.createSandbox(any(), any())).thenReturn(null);
+        when(llmProperties.getDefaultModel()).thenReturn(null);
+        when(logRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        ChatClient.ChatClientRequestSpec promptSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.system(anyString())).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callSpec);
+        when(callSpec.content()).thenReturn("Final answer.");
+
+        WorkflowRun run = new WorkflowRun("run-1", "wf-1", "owner@test.com", "Do the task");
+        executeRunDirectly(run);
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.DONE);
+    }
+
+    @Test
+    void executeRun_teamParallelPattern_completesSuccessfully() throws Exception {
+        Workflow workflow = new Workflow();
+        workflow.setId("wf-2");
+        workflow.setName("Team Workflow");
+        workflow.setAgentPattern(Workflow.AgentPattern.TEAM);
+        workflow.setTeamExecMode(Workflow.TeamExecMode.PARALLEL);
+        workflow.setSelectedModel(null);
+
+        com.ragagent.workflow.entity.WorkflowAgent peer1 = new com.ragagent.workflow.entity.WorkflowAgent();
+        peer1.setId(1L);
+        peer1.setName("Peer1");
+        peer1.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.PEER);
+        peer1.setSystemPrompt("You are agent 1.");
+
+        com.ragagent.workflow.entity.WorkflowAgent peer2 = new com.ragagent.workflow.entity.WorkflowAgent();
+        peer2.setId(2L);
+        peer2.setName("Peer2");
+        peer2.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.PEER);
+        peer2.setSystemPrompt("You are agent 2.");
+
+        when(workflowService.findById("wf-2")).thenReturn(java.util.Optional.of(workflow));
+        when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-2")).thenReturn(List.of(peer1, peer2));
+        when(workflowService.parseTools(any())).thenReturn(List.of());
+        when(workflowService.parseSkillIds(any())).thenReturn(List.of());
+        when(sandboxService.createSandbox(any(), any())).thenReturn(null);
+        when(llmProperties.getDefaultModel()).thenReturn(null);
+        when(logRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        ChatClient.ChatClientRequestSpec promptSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.system(anyString())).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callSpec);
+        when(callSpec.content()).thenReturn("Team result.");
+
+        WorkflowRun run = new WorkflowRun("run-2", "wf-2", "owner@test.com", "Analyze data");
+        executeRunDirectly(run);
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.DONE);
+    }
+
+    @Test
+    void executeRun_sandboxStartupException_failsRun() throws Exception {
+        Workflow workflow = new Workflow();
+        workflow.setId("wf-3");
+        workflow.setName("Sandbox Fail Workflow");
+        workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
+        workflow.setSelectedModel(null);
+
+        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        mainAgent.setId(1L);
+        mainAgent.setName("Main");
+        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+        mainAgent.setSystemPrompt("You are helpful.");
+
+        when(workflowService.findById("wf-3")).thenReturn(java.util.Optional.of(workflow));
+        when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-3")).thenReturn(List.of(mainAgent));
+        when(workflowService.parseTools(any())).thenReturn(List.of());
+        when(sandboxService.createSandbox(any(), any()))
+                .thenThrow(new SandboxService.SandboxStartupException("docker failed"));
+        when(logRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        WorkflowRun run = new WorkflowRun("run-3", "wf-3", "owner@test.com", "Do task");
+        executeRunDirectly(run);
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.FAILED);
+    }
+
+    @Test
+    void executeRun_workflowNotFound_throwsRuntimeException() {
+        when(workflowService.findById("wf-missing")).thenReturn(java.util.Optional.empty());
+
+        WorkflowRun run = new WorkflowRun("run-4", "wf-missing", "owner@test.com", "Input");
+
+        assertThatThrownBy(() -> executeRunDirectly(run))
+                .hasCauseInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void executeRun_teamSequentialPattern_completesSuccessfully() throws Exception {
+        Workflow workflow = new Workflow();
+        workflow.setId("wf-seq");
+        workflow.setName("Sequential Workflow");
+        workflow.setAgentPattern(Workflow.AgentPattern.TEAM);
+        workflow.setTeamExecMode(Workflow.TeamExecMode.SEQUENTIAL);
+        workflow.setSelectedModel(null);
+
+        com.ragagent.workflow.entity.WorkflowAgent peer1 = new com.ragagent.workflow.entity.WorkflowAgent();
+        peer1.setId(10L);
+        peer1.setName("PeerA");
+        peer1.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.PEER);
+        peer1.setSystemPrompt("You are agent A.");
+
+        com.ragagent.workflow.entity.WorkflowAgent peer2 = new com.ragagent.workflow.entity.WorkflowAgent();
+        peer2.setId(11L);
+        peer2.setName("PeerB");
+        peer2.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.PEER);
+        peer2.setSystemPrompt("You are agent B.");
+
+        when(workflowService.findById("wf-seq")).thenReturn(java.util.Optional.of(workflow));
+        when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-seq")).thenReturn(List.of(peer1, peer2));
+        when(workflowService.parseTools(any())).thenReturn(List.of());
+        when(workflowService.parseSkillIds(any())).thenReturn(List.of());
+        when(sandboxService.createSandbox(any(), any())).thenReturn("container-seq");
+        when(llmProperties.getDefaultModel()).thenReturn(null);
+        when(logRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        ChatClient.ChatClientRequestSpec promptSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.system(anyString())).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callSpec);
+        when(callSpec.content()).thenReturn("Sequential result from each agent.");
+
+        WorkflowRun run = new WorkflowRun("run-seq", "wf-seq", "owner@test.com", "Analyze sequentially");
+        executeRunDirectly(run);
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.DONE);
+        assertThat(run.getFinalOutput()).isNotBlank();
+        // recycleSandbox called between steps (peers.size - 1 times = 1)
+        verify(sandboxService, atLeastOnce()).recycleSandbox("container-seq");
+    }
+
+    @Test
+    void executeRun_sandboxKilledException_failsRun() throws Exception {
+        Workflow workflow = new Workflow();
+        workflow.setId("wf-kill");
+        workflow.setName("Kill Workflow");
+        workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
+        workflow.setSelectedModel(null);
+
+        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        mainAgent.setId(1L);
+        mainAgent.setName("Main");
+        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+
+        when(workflowService.findById("wf-kill")).thenReturn(java.util.Optional.of(workflow));
+        when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-kill")).thenReturn(List.of(mainAgent));
+        when(workflowService.parseTools(any())).thenReturn(List.of());
+        when(sandboxService.createSandbox(any(), any()))
+                .thenThrow(new SandboxService.SandboxKilledException("killed by watchdog"));
+        when(logRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        WorkflowRun run = new WorkflowRun("run-kill", "wf-kill", "owner@test.com", "task");
+        executeRunDirectly(run);
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.FAILED);
+    }
+
+    @Test
+    void executeRun_sandboxQueueFullException_failsRun() throws Exception {
+        Workflow workflow = new Workflow();
+        workflow.setId("wf-queue");
+        workflow.setName("Queue Full Workflow");
+        workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
+        workflow.setSelectedModel(null);
+
+        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        mainAgent.setId(1L);
+        mainAgent.setName("Main");
+        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+
+        when(workflowService.findById("wf-queue")).thenReturn(java.util.Optional.of(workflow));
+        when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-queue")).thenReturn(List.of(mainAgent));
+        when(workflowService.parseTools(any())).thenReturn(List.of());
+        when(sandboxService.createSandbox(any(), any()))
+                .thenThrow(new SandboxService.SandboxQueueFullException("queue full"));
+        when(logRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        WorkflowRun run = new WorkflowRun("run-queue", "wf-queue", "owner@test.com", "task");
+        executeRunDirectly(run);
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.FAILED);
+    }
+
+    @Test
+    void executeRun_genericException_failsRun() throws Exception {
+        Workflow workflow = new Workflow();
+        workflow.setId("wf-ex");
+        workflow.setName("Exception Workflow");
+        workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
+        workflow.setSelectedModel(null);
+
+        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        mainAgent.setId(1L);
+        mainAgent.setName("Main");
+        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+
+        when(workflowService.findById("wf-ex")).thenReturn(java.util.Optional.of(workflow));
+        when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-ex")).thenReturn(List.of(mainAgent));
+        when(workflowService.parseTools(any())).thenReturn(List.of());
+        when(sandboxService.createSandbox(any(), any()))
+                .thenThrow(new RuntimeException("unexpected failure"));
+        when(logRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        WorkflowRun run = new WorkflowRun("run-ex", "wf-ex", "owner@test.com", "task");
+        executeRunDirectly(run);
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.FAILED);
+    }
+
+    private void executeRunDirectly(WorkflowRun run) throws Exception {
+        Method m = WorkflowRunService.class.getDeclaredMethod("executeRun", WorkflowRun.class);
+        m.setAccessible(true);
+        m.invoke(service, run);
     }
 
     // ── reflection helpers ────────────────────────────────────────────────────
