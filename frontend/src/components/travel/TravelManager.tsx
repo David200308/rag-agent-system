@@ -609,11 +609,40 @@ function AnalysisModal({ records, onClose }: { records: TravelRecord[]; onClose:
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
+const MAP_MIN = 160;
+const MAP_MAX = 700;
+const MAP_DEFAULT = 380;
+
 export function TravelManager() {
   const [records,    setRecords]    = useState<TravelRecord[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [saving,     setSaving]     = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [mapHeight,  setMapHeight]  = useState(MAP_DEFAULT);
+  const dragRef = useRef<{ startY: number; startH: number } | null>(null);
+
+  const onDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    const clientY = "touches" in e ? e.touches[0]!.clientY : e.clientY;
+    dragRef.current = { startY: clientY, startH: mapHeight };
+
+    const onMove = (ev: MouseEvent | TouchEvent) => {
+      if (!dragRef.current) return;
+      const y = "touches" in ev ? (ev as TouchEvent).touches[0]!.clientY : (ev as MouseEvent).clientY;
+      const next = Math.min(MAP_MAX, Math.max(MAP_MIN, dragRef.current.startH + y - dragRef.current.startY));
+      setMapHeight(next);
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("mouseup",   onUp);
+      window.removeEventListener("touchend",  onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("touchmove", onMove);
+    window.addEventListener("mouseup",   onUp);
+    window.addEventListener("touchend",  onUp);
+  }, [mapHeight]);
 
   const [modal, setModal] = useState<
     | { mode: "add" }
@@ -688,7 +717,7 @@ export function TravelManager() {
       </div>
 
       {/* Map — isolate creates a stacking context so Leaflet's z-indexes (200-600) don't bleed over the mobile sidebar */}
-      <div className="relative isolate shrink-0 h-[380px] border-b border-[--color-border]">
+      <div className="relative isolate shrink-0 border-b border-[--color-border]" style={{ height: mapHeight }}>
         {records.length === 0 ? (
           <div className="flex h-full items-center justify-center bg-[--color-surface]">
             <div className="text-center">
@@ -711,6 +740,16 @@ export function TravelManager() {
             Clear
           </button>
         )}
+      </div>
+
+      {/* Drag handle */}
+      <div
+        onMouseDown={onDragStart}
+        onTouchStart={onDragStart}
+        className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center bg-[--color-surface] hover:bg-[--color-border]/50 select-none"
+        title="Drag to resize"
+      >
+        <span className="h-0.5 w-8 rounded-full bg-[--color-border] group-hover:bg-[--color-muted] transition-colors" />
       </div>
 
       {/* Legend */}
