@@ -687,8 +687,8 @@ export function TravelManager() {
         </div>
       </div>
 
-      {/* Map */}
-      <div className="relative shrink-0 h-[380px] border-b border-[--color-border]">
+      {/* Map — isolate creates a stacking context so Leaflet's z-indexes (200-600) don't bleed over the mobile sidebar */}
+      <div className="relative isolate shrink-0 h-[380px] border-b border-[--color-border]">
         {records.length === 0 ? (
           <div className="flex h-full items-center justify-center bg-[--color-surface]">
             <div className="text-center">

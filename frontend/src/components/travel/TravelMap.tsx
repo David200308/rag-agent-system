@@ -2,7 +2,7 @@
 
 import "leaflet/dist/leaflet.css";
 import { useEffect } from "react";
-import { MapContainer, TileLayer, CircleMarker, Polyline, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, Polyline, Tooltip, useMap, AttributionControl } from "react-leaflet";
 import L from "leaflet";
 import type { TravelRecord, TravelStop } from "@/types/travel";
 import { TRIP_COLORS, TRANSPORT_EMOJI } from "@/types/travel";
@@ -53,7 +53,9 @@ export default function TravelMap({ records, selectedId, onSelectRecord }: Props
       style={{ height: "100%", width: "100%" }}
       scrollWheelZoom
       zoomControl
+      attributionControl={false}
     >
+      <AttributionControl prefix={false} />
       <TileLayer
         attribution='&copy; <a href="https://carto.com">CARTO</a>'
         url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
