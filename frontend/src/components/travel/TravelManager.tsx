@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { Plus, Pencil, Trash2, MapPin, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
-  type TravelRecord, type TravelStop, type TransportType,
+  type TravelRecord, type TransportType,
   TRANSPORT_TYPES, TRANSPORT_LABELS, TRANSPORT_EMOJI,
   CITY_LOOKUP, TRIP_COLORS, tripDays,
 } from "@/types/travel";

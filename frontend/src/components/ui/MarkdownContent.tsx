@@ -7,7 +7,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import katex from "katex";
-import { Download, Expand, Image, Monitor, Shrink, Smartphone } from "lucide-react";
+import { Download, Expand, Image as ImageIcon, Monitor, Shrink, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MarkdownContentProps {
@@ -142,7 +142,7 @@ function HtmlPreview({ source }: { source: string }) {
                   title="Save as PNG image"
                   className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50"
                 >
-                  <Image size={13} />
+                  <ImageIcon size={13} />
                   <span className="hidden sm:inline">{toImgBusy ? "Saving…" : "To Image"}</span>
                 </button>
                 <button
