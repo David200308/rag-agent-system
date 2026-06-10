@@ -214,4 +214,65 @@ class OrganizationServiceTest {
                 service.transferOwner("skyproton", "member@test.com", "other@test.com"))
                 .isInstanceOf(SecurityException.class);
     }
+
+    // ── listAll ───────────────────────────────────────────────────────────────
+
+    @Test
+    void listAll_returnsAllOrganizations() {
+        Organization org = new Organization("skyproton", "Skyproton");
+        when(orgRepo.findAll()).thenReturn(List.of(org));
+
+        List<Organization> result = service.listAll();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getOrgId()).isEqualTo("skyproton");
+    }
+
+    // ── get ───────────────────────────────────────────────────────────────────
+
+    @Test
+    void get_existingOrg_returnsOrg() {
+        Organization org = new Organization("skyproton", "Skyproton");
+        when(orgRepo.findById("skyproton")).thenReturn(Optional.of(org));
+
+        Organization result = service.get("skyproton");
+
+        assertThat(result.getOrgId()).isEqualTo("skyproton");
+    }
+
+    @Test
+    void get_notFound_throwsIllegalArgument() {
+        when(orgRepo.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.get("missing"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("missing");
+    }
+
+    // ── delete ────────────────────────────────────────────────────────────────
+
+    @Test
+    void delete_callsDeleteById() {
+        service.delete("skyproton");
+
+        verify(orgRepo).deleteById("skyproton");
+    }
+
+    // ── requireOrgExists ──────────────────────────────────────────────────────
+
+    @Test
+    void requireOrgExists_exists_noException() {
+        when(orgRepo.existsById("skyproton")).thenReturn(true);
+
+        service.requireOrgExists("skyproton");
+    }
+
+    @Test
+    void requireOrgExists_notExists_throwsIllegalArgument() {
+        when(orgRepo.existsById("ghost")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.requireOrgExists("ghost"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ghost");
+    }
 }

@@ -3,10 +3,12 @@ package com.ragagent.financial;
 import com.ragagent.financial.dto.CardDto;
 import com.ragagent.financial.dto.CashDepositDto;
 import com.ragagent.financial.dto.CryptoInvestmentDto;
+import com.ragagent.financial.dto.SalaryUsageRecordDto;
 import com.ragagent.financial.dto.StockInvestmentDto;
 import com.ragagent.financial.entity.Card;
 import com.ragagent.financial.entity.CashDeposit;
 import com.ragagent.financial.entity.CryptoInvestment;
+import com.ragagent.financial.entity.SalaryUsageRecord;
 import com.ragagent.financial.entity.StockInvestment;
 import com.ragagent.user.UserPreference;
 import com.ragagent.user.UserPreferenceService;
@@ -304,6 +306,79 @@ class FinancialControllerTest {
         doThrow(new SecurityException("not owner")).when(service).deleteCard(anyString(), anyString());
 
         ResponseEntity<Void> resp = controller.deleteCard("card-1", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+    }
+
+    // ── Salary Usage Records ──────────────────────────────────────────────────
+
+    @Test
+    void listSalary_returnsOk() {
+        stubEmail("user@test.com");
+        SalaryUsageRecordDto dto = new SalaryUsageRecordDto(
+                "s-1", "user@test.com", 2025, 6, "HK", "HKD",
+                null, null, null, null, null, null, null, null, null, null, null);
+        when(service.listSalary("user@test.com")).thenReturn(List.of(dto));
+
+        ResponseEntity<List<SalaryUsageRecordDto>> resp = controller.listSalary(request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).hasSize(1);
+    }
+
+    @Test
+    void createSalary_returns201() {
+        stubEmail("user@test.com");
+        SalaryUsageRecord record = new SalaryUsageRecord();
+        record.setId("s-2");
+        record.setOwnerEmail("user@test.com");
+        when(service.createSalary(eq("user@test.com"), any())).thenReturn(record);
+
+        ResponseEntity<SalaryUsageRecord> resp = controller.createSalary(Map.of("year", 2025), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(201);
+        assertThat(resp.getBody().getId()).isEqualTo("s-2");
+    }
+
+    @Test
+    void updateSalary_ownerMatch_returns200() {
+        stubEmail("user@test.com");
+        SalaryUsageRecord updated = new SalaryUsageRecord();
+        updated.setId("s-1");
+        when(service.updateSalary(eq("s-1"), eq("user@test.com"), any())).thenReturn(updated);
+
+        ResponseEntity<SalaryUsageRecord> resp = controller.updateSalary("s-1", Map.of(), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+    }
+
+    @Test
+    void updateSalary_wrongOwner_returns403() {
+        stubEmail("other@test.com");
+        when(service.updateSalary(eq("s-1"), eq("other@test.com"), any()))
+                .thenThrow(new SecurityException("not owner"));
+
+        ResponseEntity<SalaryUsageRecord> resp = controller.updateSalary("s-1", Map.of(), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+    }
+
+    @Test
+    void deleteSalary_ownerMatch_returns204() {
+        stubEmail("user@test.com");
+
+        ResponseEntity<Void> resp = controller.deleteSalary("s-1", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(204);
+        verify(service).deleteSalary("s-1", "user@test.com");
+    }
+
+    @Test
+    void deleteSalary_wrongOwner_returns403() {
+        stubEmail("other@test.com");
+        doThrow(new SecurityException("not owner")).when(service).deleteSalary("s-1", "other@test.com");
+
+        ResponseEntity<Void> resp = controller.deleteSalary("s-1", request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(403);
     }

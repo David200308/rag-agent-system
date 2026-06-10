@@ -12,6 +12,7 @@ import com.ragagent.knowledge.KnowledgeSourceService;
 import com.ragagent.knowledge.entity.KnowledgeSource;
 import com.ragagent.mcp.McpConnectorService;
 import com.ragagent.rag.DocumentIngestionService;
+import com.ragagent.schema.AgentRequest;
 import com.ragagent.schema.AgentResponse;
 import com.ragagent.schema.UrlIngestionResult;
 import com.ragagent.user.UserPreferenceService;
@@ -23,7 +24,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.lang.reflect.Method;
 import java.time.Instant;
@@ -620,6 +623,106 @@ class AgentControllerTest {
     void buildErrorResponse_emptySourcesList() throws Exception {
         AgentResponse result = callBuildErrorResponse("r", "q", new RuntimeException("err"), "c");
         assertThat(result.sources()).isEmpty();
+    }
+
+    // ── query ─────────────────────────────────────────────────────────────────
+
+    @Test
+    void query_graphThrowsException_returns500() {
+        stubRequest("user@test.com");
+
+        AgentRequest agentReq = new AgentRequest("What is Java?", null, null, null, false, null, null, null, null);
+
+        when(conversationService.resolveConversation(nullable(String.class), any(OrgContext.class))).thenReturn("conv-1");
+        when(conversationService.getConversationModel("conv-1")).thenReturn(null);
+        when(userPreferenceService.getSelectedModel("user@test.com")).thenReturn(null);
+        when(llmProperties.getDefaultModel()).thenReturn(null);
+        when(agentGraph.getGraph()).thenThrow(new RuntimeException("Graph build failed"));
+
+        ResponseEntity<AgentResponse> resp = controller.query(agentReq, request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(500);
+        assertThat(resp.getBody()).isNotNull();
+    }
+
+    // ── ingest ────────────────────────────────────────────────────────────────
+
+    @Test
+    void ingest_success_returns200() throws Exception {
+        stubRequest("user@test.com");
+
+        MultipartFile file = mock(MultipartFile.class);
+        Resource resource = mock(Resource.class);
+        when(file.getResource()).thenReturn(resource);
+        when(file.getOriginalFilename()).thenReturn("test.pdf");
+        when(ingestionService.ingest(eq(resource), any(), eq(false))).thenReturn(5);
+
+        ResponseEntity<Map<String, Object>> resp =
+                controller.ingest(file, "test-source", "AI", false, request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).containsEntry("filename", "test.pdf");
+        assertThat(resp.getBody()).containsEntry("chunkCount", 5);
+        verify(agentMetrics).recordIngest();
+    }
+
+    @Test
+    void ingest_noSourceParam_usesFilename() throws Exception {
+        stubRequest("user@test.com");
+
+        MultipartFile file = mock(MultipartFile.class);
+        Resource resource = mock(Resource.class);
+        when(file.getResource()).thenReturn(resource);
+        when(file.getOriginalFilename()).thenReturn("document.pdf");
+        when(ingestionService.ingest(any(), any(), eq(false))).thenReturn(3);
+
+        ResponseEntity<Map<String, Object>> resp =
+                controller.ingest(file, null, null, false, request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        verify(knowledgeSourceService).upsert(eq("document.pdf"), eq("document.pdf"), isNull(), eq(3), any(), any());
+    }
+
+    // ── ingestText ────────────────────────────────────────────────────────────
+
+    @Test
+    void ingestText_emptyText_returns400() {
+        ResponseEntity<Map<String, Object>> resp = controller.ingestText(Map.of("text", ""), request);
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+    }
+
+    @Test
+    void ingestText_validText_returns200() {
+        stubRequest("user@test.com");
+        when(ingestionService.ingestText(anyString(), anyString(), any(), anyBoolean())).thenReturn(4);
+
+        ResponseEntity<Map<String, Object>> resp = controller.ingestText(
+                Map.of("text", "This is some text to ingest", "source", "manual-entry"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).containsEntry("status", "ingested");
+        assertThat(resp.getBody()).containsEntry("chunkCount", 4);
+    }
+
+    // ── ingestUrl ─────────────────────────────────────────────────────────────
+
+    @Test
+    void ingestUrl_emptyUrl_returns400() {
+        ResponseEntity<UrlIngestionResult> resp = controller.ingestUrl(Map.of("url", ""), request);
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+    }
+
+    @Test
+    void ingestUrl_validUrl_returns200() {
+        stubRequest("user@test.com");
+        UrlIngestionResult result = new UrlIngestionResult("ok", "https://example.com", "Example Title", 5);
+        when(mcpConnectorService.fetchAndIngest("https://example.com", null, "user@test.com")).thenReturn(result);
+
+        ResponseEntity<UrlIngestionResult> resp = controller.ingestUrl(
+                Map.of("url", "https://example.com"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody().chunkCount()).isEqualTo(5);
     }
 
     // ── Reflection helpers ────────────────────────────────────────────────────

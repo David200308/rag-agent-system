@@ -3,10 +3,12 @@ package com.ragagent.financial;
 import com.ragagent.financial.entity.Card;
 import com.ragagent.financial.entity.CashDeposit;
 import com.ragagent.financial.entity.CryptoInvestment;
+import com.ragagent.financial.entity.SalaryUsageRecord;
 import com.ragagent.financial.entity.StockInvestment;
 import com.ragagent.financial.repository.CardRepository;
 import com.ragagent.financial.repository.CashDepositRepository;
 import com.ragagent.financial.repository.CryptoInvestmentRepository;
+import com.ragagent.financial.repository.SalaryUsageRecordRepository;
 import com.ragagent.financial.repository.StockInvestmentRepository;
 import com.ragagent.financial.service.ExchangeRateService;
 import com.ragagent.financial.service.MarketPriceService;
@@ -30,12 +32,13 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class FinancialServiceTest {
 
-    @Mock CashDepositRepository      depositRepo;
-    @Mock StockInvestmentRepository  stockRepo;
-    @Mock CryptoInvestmentRepository cryptoRepo;
-    @Mock CardRepository             cardRepo;
-    @Mock ExchangeRateService        fxService;
-    @Mock MarketPriceService         priceService;
+    @Mock CashDepositRepository       depositRepo;
+    @Mock StockInvestmentRepository   stockRepo;
+    @Mock CryptoInvestmentRepository  cryptoRepo;
+    @Mock CardRepository              cardRepo;
+    @Mock SalaryUsageRecordRepository salaryRepo;
+    @Mock ExchangeRateService         fxService;
+    @Mock MarketPriceService          priceService;
 
     @InjectMocks FinancialService service;
 
@@ -373,6 +376,221 @@ class FinancialServiceTest {
         verify(priceService, never()).refreshCryptoPrices(any());
     }
 
+    // ── Missing update paths ───────────────────────────────────────────────────
+
+    @Test
+    void updateStock_ownerMatch_updatesAndSaves() {
+        StockInvestment s = stock("s-1", "owner@test.com", "AAPL");
+        when(stockRepo.findById("s-1")).thenReturn(Optional.of(s));
+        when(stockRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        StockInvestment result = service.updateStock("s-1", "owner@test.com",
+                Map.of("symbol", "TSLA", "name", "Tesla", "stockAmount", "5"));
+
+        assertThat(result.getSymbol()).isEqualTo("TSLA");
+        verify(stockRepo).save(s);
+    }
+
+    @Test
+    void updateStock_notFound_throwsIllegalArgument() {
+        when(stockRepo.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateStock("missing", "owner@test.com", Map.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Not found");
+    }
+
+    @Test
+    void updateCrypto_ownerMatch_updatesAndSaves() {
+        CryptoInvestment c = crypto("c-1", "owner@test.com", "BTC");
+        when(cryptoRepo.findById("c-1")).thenReturn(Optional.of(c));
+        when(cryptoRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        CryptoInvestment result = service.updateCrypto("c-1", "owner@test.com",
+                Map.of("symbol", "ETH", "amount", "2.0", "investAmount", "3000", "currency", "USD"));
+
+        assertThat(result.getSymbol()).isEqualTo("ETH");
+        verify(cryptoRepo).save(c);
+    }
+
+    @Test
+    void updateCrypto_notFound_throwsIllegalArgument() {
+        when(cryptoRepo.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateCrypto("missing", "owner@test.com", Map.of()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void updateCrypto_nonOwner_throwsSecurityException() {
+        CryptoInvestment c = crypto("c-1", "owner@test.com", "BTC");
+        when(cryptoRepo.findById("c-1")).thenReturn(Optional.of(c));
+
+        assertThatThrownBy(() -> service.updateCrypto("c-1", "other@test.com", Map.of()))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test
+    void deleteCrypto_notFound_doesNothing() {
+        when(cryptoRepo.findById("ghost")).thenReturn(Optional.empty());
+
+        service.deleteCrypto("ghost", "owner@test.com");
+
+        verify(cryptoRepo, never()).delete(any());
+    }
+
+    @Test
+    void updateCard_ownerMatch_updatesAndSaves() {
+        Card c = card("card-1", "owner@test.com", "Credit");
+        when(cardRepo.findById("card-1")).thenReturn(Optional.of(c));
+        when(cardRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        service.updateCard("card-1", "owner@test.com",
+                Map.of("cardName", "Gold Card", "network", "Mastercard",
+                       "creditLimit", "50000", "creditLimitCurrency", "HKD",
+                       "sharedCredit", true));
+
+        verify(cardRepo).save(c);
+        assertThat(c.getCardName()).isEqualTo("Gold Card");
+    }
+
+    @Test
+    void updateCard_notFound_throwsIllegalArgument() {
+        when(cardRepo.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateCard("missing", "owner@test.com", Map.of()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void deleteStock_notFound_doesNothing() {
+        when(stockRepo.findById("ghost")).thenReturn(Optional.empty());
+
+        service.deleteStock("ghost", "owner@test.com");
+
+        verify(stockRepo, never()).delete(any());
+    }
+
+    @Test
+    void deleteCard_notFound_doesNothing() {
+        when(cardRepo.findById("ghost")).thenReturn(Optional.empty());
+
+        service.deleteCard("ghost", "owner@test.com");
+
+        verify(cardRepo, never()).delete(any());
+    }
+
+    // ── Salary Usage Records ───────────────────────────────────────────────────
+
+    @Test
+    void listSalary_returnsAllRecords() {
+        SalaryUsageRecord r = salary("sal-1", "user@test.com");
+        when(salaryRepo.findByOwnerEmailOrderByYearDescMonthDesc("user@test.com")).thenReturn(List.of(r));
+
+        var result = service.listSalary("user@test.com");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).id()).isEqualTo("sal-1");
+        assertThat(result.get(0).ownerEmail()).isEqualTo("user@test.com");
+    }
+
+    @Test
+    void listSalary_noRecords_returnsEmpty() {
+        when(salaryRepo.findByOwnerEmailOrderByYearDescMonthDesc("user@test.com")).thenReturn(List.of());
+
+        assertThat(service.listSalary("user@test.com")).isEmpty();
+    }
+
+    @Test
+    void createSalary_savesWithOwnerEmailAndUuid() {
+        when(salaryRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        var body = new java.util.HashMap<String, Object>();
+        body.put("year", 2025); body.put("month", 6); body.put("region", "HK");
+        body.put("currency", "HKD"); body.put("salary", "50000"); body.put("bonus", "5000");
+        body.put("retirementSavingEmployee", "2500"); body.put("retirementSavingEmployer", "2500");
+        body.put("tax", "3000"); body.put("houseRent", "10000"); body.put("livingExpense", "5000");
+        body.put("otherExpense", "2000"); body.put("totalExpense", "17000");
+
+        SalaryUsageRecord result = service.createSalary("owner@test.com", body);
+
+        assertThat(result.getOwnerEmail()).isEqualTo("owner@test.com");
+        assertThat(result.getId()).isNotBlank();
+        assertThat(result.getYear()).isEqualTo(2025);
+        assertThat(result.getCurrency()).isEqualTo("HKD");
+        verify(salaryRepo).save(result);
+    }
+
+    @Test
+    void createSalary_withoutTotalExpense_computesItAutomatically() {
+        when(salaryRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        var body = new java.util.HashMap<String, Object>();
+        body.put("year", 2025); body.put("month", 1); body.put("region", "SG");
+        body.put("currency", "SGD"); body.put("salary", "8000"); body.put("bonus", "0");
+        body.put("retirementSavingEmployee", "800"); body.put("retirementSavingEmployer", "800");
+        body.put("tax", "500"); body.put("houseRent", "2000"); body.put("livingExpense", "1500");
+        body.put("otherExpense", "500");
+
+        SalaryUsageRecord result = service.createSalary("owner@test.com", body);
+
+        // totalExpense = houseRent(2000) + livingExpense(1500) + otherExpense(500) = 4000
+        assertThat(result.getTotalExpense()).isEqualByComparingTo("4000");
+    }
+
+    @Test
+    void updateSalary_ownerMatch_updatesAndSaves() {
+        SalaryUsageRecord r = salary("sal-1", "owner@test.com");
+        when(salaryRepo.findById("sal-1")).thenReturn(Optional.of(r));
+        when(salaryRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var upd = new java.util.HashMap<String, Object>();
+        upd.put("year", 2026); upd.put("month", 3); upd.put("region", "UK");
+        upd.put("currency", "GBP"); upd.put("salary", "60000"); upd.put("bonus", "6000");
+        upd.put("retirementSavingEmployee", "3000"); upd.put("retirementSavingEmployer", "3000");
+        upd.put("tax", "4000"); upd.put("houseRent", "12000"); upd.put("livingExpense", "6000");
+        upd.put("otherExpense", "2500"); upd.put("totalExpense", "20500");
+        service.updateSalary("sal-1", "owner@test.com", upd);
+
+        verify(salaryRepo).save(r);
+        assertThat(r.getYear()).isEqualTo(2026);
+        assertThat(r.getCurrency()).isEqualTo("GBP");
+    }
+
+    @Test
+    void updateSalary_notFound_throwsIllegalArgument() {
+        when(salaryRepo.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateSalary("missing", "owner@test.com", Map.of()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void updateSalary_nonOwner_throwsSecurityException() {
+        SalaryUsageRecord r = salary("sal-1", "owner@test.com");
+        when(salaryRepo.findById("sal-1")).thenReturn(Optional.of(r));
+
+        assertThatThrownBy(() -> service.updateSalary("sal-1", "other@test.com", Map.of()))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test
+    void deleteSalary_ownerCanDelete() {
+        SalaryUsageRecord r = salary("sal-1", "owner@test.com");
+        when(salaryRepo.findById("sal-1")).thenReturn(Optional.of(r));
+
+        service.deleteSalary("sal-1", "owner@test.com");
+
+        verify(salaryRepo).delete(r);
+    }
+
+    @Test
+    void deleteSalary_notFound_doesNothing() {
+        when(salaryRepo.findById("ghost")).thenReturn(Optional.empty());
+
+        service.deleteSalary("ghost", "owner@test.com");
+
+        verify(salaryRepo, never()).delete(any());
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private CashDeposit deposit(String id, String email, String currency, BigDecimal amount) {
@@ -413,5 +631,25 @@ class FinancialServiceTest {
         c.setOwnerEmail(email);
         c.setTypes(types);
         return c;
+    }
+
+    private SalaryUsageRecord salary(String id, String email) {
+        SalaryUsageRecord r = new SalaryUsageRecord();
+        r.setId(id);
+        r.setOwnerEmail(email);
+        r.setYear(2025);
+        r.setMonth(6);
+        r.setRegion("HK");
+        r.setCurrency("HKD");
+        r.setSalary(new BigDecimal("50000"));
+        r.setBonus(new BigDecimal("5000"));
+        r.setRetirementSavingEmployee(new BigDecimal("2500"));
+        r.setRetirementSavingEmployer(new BigDecimal("2500"));
+        r.setTax(new BigDecimal("3000"));
+        r.setHouseRent(new BigDecimal("10000"));
+        r.setLivingExpense(new BigDecimal("5000"));
+        r.setOtherExpense(new BigDecimal("2000"));
+        r.setTotalExpense(new BigDecimal("17000"));
+        return r;
     }
 }

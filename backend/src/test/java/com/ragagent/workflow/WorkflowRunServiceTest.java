@@ -1063,6 +1063,128 @@ class WorkflowRunServiceTest {
         assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.FAILED);
     }
 
+    // ── executeRun — tool-use ReAct loop ─────────────────────────────────────
+
+    @Test
+    void executeRun_bashToolUse_exercisesReActLoop() throws Exception {
+        Workflow workflow = new Workflow();
+        workflow.setId("wf-bash");
+        workflow.setName("Bash Tool Workflow");
+        workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
+        workflow.setSelectedModel(null);
+
+        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        mainAgent.setId(1L);
+        mainAgent.setName("Main");
+        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+        mainAgent.setSystemPrompt("Use bash tools to complete tasks.");
+
+        when(workflowService.findById("wf-bash")).thenReturn(java.util.Optional.of(workflow));
+        when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-bash")).thenReturn(List.of(mainAgent));
+        when(workflowService.parseTools(any())).thenReturn(List.of("BASH", "PYTHON"));
+        when(workflowService.parseSkillIds(any())).thenReturn(List.of());
+        when(sandboxService.createSandbox(any(), any())).thenReturn(null);
+        when(llmProperties.getDefaultModel()).thenReturn(null);
+        when(logRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        ChatClient.ChatClientRequestSpec promptSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.system(anyString())).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callSpec);
+        // First call returns a bash tool use, second call returns the final answer
+        when(callSpec.content())
+                .thenReturn("<use_tool name=\"bash\">echo hello world</use_tool>")
+                .thenReturn("Final answer: hello world");
+
+        WorkflowRun run = new WorkflowRun("run-bash", "wf-bash", "owner@test.com", "Run bash");
+        executeRunDirectly(run);
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.DONE);
+    }
+
+    @Test
+    void executeRun_connectorToolUse_exercisesConnectorDispatch() throws Exception {
+        Workflow workflow = new Workflow();
+        workflow.setId("wf-conn");
+        workflow.setName("Connector Workflow");
+        workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
+        workflow.setSelectedModel(null);
+
+        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        mainAgent.setId(1L);
+        mainAgent.setName("Main");
+        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+        mainAgent.setSystemPrompt("Use Google Docs to create documents.");
+
+        when(workflowService.findById("wf-conn")).thenReturn(java.util.Optional.of(workflow));
+        when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-conn")).thenReturn(List.of(mainAgent));
+        when(workflowService.parseTools(any())).thenReturn(List.of("CONNECTOR_GOOGLE_DOCS"));
+        when(workflowService.parseSkillIds(any())).thenReturn(List.of());
+        when(sandboxService.createSandbox(any(), any())).thenReturn(null);
+        when(llmProperties.getDefaultModel()).thenReturn(null);
+        when(logRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(googleDocsService.createDocument(anyString(), anyString(), anyString(), any()))
+                .thenReturn("https://docs.google.com/document/d/abc/edit");
+
+        ChatClient.ChatClientRequestSpec promptSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.system(anyString())).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callSpec);
+        when(callSpec.content())
+                .thenReturn("<use_tool name=\"GOOGLE_DOCS_WRITE\">{\"title\":\"Report\",\"content\":\"Hello World\"}</use_tool>")
+                .thenReturn("Document created successfully.");
+
+        WorkflowRun run = new WorkflowRun("run-conn", "wf-conn", "owner@test.com", "Create a doc");
+        executeRunDirectly(run);
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.DONE);
+    }
+
+    @Test
+    void executeRun_scheduleToolUse_exercisesScheduleDispatch() throws Exception {
+        Workflow workflow = new Workflow();
+        workflow.setId("wf-sched");
+        workflow.setName("Schedule Workflow");
+        workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
+        workflow.setSelectedModel(null);
+
+        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        mainAgent.setId(1L);
+        mainAgent.setName("Main");
+        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+
+        when(workflowService.findById("wf-sched")).thenReturn(java.util.Optional.of(workflow));
+        when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-sched")).thenReturn(List.of(mainAgent));
+        when(workflowService.parseTools(any())).thenReturn(List.of("SCHEDULE"));
+        when(workflowService.parseSkillIds(any())).thenReturn(List.of());
+        when(sandboxService.createSandbox(any(), any())).thenReturn(null);
+        when(llmProperties.getDefaultModel()).thenReturn(null);
+        when(logRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(workflowScheduleClient.listSchedules(anyString(), anyString())).thenReturn("[]");
+
+        ChatClient.ChatClientRequestSpec promptSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.system(anyString())).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callSpec);
+        when(callSpec.content())
+                .thenReturn("<use_tool name=\"SCHEDULE\">{\"action\":\"list\",\"conversationId\":\"conv-1\"}</use_tool>")
+                .thenReturn("No schedules found.");
+
+        WorkflowRun run = new WorkflowRun("run-sched", "wf-sched", "owner@test.com", "List schedules");
+        executeRunDirectly(run);
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.DONE);
+    }
+
     private void executeRunDirectly(WorkflowRun run) throws Exception {
         Method m = WorkflowRunService.class.getDeclaredMethod("executeRun", WorkflowRun.class);
         m.setAccessible(true);

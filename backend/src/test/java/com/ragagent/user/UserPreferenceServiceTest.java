@@ -130,4 +130,49 @@ class UserPreferenceServiceTest {
 
         assertThat(service.getSelectedModel("user@test.com")).isNull();
     }
+
+    // ── setDefaultCurrency ────────────────────────────────────────────────────
+
+    @Test
+    void setDefaultCurrency_validCurrency_savesUppercase() {
+        UserPreference pref = new UserPreference("user@test.com", "UTC");
+        when(repo.findByEmail("user@test.com")).thenReturn(Optional.of(pref));
+        when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        UserPreference result = service.setDefaultCurrency("user@test.com", "hkd");
+
+        assertThat(result.getDefaultCurrency()).isEqualTo("HKD");
+    }
+
+    @Test
+    void setDefaultCurrency_nullCurrency_defaultsToUSD() {
+        UserPreference pref = new UserPreference("user@test.com", "UTC");
+        when(repo.findByEmail("user@test.com")).thenReturn(Optional.of(pref));
+        when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        UserPreference result = service.setDefaultCurrency("user@test.com", null);
+
+        assertThat(result.getDefaultCurrency()).isEqualTo("USD");
+    }
+
+    @Test
+    void setDefaultCurrency_blankCurrency_defaultsToUSD() {
+        UserPreference pref = new UserPreference("user@test.com", "UTC");
+        when(repo.findByEmail("user@test.com")).thenReturn(Optional.of(pref));
+        when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        UserPreference result = service.setDefaultCurrency("user@test.com", "  ");
+
+        assertThat(result.getDefaultCurrency()).isEqualTo("USD");
+    }
+
+    @Test
+    void setDefaultCurrency_noPref_createsNewRecord() {
+        when(repo.findByEmail("new@test.com")).thenReturn(Optional.empty());
+        when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        UserPreference result = service.setDefaultCurrency("new@test.com", "EUR");
+
+        assertThat(result.getDefaultCurrency()).isEqualTo("EUR");
+    }
 }

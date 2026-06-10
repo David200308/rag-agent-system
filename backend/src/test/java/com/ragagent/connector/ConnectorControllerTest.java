@@ -17,12 +17,13 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class ConnectorControllerTest {
 
-    @Mock ConnectorService    connectorService;
-    @Mock GoogleDocsService   googleDocsService;
-    @Mock GoogleSheetsService googleSheetsService;
-    @Mock GoogleSlidesService googleSlidesService;
-    @Mock TelegramService     telegramService;
-    @Mock HttpServletRequest  request;
+    @Mock ConnectorService       connectorService;
+    @Mock GoogleDocsService      googleDocsService;
+    @Mock GoogleSheetsService    googleSheetsService;
+    @Mock GoogleSlidesService    googleSlidesService;
+    @Mock GoogleCalendarService  googleCalendarService;
+    @Mock TelegramService        telegramService;
+    @Mock HttpServletRequest     request;
     @InjectMocks ConnectorController controller;
 
     // ── authUrl ────────────────────────────────────────────────────────────────
@@ -230,6 +231,74 @@ class ConnectorControllerTest {
 
         ResponseEntity<Map<String, String>> resp = controller.createGoogleSlides(
                 Map.of("title", "Presentation"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+    }
+
+    // ── listCalendarEvents ────────────────────────────────────────────────────
+
+    @Test
+    void listCalendarEvents_returnsEventsString() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
+        when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
+        when(googleCalendarService.listEvents("user@example.com", null, 10))
+                .thenReturn("Event 1, Event 2");
+
+        ResponseEntity<Map<String, String>> resp = controller.listCalendarEvents(10, request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).containsEntry("events", "Event 1, Event 2");
+    }
+
+    // ── createCalendarEvent ───────────────────────────────────────────────────
+
+    @Test
+    void createCalendarEvent_success_returns200() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
+        when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
+        when(googleCalendarService.createEvent(
+                eq("user@example.com"), isNull(), eq("Meeting"), eq("2024-01-01T10:00:00"),
+                eq("2024-01-01T11:00:00"), isNull(), isNull()))
+                .thenReturn("created");
+
+        var body = Map.of("title", "Meeting",
+                "startDateTime", "2024-01-01T10:00:00",
+                "endDateTime", "2024-01-01T11:00:00");
+
+        ResponseEntity<Map<String, String>> resp = controller.createCalendarEvent(body, request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).containsEntry("result", "created");
+    }
+
+    @Test
+    void createCalendarEvent_missingTitle_returns400() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
+        when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
+
+        var body = new java.util.HashMap<String, String>();
+        body.put("startDateTime", "2024-01-01T10:00:00");
+        body.put("endDateTime", "2024-01-01T11:00:00");
+
+        ResponseEntity<Map<String, String>> resp = controller.createCalendarEvent(body, request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+    }
+
+    @Test
+    void createCalendarEvent_missingStartDateTime_returns400() {
+        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
+        when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
+
+        var body = new java.util.HashMap<String, String>();
+        body.put("title", "Meeting");
+        body.put("endDateTime", "2024-01-01T11:00:00");
+
+        ResponseEntity<Map<String, String>> resp = controller.createCalendarEvent(body, request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(400);
     }
