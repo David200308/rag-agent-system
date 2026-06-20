@@ -1,7 +1,4 @@
 -- ── Auth schema ────────────────────────────────────────────────────────────────
--- JWT is used for sessions (stateless) so only the whitelist needs SQL storage.
--- OTP codes live in Redis (key "otp:<email>", native TTL) — see AuthService.
--- Idempotent: safe to run on every startup.
 
 CREATE TABLE IF NOT EXISTS email_whitelist (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -11,7 +8,6 @@ CREATE TABLE IF NOT EXISTS email_whitelist (
 );
 
 -- ── Conversation history schema ───────────────────────────────────────────────
--- Persists multi-turn conversation sessions and their messages.
 
 CREATE TABLE IF NOT EXISTS conversations (
     id         VARCHAR(36)  PRIMARY KEY,          -- UUID
@@ -177,16 +173,6 @@ CREATE TABLE IF NOT EXISTS passkey_credentials (
     INDEX idx_pk_user_handle (user_handle)
 );
 
-CREATE TABLE IF NOT EXISTS passkey_challenges (
-    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
-    email        VARCHAR(255) NOT NULL,
-    type         VARCHAR(20)  NOT NULL,
-    request_json TEXT         NOT NULL,
-    expires_at   TIMESTAMP    NOT NULL,
-    created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_pkc_email_type (email, type)
-);
-
 -- ── External connector OAuth tokens ─────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS connector_tokens (
     id            BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -333,11 +319,6 @@ ALTER TABLE connector_tokens ADD COLUMN org_id VARCHAR(100) NULL;
 -- ── Schema migration: connector OAuth state org scoping ─────────────────────
 ALTER TABLE connector_oauth_states ADD COLUMN org_id VARCHAR(100) NULL;
 
--- ── Schema migration: passkey challenge mode/orgId for team-mode login ───────
--- mode and org_id must be captured at begin so finish can issue the correct JWT.
-ALTER TABLE passkey_challenges ADD COLUMN mode   VARCHAR(20)  NOT NULL DEFAULT 'PERSONAL';
-ALTER TABLE passkey_challenges ADD COLUMN org_id VARCHAR(100) NULL;
-
 -- ── CLI public keys ──────────────────────────────────────────────────────────
 -- Stores one Ed25519 public key per user, registered by agent-cli at login.
 -- Used by CliSignatureFilter to verify X-Cli-Signature on every CLI request.
@@ -453,7 +434,3 @@ CREATE TABLE IF NOT EXISTS travel_records (
     INDEX idx_travel_owner (owner_email)
 );
 
--- ── Schema migration: widen workflow_runs.final_output ──────────────────────
--- TEXT caps out at 64KB; large agent outputs (long transcripts/tool results)
--- were hitting "Data too long for column 'final_output'". LONGTEXT allows up to 4GB.
-ALTER TABLE workflow_runs MODIFY COLUMN final_output LONGTEXT;

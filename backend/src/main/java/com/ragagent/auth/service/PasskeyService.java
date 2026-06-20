@@ -6,9 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.ragagent.auth.PasskeyProperties;
-import com.ragagent.auth.entity.PasskeyChallenge;
 import com.ragagent.auth.entity.PasskeyCredential;
-import com.ragagent.auth.repository.PasskeyChallengeRepository;
 import com.ragagent.auth.repository.PasskeyCredentialRepository;
 import com.yubico.webauthn.*;
 import com.yubico.webauthn.data.*;
@@ -18,27 +16,39 @@ import com.yubico.webauthn.exception.RegistrationFailedException;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
-import java.time.Instant;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Registration/authentication challenges are short-lived (5 min) and stored in Redis
+ * under {@code passkey-challenge:<type>:<email>} with that as the key's native TTL —
+ * no separate cleanup job needed. {@code type} is REGISTER or AUTHENTICATE; a fresh
+ * challenge overwrites any previous one for the same (email, type) pair.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PasskeyService implements CredentialRepository {
 
-    private final PasskeyProperties              props;
-    private final PasskeyCredentialRepository    credRepo;
-    private final PasskeyChallengeRepository     challengeRepo;
-    private final JwtService                     jwtService;
+    private final PasskeyProperties           props;
+    private final PasskeyCredentialRepository credRepo;
+    private final StringRedisTemplate         redisTemplate;
+    private final JwtService                  jwtService;
 
     private RelyingParty relyingParty;
+
+    private static final String  CHALLENGE_KEY_PREFIX = "passkey-challenge:";
+    private static final Duration CHALLENGE_TTL        = Duration.ofSeconds(300);
+
+    /** Challenge payload persisted to Redis: the WebAuthn request JSON plus the login mode/org captured at begin. */
+    private record ChallengeData(String requestJson, String mode, String orgId) {}
 
     private final ObjectMapper passkeyMapper = new ObjectMapper()
             .registerModule(new Jdk8Module())
@@ -143,13 +153,10 @@ public class PasskeyService implements CredentialRepository {
         // Store the full JSON (nulls intact) for round-trip deserialization on finish.
         String storageJson = options.toJson();
 
-        challengeRepo.deleteByEmailAndType(email, "REGISTER");
-        PasskeyChallenge challenge = new PasskeyChallenge();
-        challenge.setEmail(email);
-        challenge.setType("REGISTER");
-        challenge.setRequestJson(storageJson);
-        challenge.setExpiresAt(Instant.now().plusSeconds(300));
-        challengeRepo.save(challenge);
+        redisTemplate.opsForValue().set(
+                challengeKey(email, "REGISTER"),
+                passkeyMapper.writeValueAsString(new ChallengeData(storageJson, "PERSONAL", null)),
+                CHALLENGE_TTL);
 
         log.info("[PasskeyService] Registration challenge issued for {}", email);
         return stripNulls(storageJson);
@@ -158,12 +165,11 @@ public class PasskeyService implements CredentialRepository {
     @Transactional
     public void finishRegistration(String email, String responseJson)
             throws Exception {
-        PasskeyChallenge challenge = challengeRepo
-                .findByEmailAndTypeAndExpiresAtAfter(email, "REGISTER", Instant.now())
+        ChallengeData challenge = getChallenge(email, "REGISTER")
                 .orElseThrow(() -> new IllegalStateException("No pending registration or challenge expired"));
 
         PublicKeyCredentialCreationOptions options =
-                passkeyMapper.readValue(challenge.getRequestJson(), PublicKeyCredentialCreationOptions.class);
+                passkeyMapper.readValue(challenge.requestJson(), PublicKeyCredentialCreationOptions.class);
 
         RegistrationResult result;
         try {
@@ -189,7 +195,7 @@ public class PasskeyService implements CredentialRepository {
         cred.setUserHandle(userHandle);
         credRepo.save(cred);
 
-        challengeRepo.deleteByEmailAndType(email, "REGISTER");
+        redisTemplate.delete(challengeKey(email, "REGISTER"));
         log.info("[PasskeyService] Passkey registered for {}", email);
     }
 
@@ -209,15 +215,10 @@ public class PasskeyService implements CredentialRepository {
 
         String fullJson = assertionRequest.toJson();
 
-        challengeRepo.deleteByEmailAndType(email, "AUTHENTICATE");
-        PasskeyChallenge challenge = new PasskeyChallenge();
-        challenge.setEmail(email);
-        challenge.setType("AUTHENTICATE");
-        challenge.setRequestJson(fullJson);
-        challenge.setMode(mode != null ? mode : "PERSONAL");
-        challenge.setOrgId(orgId);
-        challenge.setExpiresAt(Instant.now().plusSeconds(300));
-        challengeRepo.save(challenge);
+        redisTemplate.opsForValue().set(
+                challengeKey(email, "AUTHENTICATE"),
+                passkeyMapper.writeValueAsString(new ChallengeData(fullJson, mode != null ? mode : "PERSONAL", orgId)),
+                CHALLENGE_TTL);
 
         log.info("[PasskeyService] Authentication challenge issued for {}", email);
         // Use toJson() for fidelity, then strip nulls — the yubico library's custom serializers
@@ -228,12 +229,11 @@ public class PasskeyService implements CredentialRepository {
 
     @Transactional
     public String finishAuthentication(String email, String responseJson) throws Exception {
-        PasskeyChallenge challenge = challengeRepo
-                .findByEmailAndTypeAndExpiresAtAfter(email, "AUTHENTICATE", Instant.now())
+        ChallengeData challenge = getChallenge(email, "AUTHENTICATE")
                 .orElseThrow(() -> new IllegalStateException("No pending authentication or challenge expired"));
 
         AssertionRequest assertionRequest =
-                passkeyMapper.readValue(challenge.getRequestJson(), AssertionRequest.class);
+                passkeyMapper.readValue(challenge.requestJson(), AssertionRequest.class);
 
         AssertionResult result;
         try {
@@ -253,11 +253,11 @@ public class PasskeyService implements CredentialRepository {
                     credRepo.save(c);
                 });
 
-        challengeRepo.deleteByEmailAndType(email, "AUTHENTICATE");
+        redisTemplate.delete(challengeKey(email, "AUTHENTICATE"));
 
-        String resolvedMode = challenge.getMode() != null ? challenge.getMode() : "PERSONAL";
-        String jwt = jwtService.generate(challenge.getEmail(), resolvedMode, challenge.getOrgId());
-        log.info("[PasskeyService] Passkey authentication successful for {} mode={}", challenge.getEmail(), resolvedMode);
+        String resolvedMode = challenge.mode() != null ? challenge.mode() : "PERSONAL";
+        String jwt = jwtService.generate(email, resolvedMode, challenge.orgId());
+        log.info("[PasskeyService] Passkey authentication successful for {} mode={}", email, resolvedMode);
         return jwt;
     }
 
@@ -270,21 +270,24 @@ public class PasskeyService implements CredentialRepository {
     @Transactional
     public void deletePasskeys(String email) {
         credRepo.deleteByEmail(email);
-        challengeRepo.deleteByEmailAndType(email, "REGISTER");
-        challengeRepo.deleteByEmailAndType(email, "AUTHENTICATE");
+        redisTemplate.delete(challengeKey(email, "REGISTER"));
+        redisTemplate.delete(challengeKey(email, "AUTHENTICATE"));
         log.info("[PasskeyService] Passkeys deleted for {}", email);
     }
 
-    // ── Scheduled cleanup ────────────────────────────────────────────────────────
+    // ── Helpers ──────────────────────────────────────────────────────────────────
 
-    @Scheduled(fixedDelay = 3_600_000)
-    @Transactional
-    public void cleanupExpiredChallenges() {
-        challengeRepo.deleteExpired(Instant.now());
-        log.debug("[PasskeyService] Expired challenges purged");
+    private String challengeKey(String email, String type) {
+        return CHALLENGE_KEY_PREFIX + type + ":" + email;
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────────
+    private Optional<ChallengeData> getChallenge(String email, String type) throws Exception {
+        String raw = redisTemplate.opsForValue().get(challengeKey(email, type));
+        if (raw == null) {
+            return Optional.empty();
+        }
+        return Optional.of(passkeyMapper.readValue(raw, ChallengeData.class));
+    }
 
     private String generateUserHandle() {
         byte[] bytes = new byte[32];
