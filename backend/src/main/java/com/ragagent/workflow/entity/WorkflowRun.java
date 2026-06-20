@@ -40,7 +40,7 @@ public class WorkflowRun {
     @Column(name = "sandbox_container", length = 128)
     private String sandboxContainer;
 
-    @Column(name = "final_output", columnDefinition = "TEXT")
+    @Column(name = "final_output", columnDefinition = "LONGTEXT")
     private String finalOutput;
 
     @Column(name = "started_at", nullable = false, updatable = false)

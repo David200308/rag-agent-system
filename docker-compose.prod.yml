@@ -110,7 +110,8 @@ services:
       retries: 10
       start_period: 30s
 
-  # ── Redis (Asynq task queue backend) ─────────────────────────────────────────
+  # ── Redis — shared by the Go scheduler (Asynq queue) and the Java backend
+  #    (rate-limit buckets, sandbox container tracking, fallback answer cache) ──
   redis:
     image: redis:7-alpine
     container_name: agent-system-redis
@@ -172,6 +173,8 @@ services:
         condition: service_healthy
       weaviate:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     secrets:
       - mysql_password
       - weaviate_api_key
@@ -198,6 +201,9 @@ services:
       # ── Weaviate
       WEAVIATE_HOST: weaviate
       WEAVIATE_PORT: 8080
+      # ── Redis (rate limiting, sandbox tracking, fallback cache — shared with scheduler's Asynq queue)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       # ── LLM
       LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
       # Embeddings use Ollama (nomic-embed-text) running on the host.

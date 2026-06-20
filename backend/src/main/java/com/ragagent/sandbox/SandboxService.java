@@ -2,8 +2,12 @@ package com.ragagent.sandbox;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RSemaphore;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -14,6 +18,7 @@ import java.lang.management.OperatingSystemMXBean;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -22,7 +27,8 @@ import java.util.function.Consumer;
  * Manages ephemeral Docker sandbox containers for workflow runs.
  *
  * Resource governance:
- *  - sandbox.max-concurrent  caps how many containers run simultaneously (semaphore)
+ *  - sandbox.max-concurrent  caps how many containers run simultaneously, enforced by a
+ *    Redisson distributed semaphore so the cap holds cluster-wide, not per-instance
  *  - sandbox.queue-capacity  caps how many runs can wait in line before rejection
  *  - Admission check: refuses new sandboxes if system CPU or free memory
  *    exceed configured thresholds (fail-fast instead of overloading the host)
@@ -32,10 +38,18 @@ import java.util.function.Consumer;
  *  - Kills any container whose CPU% or memory% exceeds the configured limits
  *  - Killed containers cause the next exec() call to throw SandboxKilledException,
  *    which propagates up and fails the workflow run immediately
+ *
+ * Live container tracking (activeContainers/killedContainers) is stored in Redis
+ * rather than in-process so the watchdog and exec() admission checks see the same
+ * state regardless of which backend instance created the container.
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class SandboxService {
+
+    private final RedissonClient       redisson;
+    private final StringRedisTemplate  redisTemplate;
 
     @Value("${sandbox.enabled:true}")
     private boolean enabled;
@@ -83,22 +97,24 @@ public class SandboxService {
 
     // ── Runtime state ─────────────────────────────────────────────────────────
 
-    private Semaphore              slots;
+    private static final String SLOTS_SEMAPHORE_KEY   = "sandbox:slots";
+    private static final String ACTIVE_CONTAINERS_KEY  = "sandbox:active-containers";
+    private static final String KILLED_CONTAINERS_KEY  = "sandbox:killed-containers";
+
+    /** Cluster-wide concurrency cap — every backend instance shares the same Redis-backed permit pool. */
+    private RSemaphore             slots;
     private BlockingQueue<String>  waitQueue;
     private final AtomicInteger    active  = new AtomicInteger(0);
     private final AtomicInteger    queued  = new AtomicInteger(0);
-
-    /** containerId → runId for every live sandbox container. */
-    private final ConcurrentHashMap<String, String> activeContainers = new ConcurrentHashMap<>();
-
-    /** containerId → kill reason for containers the watchdog terminated. */
-    private final ConcurrentHashMap<String, String> killedContainers = new ConcurrentHashMap<>();
 
     private ScheduledExecutorService watchdogExecutor;
 
     @PostConstruct
     void init() {
-        slots     = new Semaphore(maxConcurrent, true);
+        slots = redisson.getSemaphore(SLOTS_SEMAPHORE_KEY);
+        // trySetPermits is a no-op if another instance already initialized the pool — that's
+        // intentional, otherwise every instance restart would reset permits out from under active runs.
+        slots.trySetPermits(maxConcurrent);
         waitQueue = new ArrayBlockingQueue<>(queueCapacity);
         log.info("[Sandbox] max-concurrent={} queue-capacity={}", maxConcurrent, queueCapacity);
 
@@ -172,7 +188,7 @@ public class SandboxService {
 
         try {
             String containerId = spawnContainer(runId, withNetwork, logger);
-            activeContainers.put(containerId, runId);
+            redisTemplate.<String, String>opsForHash().put(ACTIVE_CONTAINERS_KEY, containerId, runId);
             return containerId;
         } catch (Exception e) {
             slots.release();
@@ -194,7 +210,7 @@ public class SandboxService {
             return "[Sandbox unavailable — Docker not running or sandbox disabled]";
         }
 
-        String killReason = killedContainers.get(containerId);
+        String killReason = redisTemplate.<String, String>opsForHash().get(KILLED_CONTAINERS_KEY, containerId);
         if (killReason != null) {
             throw new SandboxKilledException(
                     "Sandbox forcibly terminated due to excessive resource usage: " + killReason);
@@ -235,8 +251,9 @@ public class SandboxService {
      */
     public void destroySandbox(String containerId) {
         if (containerId == null || containerId.isBlank()) return;
-        activeContainers.remove(containerId);
-        boolean wasKilledByWatchdog = killedContainers.remove(containerId) != null;
+        redisTemplate.opsForHash().delete(ACTIVE_CONTAINERS_KEY, containerId);
+        Long killedRemoved = redisTemplate.opsForHash().delete(KILLED_CONTAINERS_KEY, containerId);
+        boolean wasKilledByWatchdog = killedRemoved != null && killedRemoved > 0;
         if (!wasKilledByWatchdog) {
             try {
                 runProcess(List.of("docker", "rm", "-f", containerId), 15);
@@ -253,10 +270,11 @@ public class SandboxService {
     // ── Watchdog ──────────────────────────────────────────────────────────────
 
     private void checkContainerResources() {
-        if (activeContainers.isEmpty()) return;
+        Set<String> containerIds = redisTemplate.<String, String>opsForHash().keys(ACTIVE_CONTAINERS_KEY);
+        if (containerIds.isEmpty()) return;
 
-        for (String containerId : activeContainers.keySet()) {
-            if (killedContainers.containsKey(containerId)) continue;
+        for (String containerId : containerIds) {
+            if (redisTemplate.opsForHash().hasKey(KILLED_CONTAINERS_KEY, containerId)) continue;
 
             try {
                 String stats = runProcess(
@@ -289,7 +307,7 @@ public class SandboxService {
 
     private void killByWatchdog(String containerId, String reason) {
         log.warn("[Watchdog] Killing container {} — {}", shortId(containerId), reason);
-        killedContainers.put(containerId, reason);
+        redisTemplate.opsForHash().put(KILLED_CONTAINERS_KEY, containerId, reason);
         try {
             runProcess(List.of("docker", "rm", "-f", containerId), 10);
         } catch (Exception e) {

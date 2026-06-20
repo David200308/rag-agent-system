@@ -1,5 +1,6 @@
 -- ── Auth schema ────────────────────────────────────────────────────────────────
--- JWT is used for sessions (stateless) so only whitelist + OTP need storage.
+-- JWT is used for sessions (stateless) so only the whitelist needs SQL storage.
+-- OTP codes live in Redis (key "otp:<email>", native TTL) — see AuthService.
 -- Idempotent: safe to run on every startup.
 
 CREATE TABLE IF NOT EXISTS email_whitelist (
@@ -7,16 +8,6 @@ CREATE TABLE IF NOT EXISTS email_whitelist (
     email      VARCHAR(255) NOT NULL UNIQUE,
     enabled    BOOLEAN      NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS otp_codes (
-    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
-    email      VARCHAR(255) NOT NULL,
-    code       VARCHAR(6)   NOT NULL,
-    expires_at DATETIME     NOT NULL,
-    used       BOOLEAN      NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_otp_email (email)
 );
 
 -- ── Conversation history schema ───────────────────────────────────────────────
@@ -138,7 +129,7 @@ CREATE TABLE IF NOT EXISTS workflow_runs (
     user_input       TEXT         NOT NULL,
     status           VARCHAR(20)  NOT NULL DEFAULT 'PENDING',  -- PENDING | RUNNING | DONE | FAILED
     sandbox_container VARCHAR(128),
-    final_output     TEXT,
+    final_output     LONGTEXT,
     started_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     finished_at      TIMESTAMP,
     INDEX idx_wr_workflow (workflow_id),
@@ -461,3 +452,8 @@ CREATE TABLE IF NOT EXISTS travel_records (
     updated_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_travel_owner (owner_email)
 );
+
+-- ── Schema migration: widen workflow_runs.final_output ──────────────────────
+-- TEXT caps out at 64KB; large agent outputs (long transcripts/tool results)
+-- were hitting "Data too long for column 'final_output'". LONGTEXT allows up to 4GB.
+ALTER TABLE workflow_runs MODIFY COLUMN final_output LONGTEXT;

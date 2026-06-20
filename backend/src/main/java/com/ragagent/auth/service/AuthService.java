@@ -1,19 +1,22 @@
 package com.ragagent.auth.service;
 
 import com.ragagent.auth.AuthProperties;
-import com.ragagent.auth.entity.OtpCode;
 import com.ragagent.auth.repository.EmailWhitelistRepository;
-import com.ragagent.auth.repository.OtpCodeRepository;
 import com.ragagent.org.OrganizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
-import java.time.LocalDateTime;
+import java.time.Duration;
 
+/**
+ * OTP codes are stored in Redis under {@code otp:<email>} with the configured expiry as
+ * the key's native TTL — no separate "used" flag or cleanup job needed: issuing a new code
+ * overwrites the key (SETEX), and verifying deletes it, so a code can't be reused or outlive
+ * its TTL.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -21,22 +24,23 @@ public class AuthService {
 
     private final AuthProperties           authProperties;
     private final EmailWhitelistRepository whitelistRepo;
-    private final OtpCodeRepository        otpRepo;
+    private final StringRedisTemplate      redisTemplate;
     private final EmailService             emailService;
     private final JwtService               jwtService;
     private final OrganizationService      orgService;
 
     private final SecureRandom random = new SecureRandom();
 
+    private static final String OTP_KEY_PREFIX = "otp:";
+
     // ── Request OTP ──────────────────────────────────────────────────────────────
 
     /**
      * Validates the email against the whitelist, generates a 6-digit OTP,
-     * persists it, and sends it via Resend.
+     * stores it in Redis, and sends it via Resend.
      *
      * @throws IllegalArgumentException if the email is not whitelisted
      */
-    @Transactional
     public void requestOtp(String email) {
         String normalised = email.trim().toLowerCase();
 
@@ -44,13 +48,11 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Email is not authorised to access this system."));
 
-        String        code    = generateCode();
-        int           expiry  = authProperties.otpExpiryMinutes();
-        LocalDateTime expires = LocalDateTime.now().plusMinutes(expiry);
+        String code   = generateCode();
+        int    expiry = authProperties.otpExpiryMinutes();
 
-        // Invalidate any previous codes for this email before issuing a new one
-        otpRepo.deleteAllByEmail(normalised);
-        otpRepo.save(new OtpCode(normalised, code, expires));
+        // SETEX overwrites any previous code for this email, naturally invalidating it.
+        redisTemplate.opsForValue().set(OTP_KEY_PREFIX + normalised, code, Duration.ofMinutes(expiry));
 
         emailService.sendOtp(normalised, code, expiry);
         log.info("[AuthService] OTP issued for {}", normalised);
@@ -63,7 +65,6 @@ public class AuthService {
      *
      * @throws IllegalArgumentException if the code is wrong or expired
      */
-    @Transactional
     public String verifyOtp(String email, String code) {
         return verifyOtp(email, code, "PERSONAL", null);
     }
@@ -74,15 +75,12 @@ public class AuthService {
      *
      * @throws IllegalArgumentException if the code is wrong, expired, or org/membership invalid
      */
-    @Transactional
     public String verifyOtp(String email, String code, String mode, String orgId) {
         String normalised = email.trim().toLowerCase();
+        String key         = OTP_KEY_PREFIX + normalised;
 
-        OtpCode otp = otpRepo.findValidOtp(normalised, LocalDateTime.now())
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Invalid or expired code."));
-
-        if (!otp.getCode().equals(code.trim())) {
+        String storedCode = redisTemplate.opsForValue().get(key);
+        if (storedCode == null || !storedCode.equals(code.trim())) {
             throw new IllegalArgumentException("Invalid or expired code.");
         }
 
@@ -96,9 +94,7 @@ public class AuthService {
             }
         }
 
-        otp.setUsed(true);
-        otpRepo.save(otp);
-        otpRepo.deleteAllByEmail(normalised);
+        redisTemplate.delete(key);
 
         String resolvedOrgId = "TEAM".equals(mode) ? orgId.trim() : null;
         String jwt = jwtService.generate(normalised, mode, resolvedOrgId);
@@ -116,15 +112,6 @@ public class AuthService {
     /** Returns full claims from the JWT, or {@code null} if invalid/expired. */
     public JwtService.TokenClaims validateTokenFull(String token) {
         return jwtService.validateFull(token);
-    }
-
-    // ── Scheduled cleanup ────────────────────────────────────────────────────────
-
-    @Scheduled(fixedDelay = 3_600_000) // every hour
-    @Transactional
-    public void cleanupExpired() {
-        otpRepo.deleteExpired(LocalDateTime.now());
-        log.debug("[AuthService] Expired OTPs purged");
     }
 
     // ── Helper ───────────────────────────────────────────────────────────────────

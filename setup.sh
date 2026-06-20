@@ -91,7 +91,7 @@ require_cmd() {
 clear
 echo ""
 echo -e "${BOLD}  SkyProton Agent System — Setup${NC}"
-echo -e "  ${DIM}Spring AI · LangGraph4j · Weaviate · MySQL · Redis (Asynq) · Prometheus · Grafana${NC}"
+echo -e "  ${DIM}Spring AI · LangGraph4j · Weaviate · MySQL · Redis · Prometheus · Grafana${NC}"
 echo -e "  ${DIM}Features: Chat · Workflow · Knowledge · Skills · Financial · Travel${NC}"
 echo ""
 

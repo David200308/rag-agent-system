@@ -32,6 +32,7 @@
 | Circuit breaker  | Resilience4j 2.2                                   |
 | Auth             | OTP email (Resend) + Passkey (WebAuthn) + JJWT     |
 | Persistence      | MySQL 8 + Spring Data JPA                          |
+| Redis            | Lettuce (Bucket4j rate limits, fallback cache) + Redisson (sandbox semaphore) — shared with the scheduler's Asynq queue |
 | MCP server       | Spring AI MCP WebMVC SSE transport                 |
 | API docs         | SpringDoc OpenAPI (Swagger UI)                     |
 
@@ -60,7 +61,7 @@
 | ---------------- | --------------------------------------------- |
 | Vector DB        | Weaviate (Docker)                             |
 | Relational DB    | MySQL (Docker) — app + schedule data         |
-| Task queue       | Redis 7 (Docker) — Asynq backend             |
+| Redis            | Redis 7 (Docker) — shared by the scheduler's Asynq queue and the backend's rate limits, sandbox tracking, and fallback cache |
 | Scheduler        | Go microservice backed by Asynq (`:8082`)    |
 | Observability    | Prometheus + Grafana + Loki + Promtail        |
 | Containerization | Docker Compose                                |

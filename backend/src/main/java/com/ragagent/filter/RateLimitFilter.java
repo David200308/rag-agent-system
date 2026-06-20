@@ -4,9 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ragagent.config.AgentMetrics;
 import com.ragagent.config.RateLimitProperties;
 import io.github.bucket4j.Bandwidth;
-import io.github.bucket4j.Bucket;
+import io.github.bucket4j.BucketConfiguration;
 import io.github.bucket4j.ConsumptionProbe;
 import io.github.bucket4j.Refill;
+import io.github.bucket4j.distributed.BucketProxy;
+import io.github.bucket4j.distributed.proxy.ProxyManager;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,14 +20,17 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Token-bucket rate limiter (Bucket4j) scoped per authenticated user email,
  * or per client IP for unauthenticated/shared paths.
+ *
+ * Buckets are persisted in Redis (via {@code bucketProxyManager}, see RedisConfig) so
+ * the limit is shared across all backend instances instead of being per-instance.
  *
  * Runs at Order(3), after AuthFilter (Order(1)) and CliSignatureFilter (Order(2)),
  * so the email attribute is already set when this filter executes.
@@ -44,12 +49,10 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class RateLimitFilter extends OncePerRequestFilter {
 
-    private final RateLimitProperties props;
-    private final ObjectMapper        objectMapper;
-    private final AgentMetrics        agentMetrics;
-
-    // key = "<email|ip>:<CATEGORY>" → bucket
-    private final ConcurrentHashMap<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private final RateLimitProperties  props;
+    private final ObjectMapper         objectMapper;
+    private final AgentMetrics         agentMetrics;
+    private final ProxyManager<byte[]> bucketProxyManager;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -71,8 +74,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String category = categorize(request.getRequestURI());
         String key      = resolveKey(request) + ":" + category;
 
-        Bucket           bucket = buckets.computeIfAbsent(key, k -> newBucket(category));
-        ConsumptionProbe probe  = bucket.tryConsumeAndReturnRemaining(1);
+        BucketProxy bucket = bucketProxyManager.builder()
+                .build(key.getBytes(StandardCharsets.UTF_8), () -> newConfiguration(category));
+        ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 
         response.setHeader("X-RateLimit-Remaining", String.valueOf(probe.getRemainingTokens()));
 
@@ -110,13 +114,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return "DEFAULT";
     }
 
-    private Bucket newBucket(String category) {
+    private BucketConfiguration newConfiguration(String category) {
         long capacity = switch (category) {
             case "QUERY"  -> props.agentQueryLimit();
             case "INGEST" -> props.ingestLimit();
             default       -> props.defaultLimit();
         };
-        return Bucket.builder()
+        return BucketConfiguration.builder()
                 .addLimit(Bandwidth.classic(capacity, Refill.greedy(capacity, Duration.ofMinutes(1))))
                 .build();
     }

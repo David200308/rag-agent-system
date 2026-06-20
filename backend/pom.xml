@@ -166,7 +166,7 @@
             <version>1.18.3</version>
         </dependency>
 
-        <!-- MySQL + Spring Data JPA (auth: whitelist, OTP, sessions) -->
+        <!-- MySQL + Spring Data JPA (auth: email whitelist; OTP codes live in Redis) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -227,11 +227,38 @@
             <version>2.18.2</version>
         </dependency>
 
-        <!-- Rate limiting — Bucket4j token-bucket per user/IP (in-memory, no Redis) -->
+        <!-- Rate limiting — Bucket4j token-bucket per user/IP, backed by Redis so limits are shared across backend instances -->
         <dependency>
             <groupId>com.bucket4j</groupId>
             <artifactId>bucket4j-core</artifactId>
             <version>8.10.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j-redis</artifactId>
+            <version>8.10.1</version>
+        </dependency>
+        <!-- bucket4j's own in-memory ProxyManagerMock — lets RateLimitFilterTest exercise real
+             distributed-bucket logic without a live Redis instance -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j-core</artifactId>
+            <version>8.10.1</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Redis client (Lettuce) — shared with the Go scheduler's Asynq queue instance -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- Redisson — distributed semaphore for cluster-wide sandbox concurrency admission control -->
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson</artifactId>
+            <version>3.50.0</version>
         </dependency>
 
         <!-- Observability — Prometheus metrics scrape endpoint (/actuator/prometheus) -->

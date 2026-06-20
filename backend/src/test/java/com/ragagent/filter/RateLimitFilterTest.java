@@ -3,6 +3,11 @@ package com.ragagent.filter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ragagent.config.AgentMetrics;
 import com.ragagent.config.RateLimitProperties;
+import io.github.bucket4j.TimeMeter;
+import io.github.bucket4j.distributed.proxy.ProxyManager;
+import io.github.bucket4j.distributed.remote.CommandResult;
+import io.github.bucket4j.distributed.remote.Request;
+import io.github.bucket4j.mock.ProxyManagerMock;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +21,9 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
@@ -28,11 +36,32 @@ class RateLimitFilterTest {
     RateLimitFilter filter;
     AgentMetrics    agentMetrics;
 
+    /**
+     * Bucket4j's own in-memory ProxyManager test double — real bucket logic, no Redis needed.
+     *
+     * {@link ProxyManagerMock} keys its internal state map by {@code byte[]} identity, but
+     * {@code RateLimitFilter} calls {@code key.getBytes(...)} fresh on every request, so two
+     * requests for the same logical key would never hit the same map entry. Real Redis doesn't
+     * have this problem (it compares key bytes, not Java object references) — this override just
+     * canonicalizes equal-content byte[] keys so the mock behaves the way Redis actually would.
+     */
+    private static ProxyManager<byte[]> newProxyManager() {
+        Map<String, byte[]> canonicalKeys = new ConcurrentHashMap<>();
+        return new ProxyManagerMock<byte[]>(TimeMeter.SYSTEM_MILLISECONDS) {
+            @Override
+            public <T> CommandResult<T> execute(byte[] key, Request<T> request) {
+                byte[] canonicalKey = canonicalKeys.computeIfAbsent(
+                        new String(key, StandardCharsets.UTF_8), k -> key);
+                return super.execute(canonicalKey, request);
+            }
+        };
+    }
+
     @BeforeEach
     void setUp() {
         RateLimitProperties props = new RateLimitProperties(20, 10, 100);
         agentMetrics = new AgentMetrics(new SimpleMeterRegistry());
-        filter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics);
+        filter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics, newProxyManager());
     }
 
     // ── shouldNotFilter ───────────────────────────────────────────────────────
@@ -181,7 +210,7 @@ class RateLimitFilterTest {
     void doFilterInternal_limitExceeded_returns429() throws Exception {
         // Use a very low limit so we can exhaust it
         RateLimitProperties props = new RateLimitProperties(1, 1, 1);
-        RateLimitFilter limitFilter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics);
+        RateLimitFilter limitFilter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics, newProxyManager());
 
         MockHttpServletRequest  req  = new MockHttpServletRequest();
         MockHttpServletResponse resp = new MockHttpServletResponse();

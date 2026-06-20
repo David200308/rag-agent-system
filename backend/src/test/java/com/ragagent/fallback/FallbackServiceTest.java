@@ -8,8 +8,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -18,15 +22,24 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class FallbackServiceTest {
 
-    @Mock ChatClient         chatClient;
-    @Mock ModelConfigService modelConfigService;
-    @Mock ChatModelFactory   chatModelFactory;
+    @Mock ChatClient                       chatClient;
+    @Mock ModelConfigService               modelConfigService;
+    @Mock ChatModelFactory                 chatModelFactory;
+    @Mock StringRedisTemplate              redisTemplate;
+    @Mock ValueOperations<String, String>  valueOperations;
 
     FallbackService fallbackService;
 
     @BeforeEach
     void setUp() {
-        fallbackService = new FallbackService(chatClient, modelConfigService, chatModelFactory);
+        // Fake StringRedisTemplate backed by a plain map — keeps the test a pure unit test, no Redis needed.
+        Map<String, String> cacheBacking = new ConcurrentHashMap<>();
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(valueOperations.get(anyString())).thenAnswer(inv -> cacheBacking.get(inv.getArgument(0)));
+        lenient().doAnswer(inv -> cacheBacking.put(inv.getArgument(0), inv.getArgument(1)))
+                .when(valueOperations).set(anyString(), anyString());
+
+        fallbackService = new FallbackService(chatClient, modelConfigService, chatModelFactory, redisTemplate);
     }
 
     // ── cacheAnswer & cache-hit path ───────────────────────────────────────────

@@ -7,11 +7,10 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Fallback strategy hierarchy:
@@ -27,12 +26,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class FallbackService {
 
-    private final ChatClient         chatClient;
-    private final ModelConfigService modelConfigService;
-    private final ChatModelFactory   chatModelFactory;
+    private final ChatClient          chatClient;
+    private final ModelConfigService  modelConfigService;
+    private final ChatModelFactory    chatModelFactory;
+    private final StringRedisTemplate redisTemplate;
 
-    /** Simple in-process cache; replace with Redis for production. */
-    private final Map<String, String> answerCache = new ConcurrentHashMap<>();
+    private static final String CACHE_KEY_PREFIX = "fallback:answer-cache:";
 
     private static final String STATIC_FALLBACK =
             "I'm sorry, I'm unable to answer your question at the moment. " +
@@ -45,7 +44,7 @@ public class FallbackService {
         log.warn("[FallbackService] Resolving fallback for: '{}', reason: {}", query, reason);
 
         // 1. Check cache
-        String cached = answerCache.get(normalise(query));
+        String cached = redisTemplate.opsForValue().get(CACHE_KEY_PREFIX + normalise(query));
         if (cached != null) {
             log.info("[FallbackService] Cache hit for query");
             return "(Cached) " + cached;
@@ -78,7 +77,7 @@ public class FallbackService {
                 .content();
 
         // Cache for future fallback hits
-        answerCache.put(normalise(query), answer);
+        redisTemplate.opsForValue().set(CACHE_KEY_PREFIX + normalise(query), answer);
         return answer;
     }
 
@@ -90,7 +89,7 @@ public class FallbackService {
 
     /** Cache a known good answer manually (e.g. from admin endpoint). */
     public void cacheAnswer(String query, String answer) {
-        answerCache.put(normalise(query), answer);
+        redisTemplate.opsForValue().set(CACHE_KEY_PREFIX + normalise(query), answer);
     }
 
     private String normalise(String query) {

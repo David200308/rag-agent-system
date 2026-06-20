@@ -2,27 +2,103 @@ package com.ragagent.sandbox;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.redisson.api.RSemaphore;
+import org.redisson.api.RedissonClient;
+import org.springframework.data.redis.core.HashOperations;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Method;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
 
 class SandboxServiceTest {
 
-    SandboxService sandboxService;
+    SandboxService      sandboxService;
+    RedissonClient      redisson;
+    StringRedisTemplate redisTemplate;
+
+    /** redisKey → (hashKey → hashValue), backing the mocked HashOperations below. */
+    Map<String, Map<Object, Object>> hashesByKey;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
-        sandboxService = new SandboxService();
+        redisson = mock(RedissonClient.class);
+        RSemaphore semaphore = mock(RSemaphore.class);
+        when(semaphore.trySetPermits(anyInt())).thenReturn(true);
+        when(redisson.getSemaphore(anyString())).thenReturn(semaphore);
+
+        hashesByKey = new ConcurrentHashMap<>();
+        HashOperations<String, Object, Object> hashOps = mock(HashOperations.class);
+        wireHashOpsFake(hashOps);
+
+        redisTemplate = mock(StringRedisTemplate.class);
+        when(redisTemplate.opsForHash()).thenReturn(hashOps);
+
+        sandboxService = new SandboxService(redisson, redisTemplate);
         // Set @Value fields that status() reads
         ReflectionTestUtils.setField(sandboxService, "maxConcurrent", 3);
         ReflectionTestUtils.setField(sandboxService, "queueCapacity",  10);
         ReflectionTestUtils.setField(sandboxService, "enabled",        false); // skip Docker in tests
         ReflectionTestUtils.setField(sandboxService, "watchdogEnabled", false); // skip watchdog
-        // Call @PostConstruct to initialise Semaphore and queue
+        // Call @PostConstruct to initialise the semaphore and queue
         sandboxService.init();
+    }
+
+    /** Fake HashOperations backed by {@link #hashesByKey} — real put/get/delete/keys/hasKey semantics, no Redis needed. */
+    private void wireHashOpsFake(HashOperations<String, Object, Object> hashOps) {
+        doAnswer(inv -> {
+            String key = inv.getArgument(0);
+            Object hk  = inv.getArgument(1);
+            Object hv  = inv.getArgument(2);
+            hashesByKey.computeIfAbsent(key, k -> new ConcurrentHashMap<>()).put(hk, hv);
+            return null;
+        }).when(hashOps).put(any(), any(), any());
+
+        when(hashOps.get(any(), any())).thenAnswer(inv -> {
+            String key = inv.getArgument(0);
+            Object hk  = inv.getArgument(1);
+            Map<Object, Object> m = hashesByKey.get(key);
+            return m == null ? null : m.get(hk);
+        });
+
+        when(hashOps.delete(any(), any())).thenAnswer(inv -> {
+            String key = inv.getArgument(0);
+            Object hk  = inv.getArgument(1);
+            Map<Object, Object> m = hashesByKey.get(key);
+            return (m != null && m.remove(hk) != null) ? 1L : 0L;
+        });
+
+        when(hashOps.keys(any())).thenAnswer(inv -> {
+            String key = inv.getArgument(0);
+            Map<Object, Object> m = hashesByKey.get(key);
+            return m == null ? Set.of() : new HashSet<>(m.keySet());
+        });
+
+        when(hashOps.hasKey(any(), any())).thenAnswer(inv -> {
+            String key = inv.getArgument(0);
+            Object hk  = inv.getArgument(1);
+            Map<Object, Object> m = hashesByKey.get(key);
+            return m != null && m.containsKey(hk);
+        });
+    }
+
+    private static String activeKey() {
+        return (String) ReflectionTestUtils.getField(SandboxService.class, "ACTIVE_CONTAINERS_KEY");
+    }
+
+    private static String killedKey() {
+        return (String) ReflectionTestUtils.getField(SandboxService.class, "KILLED_CONTAINERS_KEY");
     }
 
     // ── status ─────────────────────────────────────────────────────────────────
@@ -66,11 +142,9 @@ class SandboxServiceTest {
     // ── exec — killed container ────────────────────────────────────────────────
 
     @Test
-    @SuppressWarnings("unchecked")
     void exec_killedContainer_throwsSandboxKilledException() {
-        var killedContainers = (java.util.concurrent.ConcurrentHashMap<String, String>)
-                ReflectionTestUtils.getField(sandboxService, "killedContainers");
-        killedContainers.put("abc123def456", "CPU 95% exceeded limit 80%");
+        hashesByKey.computeIfAbsent(killedKey(), k -> new ConcurrentHashMap<>())
+                .put("abc123def456", "CPU 95% exceeded limit 80%");
 
         assertThatThrownBy(() -> sandboxService.exec("abc123def456", "ls"))
                 .isInstanceOf(SandboxService.SandboxKilledException.class)
@@ -163,11 +237,9 @@ class SandboxServiceTest {
     // ── exec — killed container propagates KilledException ───────────────────
 
     @Test
-    @SuppressWarnings("unchecked")
     void recycleSandbox_killedContainer_propagatesException() {
-        var killedContainers = (java.util.concurrent.ConcurrentHashMap<String, String>)
-                ReflectionTestUtils.getField(sandboxService, "killedContainers");
-        killedContainers.put("containerXYZ", "memory 95% exceeded limit 90%");
+        hashesByKey.computeIfAbsent(killedKey(), k -> new ConcurrentHashMap<>())
+                .put("containerXYZ", "memory 95% exceeded limit 90%");
 
         assertThatThrownBy(() -> sandboxService.recycleSandbox("containerXYZ"))
                 .isInstanceOf(SandboxService.SandboxKilledException.class);
@@ -176,23 +248,19 @@ class SandboxServiceTest {
     // ── destroySandbox — killed-by-watchdog skips docker rm ───────────────────
 
     @Test
-    @SuppressWarnings("unchecked")
     void destroySandbox_killedByWatchdog_doesNotTryDockerRm() {
-        var killedContainers = (java.util.concurrent.ConcurrentHashMap<String, String>)
-                ReflectionTestUtils.getField(sandboxService, "killedContainers");
-        var activeContainers = (java.util.concurrent.ConcurrentHashMap<String, String>)
-                ReflectionTestUtils.getField(sandboxService, "activeContainers");
-
-        killedContainers.put("watchdog-container", "cpu exceeded");
-        activeContainers.put("watchdog-container", "run-99");
+        hashesByKey.computeIfAbsent(killedKey(), k -> new ConcurrentHashMap<>())
+                .put("watchdog-container", "cpu exceeded");
+        hashesByKey.computeIfAbsent(activeKey(), k -> new ConcurrentHashMap<>())
+                .put("watchdog-container", "run-99");
 
         // Since sandbox is disabled and watchdog killed it, destroySandbox should not run docker rm
         // (which would fail anyway without Docker). It just cleans up internal state.
         sandboxService.destroySandbox("watchdog-container");
 
-        // Container should be removed from both maps
-        assertThat(killedContainers).doesNotContainKey("watchdog-container");
-        assertThat(activeContainers).doesNotContainKey("watchdog-container");
+        // Container should be removed from both hashes
+        assertThat(hashesByKey.get(killedKey())).doesNotContainKey("watchdog-container");
+        assertThat(hashesByKey.get(activeKey())).doesNotContainKey("watchdog-container");
     }
 
     // ── createSandbox — queue full ─────────────────────────────────────────────
@@ -201,7 +269,7 @@ class SandboxServiceTest {
     @SuppressWarnings("unchecked")
     void createSandbox_enabled_queueFull_throwsQueueFullException() {
         // Set up a sandbox service with capacity=1, fill the queue, then try to add another
-        SandboxService svc2 = new SandboxService();
+        SandboxService svc2 = new SandboxService(redisson, redisTemplate);
         ReflectionTestUtils.setField(svc2, "maxConcurrent",       1);
         ReflectionTestUtils.setField(svc2, "queueCapacity",       1);
         ReflectionTestUtils.setField(svc2, "enabled",             true);
@@ -287,7 +355,7 @@ class SandboxServiceTest {
 
     @Test
     void checkContainerResources_noActiveContainers_isNoOp() throws Exception {
-        // activeContainers is empty (no containers spawned), so method is a no-op
+        // activeContainers hash is empty (no containers spawned), so method is a no-op
         Method m = SandboxService.class.getDeclaredMethod("checkContainerResources");
         m.setAccessible(true);
         // Should complete without throwing

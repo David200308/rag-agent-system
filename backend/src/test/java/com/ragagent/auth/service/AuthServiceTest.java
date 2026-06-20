@@ -2,9 +2,7 @@ package com.ragagent.auth.service;
 
 import com.ragagent.auth.AuthProperties;
 import com.ragagent.auth.entity.EmailWhitelist;
-import com.ragagent.auth.entity.OtpCode;
 import com.ragagent.auth.repository.EmailWhitelistRepository;
-import com.ragagent.auth.repository.OtpCodeRepository;
 import com.ragagent.org.OrganizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,9 +10,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -24,11 +26,12 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
-    @Mock EmailWhitelistRepository whitelistRepo;
-    @Mock OtpCodeRepository        otpRepo;
-    @Mock EmailService             emailService;
-    @Mock JwtService               jwtService;
-    @Mock OrganizationService      orgService;
+    @Mock EmailWhitelistRepository        whitelistRepo;
+    @Mock StringRedisTemplate             redisTemplate;
+    @Mock ValueOperations<String, String> valueOperations;
+    @Mock EmailService                    emailService;
+    @Mock JwtService                      jwtService;
+    @Mock OrganizationService             orgService;
 
     // AuthProperties is a record (final) — instantiate directly
     private final AuthProperties authProperties =
@@ -36,9 +39,21 @@ class AuthServiceTest {
 
     AuthService authService;
 
+    /** otp:<email> → code, backing the mocked StringRedisTemplate below. */
+    Map<String, String> otpBacking;
+
     @BeforeEach
     void setUp() {
-        authService = new AuthService(authProperties, whitelistRepo, otpRepo, emailService, jwtService, orgService);
+        otpBacking = new ConcurrentHashMap<>();
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().doAnswer(inv -> otpBacking.put(inv.getArgument(0), inv.getArgument(1)))
+                .when(valueOperations).set(anyString(), anyString(), any(Duration.class));
+        lenient().when(valueOperations.get(anyString()))
+                .thenAnswer(inv -> otpBacking.get(inv.getArgument(0)));
+        lenient().when(redisTemplate.delete(anyString()))
+                .thenAnswer(inv -> otpBacking.remove((String) inv.getArgument(0)) != null);
+
+        authService = new AuthService(authProperties, whitelistRepo, redisTemplate, emailService, jwtService, orgService);
     }
 
     // ── requestOtp ────────────────────────────────────────────────────────────
@@ -50,8 +65,7 @@ class AuthServiceTest {
 
         authService.requestOtp("User@Example.COM");
 
-        verify(otpRepo).deleteAllByEmail("user@example.com");
-        verify(otpRepo).save(any(OtpCode.class));
+        verify(valueOperations).set(eq("otp:user@example.com"), anyString(), eq(Duration.ofMinutes(10)));
         verify(emailService).sendOtp(eq("user@example.com"), anyString(), eq(10));
     }
 
@@ -81,26 +95,18 @@ class AuthServiceTest {
 
     @Test
     void verifyOtp_validCode_returnsJwt() {
-        OtpCode otp = new OtpCode("user@example.com", "123456",
-                LocalDateTime.now().plusMinutes(5));
-        when(otpRepo.findValidOtp(eq("user@example.com"), any(LocalDateTime.class)))
-                .thenReturn(Optional.of(otp));
+        otpBacking.put("otp:user@example.com", "123456");
         when(jwtService.generate("user@example.com", "PERSONAL", null)).thenReturn("signed-jwt");
 
         String token = authService.verifyOtp("user@example.com", "123456");
 
         assertThat(token).isEqualTo("signed-jwt");
-        assertThat(otp.isUsed()).isTrue();
-        verify(otpRepo).save(otp);
-        verify(otpRepo).deleteAllByEmail("user@example.com");
+        assertThat(otpBacking).doesNotContainKey("otp:user@example.com");
     }
 
     @Test
     void verifyOtp_teamMode_validMember_returnsJwt() {
-        OtpCode otp = new OtpCode("user@example.com", "123456",
-                LocalDateTime.now().plusMinutes(5));
-        when(otpRepo.findValidOtp(eq("user@example.com"), any(LocalDateTime.class)))
-                .thenReturn(Optional.of(otp));
+        otpBacking.put("otp:user@example.com", "123456");
         when(orgService.isMember("skyproton", "user@example.com")).thenReturn(true);
         when(jwtService.generate("user@example.com", "TEAM", "skyproton")).thenReturn("team-jwt");
 
@@ -112,10 +118,7 @@ class AuthServiceTest {
 
     @Test
     void verifyOtp_teamMode_notMember_throwsIllegalArgument() {
-        OtpCode otp = new OtpCode("user@example.com", "123456",
-                LocalDateTime.now().plusMinutes(5));
-        when(otpRepo.findValidOtp(eq("user@example.com"), any(LocalDateTime.class)))
-                .thenReturn(Optional.of(otp));
+        otpBacking.put("otp:user@example.com", "123456");
         when(orgService.isMember("unknown-org", "user@example.com")).thenReturn(false);
 
         assertThatThrownBy(() ->
@@ -126,10 +129,7 @@ class AuthServiceTest {
 
     @Test
     void verifyOtp_teamMode_missingOrgId_throwsIllegalArgument() {
-        OtpCode otp = new OtpCode("user@example.com", "123456",
-                LocalDateTime.now().plusMinutes(5));
-        when(otpRepo.findValidOtp(eq("user@example.com"), any(LocalDateTime.class)))
-                .thenReturn(Optional.of(otp));
+        otpBacking.put("otp:user@example.com", "123456");
 
         assertThatThrownBy(() ->
                 authService.verifyOtp("user@example.com", "123456", "TEAM", null))
@@ -139,10 +139,7 @@ class AuthServiceTest {
 
     @Test
     void verifyOtp_wrongCode_throwsIllegalArgument() {
-        OtpCode otp = new OtpCode("user@example.com", "123456",
-                LocalDateTime.now().plusMinutes(5));
-        when(otpRepo.findValidOtp(eq("user@example.com"), any(LocalDateTime.class)))
-                .thenReturn(Optional.of(otp));
+        otpBacking.put("otp:user@example.com", "123456");
 
         assertThatThrownBy(() -> authService.verifyOtp("user@example.com", "999999"))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -151,9 +148,6 @@ class AuthServiceTest {
 
     @Test
     void verifyOtp_noValidOtp_throwsIllegalArgument() {
-        when(otpRepo.findValidOtp(anyString(), any(LocalDateTime.class)))
-                .thenReturn(Optional.empty());
-
         assertThatThrownBy(() -> authService.verifyOtp("user@example.com", "123456"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid or expired");
@@ -181,14 +175,5 @@ class AuthServiceTest {
         when(jwtService.validateFull("my-token")).thenReturn(claims);
 
         assertThat(authService.validateTokenFull("my-token")).isSameAs(claims);
-    }
-
-    // ── cleanupExpired ────────────────────────────────────────────────────────
-
-    @Test
-    void cleanupExpired_deletesExpiredOtps() {
-        authService.cleanupExpired();
-
-        verify(otpRepo).deleteExpired(any(LocalDateTime.class));
     }
 }

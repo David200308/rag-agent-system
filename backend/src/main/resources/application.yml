@@ -16,6 +16,13 @@ spring:
       max-file-size: 20MB
       max-request-size: 25MB
 
+  # ── Redis (rate-limit buckets, sandbox container tracking, fallback cache) ────
+  # Shared with the Go scheduler's Asynq queue — same instance, same docker-compose service.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
   # ── MySQL (auth: email whitelist, OTP codes, sessions) ────────────────────────
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:ragagent}?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useUnicode=true

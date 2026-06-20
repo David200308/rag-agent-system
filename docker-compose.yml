@@ -26,7 +26,7 @@ services:
       timeout: 5s
       retries: 10
 
-  # ── Relational DB (auth: whitelist, OTP, JWT) ─────────────────────────────────
+  # ── Relational DB (auth: email whitelist; OTP codes live in Redis, JWT is stateless) ──
   mysql:
     image: mysql:latest
     container_name: agent-system-mysql
@@ -60,6 +60,8 @@ services:
         condition: service_healthy
       weaviate:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       # ── Database
       MYSQL_HOST: mysql
@@ -67,6 +69,9 @@ services:
       MYSQL_DB: ${MYSQL_DB:-ragagent}
       MYSQL_USER: ${MYSQL_USER:-ragagent}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ragagent}
+      # ── Redis (rate limiting, sandbox tracking, fallback cache — shared with scheduler's Asynq queue)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       # ── Weaviate
       WEAVIATE_HOST: weaviate
       WEAVIATE_PORT: 8080
@@ -122,7 +127,8 @@ services:
       retries: 8
       start_period: 60s
 
-  # ── Redis (Asynq task queue backend) ─────────────────────────────────────────
+  # ── Redis — shared by the Go scheduler (Asynq queue) and the Java backend
+  #    (rate-limit buckets, sandbox container tracking, fallback answer cache) ──
   redis:
     image: redis:7-alpine
     container_name: agent-system-redis
