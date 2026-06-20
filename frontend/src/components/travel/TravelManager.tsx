@@ -747,6 +747,10 @@ function AnalysisModal({ records, onClose }: { records: TravelRecord[]; onClose:
 
 type DetailTab = "detail" | "expense" | "transport" | "memory";
 
+const PANEL_MIN = 360;
+const PANEL_MAX = 900;
+const PANEL_DEFAULT = 520;
+
 const DETAIL_TABS: { id: DetailTab; icon: string; label: string }[] = [
   { id: "detail",    icon: "📋", label: "Detail" },
   { id: "expense",   icon: "💰", label: "Expense" },
@@ -770,9 +774,34 @@ function TravelDetailPanel({
 }) {
   const [mounted, setMounted] = useState(false);
   const [tab, setTab] = useState<DetailTab>("detail");
+  const [width, setWidth] = useState(PANEL_DEFAULT);
+  const dragRef = useRef<{ startX: number; startW: number } | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { setTab("detail"); }, [record.id]);
+
+  const onResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    const clientX = "touches" in e ? e.touches[0]!.clientX : e.clientX;
+    dragRef.current = { startX: clientX, startW: width };
+
+    const onMove = (ev: MouseEvent | TouchEvent) => {
+      if (!dragRef.current) return;
+      const x = "touches" in ev ? (ev as TouchEvent).touches[0]!.clientX : (ev as MouseEvent).clientX;
+      const next = Math.min(PANEL_MAX, Math.max(PANEL_MIN, dragRef.current.startW - (x - dragRef.current.startX)));
+      setWidth(next);
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("mouseup",   onUp);
+      window.removeEventListener("touchend",  onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("touchmove", onMove);
+    window.addEventListener("mouseup",   onUp);
+    window.addEventListener("touchend",  onUp);
+  }, [width]);
 
   if (!mounted) return null;
 
@@ -799,7 +828,18 @@ function TravelDetailPanel({
   return createPortal(
     <div className="fixed inset-0 z-[9999]">
       <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onClose} />
-      <aside className="absolute right-0 top-0 flex h-full w-full flex-col border-l border-[--color-border] bg-[--color-surface-raised] shadow-xl sm:w-[420px]">
+      <aside
+        style={{ "--panel-w": `${width}px` } as React.CSSProperties}
+        className="absolute right-0 top-0 flex h-full w-full flex-col border-l border-[--color-border] bg-[--color-surface-raised] shadow-xl sm:w-[var(--panel-w)]"
+      >
+        {/* Resize handle (desktop only) */}
+        <div
+          onMouseDown={onResizeStart}
+          onTouchStart={onResizeStart}
+          className="absolute left-0 top-0 z-10 hidden h-full w-1.5 -translate-x-1/2 cursor-col-resize select-none sm:block hover:bg-[--color-primary]/30"
+          title="Drag to resize"
+        />
+
         {/* Header */}
         <div className="flex items-start justify-between gap-2 border-b border-[--color-border] px-4 py-3">
           <div className="min-w-0">
