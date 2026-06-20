@@ -20,12 +20,20 @@ export const TRANSPORT_EMOJI: Record<TransportType, string> = {
 };
 
 export interface TravelStop {
-  city:      string;
-  country:   string;
-  lat:       number;
-  lon:       number;
-  transport: TransportType | null;
-  notes?:    string;
+  city:         string;
+  country:      string;
+  lat:          number;
+  lon:          number;
+  transport:    TransportType | null;
+  flightNumber?: string;
+  seatNumber?:   string;
+  notes?:       string;
+}
+
+export interface TravelExpense {
+  category: string;
+  amount:   number;
+  currency: string;
 }
 
 export interface TravelRecord {
@@ -35,6 +43,7 @@ export interface TravelRecord {
   startDate:  string;
   endDate:    string;
   stops:      TravelStop[];
+  expenses:   TravelExpense[];
   notes?:     string;
   createdAt:  string;
   updatedAt:  string;

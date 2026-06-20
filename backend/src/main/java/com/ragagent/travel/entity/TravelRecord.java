@@ -33,6 +33,9 @@ public class TravelRecord {
     @Column(name = "stops_json", columnDefinition = "TEXT")
     private String stopsJson;
 
+    @Column(name = "expenses_json", columnDefinition = "TEXT")
+    private String expensesJson;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 

@@ -101,6 +101,29 @@ class TravelServiceTest {
         assertThat(result.get(0).stops()).isEmpty();
     }
 
+    @Test
+    void list_recordWithExpensesJson_parsesExpenses() {
+        TravelRecord r = makeRecord("id-5", "user@test.com");
+        r.setExpensesJson("[{\"category\":\"Flight\",\"amount\":1200,\"currency\":\"USD\"}]");
+        when(repo.findByOwnerEmailOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+
+        List<TravelRecordDto> result = service.list("user@test.com");
+
+        assertThat(result.get(0).expenses()).hasSize(1);
+        assertThat(result.get(0).expenses().get(0)).containsEntry("category", "Flight");
+    }
+
+    @Test
+    void list_recordWithInvalidExpensesJson_returnsEmptyExpenses() {
+        TravelRecord r = makeRecord("id-6", "user@test.com");
+        r.setExpensesJson("not-valid-json");
+        when(repo.findByOwnerEmailOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+
+        List<TravelRecordDto> result = service.list("user@test.com");
+
+        assertThat(result.get(0).expenses()).isEmpty();
+    }
+
     // ── create ────────────────────────────────────────────────────────────────
 
     @Test
@@ -135,6 +158,17 @@ class TravelServiceTest {
         TravelRecord result = service.create("user@test.com", body);
 
         assertThat(result.getStopsJson()).contains("Tokyo");
+    }
+
+    @Test
+    void create_withExpenses_serializes() {
+        when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        List<Map<String, Object>> expenses = List.of(Map.of("category", "Flight", "amount", 1200, "currency", "USD"));
+        Map<String, Object> body = Map.of("title", "Japan", "expenses", expenses);
+        TravelRecord result = service.create("user@test.com", body);
+
+        assertThat(result.getExpensesJson()).contains("Flight");
     }
 
     // ── update ────────────────────────────────────────────────────────────────

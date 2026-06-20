@@ -73,6 +73,16 @@ public class TravelService {
                 r.setStopsJson("[]");
             }
         }
+        if (body.containsKey("expenses")) {
+            try {
+                Object raw = body.get("expenses");
+                String json = mapper.writeValueAsString(raw);
+                r.setExpensesJson(json);
+            } catch (Exception e) {
+                log.warn("Failed to serialize expenses", e);
+                r.setExpensesJson("[]");
+            }
+        }
     }
 
     private TravelRecordDto toDto(TravelRecord r) {
@@ -85,10 +95,19 @@ public class TravelService {
                 log.warn("Failed to parse stops for record {}", r.getId(), e);
             }
         }
+        List<Map<String, Object>> expenses = Collections.emptyList();
+        if (r.getExpensesJson() != null && !r.getExpensesJson().isBlank()) {
+            try {
+                expenses = mapper.readValue(r.getExpensesJson(),
+                        new TypeReference<List<Map<String, Object>>>() {});
+            } catch (Exception e) {
+                log.warn("Failed to parse expenses for record {}", r.getId(), e);
+            }
+        }
         return new TravelRecordDto(
                 r.getId(), r.getOwnerEmail(), r.getTitle(),
                 r.getStartDate(), r.getEndDate(),
-                stops, r.getNotes(),
+                stops, expenses, r.getNotes(),
                 r.getCreatedAt(), r.getUpdatedAt()
         );
     }

@@ -43,7 +43,7 @@ class TravelControllerTest {
     @Test
     void list_returnsOkWithRecords() {
         stubEmail("user@test.com");
-        TravelRecordDto dto = new TravelRecordDto("id-1", "user@test.com", "Trip", null, null, null, null, Instant.now(), Instant.now());
+        TravelRecordDto dto = new TravelRecordDto("id-1", "user@test.com", "Trip", null, null, null, null, null, Instant.now(), Instant.now());
         when(service.list("user@test.com")).thenReturn(List.of(dto));
 
         ResponseEntity<List<TravelRecordDto>> resp = controller.list(request);

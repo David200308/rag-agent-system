@@ -11,6 +11,7 @@ public record TravelRecordDto(
         String startDate,
         String endDate,
         List<Map<String, Object>> stops,
+        List<Map<String, Object>> expenses,
         String notes,
         Instant createdAt,
         Instant updatedAt

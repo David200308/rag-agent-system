@@ -428,6 +428,7 @@ CREATE TABLE IF NOT EXISTS travel_records (
     start_date  VARCHAR(10)   NOT NULL,   -- YYYY-MM-DD
     end_date    VARCHAR(10)   NOT NULL,   -- YYYY-MM-DD
     stops_json  TEXT,                     -- JSON array of stops
+    expenses_json TEXT,                     -- JSON array of expenses
     notes       TEXT,
     created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

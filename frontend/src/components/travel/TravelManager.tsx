@@ -114,16 +114,18 @@ function CityInput({ value, onChange }: { value: string; onChange: (v: string) =
 // ── Stop row in form ──────────────────────────────────────────────────────────
 
 interface StopDraft {
-  city:      string;
-  country:   string;
-  lat:       string;
-  lon:       string;
-  transport: TransportType | "";
-  notes:     string;
+  city:         string;
+  country:      string;
+  lat:          string;
+  lon:          string;
+  transport:    TransportType | "";
+  flightNumber: string;
+  seatNumber:   string;
+  notes:        string;
 }
 
 function emptyStop(): StopDraft {
-  return { city: "", country: "", lat: "", lon: "", transport: "", notes: "" };
+  return { city: "", country: "", lat: "", lon: "", transport: "", flightNumber: "", seatNumber: "", notes: "" };
 }
 
 function StopRow({
@@ -169,6 +171,29 @@ function StopRow({
         </Field>
       )}
 
+      {!isFirst && stop.transport && (
+        <div className="grid grid-cols-2 gap-2">
+          {stop.transport === "PLANE" && (
+            <Field label="Flight Number">
+              <input
+                className={inputCls}
+                placeholder="e.g. CX725"
+                value={stop.flightNumber}
+                onChange={(e) => onChange({ ...stop, flightNumber: e.target.value })}
+              />
+            </Field>
+          )}
+          <Field label="Seat Number">
+            <input
+              className={inputCls}
+              placeholder="e.g. 12A"
+              value={stop.seatNumber}
+              onChange={(e) => onChange({ ...stop, seatNumber: e.target.value })}
+            />
+          </Field>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2">
         <Field label="City *">
           <CityInput value={stop.city} onChange={handleCityChange} />
@@ -182,6 +207,67 @@ function StopRow({
           />
         </Field>
       </div>
+    </div>
+  );
+}
+
+// ── Expense row in form ────────────────────────────────────────────────────────
+
+interface ExpenseDraft {
+  category: string;
+  amount:   string;
+  currency: string;
+}
+
+function emptyExpense(): ExpenseDraft {
+  return { category: "", amount: "", currency: "" };
+}
+
+function ExpenseRow({
+  expense, index, onChange, onRemove,
+}: {
+  expense: ExpenseDraft; index: number;
+  onChange: (e: ExpenseDraft) => void; onRemove: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-[--color-border] bg-[--color-surface] p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-[--color-muted]">Expense {index + 1}</span>
+        <button onClick={onRemove} className="text-[--color-muted] hover:text-red-400 p-0.5 rounded">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="col-span-2">
+          <Field label="Category">
+            <input
+              className={inputCls}
+              placeholder="e.g. Flight"
+              value={expense.category}
+              onChange={(e) => onChange({ ...expense, category: e.target.value })}
+            />
+          </Field>
+        </div>
+        <Field label="Currency">
+          <input
+            className={inputCls}
+            placeholder="USD"
+            value={expense.currency}
+            onChange={(e) => onChange({ ...expense, currency: e.target.value })}
+          />
+        </Field>
+      </div>
+      <Field label="Amount">
+        <input
+          className={inputCls}
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="0.00"
+          value={expense.amount}
+          onChange={(e) => onChange({ ...expense, amount: e.target.value })}
+        />
+      </Field>
     </div>
   );
 }
@@ -218,10 +304,11 @@ interface TripDraft {
   endDate:   string;
   notes:     string;
   stops:     StopDraft[];
+  expenses:  ExpenseDraft[];
 }
 
 function emptyTrip(): TripDraft {
-  return { title: "", startDate: "", endDate: "", notes: "", stops: [emptyStop(), emptyStop()] };
+  return { title: "", startDate: "", endDate: "", notes: "", stops: [emptyStop(), emptyStop()], expenses: [] };
 }
 
 function draftFromRecord(r: TravelRecord): TripDraft {
@@ -231,12 +318,19 @@ function draftFromRecord(r: TravelRecord): TripDraft {
     endDate:   r.endDate,
     notes:     r.notes ?? "",
     stops: r.stops.map((s) => ({
-      city:      s.city,
-      country:   s.country,
-      lat:       String(s.lat),
-      lon:       String(s.lon),
-      transport: (s.transport ?? "") as TransportType | "",
-      notes:     s.notes ?? "",
+      city:         s.city,
+      country:      s.country,
+      lat:          String(s.lat),
+      lon:          String(s.lon),
+      transport:    (s.transport ?? "") as TransportType | "",
+      flightNumber: s.flightNumber ?? "",
+      seatNumber:   s.seatNumber ?? "",
+      notes:        s.notes ?? "",
+    })),
+    expenses: r.expenses.map((e) => ({
+      category: e.category,
+      amount:   String(e.amount),
+      currency: e.currency,
     })),
   };
 }
@@ -248,13 +342,22 @@ function draftToPayload(d: TripDraft) {
     endDate:   d.endDate,
     notes:     d.notes || null,
     stops: d.stops.map((s) => ({
-      city:      s.city,
-      country:   s.country,
-      lat:       parseFloat(s.lat) || 0,
-      lon:       parseFloat(s.lon) || 0,
-      transport: s.transport || null,
-      notes:     s.notes || null,
+      city:         s.city,
+      country:      s.country,
+      lat:          parseFloat(s.lat) || 0,
+      lon:          parseFloat(s.lon) || 0,
+      transport:    s.transport || null,
+      flightNumber: s.flightNumber || null,
+      seatNumber:   s.seatNumber || null,
+      notes:        s.notes || null,
     })),
+    expenses: d.expenses
+      .filter((e) => e.category.trim() !== "")
+      .map((e) => ({
+        category: e.category,
+        amount:   parseFloat(e.amount) || 0,
+        currency: e.currency || "USD",
+      })),
   };
 }
 
@@ -273,6 +376,15 @@ function TripForm({
 
   const removeStop = (i: number) =>
     setF((p) => ({ ...p, stops: p.stops.filter((_, idx) => idx !== i) }));
+
+  const updateExpense = (i: number, e: ExpenseDraft) => {
+    setF((p) => { const expenses = [...p.expenses]; expenses[i] = e; return { ...p, expenses }; });
+  };
+
+  const addExpense = () => setF((p) => ({ ...p, expenses: [...p.expenses, emptyExpense()] }));
+
+  const removeExpense = (i: number) =>
+    setF((p) => ({ ...p, expenses: p.expenses.filter((_, idx) => idx !== i) }));
 
   return (
     <form
@@ -332,6 +444,30 @@ function TripForm({
           className="mt-2 flex items-center gap-1.5 text-xs text-[--color-primary] hover:underline"
         >
           <Plus className="h-3 w-3" /> Add stop
+        </button>
+      </div>
+
+      <div>
+        <p className="text-xs text-[--color-muted] mb-2">
+          Expenses — optional, track trip costs
+        </p>
+        <div className="flex flex-col gap-2">
+          {f.expenses.map((e, i) => (
+            <ExpenseRow
+              key={i}
+              index={i}
+              expense={e}
+              onChange={(ne) => updateExpense(i, ne)}
+              onRemove={() => removeExpense(i)}
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={addExpense}
+          className="mt-2 flex items-center gap-1.5 text-xs text-[--color-primary] hover:underline"
+        >
+          <Plus className="h-3 w-3" /> Add expense
         </button>
       </div>
 
@@ -607,6 +743,193 @@ function AnalysisModal({ records, onClose }: { records: TravelRecord[]; onClose:
   );
 }
 
+// ── Detail panel ───────────────────────────────────────────────────────────────
+
+type DetailTab = "detail" | "expense" | "transport" | "memory";
+
+const DETAIL_TABS: { id: DetailTab; icon: string; label: string }[] = [
+  { id: "detail",    icon: "📋", label: "Detail" },
+  { id: "expense",   icon: "💰", label: "Expense" },
+  { id: "transport", icon: "🚆", label: "Transport" },
+  { id: "memory",    icon: "📸", label: "Memory" },
+];
+
+function EmptyTab({ icon, text }: { icon: string; text: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+      <span className="text-3xl opacity-40">{icon}</span>
+      <p className="text-sm text-[--color-muted]">{text}</p>
+    </div>
+  );
+}
+
+function TravelDetailPanel({
+  record, color, onClose,
+}: {
+  record: TravelRecord; color: string; onClose: () => void;
+}) {
+  const [mounted, setMounted] = useState(false);
+  const [tab, setTab] = useState<DetailTab>("detail");
+
+  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => { setTab("detail"); }, [record.id]);
+
+  if (!mounted) return null;
+
+  const days       = tripDays(record);
+  const year       = record.startDate.slice(0, 4);
+  const route      = record.stops.map((s) => s.city).join(" → ");
+  const countries  = new Set(record.stops.map((s) => s.country)).size;
+  const cities     = new Set(record.stops.map((s) => s.city)).size;
+
+  const legs = record.stops.slice(1).map((s, i) => ({
+    from:         record.stops[i]!.city,
+    to:           s.city,
+    transport:    s.transport,
+    flightNumber: s.flightNumber,
+    seatNumber:   s.seatNumber,
+    notes:        s.notes,
+  }));
+
+  const totalsByCurrency = record.expenses.reduce<Record<string, number>>((acc, e) => {
+    acc[e.currency] = (acc[e.currency] ?? 0) + e.amount;
+    return acc;
+  }, {});
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999]">
+      <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onClose} />
+      <aside className="absolute right-0 top-0 flex h-full w-full flex-col border-l border-[--color-border] bg-[--color-surface-raised] shadow-xl sm:w-[420px]">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2 border-b border-[--color-border] px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold truncate">{record.title}</p>
+            <p className="text-xs text-[--color-muted] mt-0.5">
+              {year} · {days} day{days !== 1 ? "s" : ""}{route ? ` · ${route}` : ""}
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1 text-[--color-muted] hover:bg-[--color-border]/50 shrink-0">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-[--color-border] px-2 overflow-x-auto">
+          {DETAIL_TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 -mb-px px-3 py-2.5 text-xs font-medium transition-colors ${
+                tab === t.id
+                  ? "border-[--color-primary] text-[--color-primary]"
+                  : "border-transparent text-[--color-muted] hover:text-[--color-fg]"
+              }`}
+            >
+              <span>{t.icon}</span> {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          {tab === "detail" && (
+            <div className="space-y-4">
+              <p className="text-sm leading-relaxed">
+                {record.notes || "No notes for this trip yet."}
+              </p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {[
+                  { label: "Year",      value: year },
+                  { label: "Duration",  value: `${days} day${days !== 1 ? "s" : ""}` },
+                  { label: "Countries", value: countries },
+                  { label: "Cities",    value: cities },
+                ].map(({ label, value }) => (
+                  <div key={label} className="rounded-lg border border-[--color-border] bg-[--color-surface] p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-[--color-muted]">{label}</p>
+                    <p className="text-sm font-medium mt-0.5">{value}</p>
+                  </div>
+                ))}
+              </div>
+              {record.stops.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {record.stops.map((s, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-0.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                      style={{ backgroundColor: `${color}20`, color }}
+                    >
+                      <MapPin className="h-2.5 w-2.5" /> {s.city}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === "expense" && (
+            record.expenses.length === 0 ? (
+              <EmptyTab icon="💰" text="No expenses logged yet." />
+            ) : (
+              <div className="space-y-2.5">
+                {record.expenses.map((e, i) => (
+                  <div key={i} className="flex items-center justify-between rounded-lg border border-[--color-border] bg-[--color-surface] px-3.5 py-2.5">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: TRIP_COLORS[i % TRIP_COLORS.length] }} />
+                      {e.category}
+                    </div>
+                    <span className="text-sm font-semibold">{e.amount.toLocaleString()} {e.currency}</span>
+                  </div>
+                ))}
+                <div className="mt-1 flex flex-col gap-1 rounded-lg border border-[--color-border] bg-[--color-surface] px-3.5 py-2.5">
+                  {Object.entries(totalsByCurrency).map(([currency, total]) => (
+                    <div key={currency} className="flex items-center justify-between text-sm">
+                      <span className="text-[--color-muted]">Total ({currency})</span>
+                      <span className="font-semibold">{total.toLocaleString()} {currency}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          )}
+
+          {tab === "transport" && (
+            legs.length === 0 ? (
+              <EmptyTab icon="🚆" text="Add stops to see transport legs." />
+            ) : (
+              <div className="space-y-2.5">
+                {legs.map((leg, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-lg border border-[--color-border] bg-[--color-surface] px-3.5 py-2.5">
+                    <span
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base"
+                      style={{ backgroundColor: `${color}20` }}
+                    >
+                      {leg.transport ? TRANSPORT_EMOJI[leg.transport] : "📍"}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{leg.from} → {leg.to}</p>
+                      <p className="text-xs text-[--color-muted] mt-0.5">
+                        {leg.transport ? TRANSPORT_LABELS[leg.transport] : "Mode unknown"}
+                        {leg.flightNumber ? ` · ${leg.flightNumber}` : ""}
+                        {leg.seatNumber ? ` · Seat ${leg.seatNumber}` : ""}
+                        {leg.notes ? ` · ${leg.notes}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {tab === "memory" && (
+            <EmptyTab icon="📸" text="Memories coming soon." />
+          )}
+        </div>
+      </aside>
+    </div>,
+    document.body,
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 const MAP_MIN = 160;
@@ -618,6 +941,7 @@ export function TravelManager() {
   const [loading,    setLoading]    = useState(true);
   const [saving,     setSaving]     = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailId,   setDetailId]   = useState<string | null>(null);
   const [mapHeight,  setMapHeight]  = useState(MAP_DEFAULT);
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
 
@@ -681,6 +1005,7 @@ export function TravelManager() {
     if (!confirm("Delete this trip?")) return;
     await apiDelete(id);
     if (selectedId === id) setSelectedId(null);
+    if (detailId === id) setDetailId(null);
     await load();
   }
 
@@ -691,6 +1016,9 @@ export function TravelManager() {
       </div>
     );
   }
+
+  const detailIndex  = records.findIndex((r) => r.id === detailId);
+  const detailRecord = detailIndex >= 0 ? records[detailIndex]! : null;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -773,7 +1101,7 @@ export function TravelManager() {
                 record={r}
                 color={TRIP_COLORS[i % TRIP_COLORS.length] ?? "#6b7280"}
                 selected={selectedId === r.id}
-                onSelect={() => setSelectedId((prev) => prev === r.id ? null : r.id)}
+                onSelect={() => { setSelectedId(r.id); setDetailId(r.id); }}
                 onEdit={() => setModal({ mode: "edit", record: r })}
                 onDelete={() => handleDelete(r.id)}
               />
@@ -800,6 +1128,15 @@ export function TravelManager() {
       {/* Analysis modal */}
       {analysisOpen && (
         <AnalysisModal records={records} onClose={() => setAnalysisOpen(false)} />
+      )}
+
+      {/* Detail panel */}
+      {detailRecord && (
+        <TravelDetailPanel
+          record={detailRecord}
+          color={TRIP_COLORS[detailIndex % TRIP_COLORS.length] ?? "#6b7280"}
+          onClose={() => setDetailId(null)}
+        />
       )}
     </div>
   );
