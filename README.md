@@ -40,7 +40,7 @@
 
 | Layer            | Technology                             |
 | ---------------- | -------------------------------------- |
-| Runtime          | Go 1.24                                |
+| Runtime          | Go 1.25                                |
 | Task queue       | Asynq (Redis-backed)                   |
 | Schedule storage | MySQL (shared with app DB)             |
 | Retry policy     | MaxRetry=3, task timeout=5 min (Asynq) |
