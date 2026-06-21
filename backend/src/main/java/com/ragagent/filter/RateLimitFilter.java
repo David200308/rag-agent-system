@@ -35,13 +35,17 @@ import java.util.concurrent.TimeUnit;
  * Runs at Order(3), after AuthFilter (Order(1)) and CliSignatureFilter (Order(2)),
  * so the email attribute is already set when this filter executes.
  *
- * Skipped for auth, scheduler, actuator, Swagger, and MCP paths —
- * the same exemption list as AuthFilter.
+ * Skipped for scheduler, share, actuator, Swagger, and MCP paths. Unlike
+ * AuthFilter/ClientIdentityFilter, /api/v1/auth/** is NOT exempt here — OTP
+ * request/verify are pre-auth (no authenticatedEmail yet, so keyed by IP) and
+ * are the most brute-forceable endpoints in the system, so they get their own
+ * tight OTP bucket instead of running unthrottled.
  *
  * Limits (all per-minute, configurable via env):
- *   AGENT_QUERY  — LLM query calls        (default 20/min)
- *   INGEST       — document ingest calls  (default 10/min)
- *   DEFAULT      — everything else        (default 100/min)
+ *   AGENT_QUERY  — LLM query calls               (default 20/min)
+ *   INGEST       — document ingest calls         (default 10/min)
+ *   OTP          — /api/v1/auth/request-otp,verify-otp (default 5/min per IP)
+ *   DEFAULT      — everything else               (default 100/min)
  */
 @Slf4j
 @Component
@@ -57,8 +61,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return path.startsWith("/api/v1/auth/")
-            || path.startsWith("/api/v1/scheduler/")
+        return path.startsWith("/api/v1/scheduler/")
             || path.startsWith("/api/v1/share/")
             || path.startsWith("/actuator/")
             || path.startsWith("/v3/api-docs")
@@ -103,14 +106,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private String extractClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
+        if (props.trustForwardedFor()) {
+            String xff = request.getHeader("X-Forwarded-For");
+            if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
+        }
         return request.getRemoteAddr();
     }
 
     private String categorize(String path) {
         if (path.equals("/api/v1/agent/query"))          return "QUERY";
         if (path.startsWith("/api/v1/agent/ingest"))     return "INGEST";
+        if (path.equals("/api/v1/auth/request-otp")
+                || path.equals("/api/v1/auth/verify-otp")) return "OTP";
         return "DEFAULT";
     }
 
@@ -118,6 +125,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         long capacity = switch (category) {
             case "QUERY"  -> props.agentQueryLimit();
             case "INGEST" -> props.ingestLimit();
+            case "OTP"    -> props.otpLimit();
             default       -> props.defaultLimit();
         };
         return BucketConfiguration.builder()

@@ -59,7 +59,7 @@ class RateLimitFilterTest {
 
     @BeforeEach
     void setUp() {
-        RateLimitProperties props = new RateLimitProperties(20, 10, 100);
+        RateLimitProperties props = new RateLimitProperties(20, 10, 100, 5, false);
         agentMetrics = new AgentMetrics(new SimpleMeterRegistry());
         filter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics, newProxyManager());
     }
@@ -67,10 +67,12 @@ class RateLimitFilterTest {
     // ── shouldNotFilter ───────────────────────────────────────────────────────
 
     @Test
-    void shouldNotFilter_authPath_returnsTrue() throws Exception {
+    void shouldNotFilter_authPath_returnsFalse() throws Exception {
+        // /api/v1/auth/** is no longer exempt — OTP request/verify get their own
+        // tight bucket below instead of running unthrottled.
         MockHttpServletRequest req = new MockHttpServletRequest();
-        req.setRequestURI("/api/v1/auth/otp/request");
-        assertThat(filter.shouldNotFilter(req)).isTrue();
+        req.setRequestURI("/api/v1/auth/verify-otp");
+        assertThat(filter.shouldNotFilter(req)).isFalse();
     }
 
     @Test
@@ -152,6 +154,21 @@ class RateLimitFilterTest {
         assertThat(callCategorize("/api/v1/models")).isEqualTo("DEFAULT");
     }
 
+    @Test
+    void categorize_requestOtpPath_returnsOTP() throws Exception {
+        assertThat(callCategorize("/api/v1/auth/request-otp")).isEqualTo("OTP");
+    }
+
+    @Test
+    void categorize_verifyOtpPath_returnsOTP() throws Exception {
+        assertThat(callCategorize("/api/v1/auth/verify-otp")).isEqualTo("OTP");
+    }
+
+    @Test
+    void categorize_otherAuthPath_returnsDEFAULT() throws Exception {
+        assertThat(callCategorize("/api/v1/auth/logout")).isEqualTo("DEFAULT");
+    }
+
     // ── doFilterInternal — happy path ─────────────────────────────────────────
 
     @Test
@@ -193,7 +210,7 @@ class RateLimitFilterTest {
     }
 
     @Test
-    void doFilterInternal_xForwardedFor_usesFirstIp() throws Exception {
+    void doFilterInternal_xForwardedFor_presentButUntrusted_doesNotThrow() throws Exception {
         MockHttpServletRequest  req  = new MockHttpServletRequest();
         MockHttpServletResponse resp = new MockHttpServletResponse();
         req.setRequestURI("/api/v1/models");
@@ -204,12 +221,69 @@ class RateLimitFilterTest {
         verify(chain).doFilter(req, resp);
     }
 
+    // ── extractClientIp — trust-forwarded-for toggle ──────────────────────────
+
+    @Test
+    void extractClientIp_trustForwardedForDisabled_ignoresHeaderUsesRemoteAddr() throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setRemoteAddr("203.0.113.9");
+        req.addHeader("X-Forwarded-For", "10.0.0.1, 10.0.0.2");
+
+        assertThat(callExtractClientIp(filter, req)).isEqualTo("203.0.113.9");
+    }
+
+    @Test
+    void extractClientIp_trustForwardedForEnabled_usesFirstHeaderIp() throws Exception {
+        RateLimitProperties props = new RateLimitProperties(20, 10, 100, 5, true);
+        RateLimitFilter trustingFilter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics, newProxyManager());
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setRemoteAddr("203.0.113.9");
+        req.addHeader("X-Forwarded-For", "10.0.0.1, 10.0.0.2");
+
+        assertThat(callExtractClientIp(trustingFilter, req)).isEqualTo("10.0.0.1");
+    }
+
+    @Test
+    void extractClientIp_trustForwardedForEnabled_noHeader_fallsBackToRemoteAddr() throws Exception {
+        RateLimitProperties props = new RateLimitProperties(20, 10, 100, 5, true);
+        RateLimitFilter trustingFilter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics, newProxyManager());
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setRemoteAddr("203.0.113.9");
+
+        assertThat(callExtractClientIp(trustingFilter, req)).isEqualTo("203.0.113.9");
+    }
+
+    @Test
+    void doFilterInternal_trustForwardedForDisabled_spoofedHeaderSharedAcrossDifferentClients_doesNotShareBucket() throws Exception {
+        RateLimitProperties props = new RateLimitProperties(1, 1, 1, 1, false);
+        RateLimitFilter limitFilter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics, newProxyManager());
+
+        MockHttpServletRequest reqA = new MockHttpServletRequest();
+        reqA.setRequestURI("/api/v1/agent/query");
+        reqA.setRemoteAddr("203.0.113.1");
+        reqA.addHeader("X-Forwarded-For", "1.2.3.4"); // spoofed — same for both clients
+
+        MockHttpServletRequest reqB = new MockHttpServletRequest();
+        reqB.setRequestURI("/api/v1/agent/query");
+        reqB.setRemoteAddr("203.0.113.2");
+        reqB.addHeader("X-Forwarded-For", "1.2.3.4"); // spoofed — same for both clients
+
+        MockHttpServletResponse respA = new MockHttpServletResponse();
+        limitFilter.doFilterInternal(reqA, respA, chain);
+        assertThat(respA.getStatus()).isNotEqualTo(429);
+
+        // Different real client (remoteAddr) — must not be throttled by client A's spoofed XFF.
+        MockHttpServletResponse respB = new MockHttpServletResponse();
+        limitFilter.doFilterInternal(reqB, respB, chain);
+        assertThat(respB.getStatus()).isNotEqualTo(429);
+    }
+
     // ── rate limit exceeded — all tokens consumed ─────────────────────────────
 
     @Test
     void doFilterInternal_limitExceeded_returns429() throws Exception {
         // Use a very low limit so we can exhaust it
-        RateLimitProperties props = new RateLimitProperties(1, 1, 1);
+        RateLimitProperties props = new RateLimitProperties(1, 1, 1, 1, false);
         RateLimitFilter limitFilter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics, newProxyManager());
 
         MockHttpServletRequest  req  = new MockHttpServletRequest();
@@ -229,11 +303,35 @@ class RateLimitFilterTest {
         assertThat(resp.getHeader("Retry-After")).isNotNull();
     }
 
+    @Test
+    void doFilterInternal_otpBucketExceeded_returns429() throws Exception {
+        RateLimitProperties props = new RateLimitProperties(20, 10, 100, 1, false);
+        RateLimitFilter limitFilter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics, newProxyManager());
+
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setRequestURI("/api/v1/auth/verify-otp");
+        req.setRemoteAddr("203.0.113.5");
+
+        MockHttpServletResponse resp1 = new MockHttpServletResponse();
+        limitFilter.doFilterInternal(req, resp1, chain);
+        assertThat(resp1.getStatus()).isNotEqualTo(429);
+
+        MockHttpServletResponse resp2 = new MockHttpServletResponse();
+        limitFilter.doFilterInternal(req, resp2, chain);
+        assertThat(resp2.getStatus()).isEqualTo(429);
+    }
+
     // ── reflection helper ─────────────────────────────────────────────────────
 
     private String callCategorize(String path) throws Exception {
         Method m = RateLimitFilter.class.getDeclaredMethod("categorize", String.class);
         m.setAccessible(true);
         return (String) m.invoke(filter, path);
+    }
+
+    private String callExtractClientIp(RateLimitFilter targetFilter, HttpServletRequest request) throws Exception {
+        Method m = RateLimitFilter.class.getDeclaredMethod("extractClientIp", HttpServletRequest.class);
+        m.setAccessible(true);
+        return (String) m.invoke(targetFilter, request);
     }
 }

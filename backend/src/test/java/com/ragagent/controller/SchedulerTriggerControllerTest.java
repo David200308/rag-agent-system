@@ -10,12 +10,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.ResponseEntity;
 
 import java.lang.reflect.Method;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -27,6 +32,8 @@ class SchedulerTriggerControllerTest {
     @Mock RagAgentGraph       agentGraph;
     @Mock ConversationService conversationService;
     @Mock WorkflowRunService  workflowRunService;
+    @Mock StringRedisTemplate redisTemplate;
+    @Mock ValueOperations<String, String> valueOperations;
 
     // SchedulerProperties is a record (final) — instantiate directly
     SchedulerProperties schedulerProperties = new SchedulerProperties("secret-key", "http://scheduler");
@@ -35,8 +42,15 @@ class SchedulerTriggerControllerTest {
 
     @BeforeEach
     void setUp() {
+        // Fake idempotency-key store backed by a plain set — keeps the test a pure
+        // unit test, no Redis needed. Mirrors setIfAbsent's real semantics.
+        Set<String> claimed = ConcurrentHashMap.newKeySet();
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class)))
+                .thenAnswer(inv -> claimed.add(inv.getArgument(0)));
+
         controller = new SchedulerTriggerController(agentGraph, conversationService,
-                schedulerProperties, workflowRunService);
+                schedulerProperties, workflowRunService, redisTemplate);
     }
 
     // ── /trigger — service key validation ─────────────────────────────────────
@@ -46,7 +60,7 @@ class SchedulerTriggerControllerTest {
         var body = new SchedulerTriggerController.TriggerRequest(
                 "user@example.com", "conv-1", "Hello?", 5, true, false);
 
-        ResponseEntity<?> resp = controller.trigger(null, body);
+        ResponseEntity<?> resp = controller.trigger(null, null, body);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(401);
     }
@@ -56,9 +70,49 @@ class SchedulerTriggerControllerTest {
         var body = new SchedulerTriggerController.TriggerRequest(
                 "user@example.com", "conv-1", "Hello?", 5, true, false);
 
-        ResponseEntity<?> resp = controller.trigger("wrong-key", body);
+        ResponseEntity<?> resp = controller.trigger("wrong-key", null, body);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(401);
+    }
+
+    // ── /trigger — idempotency ─────────────────────────────────────────────────
+
+    @Test
+    void trigger_duplicateIdempotencyKey_skipsExecutionReturns200() {
+        when(conversationService.resolveConversation(anyString(), anyString())).thenReturn("conv-resolved");
+        when(conversationService.loadHistory(anyString())).thenReturn(List.of());
+        when(agentGraph.getGraph()).thenThrow(new RuntimeException("should not be reached on duplicate"));
+
+        var body = new SchedulerTriggerController.TriggerRequest(
+                "user@example.com", "conv-1", "Hello?", 5, true, false);
+
+        ResponseEntity<?> first = controller.trigger("secret-key", "run-dup-1", body);
+        // First call still hits the pipeline (which we've stubbed to throw → 500),
+        // proving the idempotency check doesn't block a genuinely new key.
+        assertThat(first.getStatusCode().value()).isEqualTo(500);
+
+        // Second call with the SAME idempotency key must short-circuit before the
+        // pipeline (and therefore before resolveConversation) runs again.
+        reset(conversationService);
+        ResponseEntity<?> second = controller.trigger("secret-key", "run-dup-1", body);
+
+        assertThat(second.getStatusCode().value()).isEqualTo(200);
+        verifyNoInteractions(conversationService);
+    }
+
+    @Test
+    void trigger_noIdempotencyKey_alwaysExecutes() {
+        when(conversationService.resolveConversation(anyString(), anyString())).thenReturn("conv-resolved");
+        when(conversationService.loadHistory(anyString())).thenReturn(List.of());
+        when(agentGraph.getGraph()).thenThrow(new RuntimeException("expected"));
+
+        var body = new SchedulerTriggerController.TriggerRequest(
+                "user@example.com", "conv-1", "Hello?", 5, true, false);
+
+        controller.trigger("secret-key", null, body);
+        controller.trigger("secret-key", null, body);
+
+        verify(conversationService, times(2)).resolveConversation(anyString(), anyString());
     }
 
     // ── /workflow-trigger — service key validation ─────────────────────────────
@@ -68,7 +122,7 @@ class SchedulerTriggerControllerTest {
         var body = new SchedulerTriggerController.WorkflowTriggerRequest(
                 "user@example.com", "wf-123", "Run this");
 
-        ResponseEntity<?> resp = controller.workflowTrigger(null, body);
+        ResponseEntity<?> resp = controller.workflowTrigger(null, null, body);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(401);
     }
@@ -78,7 +132,7 @@ class SchedulerTriggerControllerTest {
         var body = new SchedulerTriggerController.WorkflowTriggerRequest(
                 "user@example.com", "wf-123", "Run this");
 
-        ResponseEntity<?> resp = controller.workflowTrigger("bad-key", body);
+        ResponseEntity<?> resp = controller.workflowTrigger("bad-key", null, body);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(401);
     }
@@ -91,7 +145,7 @@ class SchedulerTriggerControllerTest {
         var body = new SchedulerTriggerController.WorkflowTriggerRequest(
                 "user@example.com", "wf-123", "Run this");
 
-        ResponseEntity<Map<String, String>> resp = controller.workflowTrigger("secret-key", body);
+        ResponseEntity<Map<String, String>> resp = controller.workflowTrigger("secret-key", null, body);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("runId", "run-abc");
@@ -105,10 +159,25 @@ class SchedulerTriggerControllerTest {
         var body = new SchedulerTriggerController.WorkflowTriggerRequest(
                 null, "wf-123", "Run this");
 
-        ResponseEntity<Map<String, String>> resp = controller.workflowTrigger("secret-key", body);
+        ResponseEntity<Map<String, String>> resp = controller.workflowTrigger("secret-key", null, body);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("runId", "run-xyz");
+    }
+
+    @Test
+    void workflowTrigger_duplicateIdempotencyKey_skipsStartRun() {
+        when(workflowRunService.startRun(anyString(), anyString(), anyString(), anyBoolean()))
+                .thenReturn("run-once");
+        var body = new SchedulerTriggerController.WorkflowTriggerRequest(
+                "user@example.com", "wf-123", "Run this");
+
+        ResponseEntity<Map<String, String>> first = controller.workflowTrigger("secret-key", "run-dup-2", body);
+        ResponseEntity<Map<String, String>> second = controller.workflowTrigger("secret-key", "run-dup-2", body);
+
+        assertThat(first.getBody()).containsEntry("runId", "run-once");
+        assertThat(second.getBody()).containsEntry("status", "duplicate");
+        verify(workflowRunService, times(1)).startRun(anyString(), anyString(), anyString(), anyBoolean());
     }
 
     // ── withConversationId ────────────────────────────────────────────────────
@@ -184,7 +253,7 @@ class SchedulerTriggerControllerTest {
         var body = new SchedulerTriggerController.TriggerRequest(
                 "user@example.com", "conv-1", "Hello?", 5, true, false);
 
-        ResponseEntity<?> resp = controller.trigger("secret-key", body);
+        ResponseEntity<?> resp = controller.trigger("secret-key", null, body);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(500);
     }
@@ -200,7 +269,7 @@ class SchedulerTriggerControllerTest {
         var body = new SchedulerTriggerController.TriggerRequest(
                 null, "conv-1", "Hello?", 5, true, false);
 
-        ResponseEntity<?> resp = controller.trigger("secret-key", body);
+        ResponseEntity<?> resp = controller.trigger("secret-key", null, body);
 
         // Still returns 500 — graph failure is handled gracefully
         assertThat(resp.getStatusCode().value()).isEqualTo(500);

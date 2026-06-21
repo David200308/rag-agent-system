@@ -1,8 +1,10 @@
 package com.ragagent.mcp;
 
 import com.ragagent.knowledge.KnowledgeSourceService;
+import com.ragagent.org.OrgContext;
 import com.ragagent.rag.DocumentIngestionService;
 import com.ragagent.schema.UrlIngestionResult;
+import com.ragagent.webfetch.WebFetchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +24,7 @@ class McpConnectorServiceTest {
 
     @Mock DocumentIngestionService ingestionService;
     @Mock KnowledgeSourceService   knowledgeSourceService;
+    @Mock WebFetchService          webFetchService;
     @Mock RestClient.Builder       restClientBuilder;
     @Mock RestClient               restClient;
     @Mock RestClient.RequestHeadersUriSpec uriSpec;
@@ -32,12 +35,24 @@ class McpConnectorServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new McpConnectorService(ingestionService, knowledgeSourceService, restClientBuilder);
+        service = new McpConnectorService(ingestionService, knowledgeSourceService, webFetchService, restClientBuilder);
+        lenient().when(webFetchService.isUrlAllowed(anyString(), any(OrgContext.class))).thenReturn(true);
         lenient().when(restClientBuilder.build()).thenReturn(restClient);
         lenient().when(restClient.get()).thenReturn(uriSpec);
         lenient().when(uriSpec.uri(anyString())).thenReturn(headersSpec);
         lenient().when(headersSpec.header(anyString(), any(String[].class))).thenReturn(headersSpec);
         lenient().when(headersSpec.retrieve()).thenReturn(responseSpec);
+    }
+
+    // ── fetchAndIngest — domain whitelist ───────────────────────────────────────
+
+    @Test
+    void fetchAndIngest_domainNotWhitelisted_throwsIllegalState() {
+        when(webFetchService.isUrlAllowed(anyString(), any(OrgContext.class))).thenReturn(false);
+
+        assertThatThrownBy(() -> service.fetchAndIngest("https://evil.example.com", "tech"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not whitelisted");
     }
 
     // ── fetchAndIngest — empty/null response ──────────────────────────────────

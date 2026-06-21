@@ -1,8 +1,10 @@
 package com.ragagent.mcp;
 
 import com.ragagent.knowledge.KnowledgeSourceService;
+import com.ragagent.org.OrgContext;
 import com.ragagent.rag.DocumentIngestionService;
 import com.ragagent.schema.UrlIngestionResult;
+import com.ragagent.webfetch.WebFetchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -18,6 +20,10 @@ import java.util.Map;
  * Used by both:
  *   - REST endpoint  POST /api/v1/agent/ingest/url
  *   - MCP tool       ingest_url (exposed via RagMcpService)
+ *
+ * Both callers are gated by the same domain whitelist WebFetchService enforces for
+ * /api/v1/agent/web-fetch — without it, this fetches any attacker-supplied URL
+ * (internal services, cloud metadata endpoints, etc.) with no restriction.
  */
 @Slf4j
 @Service
@@ -26,6 +32,7 @@ public class McpConnectorService {
 
     private final DocumentIngestionService ingestionService;
     private final KnowledgeSourceService   knowledgeSourceService;
+    private final WebFetchService          webFetchService;
     private final RestClient.Builder       restClientBuilder;
 
     /**
@@ -40,6 +47,11 @@ public class McpConnectorService {
 
     public UrlIngestionResult fetchAndIngest(String url, String category, String ownerEmail) {
         log.info("[McpConnectorService] Fetching URL: {}", url);
+
+        if (!webFetchService.isUrlAllowed(url, new OrgContext(ownerEmail, "PERSONAL", null))) {
+            throw new IllegalStateException(
+                    "Domain not whitelisted: " + url + ". Add it via POST /api/v1/agent/web-fetch/whitelist");
+        }
 
         // ── 1. Fetch raw HTML ────────────────────────────────────────────────
         String html = restClientBuilder.build()

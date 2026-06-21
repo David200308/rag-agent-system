@@ -1,6 +1,7 @@
 package com.ragagent.fallback;
 
 import com.ragagent.config.ChatModelFactory;
+import com.ragagent.config.FallbackProperties;
 import com.ragagent.model.ModelConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,11 +12,13 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -37,9 +40,10 @@ class FallbackServiceTest {
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         lenient().when(valueOperations.get(anyString())).thenAnswer(inv -> cacheBacking.get(inv.getArgument(0)));
         lenient().doAnswer(inv -> cacheBacking.put(inv.getArgument(0), inv.getArgument(1)))
-                .when(valueOperations).set(anyString(), anyString());
+                .when(valueOperations).set(anyString(), anyString(), any(Duration.class));
 
-        fallbackService = new FallbackService(chatClient, modelConfigService, chatModelFactory, redisTemplate);
+        fallbackService = new FallbackService(chatClient, modelConfigService, chatModelFactory, redisTemplate,
+                new FallbackProperties(60));
     }
 
     // ── cacheAnswer & cache-hit path ───────────────────────────────────────────
@@ -62,6 +66,29 @@ class FallbackServiceTest {
         String result = fallbackService.resolveFallback("HELLO WORLD", "reason", Optional.empty());
 
         assertThat(result).startsWith("(Cached)");
+    }
+
+    @Test
+    void cacheAnswer_setsTtlFromConfiguredMinutes() {
+        fallbackService.cacheAnswer("ttl query", "answer");
+
+        verify(valueOperations).set(eq("fallback:answer-cache:ttl query"), eq("answer"), eq(Duration.ofMinutes(60)));
+    }
+
+    @Test
+    void tryDirectAnswer_cachesWithTtlFromConfiguredMinutes() {
+        ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(requestSpec.call()).thenReturn(callSpec);
+        when(callSpec.content()).thenReturn("Direct answer");
+
+        fallbackService.tryDirectAnswer("ttl direct query", "no cache", Optional.empty());
+
+        verify(valueOperations).set(eq("fallback:answer-cache:ttl direct query"), eq("Direct answer"),
+                eq(Duration.ofMinutes(60)));
     }
 
     @Test

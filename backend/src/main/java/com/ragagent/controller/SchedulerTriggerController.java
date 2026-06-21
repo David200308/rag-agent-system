@@ -12,10 +12,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.RunnableConfig;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +40,10 @@ public class SchedulerTriggerController {
     private final ConversationService   conversationService;
     private final SchedulerProperties   schedulerProperties;
     private final WorkflowRunService    workflowRunService;
+    private final StringRedisTemplate   redisTemplate;
+
+    private static final String IDEMPOTENCY_KEY_PREFIX = "scheduler:idempotency:";
+    private static final Duration IDEMPOTENCY_TTL      = Duration.ofHours(24);
 
     /** Body sent by the Go scheduler when a cron fires. */
     public record TriggerRequest(
@@ -55,6 +61,7 @@ public class SchedulerTriggerController {
     @Operation(summary = "Execute a scheduled query on behalf of a user (internal, service-key protected)")
     public ResponseEntity<AgentResponse> trigger(
             @RequestHeader(value = "X-Scheduler-Key", required = false) String serviceKey,
+            @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody TriggerRequest body) {
 
         // Validate shared service key
@@ -63,7 +70,15 @@ public class SchedulerTriggerController {
             return ResponseEntity.status(401).build();
         }
 
-        String runId = UUID.randomUUID().toString();
+        // Asynq retries (MaxRetry=3) re-call this endpoint with the same idempotency key
+        // if a prior attempt times out after the message was already sent — without this
+        // check, a retry would re-run the whole pipeline and send a duplicate message.
+        if (idempotencyKey != null && !claimIdempotencyKey(idempotencyKey)) {
+            log.info("[SchedulerTrigger] Duplicate request for idempotencyKey={} — skipping re-execution", idempotencyKey);
+            return ResponseEntity.ok().build();
+        }
+
+        String runId = idempotencyKey != null ? idempotencyKey : UUID.randomUUID().toString();
         log.info("[SchedulerTrigger] Firing runId={} conv={} user={} message='{}'",
                 runId, body.conversationId(), body.userEmail(), body.message());
 
@@ -124,11 +139,18 @@ public class SchedulerTriggerController {
     @Operation(summary = "Start a scheduled workflow run on behalf of a user (internal, service-key protected)")
     public ResponseEntity<Map<String, String>> workflowTrigger(
             @RequestHeader(value = "X-Scheduler-Key", required = false) String serviceKey,
+            @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody WorkflowTriggerRequest body) {
 
         if (serviceKey == null || !serviceKey.equals(schedulerProperties.serviceKey())) {
             log.warn("[SchedulerTrigger] Rejected workflow-trigger — invalid or missing X-Scheduler-Key");
             return ResponseEntity.status(401).build();
+        }
+
+        if (idempotencyKey != null && !claimIdempotencyKey(idempotencyKey)) {
+            log.info("[SchedulerTrigger] Duplicate workflow-trigger for idempotencyKey={} — skipping re-execution",
+                    idempotencyKey);
+            return ResponseEntity.ok(Map.of("status", "duplicate"));
         }
 
         log.info("[SchedulerTrigger] workflow-trigger workflowId={} user={}", body.workflowId(), body.userEmail());
@@ -138,6 +160,13 @@ public class SchedulerTriggerController {
                 body.userEmail() != null ? body.userEmail() : "anonymous",
                 false);
         return ResponseEntity.ok(Map.of("runId", runId));
+    }
+
+    /** Returns true the first time this key is seen (caller should proceed); false on a repeat. */
+    private boolean claimIdempotencyKey(String idempotencyKey) {
+        Boolean isNew = redisTemplate.opsForValue()
+                .setIfAbsent(IDEMPOTENCY_KEY_PREFIX + idempotencyKey, "1", IDEMPOTENCY_TTL);
+        return Boolean.TRUE.equals(isNew);
     }
 
     private AgentResponse withConversationId(AgentResponse raw, String conversationId) {

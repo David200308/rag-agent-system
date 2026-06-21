@@ -1,5 +1,6 @@
 package com.ragagent.connector;
 
+import com.ragagent.agent.ToolCallBudget;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Component;
 public class GoogleCalendarAgentTool {
 
     private final GoogleCalendarService googleCalendarService;
+    private final ToolCallBudget        toolCallBudget;
 
     private static final ThreadLocal<String> CURRENT_EMAIL  = new ThreadLocal<>();
     private static final ThreadLocal<String> CURRENT_ORG_ID = new ThreadLocal<>();
@@ -34,6 +36,7 @@ public class GoogleCalendarAgentTool {
             Specify maxResults (default 10, max 25) to control how many events are returned.
             """)
     public String listUpcomingEvents(int maxResults) {
+        if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
         int limit = Math.min(Math.max(maxResults, 1), 25);
         log.info("[GoogleCalendarAgentTool] Listing {} events for '{}'", limit, CURRENT_EMAIL.get());
         try {
@@ -53,6 +56,7 @@ public class GoogleCalendarAgentTool {
             """)
     public String createCalendarEvent(String title, String startDateTime, String endDateTime,
                                       String description, String location) {
+        if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
         log.info("[GoogleCalendarAgentTool] Creating event '{}' for '{}'", title, CURRENT_EMAIL.get());
         try {
             return googleCalendarService.createEvent(

@@ -31,11 +31,14 @@ public class JwtService {
     private final SecretKey key;
     private final long      expiryMillis;
 
+    /**
+     * @throws io.jsonwebtoken.security.WeakKeyException if auth.jwt-secret is under 256 bits
+     *         (32 bytes) — fails app startup rather than silently zero-padding a short secret
+     *         into a low-entropy key.
+     */
     public JwtService(AuthProperties props) {
         byte[] keyBytes = props.jwtSecret().getBytes(StandardCharsets.UTF_8);
-        byte[] padded = new byte[32];
-        System.arraycopy(keyBytes, 0, padded, 0, Math.min(keyBytes.length, 32));
-        this.key          = Keys.hmacShaKeyFor(padded);
+        this.key          = Keys.hmacShaKeyFor(keyBytes);
         this.expiryMillis = (long) props.jwtExpiryHours() * 3_600_000L;
     }
 

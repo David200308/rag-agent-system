@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { cn, formatTime } from "@/lib/utils";
 import { useTimezone } from "@/hooks/useTimezone";
 import { useChatStore } from "@/store/chatStore";
+import { useSkillsStore } from "@/store/skillsStore";
 import { Button } from "@/components/ui/Button";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import {
@@ -53,6 +54,11 @@ export function Sidebar({ onSelectConversation, isOpen = false, onClose, desktop
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
+    // Clear conversations, skill selections, and timezone so the next user on
+    // this device doesn't see the previous user's data before logging in.
+    useChatStore.getState().clearAll();
+    useSkillsStore.getState().clearAll();
+    localStorage.removeItem("rag-timezone");
     router.push("/login");
   }
 

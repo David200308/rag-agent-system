@@ -1,5 +1,6 @@
 package com.ragagent.connector;
 
+import com.ragagent.agent.ToolCallBudget;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
 public class GoogleSheetsAgentTool {
 
     private final GoogleSheetsService googleSheetsService;
+    private final ToolCallBudget      toolCallBudget;
 
     private static final ThreadLocal<String> CURRENT_EMAIL  = new ThreadLocal<>();
     private static final ThreadLocal<String> CURRENT_ORG_ID = new ThreadLocal<>();
@@ -41,6 +43,7 @@ public class GoogleSheetsAgentTool {
             Returns the URL of the created spreadsheet.
             """)
     public String writeToGoogleSheets(String title, String content) {
+        if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
         String email = CURRENT_EMAIL.get();
         log.info("[GoogleSheetsAgentTool] Creating sheet '{}' for '{}'", title, email);
         try {
@@ -58,6 +61,7 @@ public class GoogleSheetsAgentTool {
             Pass the full URL or spreadsheet ID. Returns all sheet data as tab-separated text.
             """)
     public String readGoogleSheet(String sheetUrl) {
+        if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
         String email = CURRENT_EMAIL.get();
         log.info("[GoogleSheetsAgentTool] Reading sheet '{}' for '{}'", sheetUrl, email);
         try {

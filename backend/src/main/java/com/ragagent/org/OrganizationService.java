@@ -1,5 +1,6 @@
 package com.ragagent.org;
 
+import com.ragagent.config.AdminProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,18 @@ public class OrganizationService {
 
     private final OrganizationRepository orgRepo;
     private final OrgMemberRepository    memberRepo;
+    private final AdminProperties        adminProperties;
+
+    /**
+     * Requires the caller to be a configured system admin (admin.emails); throws
+     * SecurityException if not. Guards the /api/v1/admin/orgs/** endpoints, which
+     * operate across all organizations and are not scoped by org membership.
+     */
+    public void requireSystemAdmin(String callerEmail) {
+        if (!adminProperties.isAdmin(callerEmail)) {
+            throw new SecurityException("Admin access required.");
+        }
+    }
 
     // ── Org CRUD ──────────────────────────────────────────────────────────────
 

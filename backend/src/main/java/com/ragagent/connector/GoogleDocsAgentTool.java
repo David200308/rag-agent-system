@@ -1,5 +1,6 @@
 package com.ragagent.connector;
 
+import com.ragagent.agent.ToolCallBudget;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Component;
 public class GoogleDocsAgentTool {
 
     private final GoogleDocsService googleDocsService;
+    private final ToolCallBudget    toolCallBudget;
 
     private static final ThreadLocal<String> CURRENT_EMAIL  = new ThreadLocal<>();
     private static final ThreadLocal<String> CURRENT_ORG_ID = new ThreadLocal<>();
@@ -44,6 +46,7 @@ public class GoogleDocsAgentTool {
             Returns the URL of the created document.
             """)
     public String writeToGoogleDocs(String title, String content) {
+        if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
         String email = CURRENT_EMAIL.get();
         log.info("[GoogleDocsAgentTool] Creating doc '{}' for user '{}'", title, email);
         try {
@@ -67,6 +70,7 @@ public class GoogleDocsAgentTool {
             Pass the full URL or document ID. Returns the document title and full text.
             """)
     public String readGoogleDoc(String docUrl) {
+        if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
         String email = CURRENT_EMAIL.get();
         log.info("[GoogleDocsAgentTool] Reading doc '{}' for user '{}'", docUrl, email);
         try {

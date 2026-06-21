@@ -1,5 +1,7 @@
 package com.ragagent.agent.nodes;
 
+import com.ragagent.agent.GenerationService;
+import com.ragagent.agent.ToolCallBudget;
 import com.ragagent.agent.state.AgentState;
 import com.ragagent.config.ChatModelFactory;
 import com.ragagent.config.LlmProperties;
@@ -42,6 +44,8 @@ public class GeneratorNode {
     private final LlmProperties         llmProperties;
     private final ModelConfigService    modelConfigService;
     private final ChatModelFactory      chatModelFactory;
+    private final GenerationService     generationService;
+    private final ToolCallBudget        toolCallBudget;
     private final GoogleDocsAgentTool      googleDocsTool;
     private final GoogleSheetsAgentTool    googleSheetsTool;
     private final GoogleSlidesAgentTool    googleSlidesTool;
@@ -132,6 +136,7 @@ public class GeneratorNode {
         telegramTool.setCurrentEmail(userEmail);
         telegramTool.setCurrentOrgId(orgId);
         telegramTool.setShareOwnerEmail(shareOwnerEmail);
+        toolCallBudget.reset();
         String answer;
         try {
             ToolCallbackProvider tools = MethodToolCallbackProvider.builder()
@@ -139,12 +144,7 @@ public class GeneratorNode {
                                  googleCalendarTool, telegramTool)
                     .build();
 
-            answer = effectiveClient.prompt()
-                    .system(SYSTEM_PROMPT)
-                    .user(userPrompt)
-                    .toolCallbacks(tools)
-                    .call()
-                    .content();
+            answer = generationService.generate(effectiveClient, SYSTEM_PROMPT, userPrompt, tools).join();
         } finally {
             googleDocsTool.clearCurrentEmail();
             googleDocsTool.clearCurrentOrgId();
@@ -157,6 +157,15 @@ public class GeneratorNode {
             telegramTool.clearCurrentEmail();
             telegramTool.clearCurrentOrgId();
             telegramTool.clearShareOwnerEmail();
+            toolCallBudget.clear();
+        }
+
+        if (answer == null) {
+            log.warn("[GeneratorNode] LLM generation failed after retries — routing to fallback");
+            return Map.of(
+                    "route",         "FALLBACK",
+                    "fallbackReason", "LLM generation failed after retries"
+            );
         }
 
         AgentResponse response = new AgentResponse(

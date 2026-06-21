@@ -1,6 +1,7 @@
 package com.ragagent.fallback;
 
 import com.ragagent.config.ChatModelFactory;
+import com.ragagent.config.FallbackProperties;
 import com.ragagent.model.ModelConfig;
 import com.ragagent.model.ModelConfigService;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -10,6 +11,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.Optional;
 
 /**
@@ -30,6 +32,7 @@ public class FallbackService {
     private final ModelConfigService  modelConfigService;
     private final ChatModelFactory    chatModelFactory;
     private final StringRedisTemplate redisTemplate;
+    private final FallbackProperties  fallbackProperties;
 
     private static final String CACHE_KEY_PREFIX = "fallback:answer-cache:";
 
@@ -77,7 +80,7 @@ public class FallbackService {
                 .content();
 
         // Cache for future fallback hits
-        redisTemplate.opsForValue().set(CACHE_KEY_PREFIX + normalise(query), answer);
+        redisTemplate.opsForValue().set(CACHE_KEY_PREFIX + normalise(query), answer, cacheTtl());
         return answer;
     }
 
@@ -89,10 +92,14 @@ public class FallbackService {
 
     /** Cache a known good answer manually (e.g. from admin endpoint). */
     public void cacheAnswer(String query, String answer) {
-        redisTemplate.opsForValue().set(CACHE_KEY_PREFIX + normalise(query), answer);
+        redisTemplate.opsForValue().set(CACHE_KEY_PREFIX + normalise(query), answer, cacheTtl());
     }
 
     private String normalise(String query) {
         return query.trim().toLowerCase();
+    }
+
+    private Duration cacheTtl() {
+        return Duration.ofMinutes(fallbackProperties.cacheTtlMinutes());
     }
 }

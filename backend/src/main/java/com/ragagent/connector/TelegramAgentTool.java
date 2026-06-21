@@ -1,5 +1,6 @@
 package com.ragagent.connector;
 
+import com.ragagent.agent.ToolCallBudget;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Component;
 public class TelegramAgentTool {
 
     private final TelegramService telegramService;
+    private final ToolCallBudget  toolCallBudget;
 
     private static final ThreadLocal<String> CURRENT_EMAIL     = new ThreadLocal<>();
     private static final ThreadLocal<String> CURRENT_ORG_ID   = new ThreadLocal<>();
@@ -48,6 +50,7 @@ public class TelegramAgentTool {
             Returns a confirmation that the message was sent.
             """)
     public String sendTelegramMessage(String message) {
+        if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
         String email = CURRENT_EMAIL.get();
         String orgId = CURRENT_ORG_ID.get();
         log.info("[TelegramAgentTool] Sending Telegram message for user '{}'", email);
@@ -76,6 +79,7 @@ public class TelegramAgentTool {
             a shared context.
             """)
     public String createTelegramGroupSession(String message) {
+        if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
         String visitorEmail = CURRENT_EMAIL.get();
         String ownerEmail   = SHARE_OWNER_EMAIL.get();
         String orgId        = CURRENT_ORG_ID.get();

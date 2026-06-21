@@ -1,5 +1,6 @@
 package com.ragagent.connector;
 
+import com.ragagent.agent.ToolCallBudget;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
 public class GoogleSlidesAgentTool {
 
     private final GoogleSlidesService googleSlidesService;
+    private final ToolCallBudget      toolCallBudget;
 
     private static final ThreadLocal<String> CURRENT_EMAIL  = new ThreadLocal<>();
     private static final ThreadLocal<String> CURRENT_ORG_ID = new ThreadLocal<>();
@@ -41,6 +43,7 @@ public class GoogleSlidesAgentTool {
             title; remaining lines become the body. Returns the URL of the created presentation.
             """)
     public String writeToGoogleSlides(String title, String content) {
+        if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
         String email = CURRENT_EMAIL.get();
         log.info("[GoogleSlidesAgentTool] Creating presentation '{}' for '{}'", title, email);
         try {
@@ -58,6 +61,7 @@ public class GoogleSlidesAgentTool {
             Pass the full URL or presentation ID. Returns slide-by-slide text content.
             """)
     public String readGoogleSlide(String presUrl) {
+        if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
         String email = CURRENT_EMAIL.get();
         log.info("[GoogleSlidesAgentTool] Reading presentation '{}' for '{}'", presUrl, email);
         try {

@@ -257,6 +257,16 @@ rate-limit:
   agent-query-limit: ${RATE_LIMIT_QUERY:20}
   ingest-limit: ${RATE_LIMIT_INGEST:10}
   default-limit: ${RATE_LIMIT_DEFAULT:100}
+  otp-limit: ${RATE_LIMIT_OTP:5}
+  # Only enable if a reverse proxy/load balancer in front of this service overwrites
+  # X-Forwarded-For with the real client IP — otherwise callers can spoof it to bypass
+  # IP-based rate limiting.
+  trust-forwarded-for: ${RATE_LIMIT_TRUST_FORWARDED_FOR:false}
+
+# ── Fallback answer cache ─────────────────────────────────────────────────────
+fallback:
+  # How long a cached fallback answer (Redis key fallback:answer-cache:*) stays valid.
+  cache-ttl-minutes: ${FALLBACK_CACHE_TTL_MINUTES:60}
 
 # ── Client identity enforcement ───────────────────────────────────────────────
 # Requires every authenticated request to carry a signed client header.
@@ -283,6 +293,23 @@ auth:
     # Full origin including scheme and port.
     # For local dev: http://localhost:3000. For production: https://yourdomain.com
     origin: ${AUTH_PASSKEY_ORIGIN:http://localhost:3000}
+
+# ── Admin (system-wide access to /api/v1/admin/orgs/**) ─────────────────────
+# Comma-separated emails allowed to create/delete orgs and manage org membership
+# across the whole system. Empty by default — those endpoints reject everyone
+# until this is set.
+admin:
+  emails: ${ADMIN_EMAILS:}
+
+# ── MCP transport auth (/mcp/sse) ────────────────────────────────────────────
+# The MCP transport has no per-request JWT, so it's gated by a single shared key
+# instead. Leave api-key blank to keep /mcp/** closed (recommended unless you
+# actually use Claude Desktop/Code against this server). email scopes
+# search_knowledge to that user's accessible knowledge sources; leave blank to
+# deny all sources by default.
+mcp:
+  api-key: ${MCP_API_KEY:}
+  email: ${MCP_EMAIL:}
 
 # ── External connectors (Google Workspace + Figma OAuth) ─────────────────────
 # Register OAuth apps at:

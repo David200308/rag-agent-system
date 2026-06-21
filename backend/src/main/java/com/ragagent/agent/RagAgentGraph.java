@@ -26,11 +26,13 @@ import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
  *   START
  *     └─► analyzeQuery
  *               └─► webFetch  (no-op when fetchUrls is empty)
- *                       ├─[RETRIEVE]─► retrieve
- *                       │                 ├─[docs found]─► generate ─► END
- *                       │                 └─[no docs]────► fallback ─► END
- *                       ├─[DIRECT]───► generate ──────────────────────► END
- *                       └─[FALLBACK]─► fallback ──────────────────────► END
+ *                       ├─[RETRIEVE]─► retrieve ─[docs found]──► generate
+ *                       │                        └[no docs]───► fallback ─► END
+ *                       ├─[DIRECT]───────────────────────────► generate
+ *                       └─[FALLBACK]──────────────────────────► fallback ─► END
+ *
+ *   generate ─[succeeded]─► END
+ *            └[LLM circuit open / retries exhausted]─► fallback ─► END
  * </pre>
  *
  * Virtual threads (JDK 21) execute each async node action via Spring's
@@ -90,7 +92,18 @@ public class RagAgentGraph {
                 )
             )
 
-            .addEdge(NODE_GENERATE, END)
+            // After generation: an LLM circuit-breaker/retry exhaustion (GenerationService)
+            // leaves state.response() empty so GeneratorNode can route to fallback instead
+            // of surfacing a raw failure.
+            .addConditionalEdges(
+                NODE_GENERATE,
+                state -> CompletableFuture.completedFuture(state.response().isEmpty() ? "failed" : "succeeded"),
+                java.util.Map.of(
+                    "succeeded", END,
+                    "failed",    NODE_FALLBACK
+                )
+            )
+
             .addEdge(NODE_FALLBACK, END)
 
             .compile();

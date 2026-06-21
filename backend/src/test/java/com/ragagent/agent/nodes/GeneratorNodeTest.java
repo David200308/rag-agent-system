@@ -1,5 +1,8 @@
 package com.ragagent.agent.nodes;
 
+import com.ragagent.agent.GenerationService;
+import com.ragagent.agent.ToolCallBudget;
+import com.ragagent.agent.state.AgentState;
 import com.ragagent.config.ChatModelFactory;
 import com.ragagent.config.LlmProperties;
 import com.ragagent.connector.GoogleCalendarAgentTool;
@@ -9,6 +12,7 @@ import com.ragagent.connector.GoogleSlidesAgentTool;
 import com.ragagent.connector.TelegramAgentTool;
 import com.ragagent.model.ModelConfigService;
 import com.ragagent.schema.AgentRequest;
+import com.ragagent.schema.AgentResponse;
 import com.ragagent.schema.DocumentResult;
 import com.ragagent.schema.QueryAnalysis;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,8 +24,12 @@ import org.springframework.ai.chat.client.ChatClient;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,6 +39,8 @@ class GeneratorNodeTest {
     @Mock LlmProperties         llmProperties;
     @Mock ModelConfigService    modelConfigService;
     @Mock ChatModelFactory      chatModelFactory;
+    @Mock GenerationService     generationService;
+    @Mock ToolCallBudget        toolCallBudget;
     @Mock GoogleDocsAgentTool      googleDocsTool;
     @Mock GoogleSheetsAgentTool    googleSheetsTool;
     @Mock GoogleSlidesAgentTool    googleSlidesTool;
@@ -42,7 +52,61 @@ class GeneratorNodeTest {
     @BeforeEach
     void setUp() {
         node = new GeneratorNode(chatClient, llmProperties, modelConfigService, chatModelFactory,
+                generationService, toolCallBudget,
                 googleDocsTool, googleSheetsTool, googleSlidesTool, googleCalendarTool, telegramTool);
+    }
+
+    private static AgentRequest request() {
+        return new AgentRequest("question?", null, 5, null, false, null, null, true, null);
+    }
+
+    private static QueryAnalysis analysis() {
+        return new QueryAnalysis("refined question", QueryAnalysis.Route.DIRECT,
+                0.9, List.of(), null, "direct answer");
+    }
+
+    // ── process — success ──────────────────────────────────────────────────────
+
+    @Test
+    void process_generationSucceeds_returnsResponse() {
+        when(generationService.generate(any(), any(), any(), any()))
+                .thenReturn(CompletableFuture.completedFuture("The answer."));
+        when(llmProperties.getProvider()).thenReturn("openai");
+        LlmProperties.OpenAiProps openAiProps = new LlmProperties.OpenAiProps();
+        openAiProps.setModel("gpt-4o-mini");
+        when(llmProperties.getOpenai()).thenReturn(openAiProps);
+
+        AgentState state = new AgentState(Map.of(
+                "request",       request(),
+                "queryAnalysis", analysis()
+        ));
+
+        Map<String, Object> result = node.process(state);
+
+        AgentResponse response = (AgentResponse) result.get("response");
+        assertThat(response).isNotNull();
+        assertThat(response.answer()).isEqualTo("The answer.");
+        verify(toolCallBudget).reset();
+        verify(toolCallBudget).clear();
+    }
+
+    // ── process — LLM circuit-breaker/retry exhaustion ────────────────────────
+
+    @Test
+    void process_generationFailsAfterRetries_routesToFallback() {
+        when(generationService.generate(any(), any(), any(), any()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
+        AgentState state = new AgentState(Map.of(
+                "request",       request(),
+                "queryAnalysis", analysis()
+        ));
+
+        Map<String, Object> result = node.process(state);
+
+        assertThat(result).containsEntry("route", "FALLBACK");
+        assertThat(result).containsKey("fallbackReason");
+        verify(toolCallBudget).clear();
     }
 
     // ── buildPrompt — no documents ────────────────────────────────────────────

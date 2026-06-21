@@ -1,6 +1,8 @@
 package com.ragagent.connector;
 
+import com.ragagent.agent.ToolCallBudget;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -9,19 +11,37 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class GoogleCalendarAgentToolTest {
 
     @Mock GoogleCalendarService calendarService;
+    @Mock ToolCallBudget        toolCallBudget;
     @InjectMocks GoogleCalendarAgentTool tool;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(toolCallBudget.tryConsume()).thenReturn(true);
+    }
 
     @AfterEach
     void tearDown() {
         tool.clearCurrentEmail();
         tool.clearCurrentOrgId();
+    }
+
+    @Test
+    void createCalendarEvent_budgetExhausted_returnsExhaustedMessageWithoutCallingService() {
+        when(toolCallBudget.tryConsume()).thenReturn(false);
+
+        String result = tool.createCalendarEvent("Meeting", "2025-06-10T14:00:00Z", "2025-06-10T15:00:00Z", null, null);
+
+        assertThat(result).isEqualTo(ToolCallBudget.EXHAUSTED_MESSAGE);
+        verifyNoInteractions(calendarService);
     }
 
     // ── ThreadLocal management ────────────────────────────────────────────────

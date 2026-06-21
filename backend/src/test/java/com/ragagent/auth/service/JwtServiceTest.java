@@ -1,12 +1,33 @@
 package com.ragagent.auth.service;
 
 import com.ragagent.auth.AuthProperties;
+import io.jsonwebtoken.security.WeakKeyException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JwtServiceTest {
+
+    // ── constructor — secret strength ────────────────────────────────────────
+
+    @Test
+    void constructor_secretUnder32Bytes_throwsWeakKeyException() {
+        AuthProperties shortSecretProps = new AuthProperties(true, 10, "too-short-secret", 24);
+
+        assertThatThrownBy(() -> new JwtService(shortSecretProps))
+                .isInstanceOf(WeakKeyException.class);
+    }
+
+    @Test
+    void constructor_secretExactly32Bytes_doesNotThrow() {
+        AuthProperties props32 = new AuthProperties(true, 10, "a".repeat(32), 24);
+
+        JwtService service = new JwtService(props32);
+
+        assertThat(service.generate("user@example.com")).isNotBlank();
+    }
 
     private JwtService jwtService;
 

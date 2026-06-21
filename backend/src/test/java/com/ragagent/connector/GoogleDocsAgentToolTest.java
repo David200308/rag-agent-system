@@ -1,6 +1,8 @@
 package com.ragagent.connector;
 
+import com.ragagent.agent.ToolCallBudget;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -16,11 +18,27 @@ import static org.mockito.Mockito.*;
 class GoogleDocsAgentToolTest {
 
     @Mock GoogleDocsService     googleDocsService;
+    @Mock ToolCallBudget        toolCallBudget;
     @InjectMocks GoogleDocsAgentTool tool;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(toolCallBudget.tryConsume()).thenReturn(true);
+    }
 
     @AfterEach
     void tearDown() {
         tool.clearCurrentEmail();
+    }
+
+    @Test
+    void writeToGoogleDocs_budgetExhausted_returnsExhaustedMessageWithoutCallingService() {
+        when(toolCallBudget.tryConsume()).thenReturn(false);
+
+        String result = tool.writeToGoogleDocs("Title", "Content");
+
+        assertThat(result).isEqualTo(ToolCallBudget.EXHAUSTED_MESSAGE);
+        verifyNoInteractions(googleDocsService);
     }
 
     // ── ThreadLocal email management ──────────────────────────────────────────

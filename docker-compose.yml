@@ -95,6 +95,11 @@ services:
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-changeme-use-a-long-random-base64-string-in-production}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
       AUTH_OTP_EXPIRY_MINUTES: ${AUTH_OTP_EXPIRY_MINUTES:-10}
+      # ── Admin (comma-separated emails allowed to manage orgs system-wide)
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      # ── MCP transport auth (blank = /mcp/** closed)
+      MCP_API_KEY: ${MCP_API_KEY:-}
+      MCP_EMAIL: ${MCP_EMAIL:-}
       # ── Client identity (set CLIENT_IDENTITY_ENABLED=true to enforce)
       CLIENT_IDENTITY_ENABLED: ${CLIENT_IDENTITY_ENABLED:-false}
       CLIENT_IOS_SECRET: ${CLIENT_IOS_SECRET:-changeme-ios-shared-secret}

@@ -521,7 +521,7 @@ class FinancialServiceTest {
     }
 
     @Test
-    void createSalary_withoutTotalExpense_computesItAutomatically() {
+    void createSalary_withoutTotalExpense_defaultsToZero() {
         when(salaryRepo.save(any())).thenAnswer(i -> i.getArgument(0));
         var body = new java.util.HashMap<String, Object>();
         body.put("year", 2025); body.put("month", 1); body.put("region", "SG");
@@ -532,8 +532,25 @@ class FinancialServiceTest {
 
         SalaryUsageRecord result = service.createSalary("owner@test.com", body);
 
-        // totalExpense = houseRent(2000) + livingExpense(1500) + otherExpense(500) = 4000
-        assertThat(result.getTotalExpense()).isEqualByComparingTo("4000");
+        // totalExpense is only ever set when the caller explicitly provides it — same
+        // as every other field here — so an omitted value stays at the entity default.
+        assertThat(result.getTotalExpense()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void updateSalary_omittingTotalExpense_preservesExistingValue() {
+        SalaryUsageRecord r = salary("sal-1", "owner@test.com");
+        // Deliberately not equal to houseRent+livingExpense+otherExpense (17000), so a
+        // regression that recomputes totalExpense from those fields would be caught.
+        r.setTotalExpense(new BigDecimal("99999"));
+        when(salaryRepo.findById("sal-1")).thenReturn(Optional.of(r));
+        when(salaryRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        // Only updating an unrelated field — totalExpense must not be touched.
+        SalaryUsageRecord result = service.updateSalary("sal-1", "owner@test.com", Map.of("region", "JP"));
+
+        assertThat(result.getTotalExpense()).isEqualByComparingTo("99999");
+        assertThat(result.getRegion()).isEqualTo("JP");
     }
 
     @Test

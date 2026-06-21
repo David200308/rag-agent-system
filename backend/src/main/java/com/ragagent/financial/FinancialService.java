@@ -382,8 +382,6 @@ public class FinancialService {
         if (body.containsKey("livingExpense")) r.setLivingExpense(bd(body.get("livingExpense")));
         if (body.containsKey("otherExpense"))  r.setOtherExpense(bd(body.get("otherExpense")));
         if (body.containsKey("totalExpense"))  r.setTotalExpense(bd(body.get("totalExpense")));
-        else r.setTotalExpense(
-                r.getLivingExpense().add(r.getHouseRent()).add(r.getOtherExpense()));
     }
 
     private SalaryUsageRecordDto toDto(SalaryUsageRecord r) {

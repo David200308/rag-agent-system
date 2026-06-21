@@ -1,6 +1,8 @@
 package com.ragagent.connector;
 
+import com.ragagent.agent.ToolCallBudget;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -16,13 +18,29 @@ import static org.mockito.Mockito.*;
 class TelegramAgentToolTest {
 
     @Mock TelegramService     telegramService;
+    @Mock ToolCallBudget      toolCallBudget;
     @InjectMocks TelegramAgentTool tool;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(toolCallBudget.tryConsume()).thenReturn(true);
+    }
 
     @AfterEach
     void tearDown() {
         // The static ThreadLocals must be cleaned up between tests to prevent state leakage
         tool.clearCurrentEmail();
         tool.clearShareOwnerEmail();
+    }
+
+    @Test
+    void sendTelegramMessage_budgetExhausted_returnsExhaustedMessageWithoutCallingService() {
+        when(toolCallBudget.tryConsume()).thenReturn(false);
+
+        String result = tool.sendTelegramMessage("Hello");
+
+        assertThat(result).isEqualTo(ToolCallBudget.EXHAUSTED_MESSAGE);
+        verifyNoInteractions(telegramService);
     }
 
     // ── ThreadLocal email management ──────────────────────────────────────────

@@ -1,9 +1,10 @@
 package com.ragagent.org;
 
+import com.ragagent.config.AdminProperties;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -21,7 +22,12 @@ class OrganizationServiceTest {
     @Mock OrganizationRepository orgRepo;
     @Mock OrgMemberRepository    memberRepo;
 
-    @InjectMocks OrganizationService service;
+    OrganizationService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new OrganizationService(orgRepo, memberRepo, new AdminProperties(List.of("admin@test.com")));
+    }
 
     // ── create ────────────────────────────────────────────────────────────────
 
@@ -256,6 +262,30 @@ class OrganizationServiceTest {
         service.delete("skyproton");
 
         verify(orgRepo).deleteById("skyproton");
+    }
+
+    // ── requireSystemAdmin ────────────────────────────────────────────────────
+
+    @Test
+    void requireSystemAdmin_configuredEmail_doesNotThrow() {
+        service.requireSystemAdmin("admin@test.com");
+    }
+
+    @Test
+    void requireSystemAdmin_caseInsensitive_doesNotThrow() {
+        service.requireSystemAdmin("Admin@Test.com");
+    }
+
+    @Test
+    void requireSystemAdmin_unlistedEmail_throwsSecurityException() {
+        assertThatThrownBy(() -> service.requireSystemAdmin("stranger@test.com"))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test
+    void requireSystemAdmin_nullEmail_throwsSecurityException() {
+        assertThatThrownBy(() -> service.requireSystemAdmin(null))
+                .isInstanceOf(SecurityException.class);
     }
 
     // ── requireOrgExists ──────────────────────────────────────────────────────

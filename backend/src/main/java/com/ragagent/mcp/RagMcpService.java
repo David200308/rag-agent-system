@@ -1,5 +1,8 @@
 package com.ragagent.mcp;
 
+import com.ragagent.config.McpProperties;
+import com.ragagent.knowledge.KnowledgeSourceService;
+import com.ragagent.knowledge.entity.KnowledgeSource;
 import com.ragagent.rag.RetrievalService;
 import com.ragagent.schema.DocumentResult;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -28,8 +32,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RagMcpService {
 
-    private final RetrievalService    retrievalService;
-    private final McpConnectorService mcpConnectorService;
+    private final RetrievalService      retrievalService;
+    private final McpConnectorService   mcpConnectorService;
+    private final KnowledgeSourceService knowledgeSourceService;
+    private final McpProperties         mcpProperties;
 
     /**
      * Semantic search over the Weaviate knowledge base.
@@ -42,9 +48,23 @@ public class RagMcpService {
         int k = topK <= 0 ? 5 : Math.min(topK, 20);
         log.debug("[RagMcpService] MCP tool searchKnowledge query='{}' topK={}", query, k);
 
-        // MCP transport bypasses HTTP auth — no user context is available.
-        // Pass null for allowedSources so the vector search is unrestricted (same as auth-disabled mode).
-        List<DocumentResult> results = retrievalService.retrieve(query, k, Map.of(), null);
+        // MCP carries no per-request JWT (gated only by McpAuthFilter's shared key), so
+        // every MCP caller is scoped to mcp.email's accessible sources — same boundary
+        // RetrievalNode applies for normal chat. Unconfigured mcp.email denies all
+        // sources rather than falling back to KnowledgeSourceService's "email == null"
+        // unrestricted-access behavior.
+        String scopedEmail = mcpProperties.email();
+        Set<String> allowedSources;
+        if (scopedEmail == null || scopedEmail.isBlank()) {
+            log.warn("[RagMcpService] mcp.email is not configured — search_knowledge denies all sources");
+            allowedSources = Set.of();
+        } else {
+            allowedSources = knowledgeSourceService.listAccessible(scopedEmail).stream()
+                    .map(KnowledgeSource::getSource)
+                    .collect(Collectors.toSet());
+        }
+
+        List<DocumentResult> results = retrievalService.retrieve(query, k, Map.of(), allowedSources);
         if (results.isEmpty()) {
             return "No relevant documents found for: " + query;
         }
@@ -65,7 +85,9 @@ public class RagMcpService {
     @Tool(description = "Fetch a URL and add its text content to the RAG knowledge base so it can be queried later.")
     public String ingestUrl(String url, String category) {
         log.info("[RagMcpService] MCP tool ingestUrl url='{}' category='{}'", url, category);
-        var result = mcpConnectorService.fetchAndIngest(url, category);
+        // Scoped to mcp.email so the URL is checked against that identity's whitelist
+        // (McpConnectorService.fetchAndIngest) instead of the global whitelist.
+        var result = mcpConnectorService.fetchAndIngest(url, category, mcpProperties.email());
         return String.format(
                 "Ingested '%s' from %s — %d chunks added to knowledge base.",
                 result.title(), result.url(), result.chunkCount());

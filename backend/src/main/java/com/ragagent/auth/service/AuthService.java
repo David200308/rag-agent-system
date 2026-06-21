@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 
@@ -31,7 +33,9 @@ public class AuthService {
 
     private final SecureRandom random = new SecureRandom();
 
-    private static final String OTP_KEY_PREFIX = "otp:";
+    private static final String OTP_KEY_PREFIX          = "otp:";
+    private static final String OTP_ATTEMPTS_KEY_PREFIX  = "otp:attempts:";
+    private static final int    MAX_OTP_ATTEMPTS         = 5;
 
     // ── Request OTP ──────────────────────────────────────────────────────────────
 
@@ -53,6 +57,10 @@ public class AuthService {
 
         // SETEX overwrites any previous code for this email, naturally invalidating it.
         redisTemplate.opsForValue().set(OTP_KEY_PREFIX + normalised, code, Duration.ofMinutes(expiry));
+        // Issuing a fresh code resets the lockout — a legitimate user who got locked
+        // out can always recover by requesting a new code (rate-limited separately
+        // by RateLimitFilter's OTP bucket).
+        redisTemplate.delete(OTP_ATTEMPTS_KEY_PREFIX + normalised);
 
         emailService.sendOtp(normalised, code, expiry);
         log.info("[AuthService] OTP issued for {}", normalised);
@@ -76,11 +84,22 @@ public class AuthService {
      * @throws IllegalArgumentException if the code is wrong, expired, or org/membership invalid
      */
     public String verifyOtp(String email, String code, String mode, String orgId) {
-        String normalised = email.trim().toLowerCase();
-        String key         = OTP_KEY_PREFIX + normalised;
+        String normalised   = email.trim().toLowerCase();
+        String key           = OTP_KEY_PREFIX + normalised;
+        String attemptsKey   = OTP_ATTEMPTS_KEY_PREFIX + normalised;
+
+        // Lock out after MAX_OTP_ATTEMPTS regardless of whether this attempt turns out
+        // correct — without this, a 6-digit OTP is brute-forceable within its TTL window.
+        Long attempts = redisTemplate.opsForValue().increment(attemptsKey);
+        if (attempts != null && attempts == 1L) {
+            redisTemplate.expire(attemptsKey, Duration.ofMinutes(authProperties.otpExpiryMinutes()));
+        }
+        if (attempts != null && attempts > MAX_OTP_ATTEMPTS) {
+            throw new IllegalArgumentException("Too many incorrect attempts. Request a new code.");
+        }
 
         String storedCode = redisTemplate.opsForValue().get(key);
-        if (storedCode == null || !storedCode.equals(code.trim())) {
+        if (storedCode == null || !constantTimeEquals(storedCode, code.trim())) {
             throw new IllegalArgumentException("Invalid or expired code.");
         }
 
@@ -95,6 +114,7 @@ public class AuthService {
         }
 
         redisTemplate.delete(key);
+        redisTemplate.delete(attemptsKey);
 
         String resolvedOrgId = "TEAM".equals(mode) ? orgId.trim() : null;
         String jwt = jwtService.generate(normalised, mode, resolvedOrgId);
@@ -118,5 +138,11 @@ public class AuthService {
 
     private String generateCode() {
         return String.format("%06d", random.nextInt(1_000_000));
+    }
+
+    private boolean constantTimeEquals(String a, String b) {
+        return MessageDigest.isEqual(
+                a.getBytes(StandardCharsets.UTF_8),
+                b.getBytes(StandardCharsets.UTF_8));
     }
 }

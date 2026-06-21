@@ -41,17 +41,27 @@ class AuthServiceTest {
 
     /** otp:<email> → code, backing the mocked StringRedisTemplate below. */
     Map<String, String> otpBacking;
+    /** otp:attempts:<email> → failed-attempt count, backing the mocked StringRedisTemplate below. */
+    Map<String, Long> attemptsBacking;
 
     @BeforeEach
     void setUp() {
-        otpBacking = new ConcurrentHashMap<>();
+        otpBacking      = new ConcurrentHashMap<>();
+        attemptsBacking = new ConcurrentHashMap<>();
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         lenient().doAnswer(inv -> otpBacking.put(inv.getArgument(0), inv.getArgument(1)))
                 .when(valueOperations).set(anyString(), anyString(), any(Duration.class));
         lenient().when(valueOperations.get(anyString()))
                 .thenAnswer(inv -> otpBacking.get(inv.getArgument(0)));
+        lenient().when(valueOperations.increment(anyString()))
+                .thenAnswer(inv -> attemptsBacking.merge(inv.getArgument(0), 1L, Long::sum));
         lenient().when(redisTemplate.delete(anyString()))
-                .thenAnswer(inv -> otpBacking.remove((String) inv.getArgument(0)) != null);
+                .thenAnswer(inv -> {
+                    String k = inv.getArgument(0);
+                    boolean removedOtp      = otpBacking.remove(k) != null;
+                    boolean removedAttempts = attemptsBacking.remove(k) != null;
+                    return removedOtp || removedAttempts;
+                });
 
         authService = new AuthService(authProperties, whitelistRepo, redisTemplate, emailService, jwtService, orgService);
     }
@@ -151,6 +161,44 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.verifyOtp("user@example.com", "123456"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid or expired");
+    }
+
+    @Test
+    void verifyOtp_successResetsAttemptCounter() {
+        otpBacking.put("otp:user@example.com", "123456");
+        when(jwtService.generate("user@example.com", "PERSONAL", null)).thenReturn("signed-jwt");
+
+        authService.verifyOtp("user@example.com", "123456");
+
+        assertThat(attemptsBacking).doesNotContainKey("otp:attempts:user@example.com");
+    }
+
+    @Test
+    void verifyOtp_tooManyWrongAttempts_locksOutEvenWithCorrectCode() {
+        otpBacking.put("otp:user@example.com", "123456");
+
+        for (int i = 0; i < 5; i++) {
+            assertThatThrownBy(() -> authService.verifyOtp("user@example.com", "999999"))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Invalid or expired");
+        }
+
+        // 6th attempt is locked out regardless of whether the code is now correct.
+        assertThatThrownBy(() -> authService.verifyOtp("user@example.com", "123456"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Too many incorrect attempts");
+        verify(jwtService, never()).generate(any(), any(), any());
+    }
+
+    @Test
+    void requestOtp_resetsExistingLockout() {
+        attemptsBacking.put("otp:attempts:user@example.com", 5L);
+        when(whitelistRepo.findByEmailIgnoreCaseAndEnabledTrue("user@example.com"))
+                .thenReturn(Optional.of(new EmailWhitelist("user@example.com")));
+
+        authService.requestOtp("user@example.com");
+
+        assertThat(attemptsBacking).doesNotContainKey("otp:attempts:user@example.com");
     }
 
     // ── validateToken ─────────────────────────────────────────────────────────
