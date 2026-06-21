@@ -494,6 +494,9 @@ else
   # True if a secret file exists and is non-empty.
   has_secret() { [ -s "$SECRETS_DIR/$1" ]; }
 
+  # Read back a previously written secret's value.
+  read_secret() { cat "$SECRETS_DIR/$1" 2>/dev/null; }
+
   echo ""
   if confirm "Update environment variables?"; then UPDATE_ENV=true; else UPDATE_ENV=false; fi
 
