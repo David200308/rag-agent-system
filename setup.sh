@@ -283,7 +283,8 @@ if [ "$MODE" = "local" ]; then
   STORAGE_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
   GARAGE_RPC_SECRET="$(openssl rand -hex 32)"
   GARAGE_ADMIN_TOKEN="$(openssl rand -base64 32 | tr -d '\n')"
-  GARAGE_ACCESS_KEY="$(openssl rand -hex 12)"
+  # Garage's `key import` rejects IDs that don't match its own format: GK + 12 hex bytes.
+  GARAGE_ACCESS_KEY="GK$(openssl rand -hex 12)"
   GARAGE_SECRET_KEY="$(openssl rand -hex 32)"
   GARAGE_BUCKET="agent-system-images"
   mkdir -p "$SCRIPT_DIR/observability/garage"
@@ -807,7 +808,8 @@ else
     STORAGE_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
     GARAGE_RPC_SECRET="$(openssl rand -hex 32)"
     GARAGE_ADMIN_TOKEN="$(openssl rand -base64 32 | tr -d '\n')"
-    GARAGE_ACCESS_KEY="$(openssl rand -hex 12)"
+    # Garage's `key import` rejects IDs that don't match its own format: GK + 12 hex bytes.
+    GARAGE_ACCESS_KEY="GK$(openssl rand -hex 12)"
     GARAGE_SECRET_KEY="$(openssl rand -hex 32)"
     write_secret storage_service_key "$STORAGE_SERVICE_KEY"
     write_secret garage_rpc_secret    "$GARAGE_RPC_SECRET"
