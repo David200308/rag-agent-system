@@ -532,6 +532,11 @@ EOF
       ;;
   esac
 
+  # bootstrap_garage needs these even when "Update environment variables?" was
+  # skipped (so they were never set this run) — fall back to what's already in .env.
+  : "${GARAGE_ACCESS_KEY:=$(grep '^GARAGE_ACCESS_KEY=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)}"
+  : "${GARAGE_SECRET_KEY:=$(grep '^GARAGE_SECRET_KEY=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)}"
+  : "${GARAGE_BUCKET:=$(grep '^GARAGE_BUCKET=' "$ENV_FILE" 2>/dev/null | cut -d= -f2-)}"
   bootstrap_garage "$COMPOSE"
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1104,6 +1109,11 @@ EOF
       ;;
   esac
 
+  # bootstrap_garage needs these even when "Update environment variables?" was
+  # skipped (so they were never set this run) — fall back to the persisted secrets.
+  : "${GARAGE_ACCESS_KEY:=$(read_secret garage_access_key)}"
+  : "${GARAGE_SECRET_KEY:=$(read_secret garage_secret_key)}"
+  : "${GARAGE_BUCKET:=$(read_prod GARAGE_BUCKET agent-system-images)}"
   bootstrap_garage "$PROD_COMPOSE"
 fi
 
