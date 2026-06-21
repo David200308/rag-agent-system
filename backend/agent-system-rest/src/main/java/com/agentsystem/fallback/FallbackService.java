@@ -1,9 +1,9 @@
-package com.ragagent.fallback;
+package com.agentsystem.fallback;
 
-import com.ragagent.config.ChatModelFactory;
-import com.ragagent.config.FallbackProperties;
-import com.ragagent.model.ModelConfig;
-import com.ragagent.model.ModelConfigService;
+import com.agentsystem.config.ChatModelFactory;
+import com.agentsystem.config.FallbackProperties;
+import com.agentsystem.model.ModelConfig;
+import com.agentsystem.model.ModelConfigService;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +41,7 @@ public class FallbackService {
             "Please try rephrasing your query or contact support.";
 
     /**
-     * Entry point called by {@link com.ragagent.agent.nodes.FallbackNode}.
+     * Entry point called by {@link com.agentsystem.agent.nodes.FallbackNode}.
      */
     public String resolveFallback(String query, String reason, Optional<String> selectedModelDisplayName) {
         log.warn("[FallbackService] Resolving fallback for: '{}', reason: {}", query, reason);

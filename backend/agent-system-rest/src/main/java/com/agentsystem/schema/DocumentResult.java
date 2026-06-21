@@ -1,4 +1,4 @@
-package com.ragagent.schema;
+package com.agentsystem.schema;
 
 import com.fasterxml.jackson.annotation.JsonClassDescription;
 import io.swagger.v3.oas.annotations.media.Schema;

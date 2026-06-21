@@ -1,6 +1,6 @@
-package com.ragagent.auth.service;
+package com.agentsystem.auth.service;
 
-import com.ragagent.auth.ClientIdentityProperties;
+import com.agentsystem.auth.ClientIdentityProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

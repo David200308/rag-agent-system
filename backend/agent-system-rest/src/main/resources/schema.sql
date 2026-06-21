@@ -147,14 +147,12 @@ CREATE TABLE IF NOT EXISTS workflow_run_logs (
 );
 
 -- ── Skills (agent context documents) ────────────────────────────────────────
+-- Pure identity/ownership record — file content and per-upload metadata live
+-- in skill_versions (content moved to object storage; see migration below).
 CREATE TABLE IF NOT EXISTS skills (
     id          VARCHAR(36)   PRIMARY KEY,
     owner_email VARCHAR(255),
     name        VARCHAR(255)  NOT NULL,
-    file_name   VARCHAR(255),
-    file_type   VARCHAR(16),
-    size        BIGINT        NOT NULL DEFAULT 0,
-    content     LONGTEXT      NOT NULL,
     created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_skill_owner (owner_email)
 );
@@ -305,8 +303,8 @@ ALTER TABLE skills              ADD COLUMN org_id VARCHAR(100) NULL;
 -- ── Schema migration: team approval workflow ───────────────────────────────────
 -- PENDING = awaiting owner approval; APPROVED = active; REJECTED = denied.
 -- Personal-mode items default to APPROVED (no approval needed).
+-- (skills' approval status now lives per-version on skill_versions — see below.)
 ALTER TABLE knowledge_sources ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'APPROVED';
-ALTER TABLE skills             ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'APPROVED';
 
 -- ── Schema migration: team mode org_id on private-in-team resources ───────────
 -- Conversations, runs, and connector tokens are per-user but scoped to a context
@@ -433,5 +431,34 @@ CREATE TABLE IF NOT EXISTS travel_records (
     created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_travel_owner (owner_email)
+);
+
+-- ── Schema migration: skill content moved to object storage (Garage) ─────────
+-- Drops are no-ops (continue-on-error) on fresh installs where skills was
+-- already created without these columns.
+ALTER TABLE skills DROP COLUMN content;
+ALTER TABLE skills DROP COLUMN file_name;
+ALTER TABLE skills DROP COLUMN file_type;
+ALTER TABLE skills DROP COLUMN size;
+ALTER TABLE skills DROP COLUMN status;
+
+-- Every upload (create or replace) is a new immutable version. "Latest" =
+-- highest version_number; "active" (served to workflows) = highest
+-- version_number with status='APPROVED'. Personal-mode versions are always
+-- auto-APPROVED, so the two coincide there.
+CREATE TABLE IF NOT EXISTS skill_versions (
+    id               VARCHAR(36)  PRIMARY KEY,
+    skill_id         VARCHAR(36)  NOT NULL,
+    version_number   INT          NOT NULL,
+    object_id        VARCHAR(36)  NOT NULL,   -- id returned by agent-system-storage-inner
+    file_name        VARCHAR(255),
+    file_type        VARCHAR(16),
+    size_bytes       BIGINT       NOT NULL DEFAULT 0,
+    status           VARCHAR(20)  NOT NULL DEFAULT 'APPROVED',  -- PENDING | APPROVED | REJECTED
+    created_by_email VARCHAR(255),
+    created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_skill_versions_skill (skill_id, version_number),
+    CONSTRAINT fk_skill_versions_skill FOREIGN KEY (skill_id)
+        REFERENCES skills(id) ON DELETE CASCADE
 );
 

@@ -1,10 +1,10 @@
-package com.ragagent.mcp;
+package com.agentsystem.mcp;
 
-import com.ragagent.config.McpProperties;
-import com.ragagent.knowledge.KnowledgeSourceService;
-import com.ragagent.knowledge.entity.KnowledgeSource;
-import com.ragagent.rag.RetrievalService;
-import com.ragagent.schema.DocumentResult;
+import com.agentsystem.config.McpProperties;
+import com.agentsystem.knowledge.KnowledgeSourceService;
+import com.agentsystem.knowledge.entity.KnowledgeSource;
+import com.agentsystem.rag.RetrievalService;
+import com.agentsystem.schema.DocumentResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;

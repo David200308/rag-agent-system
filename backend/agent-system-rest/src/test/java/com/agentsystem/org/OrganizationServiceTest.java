@@ -1,6 +1,6 @@
-package com.ragagent.org;
+package com.agentsystem.org;
 
-import com.ragagent.config.AdminProperties;
+import com.agentsystem.config.AdminProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

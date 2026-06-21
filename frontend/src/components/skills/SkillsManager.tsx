@@ -4,13 +4,20 @@ import { useState, useCallback, useEffect } from "react";
 import {
   Upload, Trash2, FileText, CheckCircle2, XCircle,
   RefreshCw, Zap, Eye, X, ChevronRight, File, Folder, Clock, Ban,
+  History, UploadCloud,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fetchSkills, uploadSkill, deleteSkill, fetchSkillContent } from "@/lib/api";
+import {
+  fetchSkills, uploadSkill, deleteSkill, fetchSkillContent,
+  fetchSkillVersions, uploadSkillVersion, fetchSkillVersionContent,
+} from "@/lib/api";
 import { Button } from "@/components/ui/Button";
-import type { Skill } from "@/types/agent";
+import type { Skill, SkillVersion } from "@/types/agent";
 
 type Tab = "upload" | "manage";
+
+const SKILL_EXTS = ["txt", "md", "csv", "zip", "pdf", "docx"] as const;
+const SKILL_ACCEPT = SKILL_EXTS.map((e) => `.${e}`).join(",");
 
 // ── ZIP content parsing ───────────────────────────────────────────────────────
 
@@ -55,19 +62,27 @@ function buildFileTree(files: ZipFile[]): TreeEntry[] {
 
 // ── Preview modal ─────────────────────────────────────────────────────────────
 
-function PreviewModal({ skill, onClose }: { skill: Skill; onClose: () => void }) {
+function PreviewModal({
+  skill, versionNumber, onClose,
+}: { skill: Skill; versionNumber?: number; onClose: () => void }) {
   const [content,     setContent]     = useState<string | null>(null);
   const [loading,     setLoading]     = useState(true);
   const [activeFile,  setActiveFile]  = useState<string | null>(null);
 
   useEffect(() => {
-    fetchSkillContent(skill.id).then(c => {
+    setLoading(true);
+    const fetcher = versionNumber != null
+      ? fetchSkillVersionContent(skill.id, versionNumber)
+      : fetchSkillContent(skill.id);
+    fetcher.then(c => {
       setContent(c);
       setLoading(false);
     });
-  }, [skill.id]);
+  }, [skill.id, versionNumber]);
 
-  const zipFiles = content && skill.fileType === "zip" ? parseZipSections(content) : null;
+  // Detect zip-flattened content by its markers rather than skill.fileType, since
+  // skill.fileType reflects the *latest* version and may not match an older one being viewed.
+  const zipFiles = content ? parseZipSections(content) : null;
 
   useEffect(() => {
     if (zipFiles?.length) setActiveFile(zipFiles[0]!.name);
@@ -84,7 +99,14 @@ function PreviewModal({ skill, onClose }: { skill: Skill; onClose: () => void })
         <div className="flex items-center gap-3 border-b border-[--color-border] px-5 py-3 shrink-0">
           <Zap className="h-4 w-4 text-amber-500" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate">{skill.name}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="truncate text-sm font-semibold">{skill.name}</p>
+              {versionNumber != null && (
+                <span className="shrink-0 rounded bg-[--color-surface-raised] px-1.5 py-0.5 text-[10px] font-mono font-semibold">
+                  v{versionNumber}
+                </span>
+              )}
+            </div>
             <p className="text-[10px] text-[--color-muted]">
               {skill.fileName} · {skill.fileType.toUpperCase()}
             </p>
@@ -99,7 +121,7 @@ function PreviewModal({ skill, onClose }: { skill: Skill; onClose: () => void })
             <RefreshCw className="h-4 w-4 animate-spin mr-2" />
             <span className="text-sm">Loading…</span>
           </div>
-        ) : skill.fileType === "zip" && zipFiles ? (
+        ) : zipFiles ? (
           /* ZIP: sidebar file tree + content pane */
           <div className="flex flex-1 overflow-hidden">
             {/* File tree */}
@@ -163,6 +185,129 @@ function PreviewModal({ skill, onClose }: { skill: Skill; onClose: () => void })
   );
 }
 
+// ── Version history modal ──────────────────────────────────────────────────────
+
+function VersionHistoryModal({ skill, onClose }: { skill: Skill; onClose: () => void }) {
+  const [versions, setVersions] = useState<SkillVersion[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [viewing,  setViewing]  = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setVersions(await fetchSkillVersions(skill.id));
+    } finally {
+      setLoading(false);
+    }
+  }, [skill.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleNewVersion(file: File) {
+    setUploading(true);
+    try {
+      await uploadSkillVersion(skill.id, file);
+      await load();
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="flex w-full max-w-lg flex-col rounded-xl border border-[--color-border] bg-white dark:bg-zinc-900 shadow-2xl"
+             style={{ maxHeight: "80vh" }}>
+
+          {/* Header */}
+          <div className="flex items-center gap-3 border-b border-[--color-border] px-5 py-3 shrink-0">
+            <History className="h-4 w-4 text-[--color-muted]" />
+            <p className="flex-1 min-w-0 truncate text-sm font-semibold">{skill.name} — Version history</p>
+            <button onClick={onClose} className="text-[--color-muted] hover:text-[--color-fg]">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Upload new version */}
+          <div className="border-b border-[--color-border] px-5 py-3 shrink-0">
+            <label className={cn(
+              "flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-[--color-border] px-3 py-2 text-xs font-medium transition-colors hover:bg-[--color-border]/40",
+              uploading && "pointer-events-none opacity-60",
+            )}>
+              {uploading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
+              {uploading ? "Uploading…" : "Upload new version"}
+              <input
+                type="file"
+                accept={SKILL_ACCEPT}
+                className="sr-only"
+                disabled={uploading}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) handleNewVersion(file);
+                }}
+              />
+            </label>
+          </div>
+
+          {/* Versions list */}
+          <div className="flex-1 overflow-y-auto p-2">
+            {loading ? (
+              <div className="flex items-center justify-center py-10 text-[--color-muted]">
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              </div>
+            ) : versions.length === 0 ? (
+              <p className="py-10 text-center text-sm text-[--color-muted]">No versions yet.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {versions.map((v) => (
+                  <div key={v.id} className="flex items-center gap-3 rounded-md border border-[--color-border] px-3 py-2">
+                    <span className="shrink-0 rounded bg-[--color-surface-raised] px-1.5 py-0.5 text-[10px] font-mono font-semibold">
+                      v{v.versionNumber}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <p className="truncate text-xs font-medium">{v.fileName}</p>
+                        {v.status === "PENDING" && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-1.5 py-0.5 text-[9px] font-semibold text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400">
+                            <Clock className="h-2 w-2" />Pending
+                          </span>
+                        )}
+                        {v.status === "REJECTED" && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-semibold text-red-700 dark:bg-red-900/40 dark:text-red-400">
+                            <Ban className="h-2 w-2" />Rejected
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-[--color-muted]">
+                        {v.createdByEmail ?? "unknown"} · {new Date(v.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 shrink-0 text-[--color-muted] hover:text-[--color-fg]"
+                      onClick={() => setViewing(v.versionNumber)}
+                      title="View content"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {viewing != null && (
+        <PreviewModal skill={skill} versionNumber={viewing} onClose={() => setViewing(null)} />
+      )}
+    </>
+  );
+}
+
 // ── Upload panel ──────────────────────────────────────────────────────────────
 
 interface UploadEntry {
@@ -179,7 +324,7 @@ function UploadPanel({ onUploaded }: { onUploaded: () => void }) {
   const addFiles = useCallback((incoming: FileList | File[]) => {
     const accepted = Array.from(incoming).filter((f) => {
       const ext = f.name.split(".").pop()?.toLowerCase();
-      return ext === "txt" || ext === "md" || ext === "zip";
+      return (SKILL_EXTS as readonly string[]).includes(ext ?? "");
     });
     setEntries((prev) => [
       ...prev,
@@ -241,12 +386,12 @@ function UploadPanel({ onUploaded }: { onUploaded: () => void }) {
       >
         <Upload className="h-8 w-8 text-[--color-muted]" />
         <p className="text-sm font-medium">Drop skill files here</p>
-        <p className="text-xs text-[--color-muted]">.txt, .md, .zip supported</p>
+        <p className="text-xs text-[--color-muted]">.txt, .md, .csv, .zip, .pdf, .docx supported</p>
         <label className="mt-2 cursor-pointer rounded-md border border-[--color-border] px-3 py-1.5 text-xs font-medium hover:bg-[--color-border]/40 transition-colors">
           Browse files
           <input
             type="file"
-            accept=".txt,.md,.zip"
+            accept={SKILL_ACCEPT}
             multiple
             className="sr-only"
             onChange={(e) => e.target.files && addFiles(e.target.files)}
@@ -313,6 +458,7 @@ function ManagePanel({
   onRefresh: () => void;
 }) {
   const [previewing, setPreviewing] = useState<Skill | null>(null);
+  const [historyFor, setHistoryFor] = useState<Skill | null>(null);
 
   async function handleDelete(id: string) {
     await deleteSkill(id);
@@ -364,11 +510,22 @@ function ManagePanel({
                 )}
               </div>
               <p className="text-[10px] text-[--color-muted]">
-                <span className="font-mono select-all">{skill.id}</span>
+                <span className="rounded bg-[--color-surface-raised] px-1 py-0.5 font-mono font-semibold">
+                  v{skill.versionNumber}
+                </span>
                 {" · "}{skill.fileName} · {skill.fileType.toUpperCase()} ·{" "}
                 {new Date(skill.createdAt).toLocaleDateString()}
               </p>
             </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 shrink-0 text-[--color-muted] hover:text-[--color-fg]"
+              onClick={() => setHistoryFor(skill)}
+              title="Version history"
+            >
+              <History className="h-3.5 w-3.5" />
+            </Button>
             <Button
               size="icon"
               variant="ghost"
@@ -393,6 +550,12 @@ function ManagePanel({
 
       {previewing && (
         <PreviewModal skill={previewing} onClose={() => setPreviewing(null)} />
+      )}
+      {historyFor && (
+        <VersionHistoryModal
+          skill={historyFor}
+          onClose={() => { setHistoryFor(null); onRefresh(); }}
+        />
       )}
     </>
   );
@@ -432,7 +595,7 @@ export function SkillsManager() {
           <h1 className="text-xl font-semibold">Skills</h1>
         </div>
         <p className="text-sm text-[--color-muted]">
-          Upload reusable skill files that agents can leverage. Skills can be text, markdown, or zip archives containing multiple files.
+          Upload reusable skill files that agents can leverage. Skills can be text, markdown, CSV, PDF, DOCX, or zip archives containing multiple files.
         </p>
       </div>
 

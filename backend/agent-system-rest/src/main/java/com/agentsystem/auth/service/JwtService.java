@@ -1,6 +1,6 @@
-package com.ragagent.auth.service;
+package com.agentsystem.auth.service;
 
-import com.ragagent.auth.AuthProperties;
+import com.agentsystem.auth.AuthProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;

@@ -1,12 +1,12 @@
-package com.ragagent.agent;
+package com.agentsystem.agent;
 
-import com.ragagent.agent.nodes.FallbackNode;
-import com.ragagent.agent.nodes.GeneratorNode;
-import com.ragagent.agent.nodes.QueryAnalyzerNode;
-import com.ragagent.agent.nodes.RetrievalNode;
-import com.ragagent.agent.nodes.WebFetchNode;
-import com.ragagent.agent.state.AgentState;
-import com.ragagent.schema.QueryAnalysis;
+import com.agentsystem.agent.nodes.FallbackNode;
+import com.agentsystem.agent.nodes.GeneratorNode;
+import com.agentsystem.agent.nodes.QueryAnalyzerNode;
+import com.agentsystem.agent.nodes.RetrievalNode;
+import com.agentsystem.agent.nodes.WebFetchNode;
+import com.agentsystem.agent.state.AgentState;
+import com.agentsystem.schema.QueryAnalysis;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.StateGraph;
@@ -40,7 +40,7 @@ import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
  */
 @Slf4j
 @Component
-public class RagAgentGraph {
+public class AgentSystemGraph {
 
     private static final String NODE_ANALYZE    = "analyzeQuery";
     private static final String NODE_WEB_FETCH  = "webFetch";
@@ -50,7 +50,7 @@ public class RagAgentGraph {
 
     private final CompiledGraph<AgentState> compiledGraph;
 
-    public RagAgentGraph(QueryAnalyzerNode analyzerNode,
+    public AgentSystemGraph(QueryAnalyzerNode analyzerNode,
                          WebFetchNode      webFetchNode,
                          RetrievalNode     retrievalNode,
                          GeneratorNode     generatorNode,
@@ -108,7 +108,7 @@ public class RagAgentGraph {
 
             .compile();
 
-        log.info("[RagAgentGraph] Compiled graph ready");
+        log.info("[AgentSystemGraph] Compiled graph ready");
     }
 
     public CompiledGraph<AgentState> getGraph() {

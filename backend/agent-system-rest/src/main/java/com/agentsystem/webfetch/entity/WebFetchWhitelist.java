@@ -1,4 +1,4 @@
-package com.ragagent.webfetch.entity;
+package com.agentsystem.webfetch.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;

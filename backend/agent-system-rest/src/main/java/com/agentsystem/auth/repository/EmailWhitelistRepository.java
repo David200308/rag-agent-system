@@ -1,6 +1,6 @@
-package com.ragagent.auth.repository;
+package com.agentsystem.auth.repository;
 
-import com.ragagent.auth.entity.EmailWhitelist;
+import com.agentsystem.auth.entity.EmailWhitelist;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

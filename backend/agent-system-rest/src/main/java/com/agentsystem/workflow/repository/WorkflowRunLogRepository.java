@@ -1,6 +1,6 @@
-package com.ragagent.workflow.repository;
+package com.agentsystem.workflow.repository;
 
-import com.ragagent.workflow.entity.WorkflowRunLog;
+import com.agentsystem.workflow.entity.WorkflowRunLog;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

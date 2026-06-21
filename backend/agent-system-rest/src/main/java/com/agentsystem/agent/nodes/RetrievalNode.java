@@ -1,11 +1,11 @@
-package com.ragagent.agent.nodes;
+package com.agentsystem.agent.nodes;
 
-import com.ragagent.agent.state.AgentState;
-import com.ragagent.knowledge.KnowledgeSourceService;
-import com.ragagent.rag.RetrievalService;
-import com.ragagent.schema.AgentRequest;
-import com.ragagent.schema.DocumentResult;
-import com.ragagent.schema.QueryAnalysis;
+import com.agentsystem.agent.state.AgentState;
+import com.agentsystem.knowledge.KnowledgeSourceService;
+import com.agentsystem.rag.RetrievalService;
+import com.agentsystem.schema.AgentRequest;
+import com.agentsystem.schema.DocumentResult;
+import com.agentsystem.schema.QueryAnalysis;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

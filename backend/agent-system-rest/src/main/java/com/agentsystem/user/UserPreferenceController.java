@@ -1,4 +1,4 @@
-package com.ragagent.user;
+package com.agentsystem.user;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

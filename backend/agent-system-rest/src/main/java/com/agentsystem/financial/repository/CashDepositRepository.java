@@ -1,6 +1,6 @@
-package com.ragagent.financial.repository;
+package com.agentsystem.financial.repository;
 
-import com.ragagent.financial.entity.CashDeposit;
+import com.agentsystem.financial.entity.CashDeposit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

@@ -1,4 +1,4 @@
-package com.ragagent.workflow.entity;
+package com.agentsystem.workflow.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;

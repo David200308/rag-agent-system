@@ -1,6 +1,6 @@
-package com.ragagent.controller;
+package com.agentsystem.controller;
 
-import com.ragagent.config.AgentMetrics;
+import com.agentsystem.config.AgentMetrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -1,6 +1,6 @@
-package com.ragagent.auth.repository;
+package com.agentsystem.auth.repository;
 
-import com.ragagent.auth.entity.PasskeyCredential;
+import com.agentsystem.auth.entity.PasskeyCredential;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

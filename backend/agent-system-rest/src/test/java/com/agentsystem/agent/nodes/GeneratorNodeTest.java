@@ -1,20 +1,20 @@
-package com.ragagent.agent.nodes;
+package com.agentsystem.agent.nodes;
 
-import com.ragagent.agent.GenerationService;
-import com.ragagent.agent.ToolCallBudget;
-import com.ragagent.agent.state.AgentState;
-import com.ragagent.config.ChatModelFactory;
-import com.ragagent.config.LlmProperties;
-import com.ragagent.connector.GoogleCalendarAgentTool;
-import com.ragagent.connector.GoogleDocsAgentTool;
-import com.ragagent.connector.GoogleSheetsAgentTool;
-import com.ragagent.connector.GoogleSlidesAgentTool;
-import com.ragagent.connector.TelegramAgentTool;
-import com.ragagent.model.ModelConfigService;
-import com.ragagent.schema.AgentRequest;
-import com.ragagent.schema.AgentResponse;
-import com.ragagent.schema.DocumentResult;
-import com.ragagent.schema.QueryAnalysis;
+import com.agentsystem.agent.GenerationService;
+import com.agentsystem.agent.ToolCallBudget;
+import com.agentsystem.agent.state.AgentState;
+import com.agentsystem.config.ChatModelFactory;
+import com.agentsystem.config.LlmProperties;
+import com.agentsystem.connector.GoogleCalendarAgentTool;
+import com.agentsystem.connector.GoogleDocsAgentTool;
+import com.agentsystem.connector.GoogleSheetsAgentTool;
+import com.agentsystem.connector.GoogleSlidesAgentTool;
+import com.agentsystem.connector.TelegramAgentTool;
+import com.agentsystem.model.ModelConfigService;
+import com.agentsystem.schema.AgentRequest;
+import com.agentsystem.schema.AgentResponse;
+import com.agentsystem.schema.DocumentResult;
+import com.agentsystem.schema.QueryAnalysis;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -318,11 +318,11 @@ class GeneratorNodeTest {
     }
 
     @SuppressWarnings("unchecked")
-    private java.util.List<com.ragagent.schema.AgentResponse.SourceDocument> callToSourceDocs(
+    private java.util.List<com.agentsystem.schema.AgentResponse.SourceDocument> callToSourceDocs(
             List<DocumentResult> docs) throws Exception {
         Method m = GeneratorNode.class.getDeclaredMethod("toSourceDocs", List.class);
         m.setAccessible(true);
-        return (java.util.List<com.ragagent.schema.AgentResponse.SourceDocument>) m.invoke(node, docs);
+        return (java.util.List<com.agentsystem.schema.AgentResponse.SourceDocument>) m.invoke(node, docs);
     }
 
     private String callResolveModelName() throws Exception {

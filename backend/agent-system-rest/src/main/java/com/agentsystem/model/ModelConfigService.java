@@ -1,4 +1,4 @@
-package com.ragagent.model;
+package com.agentsystem.model;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

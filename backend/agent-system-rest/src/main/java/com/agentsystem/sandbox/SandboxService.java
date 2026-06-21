@@ -1,4 +1,4 @@
-package com.ragagent.sandbox;
+package com.agentsystem.sandbox;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;

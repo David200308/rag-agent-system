@@ -1,9 +1,9 @@
-package com.ragagent.auth.service;
+package com.agentsystem.auth.service;
 
-import com.ragagent.auth.AuthProperties;
-import com.ragagent.auth.entity.EmailWhitelist;
-import com.ragagent.auth.repository.EmailWhitelistRepository;
-import com.ragagent.org.OrganizationService;
+import com.agentsystem.auth.AuthProperties;
+import com.agentsystem.auth.entity.EmailWhitelist;
+import com.agentsystem.auth.repository.EmailWhitelistRepository;
+import com.agentsystem.org.OrganizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

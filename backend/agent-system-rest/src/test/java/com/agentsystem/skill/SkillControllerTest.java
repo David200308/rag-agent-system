@@ -1,7 +1,8 @@
-package com.ragagent.skill;
+package com.agentsystem.skill;
 
-import com.ragagent.org.OrgContext;
-import com.ragagent.skill.entity.Skill;
+import com.agentsystem.org.OrgContext;
+import com.agentsystem.skill.entity.Skill;
+import com.agentsystem.skill.entity.SkillVersion;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -9,9 +10,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,15 +34,20 @@ class SkillControllerTest {
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
     }
 
+    private static MultipartFile file(String name, byte[] content) {
+        return new MockMultipartFile("file", name, "text/plain", content);
+    }
+
     // ── list ──────────────────────────────────────────────────────────────────
 
     @Test
     void list_withEmail_returnsSkills() {
         stubRequest("user@test.com");
-        Skill skill = new Skill();
-        when(skillService.list(any(OrgContext.class))).thenReturn(List.of(skill));
+        var summary = new SkillService.SkillSummary(
+                "id-1", "user@test.com", null, "My Skill", "f.txt", "txt", 5L, "APPROVED", 1, Instant.now());
+        when(skillService.list(any(OrgContext.class))).thenReturn(List.of(summary));
 
-        ResponseEntity<List<Skill>> resp = controller.list(request);
+        ResponseEntity<List<SkillService.SkillSummary>> resp = controller.list(request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).hasSize(1);
@@ -52,7 +60,7 @@ class SkillControllerTest {
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         when(skillService.list(any(OrgContext.class))).thenReturn(List.of());
 
-        ResponseEntity<List<Skill>> resp = controller.list(request);
+        ResponseEntity<List<SkillService.SkillSummary>> resp = controller.list(request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
@@ -60,66 +68,100 @@ class SkillControllerTest {
     // ── create ────────────────────────────────────────────────────────────────
 
     @Test
-    void create_validContent_returns201() {
+    void create_validFile_returns201() throws Exception {
         stubRequest("user@test.com");
-        Skill created = new Skill();
-        when(skillService.create(any(OrgContext.class), anyString(), anyString(), anyString(), anyLong(), anyString()))
-                .thenReturn(created);
+        when(skillService.create(any(OrgContext.class), anyString(), any(MultipartFile.class), anyString()))
+                .thenReturn(new Skill());
 
-        var body = Map.<String, Object>of(
-                "name", "My Skill",
-                "fileName", "file.txt",
-                "fileType", "txt",
-                "size", 1024,
-                "content", "Some content here"
-        );
-        ResponseEntity<Skill> resp = controller.create(body, request);
+        ResponseEntity<?> resp = controller.create(file("file.txt", "Some content".getBytes()), "My Skill", "txt", request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(201);
     }
 
     @Test
-    void create_blankContent_returns400() {
-        ResponseEntity<Skill> resp = controller.create(
-                Map.of("name", "My Skill", "content", "  "), request);
+    void create_emptyFile_returns400() {
+        ResponseEntity<?> resp = controller.create(
+                new MockMultipartFile("file", "empty.txt", "text/plain", new byte[0]), "My Skill", "txt", request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(400);
     }
 
     @Test
-    void create_missingContent_returns400() {
-        ResponseEntity<Skill> resp = controller.create(Map.of("name", "My Skill"), request);
+    void create_fileTypeDefaultsFromExtension() throws Exception {
+        stubRequest("user@test.com");
+        when(skillService.create(any(OrgContext.class), anyString(), any(MultipartFile.class), eq("md")))
+                .thenReturn(new Skill());
 
-        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+        controller.create(file("notes.md", "Hello".getBytes()), "My Skill", null, request);
+
+        verify(skillService).create(any(OrgContext.class), eq("My Skill"), any(MultipartFile.class), eq("md"));
+    }
+
+    // ── addVersion ────────────────────────────────────────────────────────────
+
+    @Test
+    void addVersion_valid_returns201() throws Exception {
+        stubRequest("user@test.com");
+        when(skillService.addVersion(any(OrgContext.class), eq("skill-1"), any(MultipartFile.class), anyString()))
+                .thenReturn(new SkillVersion());
+
+        ResponseEntity<?> resp = controller.addVersion("skill-1", file("v2.txt", "new content".getBytes()), "txt", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(201);
     }
 
     @Test
-    void create_fileNameDefaultsToName() {
+    void addVersion_skillNotFound_returns404() throws Exception {
         stubRequest("user@test.com");
-        when(skillService.create(any(OrgContext.class), eq("My Skill"), eq("My Skill"),
-                anyString(), anyLong(), anyString()))
-                .thenReturn(new Skill());
+        when(skillService.addVersion(any(OrgContext.class), eq("ghost"), any(MultipartFile.class), anyString()))
+                .thenThrow(new IllegalArgumentException("Skill not found: ghost"));
 
-        var body = Map.<String, Object>of("name", "My Skill", "content", "Hello");
-        controller.create(body, request);
+        ResponseEntity<?> resp = controller.addVersion("ghost", file("v2.txt", "x".getBytes()), "txt", request);
 
-        verify(skillService).create(any(OrgContext.class), eq("My Skill"), eq("My Skill"),
-                anyString(), anyLong(), anyString());
+        assertThat(resp.getStatusCode().value()).isEqualTo(404);
     }
 
     @Test
-    void create_fileTypeDefaultsToTxt() {
-        stubRequest("user@test.com");
-        when(skillService.create(any(OrgContext.class), anyString(), anyString(), eq("txt"), anyLong(), anyString()))
-                .thenReturn(new Skill());
+    void addVersion_notOwner_returns403() throws Exception {
+        stubRequest("other@test.com");
+        when(skillService.addVersion(any(OrgContext.class), eq("skill-1"), any(MultipartFile.class), anyString()))
+                .thenThrow(new SecurityException("not owner"));
 
-        var body = Map.<String, Object>of("name", "My Skill", "content", "Hello");
-        controller.create(body, request);
+        ResponseEntity<?> resp = controller.addVersion("skill-1", file("v2.txt", "x".getBytes()), "txt", request);
 
-        verify(skillService).create(any(OrgContext.class), anyString(), anyString(), eq("txt"), anyLong(), anyString());
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
     }
 
-    // ── getContent ────────────────────────────────────────────────────────────
+    // ── listVersions / getVersionContent / getContent ────────────────────────
+
+    @Test
+    void listVersions_returnsVersionList() {
+        when(skillService.listVersions("skill-1")).thenReturn(List.of(new SkillVersion()));
+
+        ResponseEntity<List<SkillVersion>> resp = controller.listVersions("skill-1");
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).hasSize(1);
+    }
+
+    @Test
+    void getVersionContent_found_returns200() {
+        when(skillService.getVersionContent("skill-1", 1)).thenReturn(Optional.of("old content"));
+
+        ResponseEntity<String> resp = controller.getVersionContent("skill-1", 1);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).isEqualTo("old content");
+    }
+
+    @Test
+    void getVersionContent_notFound_returns404() {
+        when(skillService.getVersionContent("skill-1", 99)).thenReturn(Optional.empty());
+
+        ResponseEntity<String> resp = controller.getVersionContent("skill-1", 99);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(404);
+    }
 
     @Test
     void getContent_found_returns200WithContent() {

@@ -1,4 +1,4 @@
-package com.ragagent.config;
+package com.agentsystem.config;
 
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.boot.context.properties.ConfigurationProperties;

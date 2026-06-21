@@ -87,6 +87,44 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || { echo -e "${RED}Error: '$1' is required but not found.${NC}"; exit 1; }
 }
 
+# bootstrap_garage "<compose command>" — one-time Garage cluster init (layout,
+# bucket, access key). Idempotent: skips if the bucket already exists, and
+# no-ops if the garage container isn't running (e.g. a single-service rebuild).
+bootstrap_garage() {
+  local compose="$1"
+  $compose ps garage 2>/dev/null | grep -qi "up\|running" || return 0
+
+  echo ""
+  echo -e "  ${DIM}Waiting for Garage to be ready…${NC}"
+  local tries=0
+  until $compose exec -T garage /garage status >/dev/null 2>&1; do
+    tries=$((tries + 1))
+    if [ "$tries" -ge 30 ]; then
+      echo -e "  ${YELLOW}Garage did not become ready in time — skipping bootstrap.${NC}"
+      echo -e "  ${DIM}Bootstrap manually once it's up — see README for the layout/bucket/key commands.${NC}"
+      return 0
+    fi
+    sleep 2
+  done
+
+  local bucket="${GARAGE_BUCKET:-agent-system-images}"
+  if $compose exec -T garage /garage bucket list 2>/dev/null | grep -q "$bucket"; then
+    echo -e "  ${DIM}Garage already bootstrapped (bucket '$bucket' exists) — skipping.${NC}"
+    return 0
+  fi
+
+  echo -e "  Bootstrapping Garage cluster (layout, bucket, access key)…"
+  local node_id layout_version
+  node_id="$($compose exec -T garage /garage node id -q | tr -d '[:space:]')"
+  $compose exec -T garage /garage layout assign -z dc1 -c 1G "$node_id"
+  layout_version="$($compose exec -T garage /garage layout show | awk '/version/ {print $NF; exit}')"
+  $compose exec -T garage /garage layout apply --version "$layout_version"
+  $compose exec -T garage /garage key import "$GARAGE_ACCESS_KEY" "$GARAGE_SECRET_KEY" --yes -n storage-inner
+  $compose exec -T garage /garage bucket create "$bucket"
+  $compose exec -T garage /garage bucket allow --read --write --key storage-inner "$bucket"
+  echo -e "  ${GREEN}✓${NC}  Garage bootstrap complete."
+}
+
 # ── banner ────────────────────────────────────────────────────────────────────
 clear
 echo ""
@@ -235,6 +273,20 @@ if [ "$MODE" = "local" ]; then
   SCHEDULER_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
   echo -e "  ${DIM}Scheduler service key auto-generated.${NC}"
 
+  # ── Image storage (Garage) ────────────────────────────────────────────────
+  STORAGE_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
+  GARAGE_RPC_SECRET="$(openssl rand -hex 32)"
+  GARAGE_ADMIN_TOKEN="$(openssl rand -base64 32 | tr -d '\n')"
+  GARAGE_ACCESS_KEY="$(openssl rand -hex 12)"
+  GARAGE_SECRET_KEY="$(openssl rand -hex 32)"
+  GARAGE_BUCKET="agent-system-images"
+  mkdir -p "$SCRIPT_DIR/observability/garage"
+  sed -e "s|__GARAGE_RPC_SECRET__|$GARAGE_RPC_SECRET|" \
+      -e "s|__GARAGE_ADMIN_TOKEN__|$GARAGE_ADMIN_TOKEN|" \
+      "$SCRIPT_DIR/observability/garage/garage.toml.template" > "$SCRIPT_DIR/observability/garage/garage.toml"
+  echo -e "  ${DIM}Storage service key + Garage credentials auto-generated.${NC}"
+  echo -e "  ${DIM}Garage config rendered: observability/garage/garage.toml${NC}"
+
   # ── Financial / Market data ───────────────────────────────────────────────
   header "Financial — Finnhub (optional)"
   echo -e "  ${DIM}Used for live stock prices. Get a free key at https://finnhub.io/register${NC}"
@@ -366,6 +418,12 @@ WEAVIATE_API_KEY=$WEAVIATE_API_KEY
 # ── Scheduler microservice ────────────────────────────────────────────────────
 SCHEDULER_SERVICE_KEY=$SCHEDULER_SERVICE_KEY
 
+# ── Image storage (Garage-backed, agent-system-storage-inner) ────────────────
+STORAGE_SERVICE_KEY=$STORAGE_SERVICE_KEY
+GARAGE_ACCESS_KEY=$GARAGE_ACCESS_KEY
+GARAGE_SECRET_KEY=$GARAGE_SECRET_KEY
+GARAGE_BUCKET=$GARAGE_BUCKET
+
 # ── Web fetch ─────────────────────────────────────────────────────────────────
 WEB_FETCH_ENABLED=true
 WEB_FETCH_TIMEOUT=10
@@ -406,14 +464,14 @@ EOF
   # ── Sandbox image ──────────────────────────────────────────────────────────
   header "Sandbox Image (for Workflow engine)"
   echo -e "  ${DIM}The workflow engine runs agent tool calls inside an isolated Docker container.${NC}"
-  echo -e "  ${DIM}Build the sandbox image once with: docker build -f backend/Dockerfile.sandbox -t ragagent/sandbox:latest ./backend${NC}"
+  echo -e "  ${DIM}Build the sandbox image once with: docker build -f backend/agent-system-rest/Dockerfile.sandbox -t ragagent/sandbox:latest ./backend${NC}"
   echo ""
   if confirm "Build sandbox image now?"; then
     echo -e "  Building ragagent/sandbox:latest …"
-    docker build -f "$SCRIPT_DIR/backend/Dockerfile.sandbox" -t ragagent/sandbox:latest "$SCRIPT_DIR/backend"
+    docker build -f "$SCRIPT_DIR/backend/agent-system-rest/Dockerfile.sandbox" -t ragagent/sandbox:latest "$SCRIPT_DIR/backend"
     echo -e "  ${GREEN}✓${NC}  Sandbox image built."
   else
-    echo -e "  ${YELLOW}Skipped.${NC} Build later: ${BOLD}docker build -f backend/Dockerfile.sandbox -t ragagent/sandbox:latest ./backend${NC}"
+    echo -e "  ${YELLOW}Skipped.${NC} Build later: ${BOLD}docker build -f backend/agent-system-rest/Dockerfile.sandbox -t ragagent/sandbox:latest ./backend${NC}"
     echo -e "  ${DIM}Set SANDBOX_ENABLED=false in .env to disable the sandbox entirely.${NC}"
   fi
 
@@ -427,12 +485,14 @@ EOF
   echo -e "    ${BOLD}3${NC}) Rebuild frontend only          ${DIM}($COMPOSE up -d --build --no-deps frontend)${NC}"
   echo -e "    ${BOLD}4${NC}) Rebuild backend only           ${DIM}($COMPOSE up -d --build --no-deps backend)${NC}"
   echo -e "    ${BOLD}5${NC}) Rebuild scheduler only         ${DIM}($COMPOSE up -d --build --no-deps scheduler)${NC}"
-  echo -e "    ${BOLD}6${NC}) Restart frontend only  ${DIM}(no build — $COMPOSE restart frontend)${NC}"
-  echo -e "    ${BOLD}7${NC}) Restart backend only   ${DIM}(no build — $COMPOSE restart backend)${NC}"
-  echo -e "    ${BOLD}8${NC}) Restart scheduler only ${DIM}(no build — $COMPOSE restart scheduler)${NC}"
-  echo -e "    ${BOLD}9${NC}) Skip — I'll start manually"
+  echo -e "    ${BOLD}6${NC}) Rebuild storage only           ${DIM}($COMPOSE up -d --build --no-deps storage)${NC}"
+  echo -e "    ${BOLD}7${NC}) Restart frontend only  ${DIM}(no build — $COMPOSE restart frontend)${NC}"
+  echo -e "    ${BOLD}8${NC}) Restart backend only   ${DIM}(no build — $COMPOSE restart backend)${NC}"
+  echo -e "    ${BOLD}9${NC}) Restart scheduler only ${DIM}(no build — $COMPOSE restart scheduler)${NC}"
+  echo -e "    ${BOLD}10${NC}) Restart storage only  ${DIM}(no build — $COMPOSE restart storage)${NC}"
+  echo -e "    ${BOLD}11${NC}) Skip — I'll start manually"
   echo ""
-  printf "  Choice [1-9]: "
+  printf "  Choice [1-11]: "
   read -r launch_choice
 
   echo ""
@@ -443,24 +503,30 @@ EOF
     3) $COMPOSE up -d --build --no-deps frontend ;;
     4) $COMPOSE up -d --build --no-deps backend ;;
     5) $COMPOSE up -d --build --no-deps scheduler ;;
-    6) $COMPOSE restart frontend ;;
-    7) $COMPOSE restart backend ;;
-    8) $COMPOSE restart scheduler ;;
-    9)
+    6) $COMPOSE up -d --build --no-deps storage ;;
+    7) $COMPOSE restart frontend ;;
+    8) $COMPOSE restart backend ;;
+    9) $COMPOSE restart scheduler ;;
+    10) $COMPOSE restart storage ;;
+    11)
       echo -e "  Run manually:"
       echo -e "    Build all:          ${BOLD}$COMPOSE up --build${NC}"
       echo -e "    Rebuild frontend:   ${BOLD}$COMPOSE up -d --build --no-deps frontend${NC}"
       echo -e "    Rebuild backend:    ${BOLD}$COMPOSE up -d --build --no-deps backend${NC}"
       echo -e "    Rebuild scheduler:  ${BOLD}$COMPOSE up -d --build --no-deps scheduler${NC}"
+      echo -e "    Rebuild storage:    ${BOLD}$COMPOSE up -d --build --no-deps storage${NC}"
       echo -e "    Restart frontend:   ${BOLD}$COMPOSE restart frontend${NC}"
       echo -e "    Restart backend:    ${BOLD}$COMPOSE restart backend${NC}"
       echo -e "    Restart scheduler:  ${BOLD}$COMPOSE restart scheduler${NC}"
+      echo -e "    Restart storage:    ${BOLD}$COMPOSE restart storage${NC}"
       ;;
     *)
       echo -e "  ${YELLOW}Invalid choice — skipping launch.${NC}"
       echo -e "  Run manually: ${BOLD}$COMPOSE up --build${NC}"
       ;;
   esac
+
+  bootstrap_garage "$COMPOSE"
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ── PROD MODE ─────────────────────────────────────────────────────────────────
@@ -720,6 +786,38 @@ else
     echo -e "  ${DIM}Scheduler service key auto-generated.${NC}"
   fi
 
+  # ── Image storage (Garage) ────────────────────────────────────────────────
+  # Same first-setup-only guard as the scheduler key — rotating rpc_secret on a
+  # node with existing data breaks cluster RPC auth until every node is
+  # re-bootstrapped. garage_rpc_secret/garage_admin_token aren't mounted as
+  # Docker secrets (Garage has no env-var support); they're persisted here only
+  # so re-runs can re-render the same observability/garage/garage.toml.
+  if ! has_secret storage_service_key; then
+    STORAGE_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
+    GARAGE_RPC_SECRET="$(openssl rand -hex 32)"
+    GARAGE_ADMIN_TOKEN="$(openssl rand -base64 32 | tr -d '\n')"
+    GARAGE_ACCESS_KEY="$(openssl rand -hex 12)"
+    GARAGE_SECRET_KEY="$(openssl rand -hex 32)"
+    write_secret storage_service_key "$STORAGE_SERVICE_KEY"
+    write_secret garage_rpc_secret    "$GARAGE_RPC_SECRET"
+    write_secret garage_admin_token   "$GARAGE_ADMIN_TOKEN"
+    write_secret garage_access_key    "$GARAGE_ACCESS_KEY"
+    write_secret garage_secret_key    "$GARAGE_SECRET_KEY"
+    echo ""
+    echo -e "  ${DIM}Storage service key + Garage credentials auto-generated.${NC}"
+  else
+    GARAGE_RPC_SECRET="$(read_secret garage_rpc_secret)"
+    GARAGE_ADMIN_TOKEN="$(read_secret garage_admin_token)"
+    GARAGE_ACCESS_KEY="$(read_secret garage_access_key)"
+    GARAGE_SECRET_KEY="$(read_secret garage_secret_key)"
+  fi
+  GARAGE_BUCKET="$(read_prod GARAGE_BUCKET agent-system-images)"
+  mkdir -p "$SCRIPT_DIR/observability/garage"
+  sed -e "s|__GARAGE_RPC_SECRET__|$GARAGE_RPC_SECRET|" \
+      -e "s|__GARAGE_ADMIN_TOKEN__|$GARAGE_ADMIN_TOKEN|" \
+      "$SCRIPT_DIR/observability/garage/garage.toml.template" > "$SCRIPT_DIR/observability/garage/garage.toml"
+  echo -e "  ${DIM}Garage config rendered: observability/garage/garage.toml${NC}"
+
   # ── Financial / Market data ───────────────────────────────────────────────
   header "Financial — Finnhub (optional)"
   UPDATE_FH=true
@@ -901,6 +999,9 @@ AUTH_PASSKEY_RP_ID=$AUTH_PASSKEY_RP_ID
 AUTH_PASSKEY_RP_NAME=$AUTH_PASSKEY_RP_NAME
 AUTH_PASSKEY_ORIGIN=$AUTH_PASSKEY_ORIGIN
 
+# ── Image storage (Garage-backed, agent-system-storage-inner) ────────────────
+GARAGE_BUCKET=$GARAGE_BUCKET
+
 # ── Web fetch ─────────────────────────────────────────────────────────────────
 WEB_FETCH_ENABLED=true
 WEB_FETCH_TIMEOUT=10
@@ -934,14 +1035,14 @@ EOF
   # ── Sandbox image ──────────────────────────────────────────────────────────
   header "Sandbox Image (for Workflow engine)"
   echo -e "  ${DIM}The workflow engine runs agent tool calls inside an isolated Docker container.${NC}"
-  echo -e "  ${DIM}Build the sandbox image once with: docker build -f backend/Dockerfile.sandbox -t ragagent/sandbox:latest ./backend${NC}"
+  echo -e "  ${DIM}Build the sandbox image once with: docker build -f backend/agent-system-rest/Dockerfile.sandbox -t ragagent/sandbox:latest ./backend${NC}"
   echo ""
   if confirm "Build sandbox image now?"; then
     echo -e "  Building ragagent/sandbox:latest …"
-    docker build -f "$SCRIPT_DIR/backend/Dockerfile.sandbox" -t ragagent/sandbox:latest "$SCRIPT_DIR/backend"
+    docker build -f "$SCRIPT_DIR/backend/agent-system-rest/Dockerfile.sandbox" -t ragagent/sandbox:latest "$SCRIPT_DIR/backend"
     echo -e "  ${GREEN}✓${NC}  Sandbox image built."
   else
-    echo -e "  ${YELLOW}Skipped.${NC} Build later: ${BOLD}docker build -f backend/Dockerfile.sandbox -t ragagent/sandbox:latest ./backend${NC}"
+    echo -e "  ${YELLOW}Skipped.${NC} Build later: ${BOLD}docker build -f backend/agent-system-rest/Dockerfile.sandbox -t ragagent/sandbox:latest ./backend${NC}"
     echo -e "  ${DIM}Set SANDBOX_ENABLED=false in .env.prod to disable the sandbox entirely.${NC}"
   fi
 
@@ -956,12 +1057,14 @@ EOF
   echo -e "    ${BOLD}3${NC}) Rebuild frontend only          ${DIM}($PROD_COMPOSE up -d --build --no-deps frontend)${NC}"
   echo -e "    ${BOLD}4${NC}) Rebuild backend only           ${DIM}($PROD_COMPOSE up -d --build --no-deps backend)${NC}"
   echo -e "    ${BOLD}5${NC}) Rebuild scheduler only         ${DIM}($PROD_COMPOSE up -d --build --no-deps scheduler)${NC}"
-  echo -e "    ${BOLD}6${NC}) Restart frontend only  ${DIM}(no build — $PROD_COMPOSE restart frontend)${NC}"
-  echo -e "    ${BOLD}7${NC}) Restart backend only   ${DIM}(no build — $PROD_COMPOSE restart backend)${NC}"
-  echo -e "    ${BOLD}8${NC}) Restart scheduler only ${DIM}(no build — $PROD_COMPOSE restart scheduler)${NC}"
-  echo -e "    ${BOLD}9${NC}) Skip — I'll start manually"
+  echo -e "    ${BOLD}6${NC}) Rebuild storage only           ${DIM}($PROD_COMPOSE up -d --build --no-deps storage)${NC}"
+  echo -e "    ${BOLD}7${NC}) Restart frontend only  ${DIM}(no build — $PROD_COMPOSE restart frontend)${NC}"
+  echo -e "    ${BOLD}8${NC}) Restart backend only   ${DIM}(no build — $PROD_COMPOSE restart backend)${NC}"
+  echo -e "    ${BOLD}9${NC}) Restart scheduler only ${DIM}(no build — $PROD_COMPOSE restart scheduler)${NC}"
+  echo -e "    ${BOLD}10${NC}) Restart storage only  ${DIM}(no build — $PROD_COMPOSE restart storage)${NC}"
+  echo -e "    ${BOLD}11${NC}) Skip — I'll start manually"
   echo ""
-  printf "  Choice [1-9]: "
+  printf "  Choice [1-11]: "
   read -r launch_choice
 
   echo ""
@@ -972,24 +1075,30 @@ EOF
     3) $PROD_COMPOSE up -d --build --no-deps frontend ;;
     4) $PROD_COMPOSE up -d --build --no-deps backend ;;
     5) $PROD_COMPOSE up -d --build --no-deps scheduler ;;
-    6) $PROD_COMPOSE restart frontend ;;
-    7) $PROD_COMPOSE restart backend ;;
-    8) $PROD_COMPOSE restart scheduler ;;
-    9)
+    6) $PROD_COMPOSE up -d --build --no-deps storage ;;
+    7) $PROD_COMPOSE restart frontend ;;
+    8) $PROD_COMPOSE restart backend ;;
+    9) $PROD_COMPOSE restart scheduler ;;
+    10) $PROD_COMPOSE restart storage ;;
+    11)
       echo -e "  Run manually:"
       echo -e "    Build all:          ${BOLD}$PROD_COMPOSE up -d --build${NC}"
       echo -e "    Rebuild frontend:   ${BOLD}$PROD_COMPOSE up -d --build --no-deps frontend${NC}"
       echo -e "    Rebuild backend:    ${BOLD}$PROD_COMPOSE up -d --build --no-deps backend${NC}"
       echo -e "    Rebuild scheduler:  ${BOLD}$PROD_COMPOSE up -d --build --no-deps scheduler${NC}"
+      echo -e "    Rebuild storage:    ${BOLD}$PROD_COMPOSE up -d --build --no-deps storage${NC}"
       echo -e "    Restart frontend:   ${BOLD}$PROD_COMPOSE restart frontend${NC}"
       echo -e "    Restart backend:    ${BOLD}$PROD_COMPOSE restart backend${NC}"
       echo -e "    Restart scheduler:  ${BOLD}$PROD_COMPOSE restart scheduler${NC}"
+      echo -e "    Restart storage:    ${BOLD}$PROD_COMPOSE restart storage${NC}"
       ;;
     *)
       echo -e "  ${YELLOW}Invalid choice — skipping launch.${NC}"
       echo -e "  Run manually: ${BOLD}$PROD_COMPOSE up -d --build${NC}"
       ;;
   esac
+
+  bootstrap_garage "$PROD_COMPOSE"
 fi
 
 echo ""
@@ -1003,6 +1112,7 @@ echo -e "    Financial →  ${CYAN}http://localhost:3000/financial${NC}"
 echo -e "    Travel    →  ${CYAN}http://localhost:3000/travel${NC}"
 echo -e "  Backend API →  ${CYAN}http://localhost:8081/swagger-ui/index.html${NC}"
 echo -e "  Scheduler   →  ${CYAN}http://localhost:8082/health${NC}"
+echo -e "  Storage     →  ${CYAN}http://localhost:8083/actuator/health${NC}"
 echo -e "  Grafana     →  ${CYAN}http://localhost:3001${NC}  ${DIM}(admin / your password)${NC}"
 echo -e "  Prometheus  →  ${CYAN}http://localhost:9090${NC}"
 echo -e "  ───────────────────────────────────────────────"

@@ -1,8 +1,8 @@
-package com.ragagent.auth.filter;
+package com.agentsystem.auth.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ragagent.auth.AuthProperties;
-import com.ragagent.auth.service.AuthService;
+import com.agentsystem.auth.AuthProperties;
+import com.agentsystem.auth.service.AuthService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

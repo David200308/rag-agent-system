@@ -1,6 +1,6 @@
-package com.ragagent.webfetch.repository;
+package com.agentsystem.webfetch.repository;
 
-import com.ragagent.webfetch.entity.WebFetchWhitelist;
+import com.agentsystem.webfetch.entity.WebFetchWhitelist;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

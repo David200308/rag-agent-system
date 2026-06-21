@@ -1,7 +1,7 @@
-package com.ragagent.auth.filter;
+package com.agentsystem.auth.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ragagent.config.McpProperties;
+import com.agentsystem.config.McpProperties;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

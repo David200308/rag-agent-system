@@ -1,9 +1,9 @@
-package com.ragagent.org;
+package com.agentsystem.org;
 
-import com.ragagent.knowledge.KnowledgeSourceService;
-import com.ragagent.knowledge.entity.KnowledgeSource;
-import com.ragagent.skill.SkillService;
-import com.ragagent.skill.entity.Skill;
+import com.agentsystem.knowledge.KnowledgeSourceService;
+import com.agentsystem.knowledge.entity.KnowledgeSource;
+import com.agentsystem.skill.SkillService;
+import com.agentsystem.skill.entity.SkillVersion;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -49,11 +50,15 @@ class TeamControllerTest {
         return ks;
     }
 
-    private Skill pendingSkill(String id) {
-        Skill s = new Skill(id, "member@test.com", "Draft Tool", "d.py", "python", 50, "code");
-        s.setOrgId("skyproton");
-        s.setStatus("PENDING");
-        return s;
+    private SkillVersion pendingSkillVersion(String versionId) {
+        return new SkillVersion(versionId, "skill-1", 2, "obj-" + versionId, "d.py", "python", 50L,
+                "PENDING", "member@test.com", Instant.now());
+    }
+
+    private SkillService.PendingSkillVersion pendingSkillSummary(String versionId) {
+        return new SkillService.PendingSkillVersion(
+                versionId, "skill-1", "Draft Tool", "member@test.com", 2, "d.py", "python", 50L,
+                "member@test.com", Instant.now());
     }
 
     // ── listApprovals ─────────────────────────────────────────────────────────
@@ -63,9 +68,9 @@ class TeamControllerTest {
         stubTeamRequest("owner@test.com");
         doNothing().when(orgService).requireOwner("skyproton", "owner@test.com");
         KnowledgeSource kb = pendingKb(1L, "doc.pdf");
-        Skill skill = pendingSkill("skill-1");
+        var pendingVersion = pendingSkillSummary("version-1");
         when(knowledgeSourceService.listPendingByOrg("skyproton")).thenReturn(List.of(kb));
-        when(skillService.listPendingByOrg("skyproton")).thenReturn(List.of(skill));
+        when(skillService.listPendingByOrg("skyproton")).thenReturn(List.of(pendingVersion));
 
         ResponseEntity<?> resp = controller.listApprovals(request);
 
@@ -208,14 +213,14 @@ class TeamControllerTest {
     void approveSkill_owner_callsServiceAndReturns200() {
         stubTeamRequest("owner@test.com");
         doNothing().when(orgService).requireOwner("skyproton", "owner@test.com");
-        Skill approved = pendingSkill("skill-1");
+        SkillVersion approved = pendingSkillVersion("version-1");
         approved.setStatus("APPROVED");
-        when(skillService.approve("skill-1")).thenReturn(approved);
+        when(skillService.approve("version-1")).thenReturn(approved);
 
-        ResponseEntity<?> resp = controller.approveSkill("skill-1", request);
+        ResponseEntity<?> resp = controller.approveSkill("version-1", request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
-        verify(skillService).approve("skill-1");
+        verify(skillService).approve("version-1");
     }
 
     @Test

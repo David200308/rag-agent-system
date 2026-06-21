@@ -1,4 +1,4 @@
-package com.ragagent.schema;
+package com.agentsystem.schema;
 
 /**
  * Result returned after fetching and ingesting a remote URL.

@@ -1,4 +1,4 @@
-package com.ragagent.knowledge.entity;
+package com.agentsystem.knowledge.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;

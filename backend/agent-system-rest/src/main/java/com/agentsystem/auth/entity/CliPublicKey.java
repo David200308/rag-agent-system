@@ -1,4 +1,4 @@
-package com.ragagent.auth.entity;
+package com.agentsystem.auth.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;

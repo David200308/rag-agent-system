@@ -1,6 +1,6 @@
-package com.ragagent.conversation.repository;
+package com.agentsystem.conversation.repository;
 
-import com.ragagent.conversation.entity.Conversation;
+import com.agentsystem.conversation.entity.Conversation;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

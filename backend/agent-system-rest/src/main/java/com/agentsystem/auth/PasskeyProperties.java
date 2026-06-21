@@ -1,4 +1,4 @@
-package com.ragagent.auth;
+package com.agentsystem.auth;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

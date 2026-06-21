@@ -1,6 +1,6 @@
-package com.ragagent.auth.service;
+package com.agentsystem.auth.service;
 
-import com.ragagent.auth.ClientIdentityProperties;
+import com.agentsystem.auth.ClientIdentityProperties;
 import org.junit.jupiter.api.Test;
 
 import javax.crypto.Mac;

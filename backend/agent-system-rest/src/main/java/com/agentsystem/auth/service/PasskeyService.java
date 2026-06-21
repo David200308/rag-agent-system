@@ -1,13 +1,13 @@
-package com.ragagent.auth.service;
+package com.agentsystem.auth.service;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
-import com.ragagent.auth.PasskeyProperties;
-import com.ragagent.auth.entity.PasskeyCredential;
-import com.ragagent.auth.repository.PasskeyCredentialRepository;
+import com.agentsystem.auth.PasskeyProperties;
+import com.agentsystem.auth.entity.PasskeyCredential;
+import com.agentsystem.auth.repository.PasskeyCredentialRepository;
 import com.yubico.webauthn.*;
 import com.yubico.webauthn.data.*;
 import com.yubico.webauthn.data.exception.Base64UrlException;

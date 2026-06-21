@@ -1,4 +1,4 @@
-package com.ragagent.rag;
+package com.agentsystem.rag;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

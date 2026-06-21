@@ -1,8 +1,8 @@
-package com.ragagent.auth.service;
+package com.agentsystem.auth.service;
 
-import com.ragagent.auth.AuthProperties;
-import com.ragagent.auth.repository.EmailWhitelistRepository;
-import com.ragagent.org.OrganizationService;
+import com.agentsystem.auth.AuthProperties;
+import com.agentsystem.auth.repository.EmailWhitelistRepository;
+import com.agentsystem.org.OrganizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;

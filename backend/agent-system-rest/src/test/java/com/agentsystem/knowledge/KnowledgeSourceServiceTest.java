@@ -1,9 +1,9 @@
-package com.ragagent.knowledge;
+package com.agentsystem.knowledge;
 
-import com.ragagent.knowledge.entity.KnowledgeSource;
-import com.ragagent.knowledge.repository.KnowledgeSourceRepository;
-import com.ragagent.org.OrgContext;
-import com.ragagent.rag.DocumentIngestionService;
+import com.agentsystem.knowledge.entity.KnowledgeSource;
+import com.agentsystem.knowledge.repository.KnowledgeSourceRepository;
+import com.agentsystem.org.OrgContext;
+import com.agentsystem.rag.DocumentIngestionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;

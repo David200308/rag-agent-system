@@ -1,6 +1,6 @@
-package com.ragagent.connector;
+package com.agentsystem.connector;
 
-import com.ragagent.agent.ToolCallBudget;
+import com.agentsystem.agent.ToolCallBudget;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

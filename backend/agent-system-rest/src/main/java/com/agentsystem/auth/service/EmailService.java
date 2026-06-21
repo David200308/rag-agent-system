@@ -1,4 +1,4 @@
-package com.ragagent.auth.service;
+package com.agentsystem.auth.service;
 
 import com.resend.Resend;
 import com.resend.core.exception.ResendException;

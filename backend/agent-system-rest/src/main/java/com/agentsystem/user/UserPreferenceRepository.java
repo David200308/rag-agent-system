@@ -1,4 +1,4 @@
-package com.ragagent.user;
+package com.agentsystem.user;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

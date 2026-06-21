@@ -27,6 +27,7 @@ import type {
   ShareMetaResponse,
   ShareMode,
   Skill,
+  SkillVersion,
   UpdateScheduleRequest,
   UrlIngestionResult,
   WebFetchWhitelistEntry,
@@ -420,6 +421,24 @@ export async function deleteSkill(id: string): Promise<void> {
 
 export async function fetchSkillContent(id: string): Promise<string> {
   const res = await fetch(`/api/skills/${id}`);
+  if (!res.ok) return "";
+  return res.text();
+}
+
+export async function fetchSkillVersions(id: string): Promise<SkillVersion[]> {
+  const res = await fetch(`/api/skills/${id}/versions`);
+  if (!res.ok) return [];
+  return res.json() as Promise<SkillVersion[]>;
+}
+
+export async function uploadSkillVersion(id: string, file: File): Promise<SkillVersion> {
+  const form = new FormData();
+  form.append("file", file);
+  return postForm<SkillVersion>(`/api/skills/${id}/versions`, form);
+}
+
+export async function fetchSkillVersionContent(id: string, versionNumber: number): Promise<string> {
+  const res = await fetch(`/api/skills/${id}/versions/${versionNumber}`);
   if (!res.ok) return "";
   return res.text();
 }

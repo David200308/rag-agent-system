@@ -50,13 +50,13 @@ spring:
       # Fallback to "none" so Spring AI auto-configs pass key validation even when
       # OPENAI_API_KEY is not set (e.g. when using a local LLM provider).
       api-key: ${OPENAI_API_KEY:none}
-      # Chat/embedding/audio/image auto-configs excluded in RagAgentApplication.
+      # Chat/embedding/audio/image auto-configs excluded in AgentSystemApplication.
       # LlmProviderConfig builds the ChatModel based on llm.provider.
 
     # ── Anthropic ────────────────────────────────────────────────────────────
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:}
-      # Chat auto-config excluded in RagAgentApplication — managed by LlmProviderConfig.
+      # Chat auto-config excluded in AgentSystemApplication — managed by LlmProviderConfig.
 
     # ── Weaviate Vector Store ─────────────────────────────────────────────────
     vectorstore:
@@ -339,6 +339,11 @@ scheduler:
   service-key: ${SCHEDULER_SERVICE_KEY:scheduler-secret-key}
   url: ${SCHEDULER_URL:http://localhost:8082}
 
+# ── agent-system-storage-inner microservice (Garage-backed image storage) ───
+storage:
+  service-key: ${STORAGE_SERVICE_KEY:storage-secret-key}
+  url: ${STORAGE_URL:http://localhost:8083}
+
 # ── Resend (transactional email) ──────────────────────────────────────────────
 resend:
   api-key: ${RESEND_API_KEY:}
@@ -351,7 +356,7 @@ financial:
 
 logging:
   level:
-    com.ragagent: DEBUG
+    com.agentsystem: DEBUG
     org.springframework.ai: INFO
     org.bsc.langgraph4j: DEBUG
     # Suppress connection errors when no OTEL collector is running (sample rate = 0 by default)

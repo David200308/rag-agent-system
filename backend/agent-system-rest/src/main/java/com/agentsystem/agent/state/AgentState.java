@@ -1,9 +1,9 @@
-package com.ragagent.agent.state;
+package com.agentsystem.agent.state;
 
-import com.ragagent.schema.AgentRequest;
-import com.ragagent.schema.AgentResponse;
-import com.ragagent.schema.DocumentResult;
-import com.ragagent.schema.QueryAnalysis;
+import com.agentsystem.schema.AgentRequest;
+import com.agentsystem.schema.AgentResponse;
+import com.agentsystem.schema.DocumentResult;
+import com.agentsystem.schema.QueryAnalysis;
 import org.bsc.langgraph4j.state.Channel;
 import org.bsc.langgraph4j.state.Channels;
 

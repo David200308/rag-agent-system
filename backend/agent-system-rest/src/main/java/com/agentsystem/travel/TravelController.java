@@ -1,7 +1,7 @@
-package com.ragagent.travel;
+package com.agentsystem.travel;
 
-import com.ragagent.travel.dto.TravelRecordDto;
-import com.ragagent.travel.entity.TravelRecord;
+import com.agentsystem.travel.dto.TravelRecordDto;
+import com.agentsystem.travel.entity.TravelRecord;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;

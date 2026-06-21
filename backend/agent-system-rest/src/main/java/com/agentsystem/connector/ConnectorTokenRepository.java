@@ -1,4 +1,4 @@
-package com.ragagent.connector;
+package com.agentsystem.connector;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

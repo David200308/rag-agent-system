@@ -1,12 +1,12 @@
-package com.ragagent.agent.nodes;
+package com.agentsystem.agent.nodes;
 
-import com.ragagent.agent.state.AgentState;
-import com.ragagent.knowledge.KnowledgeSourceService;
-import com.ragagent.knowledge.entity.KnowledgeSource;
-import com.ragagent.rag.RetrievalService;
-import com.ragagent.schema.AgentRequest;
-import com.ragagent.schema.DocumentResult;
-import com.ragagent.schema.QueryAnalysis;
+import com.agentsystem.agent.state.AgentState;
+import com.agentsystem.knowledge.KnowledgeSourceService;
+import com.agentsystem.knowledge.entity.KnowledgeSource;
+import com.agentsystem.rag.RetrievalService;
+import com.agentsystem.schema.AgentRequest;
+import com.agentsystem.schema.DocumentResult;
+import com.agentsystem.schema.QueryAnalysis;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

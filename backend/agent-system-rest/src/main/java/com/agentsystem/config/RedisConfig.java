@@ -1,4 +1,4 @@
-package com.ragagent.config;
+package com.agentsystem.config;
 
 import io.github.bucket4j.distributed.ExpirationAfterWriteStrategy;
 import io.github.bucket4j.distributed.proxy.ClientSideConfig;
@@ -18,8 +18,8 @@ import java.time.Duration;
 /**
  * Redis is shared with the Go scheduler's Asynq queue (same host:port in docker-compose).
  * This config wires the two clients the backend needs on top of it:
- *  - Lettuce, for distributed Bucket4j rate-limit buckets (com.ragagent.filter.RateLimitFilter)
- *  - Redisson, for the cluster-wide sandbox concurrency semaphore (com.ragagent.sandbox.SandboxService)
+ *  - Lettuce, for distributed Bucket4j rate-limit buckets (com.agentsystem.filter.RateLimitFilter)
+ *  - Redisson, for the cluster-wide sandbox concurrency semaphore (com.agentsystem.sandbox.SandboxService)
  *
  * Plain key/value Redis access (sandbox container tracking, fallback answer cache)
  * uses Spring Boot's auto-configured {@code StringRedisTemplate}, which reuses the

@@ -1,7 +1,9 @@
-package com.ragagent.skill.repository;
+package com.agentsystem.skill.repository;
 
-import com.ragagent.skill.entity.Skill;
+import com.agentsystem.skill.entity.Skill;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -10,31 +12,25 @@ public interface SkillRepository extends JpaRepository<Skill, String> {
     /** Personal mode: skills owned by this email. */
     List<Skill> findByOwnerEmailAndOrgIdIsNullOrderByCreatedAtDesc(String ownerEmail);
 
-    /** Team mode UI: approved skills + caller's own pending/rejected. */
-    @org.springframework.data.jpa.repository.Query("""
+    /** Team mode UI: skills with an approved version + caller's own submissions (even if still pending). */
+    @Query("""
         SELECT s FROM Skill s
         WHERE s.orgId = :orgId
-          AND (s.status = 'APPROVED' OR s.ownerEmail = :callerEmail)
+          AND (s.ownerEmail = :callerEmail
+               OR EXISTS (SELECT 1 FROM SkillVersion v WHERE v.skillId = s.id AND v.status = 'APPROVED'))
         ORDER BY s.createdAt DESC
         """)
-    List<Skill> findByOrgIdForMember(@org.springframework.data.repository.query.Param("orgId") String orgId,
-                                     @org.springframework.data.repository.query.Param("callerEmail") String callerEmail);
+    List<Skill> findByOrgIdForMember(@Param("orgId") String orgId,
+                                     @Param("callerEmail") String callerEmail);
 
-    /** Team mode agent use: approved skills only. */
-    @org.springframework.data.jpa.repository.Query("""
+    /** Team mode agent use: skills with at least one approved version. */
+    @Query("""
         SELECT s FROM Skill s
-        WHERE s.orgId = :orgId AND s.status = 'APPROVED'
+        WHERE s.orgId = :orgId
+          AND EXISTS (SELECT 1 FROM SkillVersion v WHERE v.skillId = s.id AND v.status = 'APPROVED')
         ORDER BY s.createdAt DESC
         """)
-    List<Skill> findApprovedByOrgId(@org.springframework.data.repository.query.Param("orgId") String orgId);
-
-    /** Owner approval queue: all pending skills for the org. */
-    @org.springframework.data.jpa.repository.Query("""
-        SELECT s FROM Skill s
-        WHERE s.orgId = :orgId AND s.status = 'PENDING'
-        ORDER BY s.createdAt DESC
-        """)
-    List<Skill> findPendingByOrgId(@org.springframework.data.repository.query.Param("orgId") String orgId);
+    List<Skill> findApprovedByOrgId(@Param("orgId") String orgId);
 
     List<Skill> findAllByOrderByCreatedAtDesc();
 

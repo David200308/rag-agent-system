@@ -1,13 +1,13 @@
-package com.ragagent.conversation;
+package com.agentsystem.conversation;
 
-import com.ragagent.conversation.entity.Conversation;
-import com.ragagent.conversation.entity.ConversationMessage;
-import com.ragagent.conversation.entity.ConversationShare;
-import com.ragagent.conversation.repository.ConversationMessageRepository;
-import com.ragagent.conversation.repository.ConversationRepository;
-import com.ragagent.conversation.repository.ConversationShareRepository;
-import com.ragagent.org.OrgContext;
-import com.ragagent.schema.AgentRequest;
+import com.agentsystem.conversation.entity.Conversation;
+import com.agentsystem.conversation.entity.ConversationMessage;
+import com.agentsystem.conversation.entity.ConversationShare;
+import com.agentsystem.conversation.repository.ConversationMessageRepository;
+import com.agentsystem.conversation.repository.ConversationRepository;
+import com.agentsystem.conversation.repository.ConversationShareRepository;
+import com.agentsystem.org.OrgContext;
+import com.agentsystem.schema.AgentRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;

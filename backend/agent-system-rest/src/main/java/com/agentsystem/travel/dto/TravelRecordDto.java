@@ -1,4 +1,4 @@
-package com.ragagent.travel.dto;
+package com.agentsystem.travel.dto;
 
 import java.time.Instant;
 import java.util.List;

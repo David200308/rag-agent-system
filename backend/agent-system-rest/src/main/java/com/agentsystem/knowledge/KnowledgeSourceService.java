@@ -1,10 +1,10 @@
-package com.ragagent.knowledge;
+package com.agentsystem.knowledge;
 
-import com.ragagent.knowledge.entity.KnowledgeSource;
-import com.ragagent.knowledge.entity.KnowledgeSourceShare;
-import com.ragagent.knowledge.repository.KnowledgeSourceRepository;
-import com.ragagent.org.OrgContext;
-import com.ragagent.rag.DocumentIngestionService;
+import com.agentsystem.knowledge.entity.KnowledgeSource;
+import com.agentsystem.knowledge.entity.KnowledgeSourceShare;
+import com.agentsystem.knowledge.repository.KnowledgeSourceRepository;
+import com.agentsystem.org.OrgContext;
+import com.agentsystem.rag.DocumentIngestionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

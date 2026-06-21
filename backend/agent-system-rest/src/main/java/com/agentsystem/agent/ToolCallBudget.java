@@ -1,4 +1,4 @@
-package com.ragagent.agent;
+package com.agentsystem.agent;
 
 import org.springframework.stereotype.Component;
 

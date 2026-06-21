@@ -30,13 +30,17 @@ interface PendingKnowledge {
   ingestedAt: string;
 }
 
+/** A pending skill *version* — versionId (used for approve/reject) is the version id, not the skill id. */
 interface PendingSkill {
-  id: string;
-  name: string;
+  versionId: string;
+  skillId: string;
+  skillName: string;
+  versionNumber: number;
   fileName: string;
   fileType: string;
-  size: number;
+  sizeBytes: number;
   ownerEmail: string;
+  createdByEmail: string;
   createdAt: string;
 }
 
@@ -432,9 +436,14 @@ function ApprovalsTab({
             </thead>
             <tbody className="divide-y divide-[--color-border]">
               {approvals!.skills.map((skill) => (
-                <tr key={skill.id} className="bg-[--color-surface] hover:bg-[--color-surface-raised] transition-colors">
+                <tr key={skill.versionId} className="bg-[--color-surface] hover:bg-[--color-surface-raised] transition-colors">
                   <td className={cn(tdCls, "max-w-0")}>
-                    <div className="truncate font-medium">{skill.name}</div>
+                    <div className="flex items-center gap-1.5 truncate font-medium">
+                      <span>{skill.skillName}</span>
+                      <span className="shrink-0 rounded bg-[--color-surface-raised] px-1 py-0.5 text-[10px] font-mono font-semibold">
+                        v{skill.versionNumber}
+                      </span>
+                    </div>
                   </td>
                   <td className={cn(tdCls, "max-w-0 text-xs text-[--color-muted]")}>
                     <div className="flex items-center gap-1 min-w-0">
@@ -443,13 +452,13 @@ function ApprovalsTab({
                     </div>
                   </td>
                   <td className={cn(tdCls, "max-w-0 text-xs text-[--color-muted]")}>
-                    <div className="truncate">{skill.ownerEmail}</div>
+                    <div className="truncate">{skill.createdByEmail ?? skill.ownerEmail}</div>
                   </td>
                   <td className={cn(tdCls, "text-xs text-[--color-muted] whitespace-nowrap")}>
                     {new Date(skill.createdAt).toLocaleDateString()}
                   </td>
                   <td className={tdCls}>
-                    <ActionButtons type="skills" id={skill.id} />
+                    <ActionButtons type="skills" id={skill.versionId} />
                   </td>
                 </tr>
               ))}

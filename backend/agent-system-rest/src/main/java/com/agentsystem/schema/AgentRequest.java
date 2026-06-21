@@ -1,4 +1,4 @@
-package com.ragagent.schema;
+package com.agentsystem.schema;
 
 import com.fasterxml.jackson.annotation.JsonClassDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;

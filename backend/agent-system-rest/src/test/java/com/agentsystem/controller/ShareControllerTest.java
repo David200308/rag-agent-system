@@ -1,8 +1,8 @@
-package com.ragagent.controller;
+package com.agentsystem.controller;
 
-import com.ragagent.conversation.ConversationService;
-import com.ragagent.conversation.entity.ConversationMessage;
-import com.ragagent.conversation.entity.ConversationShare;
+import com.agentsystem.conversation.ConversationService;
+import com.agentsystem.conversation.entity.ConversationMessage;
+import com.agentsystem.conversation.entity.ConversationShare;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

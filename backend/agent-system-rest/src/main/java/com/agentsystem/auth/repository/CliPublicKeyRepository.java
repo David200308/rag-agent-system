@@ -1,6 +1,6 @@
-package com.ragagent.auth.repository;
+package com.agentsystem.auth.repository;
 
-import com.ragagent.auth.entity.CliPublicKey;
+import com.agentsystem.auth.entity.CliPublicKey;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

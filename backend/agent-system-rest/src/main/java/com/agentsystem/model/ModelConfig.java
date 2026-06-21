@@ -1,4 +1,4 @@
-package com.ragagent.model;
+package com.agentsystem.model;
 
 import jakarta.persistence.*;
 import lombok.Getter;

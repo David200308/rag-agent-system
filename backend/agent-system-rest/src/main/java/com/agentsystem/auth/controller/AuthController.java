@@ -1,8 +1,8 @@
-package com.ragagent.auth.controller;
+package com.agentsystem.auth.controller;
 
-import com.ragagent.auth.service.AuthService;
-import com.ragagent.auth.service.CliKeyService;
-import com.ragagent.org.OrganizationService;
+import com.agentsystem.auth.service.AuthService;
+import com.agentsystem.auth.service.CliKeyService;
+import com.agentsystem.org.OrganizationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

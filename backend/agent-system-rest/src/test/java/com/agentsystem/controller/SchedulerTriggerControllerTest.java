@@ -1,10 +1,10 @@
-package com.ragagent.controller;
+package com.agentsystem.controller;
 
-import com.ragagent.agent.RagAgentGraph;
-import com.ragagent.config.SchedulerProperties;
-import com.ragagent.conversation.ConversationService;
-import com.ragagent.schema.AgentResponse;
-import com.ragagent.workflow.WorkflowRunService;
+import com.agentsystem.agent.AgentSystemGraph;
+import com.agentsystem.config.SchedulerProperties;
+import com.agentsystem.conversation.ConversationService;
+import com.agentsystem.schema.AgentResponse;
+import com.agentsystem.workflow.WorkflowRunService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,7 +29,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class SchedulerTriggerControllerTest {
 
-    @Mock RagAgentGraph       agentGraph;
+    @Mock AgentSystemGraph       agentGraph;
     @Mock ConversationService conversationService;
     @Mock WorkflowRunService  workflowRunService;
     @Mock StringRedisTemplate redisTemplate;

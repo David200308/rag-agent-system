@@ -1,4 +1,4 @@
-package com.ragagent.web;
+package com.agentsystem.web;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;

@@ -10,6 +10,9 @@
 #      echo "sk-..."                       > secrets/openai_api_key
 #      echo "$(openssl rand -base64 64)"   > secrets/auth_jwt_secret
 #      echo "$(openssl rand -base64 32)"   > secrets/scheduler_service_key
+#      echo "$(openssl rand -base64 32)"   > secrets/storage_service_key
+#      echo "..."                          > secrets/garage_access_key   # pre-seeded via `garage key import`
+#      echo "..."                          > secrets/garage_secret_key
 #      # ... (see full list below)
 #      chmod 600 secrets/*
 #
@@ -46,6 +49,12 @@ secrets:
     file: ./secrets/finnhub_api_key
   scheduler_service_key:
     file: ./secrets/scheduler_service_key
+  storage_service_key:
+    file: ./secrets/storage_service_key
+  garage_access_key:
+    file: ./secrets/garage_access_key
+  garage_secret_key:
+    file: ./secrets/garage_secret_key
   google_client_id:
     file: ./secrets/google_client_id
   google_client_secret:
@@ -121,6 +130,58 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # ── Garage (S3-compatible object storage for images) ──────────────────────────
+  # garage.toml is rendered from observability/garage/garage.toml.template by
+  # setup.sh (embeds the generated rpc_secret/admin_token). S3 API (3900) and
+  # admin API (3903) stay on the internal docker network only.
+  garage:
+    image: dxflrs/garage:v1.0.1
+    container_name: agent-system-garage
+    restart: unless-stopped
+    volumes:
+      - ./observability/garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Image storage microservice (agent-system-storage-inner module) ───────────
+  storage:
+    build:
+      context: ./backend
+      dockerfile: agent-system-storage-inner/Dockerfile
+    container_name: agent-system-storage
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    secrets:
+      - mysql_password
+      - storage_service_key
+      - garage_access_key
+      - garage_secret_key
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-ragagent}
+      MYSQL_USER: ${MYSQL_USER:-ragagent}
+      GARAGE_S3_ENDPOINT: http://garage:3900
+      GARAGE_REGION: ${GARAGE_REGION:-garage}
+      GARAGE_BUCKET: ${GARAGE_BUCKET:-agent-system-images}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8083/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
 
   # ── Go scheduler microservice ─────────────────────────────────────────────────
   scheduler:
@@ -200,12 +261,12 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Spring Boot backend ───────────────────────────────────────────────────────
+  # ── Spring Boot backend (agent-system-rest module) ────────────────────────────
   # docker-entrypoint.sh reads /run/secrets/* → env vars before the JVM starts.
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: agent-system-rest/Dockerfile
     container_name: agent-system-backend
     ports:
       - "8081:8081"
@@ -230,6 +291,7 @@ services:
       - resend_from_email
       - finnhub_api_key
       - scheduler_service_key
+      - storage_service_key
       - google_client_id
       - google_client_secret
       - figma_client_id
@@ -248,6 +310,8 @@ services:
       # ── Redis (rate limiting, sandbox tracking, fallback cache — shared with scheduler's Asynq queue)
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # ── Image storage (agent-system-storage-inner, Garage-backed)
+      STORAGE_URL: http://storage:8083
       # ── LLM
       LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
       # Embeddings use Ollama (nomic-embed-text) running on the host.
@@ -412,6 +476,8 @@ services:
 volumes:
   weaviate_data:
   mysql_data:
+  garage_meta:
+  garage_data:
   prometheus_data:
   grafana_data:
   loki_data:

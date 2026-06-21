@@ -1,10 +1,10 @@
-package com.ragagent.webfetch;
+package com.agentsystem.webfetch;
 
-import com.ragagent.config.WebFetchProperties;
-import com.ragagent.org.OrgContext;
-import com.ragagent.schema.DocumentResult;
-import com.ragagent.webfetch.entity.WebFetchWhitelist;
-import com.ragagent.webfetch.repository.WebFetchWhitelistRepository;
+import com.agentsystem.config.WebFetchProperties;
+import com.agentsystem.org.OrgContext;
+import com.agentsystem.schema.DocumentResult;
+import com.agentsystem.webfetch.entity.WebFetchWhitelist;
+import com.agentsystem.webfetch.repository.WebFetchWhitelistRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;

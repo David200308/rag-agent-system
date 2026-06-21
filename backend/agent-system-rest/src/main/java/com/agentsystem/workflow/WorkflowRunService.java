@@ -1,23 +1,23 @@
-package com.ragagent.workflow;
+package com.agentsystem.workflow;
 
-import com.ragagent.auth.service.EmailService;
-import com.ragagent.config.ChatModelFactory;
-import com.ragagent.config.LlmProperties;
-import com.ragagent.connector.GoogleDocsService;
-import com.ragagent.connector.GoogleSheetsService;
-import com.ragagent.connector.GoogleSlidesService;
-import com.ragagent.connector.TelegramService;
-import com.ragagent.model.ModelConfigService;
-import com.ragagent.sandbox.SandboxService;
-import com.ragagent.skill.SkillService;
-import com.ragagent.webfetch.WebFetchService;
-import com.ragagent.workflow.entity.Workflow;
-import com.ragagent.workflow.entity.WorkflowAgent;
-import com.ragagent.workflow.entity.WorkflowRun;
-import com.ragagent.workflow.entity.WorkflowRunLog;
-import com.ragagent.workflow.repository.WorkflowAgentRepository;
-import com.ragagent.workflow.repository.WorkflowRunLogRepository;
-import com.ragagent.workflow.repository.WorkflowRunRepository;
+import com.agentsystem.auth.service.EmailService;
+import com.agentsystem.config.ChatModelFactory;
+import com.agentsystem.config.LlmProperties;
+import com.agentsystem.connector.GoogleDocsService;
+import com.agentsystem.connector.GoogleSheetsService;
+import com.agentsystem.connector.GoogleSlidesService;
+import com.agentsystem.connector.TelegramService;
+import com.agentsystem.model.ModelConfigService;
+import com.agentsystem.sandbox.SandboxService;
+import com.agentsystem.skill.SkillService;
+import com.agentsystem.webfetch.WebFetchService;
+import com.agentsystem.workflow.entity.Workflow;
+import com.agentsystem.workflow.entity.WorkflowAgent;
+import com.agentsystem.workflow.entity.WorkflowRun;
+import com.agentsystem.workflow.entity.WorkflowRunLog;
+import com.agentsystem.workflow.repository.WorkflowAgentRepository;
+import com.agentsystem.workflow.repository.WorkflowRunLogRepository;
+import com.agentsystem.workflow.repository.WorkflowRunRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -205,7 +205,7 @@ public class WorkflowRunService {
             }
             ChatClient effectiveClient = modelName != null
                     ? modelConfigService.findByDisplayName(modelName)
-                        .filter(com.ragagent.model.ModelConfig::isEnabled)
+                        .filter(com.agentsystem.model.ModelConfig::isEnabled)
                         .map(chatModelFactory::buildChatClient)
                         .orElse(chatClient)
                     : chatClient;

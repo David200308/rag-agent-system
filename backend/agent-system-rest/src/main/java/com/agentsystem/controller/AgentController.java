@@ -1,22 +1,22 @@
-package com.ragagent.controller;
+package com.agentsystem.controller;
 
-import com.ragagent.agent.RagAgentGraph;
-import com.ragagent.agent.state.AgentState;
-import com.ragagent.config.AgentMetrics;
-import com.ragagent.config.LlmProperties;
-import com.ragagent.conversation.ConversationService;
-import com.ragagent.conversation.entity.ConversationMessage;
-import com.ragagent.knowledge.KnowledgeSourceService;
-import com.ragagent.knowledge.entity.KnowledgeSource;
-import com.ragagent.mcp.McpConnectorService;
-import com.ragagent.rag.DocumentIngestionService;
-import com.ragagent.org.OrgContext;
-import com.ragagent.schema.AgentRequest;
-import com.ragagent.schema.AgentResponse;
-import com.ragagent.schema.UrlIngestionResult;
-import com.ragagent.user.UserPreferenceService;
-import com.ragagent.webfetch.WebFetchService;
-import com.ragagent.webfetch.entity.WebFetchWhitelist;
+import com.agentsystem.agent.AgentSystemGraph;
+import com.agentsystem.agent.state.AgentState;
+import com.agentsystem.config.AgentMetrics;
+import com.agentsystem.config.LlmProperties;
+import com.agentsystem.conversation.ConversationService;
+import com.agentsystem.conversation.entity.ConversationMessage;
+import com.agentsystem.knowledge.KnowledgeSourceService;
+import com.agentsystem.knowledge.entity.KnowledgeSource;
+import com.agentsystem.mcp.McpConnectorService;
+import com.agentsystem.rag.DocumentIngestionService;
+import com.agentsystem.org.OrgContext;
+import com.agentsystem.schema.AgentRequest;
+import com.agentsystem.schema.AgentResponse;
+import com.agentsystem.schema.UrlIngestionResult;
+import com.agentsystem.user.UserPreferenceService;
+import com.agentsystem.webfetch.WebFetchService;
+import com.agentsystem.webfetch.entity.WebFetchWhitelist;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -50,7 +50,7 @@ import java.util.UUID;
 @Tag(name = "RAG Agent", description = "LangGraph4j-powered RAG agent endpoints")
 public class AgentController {
 
-    private final RagAgentGraph            agentGraph;
+    private final AgentSystemGraph            agentGraph;
     private final DocumentIngestionService ingestionService;
     private final McpConnectorService      mcpConnectorService;
     private final ConversationService      conversationService;
@@ -134,7 +134,7 @@ public class AgentController {
 
     @GetMapping("/conversations")
     @Operation(summary = "List active (non-archived) conversations for the authenticated user")
-    public ResponseEntity<List<com.ragagent.conversation.entity.Conversation>> listConversations(
+    public ResponseEntity<List<com.agentsystem.conversation.entity.Conversation>> listConversations(
             HttpServletRequest httpRequest) {
         OrgContext ctx = OrgContext.from(httpRequest);
         if (ctx.email() == null) return ResponseEntity.status(401).build();
@@ -143,7 +143,7 @@ public class AgentController {
 
     @GetMapping("/conversations/archived")
     @Operation(summary = "List archived conversations for the authenticated user")
-    public ResponseEntity<List<com.ragagent.conversation.entity.Conversation>> listArchivedConversations(
+    public ResponseEntity<List<com.agentsystem.conversation.entity.Conversation>> listArchivedConversations(
             HttpServletRequest httpRequest) {
         OrgContext ctx = OrgContext.from(httpRequest);
         if (ctx.email() == null) return ResponseEntity.status(401).build();
@@ -307,7 +307,7 @@ public class AgentController {
         }
     }
 
-    private Map<String, Object> shareToMap(com.ragagent.conversation.entity.ConversationShare share) {
+    private Map<String, Object> shareToMap(com.agentsystem.conversation.entity.ConversationShare share) {
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("token",          share.getToken());
         result.put("conversationId", share.getConversationId());

@@ -1,4 +1,4 @@
-package com.ragagent.skill.entity;
+package com.agentsystem.skill.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -7,6 +7,11 @@ import lombok.Setter;
 
 import java.time.Instant;
 
+/**
+ * Pure identity/ownership record. File content and per-upload metadata
+ * (file name/type/size, approval status) live on {@link SkillVersion} —
+ * every upload (create or replace) is a new immutable version.
+ */
 @Entity
 @Table(name = "skills")
 @Getter
@@ -25,38 +30,16 @@ public class Skill {
     @Column(name = "org_id", length = 100)
     private String orgId;
 
-    /** Approval status: PENDING | APPROVED | REJECTED. Always APPROVED in personal mode. */
-    @Column(nullable = false, length = 20)
-    private String status = "APPROVED";
-
     @Column(nullable = false, length = 255)
     private String name;
-
-    @Column(name = "file_name", length = 255)
-    private String fileName;
-
-    @Column(name = "file_type", length = 16)
-    private String fileType;
-
-    @Column(nullable = false)
-    private long size;
-
-    @Lob
-    @Column(nullable = false, columnDefinition = "LONGTEXT")
-    private String content;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
-    public Skill(String id, String ownerEmail, String name, String fileName,
-                 String fileType, long size, String content) {
+    public Skill(String id, String ownerEmail, String name) {
         this.id         = id;
         this.ownerEmail = ownerEmail;
         this.name       = name;
-        this.fileName   = fileName;
-        this.fileType   = fileType;
-        this.size       = size;
-        this.content    = content;
         this.createdAt  = Instant.now();
     }
 }

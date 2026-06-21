@@ -1,6 +1,6 @@
-package com.ragagent.rag;
+package com.agentsystem.rag;
 
-import com.ragagent.schema.DocumentResult;
+import com.agentsystem.schema.DocumentResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;

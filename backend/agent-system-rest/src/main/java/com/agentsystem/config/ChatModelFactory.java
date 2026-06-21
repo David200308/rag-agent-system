@@ -1,6 +1,6 @@
-package com.ragagent.config;
+package com.agentsystem.config;
 
-import com.ragagent.model.ModelConfig;
+import com.agentsystem.model.ModelConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;

@@ -46,11 +46,11 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Spring Boot backend ───────────────────────────────────────────────────────
+  # ── Spring Boot backend (agent-system-rest module) ────────────────────────────
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: agent-system-rest/Dockerfile
     container_name: agent-system-backend
     ports:
       - "8081:8081"
@@ -117,6 +117,9 @@ services:
       # ── Scheduler
       SCHEDULER_URL: http://scheduler:8082
       SCHEDULER_SERVICE_KEY: ${SCHEDULER_SERVICE_KEY:-scheduler-secret-key}
+      # ── Image storage (agent-system-storage-inner, Garage-backed)
+      STORAGE_URL: http://storage:8083
+      STORAGE_SERVICE_KEY: ${STORAGE_SERVICE_KEY:-storage-secret-key}
       # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot)
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
@@ -143,6 +146,57 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # ── Garage (S3-compatible object storage for images) ──────────────────────────
+  # garage.toml is rendered from observability/garage/garage.toml.template by
+  # setup.sh (embeds the generated rpc_secret/admin_token). S3 API (3900) and
+  # admin API (3903) stay on the internal docker network only.
+  garage:
+    image: dxflrs/garage:v1.0.1
+    container_name: agent-system-garage
+    restart: unless-stopped
+    volumes:
+      - ./observability/garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Image storage microservice (agent-system-storage-inner module) ───────────
+  storage:
+    build:
+      context: ./backend
+      dockerfile: agent-system-storage-inner/Dockerfile
+    container_name: agent-system-storage
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-ragagent}
+      MYSQL_USER: ${MYSQL_USER:-ragagent}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ragagent}
+      STORAGE_SERVICE_KEY: ${STORAGE_SERVICE_KEY:-storage-secret-key}
+      GARAGE_S3_ENDPOINT: http://garage:3900
+      GARAGE_REGION: ${GARAGE_REGION:-garage}
+      GARAGE_ACCESS_KEY: ${GARAGE_ACCESS_KEY:-}
+      GARAGE_SECRET_KEY: ${GARAGE_SECRET_KEY:-}
+      GARAGE_BUCKET: ${GARAGE_BUCKET:-agent-system-images}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8083/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
 
   # ── Go scheduler microservice ─────────────────────────────────────────────────
   scheduler:
@@ -280,6 +334,8 @@ services:
 volumes:
   weaviate_data:
   mysql_data:
+  garage_meta:
+  garage_data:
   prometheus_data:
   grafana_data:
   loki_data:

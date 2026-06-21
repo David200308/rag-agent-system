@@ -1,4 +1,4 @@
-package com.ragagent.agent;
+package com.agentsystem.agent;
 
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;

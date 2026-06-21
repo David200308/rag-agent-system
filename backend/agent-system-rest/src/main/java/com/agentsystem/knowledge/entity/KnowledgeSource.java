@@ -1,4 +1,4 @@
-package com.ragagent.knowledge.entity;
+package com.agentsystem.knowledge.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;

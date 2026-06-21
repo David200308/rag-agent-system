@@ -32,7 +32,7 @@
     <logger name="org.hibernate"                 level="WARN"/>
 
     <!-- Application code at DEBUG so all [AgentController] / [RateLimitFilter] lines appear -->
-    <logger name="com.ragagent" level="DEBUG"/>
+    <logger name="com.agentsystem" level="DEBUG"/>
 
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>

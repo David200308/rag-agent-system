@@ -1,4 +1,4 @@
-package com.ragagent.conversation.entity;
+package com.agentsystem.conversation.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;

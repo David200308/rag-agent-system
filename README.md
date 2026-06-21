@@ -83,7 +83,7 @@
 │                                                               │
 │  AuthFilter (JWT: email + mode + orgId)                       │
 │       │                                                       │
-│       ├──► AgentController  ──► RagAgentGraph (LangGraph4j)  │
+│       ├──► AgentController ──► AgentSystemGraph (LangGraph4j) │
 │       │         │                    │                        │
 │       │         │          ┌─────────▼──────────┐            │
 │       │         │          │  analyzeQuery       │            │

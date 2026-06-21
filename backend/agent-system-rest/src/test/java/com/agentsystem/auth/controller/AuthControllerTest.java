@@ -1,8 +1,8 @@
-package com.ragagent.auth.controller;
+package com.agentsystem.auth.controller;
 
-import com.ragagent.auth.service.AuthService;
-import com.ragagent.auth.service.JwtService;
-import com.ragagent.org.OrganizationService;
+import com.agentsystem.auth.service.AuthService;
+import com.agentsystem.auth.service.JwtService;
+import com.agentsystem.org.OrganizationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

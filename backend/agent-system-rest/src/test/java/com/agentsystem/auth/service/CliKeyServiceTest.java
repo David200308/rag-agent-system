@@ -1,7 +1,7 @@
-package com.ragagent.auth.service;
+package com.agentsystem.auth.service;
 
-import com.ragagent.auth.entity.CliPublicKey;
-import com.ragagent.auth.repository.CliPublicKeyRepository;
+import com.agentsystem.auth.entity.CliPublicKey;
+import com.agentsystem.auth.repository.CliPublicKeyRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

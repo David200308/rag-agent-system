@@ -1,4 +1,4 @@
-package com.ragagent.connector;
+package com.agentsystem.connector;
 
 import jakarta.persistence.*;
 import lombok.*;

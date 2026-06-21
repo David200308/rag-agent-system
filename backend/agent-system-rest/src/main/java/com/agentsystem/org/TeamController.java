@@ -1,7 +1,7 @@
-package com.ragagent.org;
+package com.agentsystem.org;
 
-import com.ragagent.knowledge.KnowledgeSourceService;
-import com.ragagent.skill.SkillService;
+import com.agentsystem.knowledge.KnowledgeSourceService;
+import com.agentsystem.skill.SkillService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -119,6 +119,8 @@ public class TeamController {
         }
         return ResponseEntity.ok(Map.of(
                 "knowledge", knowledgeSourceService.listPendingByOrg(ctx.orgId()),
+                // "skills" here is a list of pending *versions* (SkillService.PendingSkillVersion) —
+                // a skill can have an approved version in use while a newer one awaits review.
                 "skills",    skillService.listPendingByOrg(ctx.orgId())
         ));
     }
@@ -155,7 +157,7 @@ public class TeamController {
     }
 
     @PostMapping("/approvals/skills/{id}/approve")
-    @Operation(summary = "Approve a pending skill (owner only)")
+    @Operation(summary = "Approve a pending skill version (owner only) — {id} is the version id")
     public ResponseEntity<?> approveSkill(@PathVariable String id, HttpServletRequest req) {
         OrgContext ctx = OrgContext.from(req);
         if (!ctx.isTeam()) return teamModeRequired();
@@ -170,7 +172,7 @@ public class TeamController {
     }
 
     @PostMapping("/approvals/skills/{id}/reject")
-    @Operation(summary = "Reject a pending skill (owner only)")
+    @Operation(summary = "Reject a pending skill version (owner only) — {id} is the version id")
     public ResponseEntity<?> rejectSkill(@PathVariable String id, HttpServletRequest req) {
         OrgContext ctx = OrgContext.from(req);
         if (!ctx.isTeam()) return teamModeRequired();

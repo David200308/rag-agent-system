@@ -1,6 +1,6 @@
-package com.ragagent.workflow;
+package com.agentsystem.workflow;
 
-import com.ragagent.config.SchedulerProperties;
+import com.agentsystem.config.SchedulerProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;

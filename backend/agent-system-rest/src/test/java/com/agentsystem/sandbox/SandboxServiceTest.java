@@ -1,4 +1,4 @@
-package com.ragagent.sandbox;
+package com.agentsystem.sandbox;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

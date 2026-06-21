@@ -1,4 +1,4 @@
-package com.ragagent.financial.entity;
+package com.agentsystem.financial.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;

@@ -1,22 +1,22 @@
-package com.ragagent.workflow;
+package com.agentsystem.workflow;
 
-import com.ragagent.auth.service.EmailService;
-import com.ragagent.config.ChatModelFactory;
-import com.ragagent.config.LlmProperties;
-import com.ragagent.connector.GoogleDocsService;
-import com.ragagent.connector.GoogleSheetsService;
-import com.ragagent.connector.GoogleSlidesService;
-import com.ragagent.connector.TelegramService;
-import com.ragagent.model.ModelConfigService;
-import com.ragagent.sandbox.SandboxService;
-import com.ragagent.skill.SkillService;
-import com.ragagent.webfetch.WebFetchService;
-import com.ragagent.workflow.entity.Workflow;
-import com.ragagent.workflow.entity.WorkflowRun;
-import com.ragagent.workflow.entity.WorkflowRunLog;
-import com.ragagent.workflow.repository.WorkflowAgentRepository;
-import com.ragagent.workflow.repository.WorkflowRunLogRepository;
-import com.ragagent.workflow.repository.WorkflowRunRepository;
+import com.agentsystem.auth.service.EmailService;
+import com.agentsystem.config.ChatModelFactory;
+import com.agentsystem.config.LlmProperties;
+import com.agentsystem.connector.GoogleDocsService;
+import com.agentsystem.connector.GoogleSheetsService;
+import com.agentsystem.connector.GoogleSlidesService;
+import com.agentsystem.connector.TelegramService;
+import com.agentsystem.model.ModelConfigService;
+import com.agentsystem.sandbox.SandboxService;
+import com.agentsystem.skill.SkillService;
+import com.agentsystem.webfetch.WebFetchService;
+import com.agentsystem.workflow.entity.Workflow;
+import com.agentsystem.workflow.entity.WorkflowRun;
+import com.agentsystem.workflow.entity.WorkflowRunLog;
+import com.agentsystem.workflow.repository.WorkflowAgentRepository;
+import com.agentsystem.workflow.repository.WorkflowRunLogRepository;
+import com.agentsystem.workflow.repository.WorkflowRunRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -716,7 +716,7 @@ class WorkflowRunServiceTest {
 
     @Test
     void buildOrchestratorPrompt_withSystemPrompt_includesPrompt() throws Exception {
-        com.ragagent.workflow.entity.WorkflowAgent main = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent main = new com.agentsystem.workflow.entity.WorkflowAgent();
         main.setSystemPrompt("You are the orchestrator.");
         main.setName("Main");
 
@@ -730,7 +730,7 @@ class WorkflowRunServiceTest {
 
     @Test
     void buildOrchestratorPrompt_noSystemPrompt_usesDefault() throws Exception {
-        com.ragagent.workflow.entity.WorkflowAgent main = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent main = new com.agentsystem.workflow.entity.WorkflowAgent();
         main.setSystemPrompt(null);
         main.setName("Main");
 
@@ -744,11 +744,11 @@ class WorkflowRunServiceTest {
 
     @Test
     void buildOrchestratorPrompt_withSubAgents_includesSubAgentSection() throws Exception {
-        com.ragagent.workflow.entity.WorkflowAgent main = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent main = new com.agentsystem.workflow.entity.WorkflowAgent();
         main.setSystemPrompt("You are the orchestrator.");
         main.setName("Main");
 
-        com.ragagent.workflow.entity.WorkflowAgent sub = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent sub = new com.agentsystem.workflow.entity.WorkflowAgent();
         sub.setName("Researcher");
         sub.setSystemPrompt("You are a research specialist.");
 
@@ -764,12 +764,12 @@ class WorkflowRunServiceTest {
 
     @Test
     void buildOrchestratorPrompt_subAgentLongPrompt_truncatesPreview() throws Exception {
-        com.ragagent.workflow.entity.WorkflowAgent main = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent main = new com.agentsystem.workflow.entity.WorkflowAgent();
         main.setName("Main");
         when(workflowService.parseSkillIds(main)).thenReturn(List.of());
         when(workflowService.parseTools(main)).thenReturn(List.of());
 
-        com.ragagent.workflow.entity.WorkflowAgent sub = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent sub = new com.agentsystem.workflow.entity.WorkflowAgent();
         sub.setName("Sub");
         sub.setSystemPrompt("A".repeat(200));  // longer than 120 chars
 
@@ -780,7 +780,7 @@ class WorkflowRunServiceTest {
 
     @Test
     void buildOrchestratorPrompt_withTools_includesToolSection() throws Exception {
-        com.ragagent.workflow.entity.WorkflowAgent main = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent main = new com.agentsystem.workflow.entity.WorkflowAgent();
         main.setName("Main");
         when(workflowService.parseSkillIds(main)).thenReturn(List.of());
         when(workflowService.parseTools(main)).thenReturn(List.of("BASH", "CURL"));
@@ -792,7 +792,7 @@ class WorkflowRunServiceTest {
 
     @Test
     void buildOrchestratorPrompt_withSkills_includesSkillSection() throws Exception {
-        com.ragagent.workflow.entity.WorkflowAgent main = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent main = new com.agentsystem.workflow.entity.WorkflowAgent();
         main.setName("Main");
         when(workflowService.parseSkillIds(main)).thenReturn(List.of("skill-1"));
         when(workflowService.parseTools(main)).thenReturn(List.of());
@@ -824,10 +824,10 @@ class WorkflowRunServiceTest {
         workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
         workflow.setSelectedModel(null);
 
-        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent mainAgent = new com.agentsystem.workflow.entity.WorkflowAgent();
         mainAgent.setId(1L);
         mainAgent.setName("Main");
-        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+        mainAgent.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.MAIN);
         mainAgent.setSystemPrompt("You are helpful.");
 
         when(workflowService.findById("wf-1")).thenReturn(java.util.Optional.of(workflow));
@@ -862,16 +862,16 @@ class WorkflowRunServiceTest {
         workflow.setTeamExecMode(Workflow.TeamExecMode.PARALLEL);
         workflow.setSelectedModel(null);
 
-        com.ragagent.workflow.entity.WorkflowAgent peer1 = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent peer1 = new com.agentsystem.workflow.entity.WorkflowAgent();
         peer1.setId(1L);
         peer1.setName("Peer1");
-        peer1.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.PEER);
+        peer1.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.PEER);
         peer1.setSystemPrompt("You are agent 1.");
 
-        com.ragagent.workflow.entity.WorkflowAgent peer2 = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent peer2 = new com.agentsystem.workflow.entity.WorkflowAgent();
         peer2.setId(2L);
         peer2.setName("Peer2");
-        peer2.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.PEER);
+        peer2.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.PEER);
         peer2.setSystemPrompt("You are agent 2.");
 
         when(workflowService.findById("wf-2")).thenReturn(java.util.Optional.of(workflow));
@@ -905,10 +905,10 @@ class WorkflowRunServiceTest {
         workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
         workflow.setSelectedModel(null);
 
-        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent mainAgent = new com.agentsystem.workflow.entity.WorkflowAgent();
         mainAgent.setId(1L);
         mainAgent.setName("Main");
-        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+        mainAgent.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.MAIN);
         mainAgent.setSystemPrompt("You are helpful.");
 
         when(workflowService.findById("wf-3")).thenReturn(java.util.Optional.of(workflow));
@@ -944,16 +944,16 @@ class WorkflowRunServiceTest {
         workflow.setTeamExecMode(Workflow.TeamExecMode.SEQUENTIAL);
         workflow.setSelectedModel(null);
 
-        com.ragagent.workflow.entity.WorkflowAgent peer1 = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent peer1 = new com.agentsystem.workflow.entity.WorkflowAgent();
         peer1.setId(10L);
         peer1.setName("PeerA");
-        peer1.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.PEER);
+        peer1.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.PEER);
         peer1.setSystemPrompt("You are agent A.");
 
-        com.ragagent.workflow.entity.WorkflowAgent peer2 = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent peer2 = new com.agentsystem.workflow.entity.WorkflowAgent();
         peer2.setId(11L);
         peer2.setName("PeerB");
-        peer2.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.PEER);
+        peer2.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.PEER);
         peer2.setSystemPrompt("You are agent B.");
 
         when(workflowService.findById("wf-seq")).thenReturn(java.util.Optional.of(workflow));
@@ -990,10 +990,10 @@ class WorkflowRunServiceTest {
         workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
         workflow.setSelectedModel(null);
 
-        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent mainAgent = new com.agentsystem.workflow.entity.WorkflowAgent();
         mainAgent.setId(1L);
         mainAgent.setName("Main");
-        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+        mainAgent.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.MAIN);
 
         when(workflowService.findById("wf-kill")).thenReturn(java.util.Optional.of(workflow));
         when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-kill")).thenReturn(List.of(mainAgent));
@@ -1017,10 +1017,10 @@ class WorkflowRunServiceTest {
         workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
         workflow.setSelectedModel(null);
 
-        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent mainAgent = new com.agentsystem.workflow.entity.WorkflowAgent();
         mainAgent.setId(1L);
         mainAgent.setName("Main");
-        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+        mainAgent.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.MAIN);
 
         when(workflowService.findById("wf-queue")).thenReturn(java.util.Optional.of(workflow));
         when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-queue")).thenReturn(List.of(mainAgent));
@@ -1044,10 +1044,10 @@ class WorkflowRunServiceTest {
         workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
         workflow.setSelectedModel(null);
 
-        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent mainAgent = new com.agentsystem.workflow.entity.WorkflowAgent();
         mainAgent.setId(1L);
         mainAgent.setName("Main");
-        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+        mainAgent.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.MAIN);
 
         when(workflowService.findById("wf-ex")).thenReturn(java.util.Optional.of(workflow));
         when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-ex")).thenReturn(List.of(mainAgent));
@@ -1073,10 +1073,10 @@ class WorkflowRunServiceTest {
         workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
         workflow.setSelectedModel(null);
 
-        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent mainAgent = new com.agentsystem.workflow.entity.WorkflowAgent();
         mainAgent.setId(1L);
         mainAgent.setName("Main");
-        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+        mainAgent.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.MAIN);
         mainAgent.setSystemPrompt("Use bash tools to complete tasks.");
 
         when(workflowService.findById("wf-bash")).thenReturn(java.util.Optional.of(workflow));
@@ -1113,10 +1113,10 @@ class WorkflowRunServiceTest {
         workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
         workflow.setSelectedModel(null);
 
-        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent mainAgent = new com.agentsystem.workflow.entity.WorkflowAgent();
         mainAgent.setId(1L);
         mainAgent.setName("Main");
-        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+        mainAgent.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.MAIN);
         mainAgent.setSystemPrompt("Use Google Docs to create documents.");
 
         when(workflowService.findById("wf-conn")).thenReturn(java.util.Optional.of(workflow));
@@ -1154,10 +1154,10 @@ class WorkflowRunServiceTest {
         workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
         workflow.setSelectedModel(null);
 
-        com.ragagent.workflow.entity.WorkflowAgent mainAgent = new com.ragagent.workflow.entity.WorkflowAgent();
+        com.agentsystem.workflow.entity.WorkflowAgent mainAgent = new com.agentsystem.workflow.entity.WorkflowAgent();
         mainAgent.setId(1L);
         mainAgent.setName("Main");
-        mainAgent.setRole(com.ragagent.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+        mainAgent.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.MAIN);
 
         when(workflowService.findById("wf-sched")).thenReturn(java.util.Optional.of(workflow));
         when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-sched")).thenReturn(List.of(mainAgent));
@@ -1194,11 +1194,11 @@ class WorkflowRunServiceTest {
     // ── reflection helpers ────────────────────────────────────────────────────
 
     private String callBuildOrchestratorPrompt(
-            com.ragagent.workflow.entity.WorkflowAgent main,
-            List<com.ragagent.workflow.entity.WorkflowAgent> subs) throws Exception {
+            com.agentsystem.workflow.entity.WorkflowAgent main,
+            List<com.agentsystem.workflow.entity.WorkflowAgent> subs) throws Exception {
         Method m = WorkflowRunService.class.getDeclaredMethod(
                 "buildOrchestratorPrompt",
-                com.ragagent.workflow.entity.WorkflowAgent.class, List.class);
+                com.agentsystem.workflow.entity.WorkflowAgent.class, List.class);
         m.setAccessible(true);
         return (String) m.invoke(service, main, subs);
     }

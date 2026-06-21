@@ -1,6 +1,6 @@
-package com.ragagent.connector;
+package com.agentsystem.connector;
 
-import com.ragagent.agent.ToolCallBudget;
+import com.agentsystem.agent.ToolCallBudget;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;

@@ -1,4 +1,4 @@
-package com.ragagent.org;
+package com.agentsystem.org;
 
 import jakarta.persistence.*;
 import lombok.Getter;

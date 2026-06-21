@@ -1,6 +1,6 @@
-package com.ragagent.workflow;
+package com.agentsystem.workflow;
 
-import com.ragagent.config.SchedulerProperties;
+import com.agentsystem.config.SchedulerProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;

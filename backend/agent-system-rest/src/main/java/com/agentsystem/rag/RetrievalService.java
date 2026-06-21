@@ -1,6 +1,6 @@
-package com.ragagent.rag;
+package com.agentsystem.rag;
 
-import com.ragagent.schema.DocumentResult;
+import com.agentsystem.schema.DocumentResult;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;

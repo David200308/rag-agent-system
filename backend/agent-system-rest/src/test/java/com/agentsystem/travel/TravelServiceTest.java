@@ -1,9 +1,9 @@
-package com.ragagent.travel;
+package com.agentsystem.travel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ragagent.travel.dto.TravelRecordDto;
-import com.ragagent.travel.entity.TravelRecord;
-import com.ragagent.travel.repository.TravelRecordRepository;
+import com.agentsystem.travel.dto.TravelRecordDto;
+import com.agentsystem.travel.entity.TravelRecord;
+import com.agentsystem.travel.repository.TravelRecordRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

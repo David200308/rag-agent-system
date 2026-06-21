@@ -1,6 +1,6 @@
-package com.ragagent.config;
+package com.agentsystem.config;
 
-import com.ragagent.config.WebFetchProperties;
+import com.agentsystem.config.WebFetchProperties;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import org.springframework.ai.chat.client.ChatClient;

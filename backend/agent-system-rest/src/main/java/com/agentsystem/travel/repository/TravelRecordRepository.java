@@ -1,6 +1,6 @@
-package com.ragagent.travel.repository;
+package com.agentsystem.travel.repository;
 
-import com.ragagent.travel.entity.TravelRecord;
+import com.agentsystem.travel.entity.TravelRecord;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

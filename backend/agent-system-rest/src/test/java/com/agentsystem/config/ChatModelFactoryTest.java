@@ -1,6 +1,6 @@
-package com.ragagent.config;
+package com.agentsystem.config;
 
-import com.ragagent.model.ModelConfig;
+import com.agentsystem.model.ModelConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;

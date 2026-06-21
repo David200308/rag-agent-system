@@ -300,12 +300,26 @@ export interface Skill {
   id: string;
   name: string;
   fileName: string;
-  fileType: "txt" | "md" | "zip";
+  fileType: "txt" | "md" | "csv" | "zip" | "pdf" | "docx";
   size: number;
   createdAt: string;
-  /** Team mode approval status. Undefined / absent means APPROVED (personal mode). */
+  /** Latest version's approval status. Undefined / absent means APPROVED (personal mode). */
   status?: "PENDING" | "APPROVED" | "REJECTED";
   ownerEmail?: string;
+  /** Version number this summary's fields (fileName/fileType/size/status) were taken from. */
+  versionNumber: number;
+}
+
+export interface SkillVersion {
+  id: string;
+  skillId: string;
+  versionNumber: number;
+  fileName: string;
+  fileType: "txt" | "md" | "csv" | "zip" | "pdf" | "docx";
+  sizeBytes: number;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdByEmail?: string;
+  createdAt: string;
 }
 
 export interface IngestionResult {

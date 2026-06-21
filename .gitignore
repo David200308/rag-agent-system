@@ -51,6 +51,10 @@ build/
 secrets/*
 !secrets/.gitkeep
 
+# ── Garage config (rendered from garage.toml.template by setup.sh — contains
+#    the generated rpc_secret/admin_token, never the template itself) ────────
+observability/garage/garage.toml
+
 # ── Docker ────────────────────────────────────────────────────────────────────
 docker-compose.override.yml
 

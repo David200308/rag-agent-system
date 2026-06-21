@@ -1,4 +1,4 @@
-package com.ragagent.travel.entity;
+package com.agentsystem.travel.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;

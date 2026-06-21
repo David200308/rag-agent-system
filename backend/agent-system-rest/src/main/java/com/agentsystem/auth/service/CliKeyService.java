@@ -1,7 +1,7 @@
-package com.ragagent.auth.service;
+package com.agentsystem.auth.service;
 
-import com.ragagent.auth.entity.CliPublicKey;
-import com.ragagent.auth.repository.CliPublicKeyRepository;
+import com.agentsystem.auth.entity.CliPublicKey;
+import com.agentsystem.auth.repository.CliPublicKeyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

@@ -1,9 +1,9 @@
-package com.ragagent.agent.nodes;
+package com.agentsystem.agent.nodes;
 
-import com.ragagent.agent.state.AgentState;
-import com.ragagent.fallback.FallbackService;
-import com.ragagent.schema.AgentRequest;
-import com.ragagent.schema.AgentResponse;
+import com.agentsystem.agent.state.AgentState;
+import com.agentsystem.fallback.FallbackService;
+import com.agentsystem.schema.AgentRequest;
+import com.agentsystem.schema.AgentResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

@@ -1,8 +1,8 @@
-package com.ragagent.fallback;
+package com.agentsystem.fallback;
 
-import com.ragagent.config.ChatModelFactory;
-import com.ragagent.config.FallbackProperties;
-import com.ragagent.model.ModelConfigService;
+import com.agentsystem.config.ChatModelFactory;
+import com.agentsystem.config.FallbackProperties;
+import com.agentsystem.model.ModelConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

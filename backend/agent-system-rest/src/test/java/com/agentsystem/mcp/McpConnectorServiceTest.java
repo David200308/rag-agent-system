@@ -1,10 +1,10 @@
-package com.ragagent.mcp;
+package com.agentsystem.mcp;
 
-import com.ragagent.knowledge.KnowledgeSourceService;
-import com.ragagent.org.OrgContext;
-import com.ragagent.rag.DocumentIngestionService;
-import com.ragagent.schema.UrlIngestionResult;
-import com.ragagent.webfetch.WebFetchService;
+import com.agentsystem.knowledge.KnowledgeSourceService;
+import com.agentsystem.org.OrgContext;
+import com.agentsystem.rag.DocumentIngestionService;
+import com.agentsystem.schema.UrlIngestionResult;
+import com.agentsystem.webfetch.WebFetchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

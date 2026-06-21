@@ -1,4 +1,4 @@
-package com.ragagent.config;
+package com.agentsystem.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

@@ -1,4 +1,4 @@
-package com.ragagent;
+package com.agentsystem;
 
 import org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
@@ -25,9 +25,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableRetry
 @EnableScheduling
 @ConfigurationPropertiesScan
-public class RagAgentApplication {
+public class AgentSystemApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(RagAgentApplication.class, args);
+        SpringApplication.run(AgentSystemApplication.class, args);
     }
 }

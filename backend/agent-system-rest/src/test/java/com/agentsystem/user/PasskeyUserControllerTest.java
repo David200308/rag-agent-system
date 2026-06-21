@@ -1,7 +1,7 @@
-package com.ragagent.user;
+package com.agentsystem.user;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ragagent.auth.service.PasskeyService;
+import com.agentsystem.auth.service.PasskeyService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

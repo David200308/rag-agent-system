@@ -1,6 +1,6 @@
-package com.ragagent.org;
+package com.agentsystem.org;
 
-import com.ragagent.config.AdminProperties;
+import com.agentsystem.config.AdminProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

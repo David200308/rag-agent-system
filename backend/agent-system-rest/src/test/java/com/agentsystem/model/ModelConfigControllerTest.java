@@ -1,4 +1,4 @@
-package com.ragagent.model;
+package com.agentsystem.model;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

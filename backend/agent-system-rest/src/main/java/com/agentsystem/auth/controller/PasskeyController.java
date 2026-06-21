@@ -1,8 +1,8 @@
-package com.ragagent.auth.controller;
+package com.agentsystem.auth.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ragagent.auth.service.PasskeyService;
+import com.agentsystem.auth.service.PasskeyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

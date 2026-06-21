@@ -1,4 +1,4 @@
-package com.ragagent.user;
+package com.agentsystem.user;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

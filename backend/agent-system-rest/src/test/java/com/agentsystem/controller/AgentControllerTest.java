@@ -1,23 +1,23 @@
-package com.ragagent.controller;
+package com.agentsystem.controller;
 
-import com.ragagent.agent.RagAgentGraph;
-import com.ragagent.config.AgentMetrics;
-import com.ragagent.org.OrgContext;
-import com.ragagent.config.LlmProperties;
-import com.ragagent.conversation.ConversationService;
-import com.ragagent.conversation.entity.Conversation;
-import com.ragagent.conversation.entity.ConversationMessage;
-import com.ragagent.conversation.entity.ConversationShare;
-import com.ragagent.knowledge.KnowledgeSourceService;
-import com.ragagent.knowledge.entity.KnowledgeSource;
-import com.ragagent.mcp.McpConnectorService;
-import com.ragagent.rag.DocumentIngestionService;
-import com.ragagent.schema.AgentRequest;
-import com.ragagent.schema.AgentResponse;
-import com.ragagent.schema.UrlIngestionResult;
-import com.ragagent.user.UserPreferenceService;
-import com.ragagent.webfetch.WebFetchService;
-import com.ragagent.webfetch.entity.WebFetchWhitelist;
+import com.agentsystem.agent.AgentSystemGraph;
+import com.agentsystem.config.AgentMetrics;
+import com.agentsystem.org.OrgContext;
+import com.agentsystem.config.LlmProperties;
+import com.agentsystem.conversation.ConversationService;
+import com.agentsystem.conversation.entity.Conversation;
+import com.agentsystem.conversation.entity.ConversationMessage;
+import com.agentsystem.conversation.entity.ConversationShare;
+import com.agentsystem.knowledge.KnowledgeSourceService;
+import com.agentsystem.knowledge.entity.KnowledgeSource;
+import com.agentsystem.mcp.McpConnectorService;
+import com.agentsystem.rag.DocumentIngestionService;
+import com.agentsystem.schema.AgentRequest;
+import com.agentsystem.schema.AgentResponse;
+import com.agentsystem.schema.UrlIngestionResult;
+import com.agentsystem.user.UserPreferenceService;
+import com.agentsystem.webfetch.WebFetchService;
+import com.agentsystem.webfetch.entity.WebFetchWhitelist;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,7 +40,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AgentControllerTest {
 
-    @Mock RagAgentGraph          agentGraph;
+    @Mock AgentSystemGraph          agentGraph;
     @Mock DocumentIngestionService ingestionService;
     @Mock McpConnectorService    mcpConnectorService;
     @Mock ConversationService    conversationService;

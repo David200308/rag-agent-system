@@ -1,4 +1,4 @@
-package com.ragagent.web;
+package com.agentsystem.web;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

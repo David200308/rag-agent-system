@@ -1,7 +1,7 @@
-package com.ragagent.financial;
+package com.agentsystem.financial;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ragagent.financial.service.ExchangeRateService;
+import com.agentsystem.financial.service.ExchangeRateService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;

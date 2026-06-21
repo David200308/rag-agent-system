@@ -1,12 +1,12 @@
-package com.ragagent.controller;
+package com.agentsystem.controller;
 
-import com.ragagent.agent.RagAgentGraph;
-import com.ragagent.agent.state.AgentState;
-import com.ragagent.config.SchedulerProperties;
-import com.ragagent.conversation.ConversationService;
-import com.ragagent.schema.AgentRequest;
-import com.ragagent.schema.AgentResponse;
-import com.ragagent.workflow.WorkflowRunService;
+import com.agentsystem.agent.AgentSystemGraph;
+import com.agentsystem.agent.state.AgentState;
+import com.agentsystem.config.SchedulerProperties;
+import com.agentsystem.conversation.ConversationService;
+import com.agentsystem.schema.AgentRequest;
+import com.agentsystem.schema.AgentResponse;
+import com.agentsystem.workflow.WorkflowRunService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +36,7 @@ import java.util.UUID;
 @Tag(name = "Scheduler", description = "Internal trigger endpoint for the Go scheduler service")
 public class SchedulerTriggerController {
 
-    private final RagAgentGraph         agentGraph;
+    private final AgentSystemGraph         agentGraph;
     private final ConversationService   conversationService;
     private final SchedulerProperties   schedulerProperties;
     private final WorkflowRunService    workflowRunService;

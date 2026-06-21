@@ -1,4 +1,4 @@
-package com.ragagent.rag;
+package com.agentsystem.rag;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

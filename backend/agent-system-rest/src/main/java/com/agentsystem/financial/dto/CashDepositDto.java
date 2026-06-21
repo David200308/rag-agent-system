@@ -1,4 +1,4 @@
-package com.ragagent.financial.dto;
+package com.agentsystem.financial.dto;
 
 import java.math.BigDecimal;
 import java.time.Instant;

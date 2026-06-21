@@ -1,8 +1,8 @@
-package com.ragagent.controller;
+package com.agentsystem.controller;
 
-import com.ragagent.conversation.ConversationService;
-import com.ragagent.conversation.entity.ConversationMessage;
-import com.ragagent.conversation.entity.ConversationShare;
+import com.agentsystem.conversation.ConversationService;
+import com.agentsystem.conversation.entity.ConversationMessage;
+import com.agentsystem.conversation.entity.ConversationShare;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
