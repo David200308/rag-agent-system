@@ -115,9 +115,15 @@ bootstrap_garage() {
 
   echo -e "  Bootstrapping Garage cluster (layout, bucket, access key)…"
   local node_id layout_version
-  node_id="$($compose exec -T garage /garage node id -q | tr -d '[:space:]')"
+  # `garage node id` prints "<id>@<rpc_public_addr>" (meant for `node connect` on
+  # other nodes) — layout assign wants the bare node ID, so strip the address.
+  node_id="$($compose exec -T garage /garage node id -q | tr -d '[:space:]' | cut -d'@' -f1)"
   $compose exec -T garage /garage layout assign -z dc1 -c 1G "$node_id"
-  layout_version="$($compose exec -T garage /garage layout show | awk '/version/ {print $NF; exit}')"
+  # Garage prints the exact next command to run (e.g. "garage layout apply --version 1") —
+  # parse that instead of grepping generically for "version", which also matches
+  # "Current cluster layout version: 0" earlier in the same output.
+  layout_version="$($compose exec -T garage /garage layout show \
+    | grep -oE 'layout apply --version [0-9]+' | grep -oE '[0-9]+$')"
   $compose exec -T garage /garage layout apply --version "$layout_version"
   $compose exec -T garage /garage key import "$GARAGE_ACCESS_KEY" "$GARAGE_SECRET_KEY" --yes -n storage-inner
   $compose exec -T garage /garage bucket create "$bucket"
