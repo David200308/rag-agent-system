@@ -1,0 +1,18 @@
+package com.agentsystem.travel.service;
+
+import com.agentsystem.travel.dto.TravelRecordDto;
+import com.agentsystem.travel.entity.TravelRecord;
+
+import java.util.List;
+import java.util.Map;
+
+public interface TravelService {
+
+    List<TravelRecordDto> list(String ownerEmail);
+
+    TravelRecord create(String ownerEmail, Map<String, Object> body);
+
+    TravelRecord update(String id, String ownerEmail, Map<String, Object> body);
+
+    void delete(String id, String ownerEmail);
+}

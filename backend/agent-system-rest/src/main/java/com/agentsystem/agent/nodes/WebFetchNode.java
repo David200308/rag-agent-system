@@ -4,7 +4,7 @@ import com.agentsystem.agent.state.AgentState;
 import com.agentsystem.config.WebFetchProperties;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.DocumentResult;
-import com.agentsystem.webfetch.WebFetchService;
+import com.agentsystem.webfetch.service.WebFetchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

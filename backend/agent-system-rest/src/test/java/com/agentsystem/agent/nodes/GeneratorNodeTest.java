@@ -1,16 +1,16 @@
 package com.agentsystem.agent.nodes;
 
-import com.agentsystem.agent.GenerationService;
+import com.agentsystem.agent.service.GenerationService;
 import com.agentsystem.agent.ToolCallBudget;
 import com.agentsystem.agent.state.AgentState;
 import com.agentsystem.config.ChatModelFactory;
 import com.agentsystem.config.LlmProperties;
-import com.agentsystem.connector.GoogleCalendarAgentTool;
-import com.agentsystem.connector.GoogleDocsAgentTool;
-import com.agentsystem.connector.GoogleSheetsAgentTool;
-import com.agentsystem.connector.GoogleSlidesAgentTool;
-import com.agentsystem.connector.TelegramAgentTool;
-import com.agentsystem.model.ModelConfigService;
+import com.agentsystem.connector.tool.GoogleCalendarAgentTool;
+import com.agentsystem.connector.tool.GoogleDocsAgentTool;
+import com.agentsystem.connector.tool.GoogleSheetsAgentTool;
+import com.agentsystem.connector.tool.GoogleSlidesAgentTool;
+import com.agentsystem.connector.tool.TelegramAgentTool;
+import com.agentsystem.model.service.ModelConfigService;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.AgentResponse;
 import com.agentsystem.schema.DocumentResult;

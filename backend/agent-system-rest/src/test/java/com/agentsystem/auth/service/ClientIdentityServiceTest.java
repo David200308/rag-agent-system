@@ -1,5 +1,7 @@
 package com.agentsystem.auth.service;
 
+import com.agentsystem.auth.service.impl.ClientIdentityServiceImpl;
+
 import com.agentsystem.auth.ClientIdentityProperties;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +19,7 @@ class ClientIdentityServiceTest {
     private static final String WEB_SECRET = "test-web-secret";
 
     private ClientIdentityService service(String ios, String web) {
-        return new ClientIdentityService(new ClientIdentityProperties(false, ios, web));
+        return new ClientIdentityServiceImpl(new ClientIdentityProperties(false, ios, web));
     }
 
     // ── verifyIos ─────────────────────────────────────────────────────────────

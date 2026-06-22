@@ -1,5 +1,7 @@
 package com.agentsystem.auth.service;
 
+import com.agentsystem.auth.service.impl.JwtServiceImpl;
+
 import com.agentsystem.auth.AuthProperties;
 import io.jsonwebtoken.security.WeakKeyException;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,7 +18,7 @@ class JwtServiceTest {
     void constructor_secretUnder32Bytes_throwsWeakKeyException() {
         AuthProperties shortSecretProps = new AuthProperties(true, 10, "too-short-secret", 24);
 
-        assertThatThrownBy(() -> new JwtService(shortSecretProps))
+        assertThatThrownBy(() -> new JwtServiceImpl(shortSecretProps))
                 .isInstanceOf(WeakKeyException.class);
     }
 
@@ -24,7 +26,7 @@ class JwtServiceTest {
     void constructor_secretExactly32Bytes_doesNotThrow() {
         AuthProperties props32 = new AuthProperties(true, 10, "a".repeat(32), 24);
 
-        JwtService service = new JwtService(props32);
+        JwtService service = new JwtServiceImpl(props32);
 
         assertThat(service.generate("user@example.com")).isNotBlank();
     }
@@ -39,7 +41,7 @@ class JwtServiceTest {
                 "test-secret-key-that-is-at-least-32-characters-long",
                 24
         );
-        jwtService = new JwtService(props);
+        jwtService = new JwtServiceImpl(props);
     }
 
     @Test
@@ -128,7 +130,7 @@ class JwtServiceTest {
         // Token signed with 0-hour expiry should be instantly expired
         AuthProperties shortProps = new AuthProperties(true, 10,
                 "test-secret-key-that-is-at-least-32-characters-long", 0);
-        JwtService shortLived = new JwtService(shortProps);
+        JwtService shortLived = new JwtServiceImpl(shortProps);
         String token = shortLived.generate("user@example.com");
         // Token expires immediately (0 hours = 0 ms), so validation should return null
         assertThat(shortLived.validate(token)).isNull();

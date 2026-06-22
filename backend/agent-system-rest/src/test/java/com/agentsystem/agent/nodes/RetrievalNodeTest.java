@@ -1,9 +1,9 @@
 package com.agentsystem.agent.nodes;
 
 import com.agentsystem.agent.state.AgentState;
-import com.agentsystem.knowledge.KnowledgeSourceService;
+import com.agentsystem.knowledge.service.KnowledgeSourceService;
 import com.agentsystem.knowledge.entity.KnowledgeSource;
-import com.agentsystem.rag.RetrievalService;
+import com.agentsystem.rag.service.RetrievalService;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.DocumentResult;
 import com.agentsystem.schema.QueryAnalysis;

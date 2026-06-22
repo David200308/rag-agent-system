@@ -4,7 +4,7 @@ import com.agentsystem.agent.state.AgentState;
 import com.agentsystem.config.WebFetchProperties;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.DocumentResult;
-import com.agentsystem.webfetch.WebFetchService;
+import com.agentsystem.webfetch.service.WebFetchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

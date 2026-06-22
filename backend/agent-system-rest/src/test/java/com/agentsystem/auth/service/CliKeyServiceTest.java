@@ -1,5 +1,7 @@
 package com.agentsystem.auth.service;
 
+import com.agentsystem.auth.service.impl.CliKeyServiceImpl;
+
 import com.agentsystem.auth.entity.CliPublicKey;
 import com.agentsystem.auth.repository.CliPublicKeyRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,7 +32,7 @@ class CliKeyServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new CliKeyService(repo);
+        service = new CliKeyServiceImpl(repo);
     }
 
     // ── registerKey ───────────────────────────────────────────────────────────

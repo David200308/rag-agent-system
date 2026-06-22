@@ -2,8 +2,8 @@ package com.agentsystem.agent.nodes;
 
 import com.agentsystem.agent.state.AgentState;
 import com.agentsystem.config.ChatModelFactory;
-import com.agentsystem.model.ModelConfig;
-import com.agentsystem.model.ModelConfigService;
+import com.agentsystem.model.entity.ModelConfig;
+import com.agentsystem.model.service.ModelConfigService;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.QueryAnalysis;
 import lombok.RequiredArgsConstructor;

@@ -1,6 +1,6 @@
 package com.agentsystem.config;
 
-import com.agentsystem.mcp.RagMcpService;
+import com.agentsystem.mcp.service.RagMcpService;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.context.annotation.Bean;

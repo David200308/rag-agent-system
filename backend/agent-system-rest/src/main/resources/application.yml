@@ -42,7 +42,7 @@ spring:
     init:
       mode: always                            # always run schema.sql on startup
       schema-locations: classpath:schema.sql
-      continue-on-error: true                 # allows idempotent ALTER TABLE migrations to fail silently on fresh installs
+      continue-on-error: true                 # tolerates "already exists" errors from CREATE TABLE IF NOT EXISTS races
 
   ai:
     # ── OpenAI ──────────────────────────────────────────────────────────────

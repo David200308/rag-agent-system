@@ -1,7 +1,7 @@
 package com.agentsystem.agent.nodes;
 
 import com.agentsystem.agent.state.AgentState;
-import com.agentsystem.fallback.FallbackService;
+import com.agentsystem.fallback.service.FallbackService;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.AgentResponse;
 import lombok.RequiredArgsConstructor;

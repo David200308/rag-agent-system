@@ -2,7 +2,7 @@ package com.agentsystem.auth.controller;
 
 import com.agentsystem.auth.service.AuthService;
 import com.agentsystem.auth.service.JwtService;
-import com.agentsystem.org.OrganizationService;
+import com.agentsystem.org.service.OrganizationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

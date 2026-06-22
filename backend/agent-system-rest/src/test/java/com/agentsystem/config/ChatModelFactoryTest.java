@@ -1,6 +1,6 @@
 package com.agentsystem.config;
 
-import com.agentsystem.model.ModelConfig;
+import com.agentsystem.model.entity.ModelConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;

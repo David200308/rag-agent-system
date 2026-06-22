@@ -2,7 +2,7 @@ package com.agentsystem.auth.controller;
 
 import com.agentsystem.auth.service.AuthService;
 import com.agentsystem.auth.service.CliKeyService;
-import com.agentsystem.org.OrganizationService;
+import com.agentsystem.org.service.OrganizationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

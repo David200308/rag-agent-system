@@ -1,6 +1,6 @@
 package com.agentsystem.config;
 
-import com.agentsystem.model.ModelConfig;
+import com.agentsystem.model.entity.ModelConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;

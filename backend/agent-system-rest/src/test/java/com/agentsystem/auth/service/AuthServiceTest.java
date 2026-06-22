@@ -1,9 +1,11 @@
 package com.agentsystem.auth.service;
 
+import com.agentsystem.auth.service.impl.AuthServiceImpl;
+
 import com.agentsystem.auth.AuthProperties;
 import com.agentsystem.auth.entity.EmailWhitelist;
 import com.agentsystem.auth.repository.EmailWhitelistRepository;
-import com.agentsystem.org.OrganizationService;
+import com.agentsystem.org.service.OrganizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -63,7 +65,7 @@ class AuthServiceTest {
                     return removedOtp || removedAttempts;
                 });
 
-        authService = new AuthService(authProperties, whitelistRepo, redisTemplate, emailService, jwtService, orgService);
+        authService = new AuthServiceImpl(authProperties, whitelistRepo, redisTemplate, emailService, jwtService, orgService);
     }
 
     // ── requestOtp ────────────────────────────────────────────────────────────

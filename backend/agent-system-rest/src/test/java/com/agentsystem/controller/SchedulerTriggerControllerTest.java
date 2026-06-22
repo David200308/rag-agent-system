@@ -2,9 +2,9 @@ package com.agentsystem.controller;
 
 import com.agentsystem.agent.AgentSystemGraph;
 import com.agentsystem.config.SchedulerProperties;
-import com.agentsystem.conversation.ConversationService;
+import com.agentsystem.conversation.service.ConversationService;
 import com.agentsystem.schema.AgentResponse;
-import com.agentsystem.workflow.WorkflowRunService;
+import com.agentsystem.workflow.service.WorkflowRunService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
