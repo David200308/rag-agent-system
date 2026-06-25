@@ -63,6 +63,8 @@
 | Relational DB    | MySQL (Docker) — app + schedule data         |
 | Redis            | Redis 7 (Docker) — shared by the scheduler's Asynq queue and the backend's rate limits, sandbox tracking, and fallback cache |
 | Scheduler        | Go microservice backed by Asynq (`:8082`)    |
+| Storage service  | `agent-system-storage-inner` — Garage (S3-compatible) object storage (`:8083`) |
+| Notification service | `agent-system-notification-inner` — Resend email delivery (`:8084`) |
 | Observability    | Prometheus + Grafana + Loki + Promtail        |
 | Containerization | Docker Compose                                |
 
@@ -118,17 +120,18 @@
 │  │   MEMBER)    │  │   + per-conv)│                           │
 │  └──────────────┘  └──────────────┘                           │
 └──────────────────────────────────────────────────────────────┘
-          │                    │                   │
-  ┌───────▼──────┐   ┌────────▼────────┐  ┌───────▼─────────────────┐
-  │  Weaviate    │   │     MySQL       │  │  Go Scheduler (:8082)   │
-  │  (vectors)   │   │  (auth, convos, │  │                         │
-  │              │   │   workflows,    │  │  Asynq Scheduler        │
-  └──────────────┘   │   skills,       │  │    └─ enqueues tasks    │
-                     │   schedules,    │  │  Asynq Worker           │
-                     │   model_configs,│  │    └─ rag:trigger       │
-                     │   orgs/members, │  │         (MaxRetry=3)    │
-                     │   connectors)   │  │                         │
-                     └─────────────────┘  └─────────────────────────┘
+          │                    │                   │                    │
+  ┌───────▼──────┐   ┌────────▼────────┐  ┌───────▼─────────────┐ ┌────▼─────────────────────┐
+  │  Weaviate    │   │     MySQL       │  │ Go Scheduler         │ │ Inner microservices       │
+  │  (vectors)   │   │  (auth, convos, │  │   (:8082)            │ │ (shared-secret header     │
+  │              │   │   workflows,    │  │                      │ │  auth, internal-only,     │
+  └──────────────┘   │   skills,       │  │ Asynq Scheduler      │ │  no public ingress)       │
+                     │   schedules,    │  │   └─ enqueues tasks  │ │                           │
+                     │   model_configs,│  │ Asynq Worker         │ │ Storage (:8083)           │
+                     │   orgs/members, │  │   └─ rag:trigger     │ │   └─ Garage S3 blobs      │
+                     │   connectors)   │  │      (MaxRetry=3)    │ │ Notification (:8084)      │
+                     └─────────────────┘  └──────────────────────┘ │   └─ Resend email         │
+                                                                    └───────────────────────────┘
 ```
 
 ---
@@ -371,3 +374,16 @@ Go Scheduler (:8082)
 ```
 
 On startup the scheduler reloads all active schedules from MySQL into the Asynq in-process cron engine. When a cron fires, Asynq enqueues a `rag:trigger` task to Redis. The worker picks it up and POSTs to Spring Boot. If the call fails, Asynq retries up to 3 times automatically. Each run is recorded in `schedule_runs` (MySQL).
+
+---
+
+## Internal Microservices
+
+Two backend capabilities are split out of `agent-system-rest` into private Maven modules, each with the `-inner` suffix. These have no public ingress — they're reachable only from `agent-system-rest` over the internal Docker network, authenticated with a shared-secret header instead of a user JWT.
+
+| Service                          | Port   | Backs                          | Auth header          |
+| --------------------------------- | ------ | ------------------------------- | --------------------- |
+| `agent-system-storage-inner`      | `:8083` | Garage (S3-compatible) object storage | `X-Storage-Key`       |
+| `agent-system-notification-inner` | `:8084` | Resend email (OTP codes, workflow-completion notices) | `X-Notification-Key` |
+
+`agent-system-rest` talks to each over a typed HTTP client (`StorageClient`, `NotificationClient`). This keeps blob storage and outbound email isolated from the main app — and gives the notification service a single place to add more channels (e.g. push) later without touching `agent-system-rest`.
