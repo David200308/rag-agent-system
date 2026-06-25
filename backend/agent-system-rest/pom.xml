@@ -127,13 +127,6 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Resend — transactional email for OTP delivery -->
-        <dependency>
-            <groupId>com.resend</groupId>
-            <artifactId>resend-java</artifactId>
-            <version>3.1.0</version>
-        </dependency>
-
         <!-- JJWT — stateless JWT for auth tokens (no session table needed) -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

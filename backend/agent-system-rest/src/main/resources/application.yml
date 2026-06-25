@@ -344,10 +344,10 @@ storage:
   service-key: ${STORAGE_SERVICE_KEY:storage-secret-key}
   url: ${STORAGE_URL:http://localhost:8083}
 
-# ── Resend (transactional email) ──────────────────────────────────────────────
-resend:
-  api-key: ${RESEND_API_KEY:}
-  from-email: ${RESEND_FROM_EMAIL:noreply@example.com}
+# ── agent-system-notification-inner microservice (Resend-backed email) ──────
+notification:
+  service-key: ${NOTIFICATION_SERVICE_KEY:notification-secret-key}
+  url: ${NOTIFICATION_URL:http://localhost:8084}
 
 # ── Financial / Market Data ───────────────────────────────────────────────────
 financial:

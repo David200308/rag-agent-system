@@ -1,4 +1,4 @@
-package com.agentsystem.auth.service;
+package com.agentsystem.notification.email.service;
 
 public interface EmailService {
 

@@ -11,6 +11,7 @@
 #      echo "$(openssl rand -base64 64)"   > secrets/auth_jwt_secret
 #      echo "$(openssl rand -base64 32)"   > secrets/scheduler_service_key
 #      echo "$(openssl rand -base64 32)"   > secrets/storage_service_key
+#      echo "$(openssl rand -base64 32)"   > secrets/notification_service_key
 #      echo "..."                          > secrets/garage_access_key   # pre-seeded via `garage key import`
 #      echo "..."                          > secrets/garage_secret_key
 #      # ... (see full list below)
@@ -51,6 +52,8 @@ secrets:
     file: ./secrets/scheduler_service_key
   storage_service_key:
     file: ./secrets/storage_service_key
+  notification_service_key:
+    file: ./secrets/notification_service_key
   garage_access_key:
     file: ./secrets/garage_access_key
   garage_secret_key:
@@ -183,6 +186,27 @@ services:
       retries: 8
       start_period: 30s
 
+  # ── Notification microservice (agent-system-notification-inner module) ───────
+  # Email today (Resend); more channels (Telegram, push, etc.) land here later.
+  notification:
+    build:
+      context: ./backend
+      dockerfile: agent-system-notification-inner/Dockerfile
+    container_name: agent-system-notification
+    ports:
+      - "8084:8084"
+    restart: unless-stopped
+    secrets:
+      - notification_service_key
+      - resend_api_key
+      - resend_from_email
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8084/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+
   # ── Go scheduler microservice ─────────────────────────────────────────────────
   scheduler:
     build:
@@ -280,6 +304,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      notification:
+        condition: service_healthy
     secrets:
       - mysql_password
       - weaviate_api_key
@@ -287,11 +313,10 @@ services:
       - anthropic_api_key
       - openrouter_api_key
       - auth_jwt_secret
-      - resend_api_key
-      - resend_from_email
       - finnhub_api_key
       - scheduler_service_key
       - storage_service_key
+      - notification_service_key
       - google_client_id
       - google_client_secret
       - figma_client_id
@@ -312,6 +337,8 @@ services:
       REDIS_PORT: 6379
       # ── Image storage (agent-system-storage-inner, Garage-backed)
       STORAGE_URL: http://storage:8083
+      # ── Notifications (agent-system-notification-inner, Resend-backed email)
+      NOTIFICATION_URL: http://notification:8084
       # ── LLM
       LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
       # Embeddings use Ollama (nomic-embed-text) running on the host.
@@ -342,7 +369,6 @@ services:
       AUTH_PASSKEY_RP_ID: ${AUTH_PASSKEY_RP_ID:-localhost}
       AUTH_PASSKEY_RP_NAME: ${AUTH_PASSKEY_RP_NAME:-RAG Agent}
       AUTH_PASSKEY_ORIGIN: ${AUTH_PASSKEY_ORIGIN:-http://localhost:3000}
-      # ── Resend (RESEND_API_KEY + RESEND_FROM_EMAIL come from secrets)
       # ── Financial / Market data (FINNHUB_API_KEY comes from secrets)
       # ── Travel (no secrets — records stored in MySQL, map tiles via CartoDB)
       # ── Distributed tracing (disabled — no OTEL collector in this stack)

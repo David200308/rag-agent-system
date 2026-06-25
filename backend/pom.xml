@@ -16,11 +16,12 @@
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>rag-agent-system</name>
-    <description>RAG Agent System — multi-module aggregator (agent-system-rest, agent-system-storage-inner)</description>
+    <description>RAG Agent System — multi-module aggregator (agent-system-rest, agent-system-storage-inner, agent-system-notification-inner)</description>
 
     <modules>
         <module>agent-system-rest</module>
         <module>agent-system-storage-inner</module>
+        <module>agent-system-notification-inner</module>
     </modules>
 
     <properties>

@@ -4,7 +4,6 @@ import com.agentsystem.workflow.service.WorkflowRunService;
 import com.agentsystem.workflow.service.WorkflowScheduleClient;
 import com.agentsystem.workflow.service.WorkflowService;
 
-import com.agentsystem.auth.service.EmailService;
 import com.agentsystem.config.ChatModelFactory;
 import com.agentsystem.config.LlmProperties;
 import com.agentsystem.connector.service.GoogleDocsService;
@@ -12,6 +11,7 @@ import com.agentsystem.connector.service.GoogleSheetsService;
 import com.agentsystem.connector.service.GoogleSlidesService;
 import com.agentsystem.connector.service.TelegramService;
 import com.agentsystem.model.service.ModelConfigService;
+import com.agentsystem.notification.NotificationClient;
 import com.agentsystem.sandbox.service.SandboxService;
 import com.agentsystem.skill.service.SkillService;
 import com.agentsystem.webfetch.service.WebFetchService;
@@ -78,7 +78,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
     private final ChatModelFactory         chatModelFactory;
     private final ModelConfigService       modelConfigService;
     private final LlmProperties            llmProperties;
-    private final EmailService             emailService;
+    private final NotificationClient       notificationClient;
     private final WorkflowScheduleClient   workflowScheduleClient;
     private final GoogleDocsService        googleDocsService;
     private final GoogleSheetsService      googleSheetsService;
@@ -277,7 +277,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         if (!emailNotifyRuns.remove(run.getId(), true)) return;
         String to = run.getOwnerEmail();
         if (to == null || to.equals("anonymous")) return;
-        asyncPool.submit(() -> emailService.sendWorkflowComplete(
+        asyncPool.submit(() -> notificationClient.sendWorkflowComplete(
                 to, workflowName, run.getStatus().name(), run.getFinalOutput()));
     }
 

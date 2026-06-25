@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: agent-system-notification-inner
+
+  config:
+    import:
+      - optional:classpath:application.local.yml
+
+server:
+  port: 8084
+
+# ── Resend (transactional email) ──────────────────────────────────────────────
+resend:
+  api-key: ${RESEND_API_KEY:}
+  from-email: ${RESEND_FROM_EMAIL:noreply@example.com}
+
+# ── Shared secret expected on X-Notification-Key from agent-system-rest ──────
+notification:
+  service-key: ${NOTIFICATION_SERVICE_KEY:notification-secret-key}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.agentsystem.notification: DEBUG

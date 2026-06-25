@@ -5,6 +5,7 @@ import com.agentsystem.auth.service.impl.AuthServiceImpl;
 import com.agentsystem.auth.AuthProperties;
 import com.agentsystem.auth.entity.EmailWhitelist;
 import com.agentsystem.auth.repository.EmailWhitelistRepository;
+import com.agentsystem.notification.NotificationClient;
 import com.agentsystem.org.service.OrganizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,7 @@ class AuthServiceTest {
     @Mock EmailWhitelistRepository        whitelistRepo;
     @Mock StringRedisTemplate             redisTemplate;
     @Mock ValueOperations<String, String> valueOperations;
-    @Mock EmailService                    emailService;
+    @Mock NotificationClient               notificationClient;
     @Mock JwtService                      jwtService;
     @Mock OrganizationService             orgService;
 
@@ -65,7 +66,7 @@ class AuthServiceTest {
                     return removedOtp || removedAttempts;
                 });
 
-        authService = new AuthServiceImpl(authProperties, whitelistRepo, redisTemplate, emailService, jwtService, orgService);
+        authService = new AuthServiceImpl(authProperties, whitelistRepo, redisTemplate, notificationClient, jwtService, orgService);
     }
 
     // ── requestOtp ────────────────────────────────────────────────────────────
@@ -78,7 +79,7 @@ class AuthServiceTest {
         authService.requestOtp("User@Example.COM");
 
         verify(valueOperations).set(eq("otp:user@example.com"), anyString(), eq(Duration.ofMinutes(10)));
-        verify(emailService).sendOtp(eq("user@example.com"), anyString(), eq(10));
+        verify(notificationClient).sendOtp(eq("user@example.com"), anyString(), eq(10));
     }
 
     @Test
@@ -99,7 +100,7 @@ class AuthServiceTest {
         authService.requestOtp("  ADMIN@Example.com  ");
 
         ArgumentCaptor<String> emailCaptor = ArgumentCaptor.forClass(String.class);
-        verify(emailService).sendOtp(emailCaptor.capture(), anyString(), anyInt());
+        verify(notificationClient).sendOtp(emailCaptor.capture(), anyString(), anyInt());
         assertThat(emailCaptor.getValue()).isEqualTo("admin@example.com");
     }
 

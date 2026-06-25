@@ -2,7 +2,6 @@ package com.agentsystem.workflow.service;
 
 import com.agentsystem.workflow.service.impl.WorkflowRunServiceImpl;
 
-import com.agentsystem.auth.service.EmailService;
 import com.agentsystem.config.ChatModelFactory;
 import com.agentsystem.config.LlmProperties;
 import com.agentsystem.connector.service.GoogleDocsService;
@@ -10,6 +9,7 @@ import com.agentsystem.connector.service.GoogleSheetsService;
 import com.agentsystem.connector.service.GoogleSlidesService;
 import com.agentsystem.connector.service.TelegramService;
 import com.agentsystem.model.service.ModelConfigService;
+import com.agentsystem.notification.NotificationClient;
 import com.agentsystem.sandbox.service.SandboxService;
 import com.agentsystem.skill.service.SkillService;
 import com.agentsystem.webfetch.service.WebFetchService;
@@ -53,7 +53,7 @@ class WorkflowRunServiceTest {
     @Mock ChatModelFactory         chatModelFactory;
     @Mock ModelConfigService       modelConfigService;
     @Mock LlmProperties            llmProperties;
-    @Mock EmailService             emailService;
+    @Mock NotificationClient        notificationClient;
     @Mock WorkflowScheduleClient   workflowScheduleClient;
     @Mock GoogleDocsService        googleDocsService;
     @Mock GoogleSheetsService      googleSheetsService;
@@ -67,7 +67,7 @@ class WorkflowRunServiceTest {
         service = new WorkflowRunServiceImpl(
                 runRepo, logRepo, agentRepo, workflowService, sandboxService,
                 webFetchService, skillService, chatClient, chatModelFactory,
-                modelConfigService, llmProperties, emailService,
+                modelConfigService, llmProperties, notificationClient,
                 workflowScheduleClient,
                 googleDocsService, googleSheetsService, googleSlidesService, telegramService);
     }

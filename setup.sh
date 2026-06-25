@@ -294,6 +294,10 @@ if [ "$MODE" = "local" ]; then
   echo -e "  ${DIM}Storage service key + Garage credentials auto-generated.${NC}"
   echo -e "  ${DIM}Garage config rendered: observability/garage/garage.toml${NC}"
 
+  # ── Notifications (email today, more channels later) ─────────────────────
+  NOTIFICATION_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
+  echo -e "  ${DIM}Notification service key auto-generated.${NC}"
+
   # ── Financial / Market data ───────────────────────────────────────────────
   header "Financial — Finnhub (optional)"
   echo -e "  ${DIM}Used for live stock prices. Get a free key at https://finnhub.io/register${NC}"
@@ -431,6 +435,9 @@ GARAGE_ACCESS_KEY=$GARAGE_ACCESS_KEY
 GARAGE_SECRET_KEY=$GARAGE_SECRET_KEY
 GARAGE_BUCKET=$GARAGE_BUCKET
 
+# ── Notifications (agent-system-notification-inner) ──────────────────────────
+NOTIFICATION_SERVICE_KEY=$NOTIFICATION_SERVICE_KEY
+
 # ── Web fetch ─────────────────────────────────────────────────────────────────
 WEB_FETCH_ENABLED=true
 WEB_FETCH_TIMEOUT=10
@@ -493,13 +500,15 @@ EOF
   echo -e "    ${BOLD}4${NC}) Rebuild backend only           ${DIM}($COMPOSE up -d --build --no-deps backend)${NC}"
   echo -e "    ${BOLD}5${NC}) Rebuild scheduler only         ${DIM}($COMPOSE up -d --build --no-deps scheduler)${NC}"
   echo -e "    ${BOLD}6${NC}) Rebuild storage only           ${DIM}($COMPOSE up -d --build --no-deps storage)${NC}"
-  echo -e "    ${BOLD}7${NC}) Restart frontend only  ${DIM}(no build — $COMPOSE restart frontend)${NC}"
-  echo -e "    ${BOLD}8${NC}) Restart backend only   ${DIM}(no build — $COMPOSE restart backend)${NC}"
-  echo -e "    ${BOLD}9${NC}) Restart scheduler only ${DIM}(no build — $COMPOSE restart scheduler)${NC}"
-  echo -e "    ${BOLD}10${NC}) Restart storage only  ${DIM}(no build — $COMPOSE restart storage)${NC}"
-  echo -e "    ${BOLD}11${NC}) Skip — I'll start manually"
+  echo -e "    ${BOLD}7${NC}) Rebuild notification only      ${DIM}($COMPOSE up -d --build --no-deps notification)${NC}"
+  echo -e "    ${BOLD}8${NC}) Restart frontend only  ${DIM}(no build — $COMPOSE restart frontend)${NC}"
+  echo -e "    ${BOLD}9${NC}) Restart backend only   ${DIM}(no build — $COMPOSE restart backend)${NC}"
+  echo -e "    ${BOLD}10${NC}) Restart scheduler only ${DIM}(no build — $COMPOSE restart scheduler)${NC}"
+  echo -e "    ${BOLD}11${NC}) Restart storage only  ${DIM}(no build — $COMPOSE restart storage)${NC}"
+  echo -e "    ${BOLD}12${NC}) Restart notification only  ${DIM}(no build — $COMPOSE restart notification)${NC}"
+  echo -e "    ${BOLD}13${NC}) Skip — I'll start manually"
   echo ""
-  printf "  Choice [1-11]: "
+  printf "  Choice [1-13]: "
   read -r launch_choice
 
   echo ""
@@ -511,21 +520,25 @@ EOF
     4) $COMPOSE up -d --build --no-deps backend ;;
     5) $COMPOSE up -d --build --no-deps scheduler ;;
     6) $COMPOSE up -d --build --no-deps storage ;;
-    7) $COMPOSE restart frontend ;;
-    8) $COMPOSE restart backend ;;
-    9) $COMPOSE restart scheduler ;;
-    10) $COMPOSE restart storage ;;
-    11)
+    7) $COMPOSE up -d --build --no-deps notification ;;
+    8) $COMPOSE restart frontend ;;
+    9) $COMPOSE restart backend ;;
+    10) $COMPOSE restart scheduler ;;
+    11) $COMPOSE restart storage ;;
+    12) $COMPOSE restart notification ;;
+    13)
       echo -e "  Run manually:"
-      echo -e "    Build all:          ${BOLD}$COMPOSE up --build${NC}"
-      echo -e "    Rebuild frontend:   ${BOLD}$COMPOSE up -d --build --no-deps frontend${NC}"
-      echo -e "    Rebuild backend:    ${BOLD}$COMPOSE up -d --build --no-deps backend${NC}"
-      echo -e "    Rebuild scheduler:  ${BOLD}$COMPOSE up -d --build --no-deps scheduler${NC}"
-      echo -e "    Rebuild storage:    ${BOLD}$COMPOSE up -d --build --no-deps storage${NC}"
-      echo -e "    Restart frontend:   ${BOLD}$COMPOSE restart frontend${NC}"
-      echo -e "    Restart backend:    ${BOLD}$COMPOSE restart backend${NC}"
-      echo -e "    Restart scheduler:  ${BOLD}$COMPOSE restart scheduler${NC}"
-      echo -e "    Restart storage:    ${BOLD}$COMPOSE restart storage${NC}"
+      echo -e "    Build all:            ${BOLD}$COMPOSE up --build${NC}"
+      echo -e "    Rebuild frontend:     ${BOLD}$COMPOSE up -d --build --no-deps frontend${NC}"
+      echo -e "    Rebuild backend:      ${BOLD}$COMPOSE up -d --build --no-deps backend${NC}"
+      echo -e "    Rebuild scheduler:    ${BOLD}$COMPOSE up -d --build --no-deps scheduler${NC}"
+      echo -e "    Rebuild storage:      ${BOLD}$COMPOSE up -d --build --no-deps storage${NC}"
+      echo -e "    Rebuild notification: ${BOLD}$COMPOSE up -d --build --no-deps notification${NC}"
+      echo -e "    Restart frontend:     ${BOLD}$COMPOSE restart frontend${NC}"
+      echo -e "    Restart backend:      ${BOLD}$COMPOSE restart backend${NC}"
+      echo -e "    Restart scheduler:    ${BOLD}$COMPOSE restart scheduler${NC}"
+      echo -e "    Restart storage:      ${BOLD}$COMPOSE restart storage${NC}"
+      echo -e "    Restart notification: ${BOLD}$COMPOSE restart notification${NC}"
       ;;
     *)
       echo -e "  ${YELLOW}Invalid choice — skipping launch.${NC}"
@@ -831,6 +844,14 @@ else
       "$SCRIPT_DIR/observability/garage/garage.toml.template" > "$SCRIPT_DIR/observability/garage/garage.toml"
   echo -e "  ${DIM}Garage config rendered: observability/garage/garage.toml${NC}"
 
+  # ── Notifications (email today, more channels later) ─────────────────────
+  if ! has_secret notification_service_key; then
+    NOTIFICATION_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
+    write_secret notification_service_key "$NOTIFICATION_SERVICE_KEY"
+    echo ""
+    echo -e "  ${DIM}Notification service key auto-generated.${NC}"
+  fi
+
   # ── Financial / Market data ───────────────────────────────────────────────
   header "Financial — Finnhub (optional)"
   UPDATE_FH=true
@@ -1071,13 +1092,15 @@ EOF
   echo -e "    ${BOLD}4${NC}) Rebuild backend only           ${DIM}($PROD_COMPOSE up -d --build --no-deps backend)${NC}"
   echo -e "    ${BOLD}5${NC}) Rebuild scheduler only         ${DIM}($PROD_COMPOSE up -d --build --no-deps scheduler)${NC}"
   echo -e "    ${BOLD}6${NC}) Rebuild storage only           ${DIM}($PROD_COMPOSE up -d --build --no-deps storage)${NC}"
-  echo -e "    ${BOLD}7${NC}) Restart frontend only  ${DIM}(no build — $PROD_COMPOSE restart frontend)${NC}"
-  echo -e "    ${BOLD}8${NC}) Restart backend only   ${DIM}(no build — $PROD_COMPOSE restart backend)${NC}"
-  echo -e "    ${BOLD}9${NC}) Restart scheduler only ${DIM}(no build — $PROD_COMPOSE restart scheduler)${NC}"
-  echo -e "    ${BOLD}10${NC}) Restart storage only  ${DIM}(no build — $PROD_COMPOSE restart storage)${NC}"
-  echo -e "    ${BOLD}11${NC}) Skip — I'll start manually"
+  echo -e "    ${BOLD}7${NC}) Rebuild notification only      ${DIM}($PROD_COMPOSE up -d --build --no-deps notification)${NC}"
+  echo -e "    ${BOLD}8${NC}) Restart frontend only  ${DIM}(no build — $PROD_COMPOSE restart frontend)${NC}"
+  echo -e "    ${BOLD}9${NC}) Restart backend only   ${DIM}(no build — $PROD_COMPOSE restart backend)${NC}"
+  echo -e "    ${BOLD}10${NC}) Restart scheduler only ${DIM}(no build — $PROD_COMPOSE restart scheduler)${NC}"
+  echo -e "    ${BOLD}11${NC}) Restart storage only  ${DIM}(no build — $PROD_COMPOSE restart storage)${NC}"
+  echo -e "    ${BOLD}12${NC}) Restart notification only  ${DIM}(no build — $PROD_COMPOSE restart notification)${NC}"
+  echo -e "    ${BOLD}13${NC}) Skip — I'll start manually"
   echo ""
-  printf "  Choice [1-11]: "
+  printf "  Choice [1-13]: "
   read -r launch_choice
 
   echo ""
@@ -1089,21 +1112,25 @@ EOF
     4) $PROD_COMPOSE up -d --build --no-deps backend ;;
     5) $PROD_COMPOSE up -d --build --no-deps scheduler ;;
     6) $PROD_COMPOSE up -d --build --no-deps storage ;;
-    7) $PROD_COMPOSE restart frontend ;;
-    8) $PROD_COMPOSE restart backend ;;
-    9) $PROD_COMPOSE restart scheduler ;;
-    10) $PROD_COMPOSE restart storage ;;
-    11)
+    7) $PROD_COMPOSE up -d --build --no-deps notification ;;
+    8) $PROD_COMPOSE restart frontend ;;
+    9) $PROD_COMPOSE restart backend ;;
+    10) $PROD_COMPOSE restart scheduler ;;
+    11) $PROD_COMPOSE restart storage ;;
+    12) $PROD_COMPOSE restart notification ;;
+    13)
       echo -e "  Run manually:"
-      echo -e "    Build all:          ${BOLD}$PROD_COMPOSE up -d --build${NC}"
-      echo -e "    Rebuild frontend:   ${BOLD}$PROD_COMPOSE up -d --build --no-deps frontend${NC}"
-      echo -e "    Rebuild backend:    ${BOLD}$PROD_COMPOSE up -d --build --no-deps backend${NC}"
-      echo -e "    Rebuild scheduler:  ${BOLD}$PROD_COMPOSE up -d --build --no-deps scheduler${NC}"
-      echo -e "    Rebuild storage:    ${BOLD}$PROD_COMPOSE up -d --build --no-deps storage${NC}"
-      echo -e "    Restart frontend:   ${BOLD}$PROD_COMPOSE restart frontend${NC}"
-      echo -e "    Restart backend:    ${BOLD}$PROD_COMPOSE restart backend${NC}"
-      echo -e "    Restart scheduler:  ${BOLD}$PROD_COMPOSE restart scheduler${NC}"
-      echo -e "    Restart storage:    ${BOLD}$PROD_COMPOSE restart storage${NC}"
+      echo -e "    Build all:            ${BOLD}$PROD_COMPOSE up -d --build${NC}"
+      echo -e "    Rebuild frontend:     ${BOLD}$PROD_COMPOSE up -d --build --no-deps frontend${NC}"
+      echo -e "    Rebuild backend:      ${BOLD}$PROD_COMPOSE up -d --build --no-deps backend${NC}"
+      echo -e "    Rebuild scheduler:    ${BOLD}$PROD_COMPOSE up -d --build --no-deps scheduler${NC}"
+      echo -e "    Rebuild storage:      ${BOLD}$PROD_COMPOSE up -d --build --no-deps storage${NC}"
+      echo -e "    Rebuild notification: ${BOLD}$PROD_COMPOSE up -d --build --no-deps notification${NC}"
+      echo -e "    Restart frontend:     ${BOLD}$PROD_COMPOSE restart frontend${NC}"
+      echo -e "    Restart backend:      ${BOLD}$PROD_COMPOSE restart backend${NC}"
+      echo -e "    Restart scheduler:    ${BOLD}$PROD_COMPOSE restart scheduler${NC}"
+      echo -e "    Restart storage:      ${BOLD}$PROD_COMPOSE restart storage${NC}"
+      echo -e "    Restart notification: ${BOLD}$PROD_COMPOSE restart notification${NC}"
       ;;
     *)
       echo -e "  ${YELLOW}Invalid choice — skipping launch.${NC}"
@@ -1131,6 +1158,7 @@ echo -e "    Travel    →  ${CYAN}http://localhost:3000/travel${NC}"
 echo -e "  Backend API →  ${CYAN}http://localhost:8081/swagger-ui/index.html${NC}"
 echo -e "  Scheduler   →  ${CYAN}http://localhost:8082/health${NC}"
 echo -e "  Storage     →  ${CYAN}http://localhost:8083/actuator/health${NC}"
+echo -e "  Notification →  ${CYAN}http://localhost:8084/actuator/health${NC}"
 echo -e "  Grafana     →  ${CYAN}http://localhost:3001${NC}  ${DIM}(admin / your password)${NC}"
 echo -e "  Prometheus  →  ${CYAN}http://localhost:9090${NC}"
 echo -e "  ───────────────────────────────────────────────"

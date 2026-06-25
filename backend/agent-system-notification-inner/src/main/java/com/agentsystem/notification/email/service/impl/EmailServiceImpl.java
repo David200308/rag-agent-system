@@ -1,6 +1,6 @@
-package com.agentsystem.auth.service.impl;
+package com.agentsystem.notification.email.service.impl;
 
-import com.agentsystem.auth.service.EmailService;
+import com.agentsystem.notification.email.service.EmailService;
 
 import com.resend.Resend;
 import com.resend.core.exception.ResendException;

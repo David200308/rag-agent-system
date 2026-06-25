@@ -1,11 +1,11 @@
 package com.agentsystem.auth.service.impl;
 
 import com.agentsystem.auth.service.AuthService;
-import com.agentsystem.auth.service.EmailService;
 import com.agentsystem.auth.service.JwtService;
 
 import com.agentsystem.auth.AuthProperties;
 import com.agentsystem.auth.repository.EmailWhitelistRepository;
+import com.agentsystem.notification.NotificationClient;
 import com.agentsystem.org.service.OrganizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +31,7 @@ public class AuthServiceImpl implements AuthService {
     private final AuthProperties           authProperties;
     private final EmailWhitelistRepository whitelistRepo;
     private final StringRedisTemplate      redisTemplate;
-    private final EmailService             emailService;
+    private final NotificationClient       notificationClient;
     private final JwtService               jwtService;
     private final OrganizationService      orgService;
 
@@ -45,7 +45,7 @@ public class AuthServiceImpl implements AuthService {
 
     /**
      * Validates the email against the whitelist, generates a 6-digit OTP,
-     * stores it in Redis, and sends it via Resend.
+     * stores it in Redis, and dispatches it via agent-system-notification-inner.
      *
      * @throws IllegalArgumentException if the email is not whitelisted
      */
@@ -67,7 +67,7 @@ public class AuthServiceImpl implements AuthService {
         // by RateLimitFilter's OTP bucket).
         redisTemplate.delete(OTP_ATTEMPTS_KEY_PREFIX + normalised);
 
-        emailService.sendOtp(normalised, code, expiry);
+        notificationClient.sendOtp(normalised, code, expiry);
         log.info("[AuthService] OTP issued for {}", normalised);
     }
 
