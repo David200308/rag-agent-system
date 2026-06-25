@@ -49,7 +49,10 @@ export function StockGroupRows({ group, expanded, onToggle, defaultCurrency, tot
     const s = group.rows[0]!;
     return (
       <tr className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
-        <td className="px-4 py-3 font-semibold">{s.symbol}</td>
+        <td className="px-4 py-3">
+          <span className="font-semibold">{s.symbol}</span>
+          <span className="ml-1.5 text-[11px] text-[--color-muted]">{s.broker}</span>
+        </td>
         <td className="px-4 py-3">{s.name}</td>
         <td className="px-4 py-3 text-xs text-[--color-muted]">{STOCK_TYPE_LABELS[s.stockType]}</td>
         <StockDataCells row={{ ...s, avgPrice: group.avgPrice }} defaultCurrency={defaultCurrency} total={total} hideAmounts={hideAmounts} />
@@ -85,8 +88,8 @@ export function StockGroupRows({ group, expanded, onToggle, defaultCurrency, tot
       {expanded && group.rows.map((s) => (
         <tr key={s.id} className="border-b border-[--color-border]/50 bg-[--color-border]/10 hover:bg-[--color-border]/20">
           <td className="px-4 py-3 pl-9 text-[--color-muted]">↳ {s.broker}</td>
-          <td className="px-4 py-3 text-[--color-muted]">{s.name}</td>
-          <td className="px-4 py-3 text-xs text-[--color-muted]">{STOCK_TYPE_LABELS[s.stockType]}</td>
+          <td className="px-4 py-3" />
+          <td className="px-4 py-3" />
           <StockDataCells
             row={{ ...s, avgPrice: s.stockAmount > 0 ? (s.investAmount + s.fee) / s.stockAmount : null }}
             defaultCurrency={defaultCurrency} total={total} hideAmounts={hideAmounts}
