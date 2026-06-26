@@ -497,10 +497,12 @@ const COMMON_CURRENCIES = [
   "SGD", "KRW", "THB", "MYR", "AUD", "CAD", "CHF",
 ];
 
+interface FinancialCard { id: string; name: string }
+
 function CardMultiSelect({
   selected, options, onChange,
 }: {
-  selected: string[]; options: string[]; onChange: (v: string[]) => void;
+  selected: string[]; options: FinancialCard[]; onChange: (v: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -513,14 +515,14 @@ function CardMultiSelect({
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const toggle = (card: string) =>
-    onChange(selected.includes(card) ? selected.filter((c) => c !== card) : [...selected, card]);
+  const toggle = (id: string) =>
+    onChange(selected.includes(id) ? selected.filter((c) => c !== id) : [...selected, id]);
 
-  const label = selected.length === 0
-    ? "Select cards"
-    : selected.length === 1
-      ? selected[0]!
-      : `${selected[0]} +${selected.length - 1}`;
+  const selectedNames = selected
+    .map((id) => options.find((o) => o.id === id)?.name ?? id)
+    .join(", ");
+
+  const label = selected.length === 0 ? "Select cards" : selectedNames;
 
   return (
     <div ref={ref} className="relative w-full">
@@ -533,19 +535,19 @@ function CardMultiSelect({
         <span className="text-[--color-muted] text-[10px] shrink-0">▾</span>
       </button>
       {open && (
-        <div className="absolute z-50 top-full left-0 mt-0.5 min-w-[160px] w-full rounded-md border border-[--color-border] bg-white dark:bg-neutral-900 shadow-lg py-1">
+        <div className="absolute z-50 top-full left-0 mt-0.5 min-w-[180px] w-max max-w-[260px] rounded-md border border-[--color-border] bg-white dark:bg-neutral-900 shadow-lg py-1">
           {options.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-[--color-muted]">No cards added yet</p>
+            <p className="px-3 py-2 text-xs text-[--color-muted]">No cards in financial section</p>
           ) : (
             options.map((card) => (
-              <label key={card} className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-[--color-border]/30">
+              <label key={card.id} className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-[--color-border]/30 whitespace-nowrap">
                 <input
                   type="checkbox"
-                  checked={selected.includes(card)}
-                  onChange={() => toggle(card)}
+                  checked={selected.includes(card.id)}
+                  onChange={() => toggle(card.id)}
                   className="cursor-pointer"
                 />
-                {card}
+                {card.name}
               </label>
             ))
           )}
@@ -558,7 +560,7 @@ function CardMultiSelect({
 function ExpenseEntryRow({
   entry, currencies, cards, primaryCur, onChange, onRemove,
 }: {
-  entry: RichExpenseEntry; currencies: string[]; cards: string[]; primaryCur: string | undefined;
+  entry: RichExpenseEntry; currencies: string[]; cards: FinancialCard[]; primaryCur: string | undefined;
   onChange: (e: RichExpenseEntry) => void; onRemove: () => void;
 }) {
   return (
@@ -620,7 +622,7 @@ function ExpenseEntryRow({
 function ExpenseTable({
   currencies, cards, entries, primaryCur, onUpdate, onRemove,
 }: {
-  currencies: string[]; cards: string[]; entries: RichExpenseEntry[]; primaryCur: string | undefined;
+  currencies: string[]; cards: FinancialCard[]; entries: RichExpenseEntry[]; primaryCur: string | undefined;
   onUpdate: (id: string, e: RichExpenseEntry) => void; onRemove: (id: string) => void;
 }) {
   if (entries.length === 0) return null;
@@ -670,15 +672,21 @@ function ExpenseTab({
       __v: 2,
       currencies,
       defaultCurrency: existing?.defaultCurrency ?? currencies[0] ?? "",
-      cards:           existing?.cards            ?? [],
-      itemExpenses:    existing?.itemExpenses      ?? [],
+      itemExpenses:    existing?.itemExpenses ?? [],
       dateExpenses:    buildDateGroups(record.startDate, record.endDate, existing?.dateExpenses ?? []),
     };
   };
 
-  const [data, setData]       = useState<TripExpenseData>(init);
-  const [saving, setSaving]   = useState(false);
-  const [newCard, setNewCard] = useState("");
+  const [data, setData]               = useState<TripExpenseData>(init);
+  const [saving, setSaving]           = useState(false);
+  const [availableCards, setAvailableCards] = useState<FinancialCard[]>([]);
+
+  useEffect(() => {
+    fetch("/api/financial?type=cards")
+      .then((r) => r.ok ? r.json() as Promise<{ id: string; cardName: string }[]> : [])
+      .then((list) => setAvailableCards(list.map((c) => ({ id: c.id, name: c.cardName }))))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => { setData(init()); }, [record.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -714,24 +722,6 @@ function ExpenseTab({
 
   function setDefaultCurrency(c: string) {
     setData((d) => ({ ...d, defaultCurrency: c }));
-  }
-
-  function addCard() {
-    const c = newCard.trim();
-    if (c && !data.cards.includes(c)) setData((d) => ({ ...d, cards: [...d.cards, c] }));
-    setNewCard("");
-  }
-
-  function removeCard(c: string) {
-    setData((d) => ({
-      ...d,
-      cards: d.cards.filter((x) => x !== c),
-      itemExpenses: d.itemExpenses.map((e) => ({ ...e, creditCards: e.creditCards.filter((x) => x !== c) })),
-      dateExpenses: d.dateExpenses.map((g) => ({
-        ...g,
-        entries: g.entries.map((e) => ({ ...e, creditCards: e.creditCards.filter((x) => x !== c) })),
-      })),
-    }));
   }
 
   function addItem() {
@@ -831,34 +821,6 @@ function ExpenseTab({
         </select>
       </div>
 
-      {/* Cards */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-[--color-muted] shrink-0">Cards</span>
-        {data.cards.map((c) => (
-          <span key={c} className="inline-flex items-center gap-1 rounded-full bg-[--color-border]/60 px-2 py-0.5 text-xs font-medium">
-            {c}
-            <button onClick={() => removeCard(c)} className="text-[--color-muted] hover:text-red-400">
-              <X className="h-2.5 w-2.5" />
-            </button>
-          </span>
-        ))}
-        {data.cards.length === 0 && (
-          <span className="text-xs text-[--color-muted]">none</span>
-        )}
-        <div className="ml-auto flex items-center gap-1">
-          <input
-            className="text-xs border border-[--color-border] rounded px-1.5 py-0.5 bg-[--color-surface] outline-none focus:border-[--color-primary] w-[130px]"
-            placeholder="e.g. HSBC Red Card"
-            value={newCard}
-            onChange={(e) => setNewCard(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCard(); } }}
-          />
-          <button onClick={addCard} className="text-xs text-[--color-primary] hover:underline whitespace-nowrap">
-            + Add
-          </button>
-        </div>
-      </div>
-
       {data.currencies.length > 0 && (
         <>
           {/* Item expenses */}
@@ -874,7 +836,7 @@ function ExpenseTab({
             ) : (
               <ExpenseTable
                 currencies={data.currencies}
-                cards={data.cards}
+                cards={availableCards}
                 primaryCur={primaryCur}
                 entries={data.itemExpenses}
                 onUpdate={updateItem}
@@ -901,7 +863,7 @@ function ExpenseTab({
                   {group.entries.length > 0 ? (
                     <ExpenseTable
                       currencies={data.currencies}
-                      cards={data.cards}
+                      cards={availableCards}
                       primaryCur={primaryCur}
                       entries={group.entries}
                       onUpdate={(id, e) => updateDateEntry(group.date, id, e)}
@@ -1109,7 +1071,7 @@ type DetailTab = "detail" | "expense" | "transport" | "memory";
 
 const PANEL_MIN = 360;
 const PANEL_MAX = 900;
-const PANEL_DEFAULT = 520;
+const PANEL_DEFAULT = PANEL_MAX;
 
 const DETAIL_TABS: { id: DetailTab; icon: string; label: string }[] = [
   { id: "detail",    icon: "📋", label: "Detail" },

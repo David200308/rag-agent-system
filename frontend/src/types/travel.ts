@@ -47,7 +47,6 @@ export interface TripExpenseData {
   __v:             2;
   currencies:      string[];
   defaultCurrency: string;   // cashback and net total are in this currency
-  cards:           string[];
   itemExpenses:    RichExpenseEntry[];
   dateExpenses:    DateExpenseGroup[];
 }
