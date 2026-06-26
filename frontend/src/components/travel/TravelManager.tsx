@@ -506,19 +506,22 @@ function CardMultiSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
+  const btnRef  = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!open) return;
     const h = (e: MouseEvent) => {
-      if (btnRef.current && !btnRef.current.closest("[data-card-select]")?.contains(e.target as Node)) {
+      const t = e.target as Node;
+      if (!btnRef.current?.contains(t) && !dropRef.current?.contains(t)) {
         setOpen(false);
       }
     };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+    // use "click" (not "mousedown") so checkbox onChange fires before the close handler
+    document.addEventListener("click", h);
+    return () => document.removeEventListener("click", h);
   }, [open]);
 
   const handleToggle = () => {
@@ -540,7 +543,7 @@ function CardMultiSelect({
 
   const dropdown = open && mounted && dropPos ? createPortal(
     <div
-      data-card-select
+      ref={dropRef}
       style={{ position: "fixed", top: dropPos.top, left: dropPos.left, minWidth: dropPos.width, zIndex: 99999 }}
       className="rounded-md border border-[--color-border] bg-white dark:bg-neutral-900 shadow-xl py-1 max-h-48 overflow-y-auto"
     >
@@ -548,7 +551,10 @@ function CardMultiSelect({
         <p className="px-3 py-2 text-xs text-[--color-muted]">No cards in financial section</p>
       ) : (
         options.map((card) => (
-          <label key={card.id} className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-[--color-border]/30 whitespace-nowrap">
+          <label
+            key={card.id}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-[--color-border]/30 whitespace-nowrap"
+          >
             <input
               type="checkbox"
               checked={selected.includes(card.id)}
@@ -564,7 +570,7 @@ function CardMultiSelect({
   ) : null;
 
   return (
-    <div data-card-select className="w-full">
+    <div className="w-full">
       <button
         ref={btnRef}
         type="button"
