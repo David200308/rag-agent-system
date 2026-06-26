@@ -31,12 +31,11 @@ export interface TravelStop {
 }
 
 export interface RichExpenseEntry {
-  id:         string;
-  name:       string;
-  confirmed:  boolean;
-  amounts:    Record<string, number>;  // e.g. { HKD: 7629.86, JPY: 14000 }
-  cashback:   number;
-  creditCard: string;
+  id:          string;
+  name:        string;
+  amounts:     Record<string, number>;  // e.g. { HKD: 7629.86, JPY: 14000 }
+  cashback:    number;
+  creditCards: string[];
 }
 
 export interface DateExpenseGroup {
@@ -45,10 +44,12 @@ export interface DateExpenseGroup {
 }
 
 export interface TripExpenseData {
-  __v:          2;
-  currencies:   string[];
-  itemExpenses: RichExpenseEntry[];
-  dateExpenses: DateExpenseGroup[];
+  __v:             2;
+  currencies:      string[];
+  defaultCurrency: string;   // cashback and net total are in this currency
+  cards:           string[];
+  itemExpenses:    RichExpenseEntry[];
+  dateExpenses:    DateExpenseGroup[];
 }
 
 export interface TravelRecord {
@@ -87,10 +88,9 @@ export function newExpenseEntry(): RichExpenseEntry {
   return {
     id: crypto.randomUUID(),
     name: "",
-    confirmed: false,
     amounts: {},
     cashback: 0,
-    creditCard: "",
+    creditCards: [],
   };
 }
 

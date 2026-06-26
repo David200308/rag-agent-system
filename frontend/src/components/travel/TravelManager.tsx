@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
-import { Plus, Pencil, Trash2, MapPin, X, BarChart2 } from "lucide-react";
+import { Plus, Pencil, Trash2, MapPin, X, BarChart2, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
   type TravelRecord, type TransportType, type RichExpenseEntry, type TripExpenseData,
@@ -492,10 +492,73 @@ const tinyInput =
   "w-full rounded border border-[--color-border] bg-[--color-surface] px-1.5 py-1 text-xs " +
   "outline-none focus:border-[--color-primary]";
 
-function ExpenseEntryRow({
-  entry, currencies, onChange, onRemove,
+const COMMON_CURRENCIES = [
+  "HKD", "USD", "EUR", "GBP", "JPY", "CNY", "TWD",
+  "SGD", "KRW", "THB", "MYR", "AUD", "CAD", "CHF",
+];
+
+function CardMultiSelect({
+  selected, options, onChange,
 }: {
-  entry: RichExpenseEntry; currencies: string[];
+  selected: string[]; options: string[]; onChange: (v: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const toggle = (card: string) =>
+    onChange(selected.includes(card) ? selected.filter((c) => c !== card) : [...selected, card]);
+
+  const label = selected.length === 0
+    ? "Select cards"
+    : selected.length === 1
+      ? selected[0]!
+      : `${selected[0]} +${selected.length - 1}`;
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`${tinyInput} text-left flex items-center justify-between gap-1 cursor-pointer`}
+      >
+        <span className={`truncate ${selected.length === 0 ? "text-[--color-muted]" : ""}`}>{label}</span>
+        <span className="text-[--color-muted] text-[10px] shrink-0">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-50 top-full left-0 mt-0.5 min-w-[160px] w-full rounded-md border border-[--color-border] bg-white dark:bg-neutral-900 shadow-lg py-1">
+          {options.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-[--color-muted]">No cards added yet</p>
+          ) : (
+            options.map((card) => (
+              <label key={card} className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-[--color-border]/30">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(card)}
+                  onChange={() => toggle(card)}
+                  className="cursor-pointer"
+                />
+                {card}
+              </label>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExpenseEntryRow({
+  entry, currencies, cards, primaryCur, onChange, onRemove,
+}: {
+  entry: RichExpenseEntry; currencies: string[]; cards: string[]; primaryCur: string | undefined;
   onChange: (e: RichExpenseEntry) => void; onRemove: () => void;
 }) {
   return (
@@ -506,14 +569,6 @@ function ExpenseEntryRow({
           placeholder="Item name"
           value={entry.name}
           onChange={(e) => onChange({ ...entry, name: e.target.value })}
-        />
-      </td>
-      <td className="px-2 py-1 text-center">
-        <input
-          type="checkbox"
-          checked={entry.confirmed}
-          onChange={(e) => onChange({ ...entry, confirmed: e.target.checked })}
-          className="cursor-pointer"
         />
       </td>
       {currencies.map((c) => (
@@ -543,14 +598,14 @@ function ExpenseEntryRow({
           placeholder="0"
           value={entry.cashback || ""}
           onChange={(e) => onChange({ ...entry, cashback: parseFloat(e.target.value) || 0 })}
+          title={primaryCur ? `Cashback in ${primaryCur}` : "Cashback"}
         />
       </td>
-      <td className="px-2 py-1">
-        <input
-          className={tinyInput}
-          placeholder="Card"
-          value={entry.creditCard}
-          onChange={(e) => onChange({ ...entry, creditCard: e.target.value })}
+      <td className="px-2 py-1 min-w-[120px]">
+        <CardMultiSelect
+          selected={entry.creditCards}
+          options={cards}
+          onChange={(v) => onChange({ ...entry, creditCards: v })}
         />
       </td>
       <td className="px-2 py-1">
@@ -563,9 +618,9 @@ function ExpenseEntryRow({
 }
 
 function ExpenseTable({
-  currencies, entries, onUpdate, onRemove,
+  currencies, cards, entries, primaryCur, onUpdate, onRemove,
 }: {
-  currencies: string[]; entries: RichExpenseEntry[];
+  currencies: string[]; cards: string[]; entries: RichExpenseEntry[]; primaryCur: string | undefined;
   onUpdate: (id: string, e: RichExpenseEntry) => void; onRemove: (id: string) => void;
 }) {
   if (entries.length === 0) return null;
@@ -575,12 +630,13 @@ function ExpenseTable({
         <thead className="bg-[--color-surface]/80">
           <tr>
             <th className="text-left px-2 py-1.5 text-[--color-muted] font-medium min-w-[110px]">Name</th>
-            <th className="px-2 py-1.5 text-[--color-muted] font-medium w-7 text-center">✓</th>
             {currencies.map((c) => (
               <th key={c} className="text-right px-2 py-1.5 text-[--color-muted] font-medium min-w-[70px]">{c}</th>
             ))}
-            <th className="text-right px-2 py-1.5 text-[--color-muted] font-medium min-w-[70px]">Cashback</th>
-            <th className="text-left px-2 py-1.5 text-[--color-muted] font-medium min-w-[80px]">Card</th>
+            <th className="text-right px-2 py-1.5 text-[--color-muted] font-medium min-w-[80px]">
+              Cashback{primaryCur ? ` (${primaryCur})` : ""}
+            </th>
+            <th className="text-left px-2 py-1.5 text-[--color-muted] font-medium min-w-[120px]">Card</th>
             <th className="w-6" />
           </tr>
         </thead>
@@ -590,6 +646,8 @@ function ExpenseTable({
               key={entry.id}
               entry={entry}
               currencies={currencies}
+              cards={cards}
+              primaryCur={primaryCur}
               onChange={(e) => onUpdate(entry.id, e)}
               onRemove={() => onRemove(entry.id)}
             />
@@ -607,17 +665,20 @@ function ExpenseTab({
 }) {
   const init = (): TripExpenseData => {
     const existing = parseTripExpenseData(record.expenses);
+    const currencies = existing?.currencies ?? [];
     return {
       __v: 2,
-      currencies:   existing?.currencies   ?? [],
-      itemExpenses: existing?.itemExpenses ?? [],
-      dateExpenses: buildDateGroups(record.startDate, record.endDate, existing?.dateExpenses ?? []),
+      currencies,
+      defaultCurrency: existing?.defaultCurrency ?? currencies[0] ?? "",
+      cards:           existing?.cards            ?? [],
+      itemExpenses:    existing?.itemExpenses      ?? [],
+      dateExpenses:    buildDateGroups(record.startDate, record.endDate, existing?.dateExpenses ?? []),
     };
   };
 
-  const [data, setData]           = useState<TripExpenseData>(init);
-  const [saving, setSaving]       = useState(false);
-  const [newCurrency, setNewCurrency] = useState("");
+  const [data, setData]       = useState<TripExpenseData>(init);
+  const [saving, setSaving]   = useState(false);
+  const [newCard, setNewCard] = useState("");
 
   useEffect(() => { setData(init()); }, [record.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -631,14 +692,46 @@ function ExpenseTab({
     }
   }
 
-  function addCurrency() {
-    const c = newCurrency.trim().toUpperCase();
-    if (c && !data.currencies.includes(c)) setData((d) => ({ ...d, currencies: [...d.currencies, c] }));
-    setNewCurrency("");
+  function addCurrency(c: string) {
+    if (!c || data.currencies.includes(c)) return;
+    setData((d) => ({
+      ...d,
+      currencies: [...d.currencies, c],
+      defaultCurrency: d.defaultCurrency || c,
+    }));
   }
 
   function removeCurrency(c: string) {
-    setData((d) => ({ ...d, currencies: d.currencies.filter((x) => x !== c) }));
+    setData((d) => {
+      const next = d.currencies.filter((x) => x !== c);
+      return {
+        ...d,
+        currencies: next,
+        defaultCurrency: d.defaultCurrency === c ? (next[0] ?? "") : d.defaultCurrency,
+      };
+    });
+  }
+
+  function setDefaultCurrency(c: string) {
+    setData((d) => ({ ...d, defaultCurrency: c }));
+  }
+
+  function addCard() {
+    const c = newCard.trim();
+    if (c && !data.cards.includes(c)) setData((d) => ({ ...d, cards: [...d.cards, c] }));
+    setNewCard("");
+  }
+
+  function removeCard(c: string) {
+    setData((d) => ({
+      ...d,
+      cards: d.cards.filter((x) => x !== c),
+      itemExpenses: d.itemExpenses.map((e) => ({ ...e, creditCards: e.creditCards.filter((x) => x !== c) })),
+      dateExpenses: d.dateExpenses.map((g) => ({
+        ...g,
+        entries: g.entries.map((e) => ({ ...e, creditCards: e.creditCards.filter((x) => x !== c) })),
+      })),
+    }));
   }
 
   function addItem() {
@@ -690,40 +783,78 @@ function ExpenseTab({
     }
     totalCashback += entry.cashback;
   }
-  const primaryCur = data.currencies[0];
-  const netTotal   = primaryCur != null ? (totalsByCur[primaryCur] ?? 0) - totalCashback : null;
+  const primaryCur = data.defaultCurrency || data.currencies[0];
+  const netTotal   = primaryCur ? (totalsByCur[primaryCur] ?? 0) - totalCashback : null;
+
+  const availableCurrencies = COMMON_CURRENCIES.filter((c) => !data.currencies.includes(c));
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Currencies */}
-      <div>
-        <p className="text-xs text-[--color-muted] mb-1.5">Currencies tracked</p>
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {data.currencies.length === 0 && (
-            <span className="text-xs text-[--color-muted]">None — add at least one to start</span>
-          )}
-          {data.currencies.map((c) => (
-            <span key={c} className="inline-flex items-center gap-1 rounded-full bg-[--color-border]/60 px-2 py-0.5 text-xs font-medium">
+      {/* Currencies — inline with click-to-set-default */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-[--color-muted] shrink-0">Currencies tracked</span>
+        {data.currencies.length === 0 && (
+          <span className="text-xs text-[--color-muted]">none</span>
+        )}
+        {data.currencies.map((c) => {
+          const isDefault = c === primaryCur;
+          return (
+            <span
+              key={c}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium border ${
+                isDefault
+                  ? "bg-[--color-primary]/10 border-[--color-primary]/40 text-[--color-primary]"
+                  : "bg-[--color-border]/60 border-transparent text-[--color-fg]"
+              }`}
+            >
+              <button
+                onClick={() => setDefaultCurrency(c)}
+                title={isDefault ? "Default currency" : "Set as default"}
+                className={`leading-none ${isDefault ? "opacity-80" : "opacity-30 hover:opacity-70"}`}
+              >
+                {isDefault ? "●" : "○"}
+              </button>
               {c}
               <button onClick={() => removeCurrency(c)} className="text-[--color-muted] hover:text-red-400">
                 <X className="h-2.5 w-2.5" />
               </button>
             </span>
-          ))}
-        </div>
-        <div className="flex gap-1.5">
+          );
+        })}
+        <select
+          className="ml-auto text-xs border border-[--color-border] rounded px-1.5 py-0.5 bg-[--color-surface] cursor-pointer outline-none focus:border-[--color-primary]"
+          value=""
+          onChange={(e) => { if (e.target.value) addCurrency(e.target.value); }}
+        >
+          <option value="">+ Currency</option>
+          {availableCurrencies.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      {/* Cards */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-[--color-muted] shrink-0">Cards</span>
+        {data.cards.map((c) => (
+          <span key={c} className="inline-flex items-center gap-1 rounded-full bg-[--color-border]/60 px-2 py-0.5 text-xs font-medium">
+            {c}
+            <button onClick={() => removeCard(c)} className="text-[--color-muted] hover:text-red-400">
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </span>
+        ))}
+        {data.cards.length === 0 && (
+          <span className="text-xs text-[--color-muted]">none</span>
+        )}
+        <div className="ml-auto flex items-center gap-1">
           <input
-            className={`${inputCls} max-w-[72px] uppercase`}
-            placeholder="HKD"
-            value={newCurrency}
-            onChange={(e) => setNewCurrency(e.target.value.toUpperCase())}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCurrency(); } }}
+            className="text-xs border border-[--color-border] rounded px-1.5 py-0.5 bg-[--color-surface] outline-none focus:border-[--color-primary] w-[130px]"
+            placeholder="e.g. HSBC Red Card"
+            value={newCard}
+            onChange={(e) => setNewCard(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCard(); } }}
           />
-          <button
-            onClick={addCurrency}
-            className="text-xs text-[--color-primary] hover:underline px-1"
-          >
-            + Add currency
+          <button onClick={addCard} className="text-xs text-[--color-primary] hover:underline whitespace-nowrap">
+            + Add
           </button>
         </div>
       </div>
@@ -743,6 +874,8 @@ function ExpenseTab({
             ) : (
               <ExpenseTable
                 currencies={data.currencies}
+                cards={data.cards}
+                primaryCur={primaryCur}
                 entries={data.itemExpenses}
                 onUpdate={updateItem}
                 onRemove={removeItem}
@@ -768,6 +901,8 @@ function ExpenseTab({
                   {group.entries.length > 0 ? (
                     <ExpenseTable
                       currencies={data.currencies}
+                      cards={data.cards}
+                      primaryCur={primaryCur}
                       entries={group.entries}
                       onUpdate={(id, e) => updateDateEntry(group.date, id, e)}
                       onRemove={(id) => removeDateEntry(group.date, id)}
@@ -1068,9 +1203,18 @@ function TravelDetailPanel({
               {year} · {days} day{days !== 1 ? "s" : ""}{route ? ` · ${route}` : ""}
             </p>
           </div>
-          <button onClick={onClose} className="rounded-md p-1 text-[--color-muted] hover:bg-[--color-border]/50 shrink-0">
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button
+              onClick={() => setWidth(width === PANEL_MAX ? PANEL_DEFAULT : PANEL_MAX)}
+              className="rounded-md p-1 text-[--color-muted] hover:bg-[--color-border]/50"
+              title={width === PANEL_MAX ? "Restore size" : "Expand to full"}
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </button>
+            <button onClick={onClose} className="rounded-md p-1 text-[--color-muted] hover:bg-[--color-border]/50">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
