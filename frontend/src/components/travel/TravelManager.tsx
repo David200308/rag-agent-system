@@ -6,9 +6,10 @@ import dynamic from "next/dynamic";
 import { Plus, Pencil, Trash2, MapPin, X, BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
-  type TravelRecord, type TransportType,
+  type TravelRecord, type TransportType, type RichExpenseEntry, type TripExpenseData,
   TRANSPORT_TYPES, TRANSPORT_LABELS, TRANSPORT_EMOJI,
   CITY_LOOKUP, TRIP_COLORS, tripDays,
+  parseTripExpenseData, buildDateGroups, newExpenseEntry,
 } from "@/types/travel";
 
 const TravelMap = dynamic(() => import("./TravelMap"), { ssr: false });
@@ -211,67 +212,6 @@ function StopRow({
   );
 }
 
-// ── Expense row in form ────────────────────────────────────────────────────────
-
-interface ExpenseDraft {
-  category: string;
-  amount:   string;
-  currency: string;
-}
-
-function emptyExpense(): ExpenseDraft {
-  return { category: "", amount: "", currency: "" };
-}
-
-function ExpenseRow({
-  expense, index, onChange, onRemove,
-}: {
-  expense: ExpenseDraft; index: number;
-  onChange: (e: ExpenseDraft) => void; onRemove: () => void;
-}) {
-  return (
-    <div className="rounded-lg border border-[--color-border] bg-[--color-surface] p-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-[--color-muted]">Expense {index + 1}</span>
-        <button onClick={onRemove} className="text-[--color-muted] hover:text-red-400 p-0.5 rounded">
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <div className="col-span-2">
-          <Field label="Category">
-            <input
-              className={inputCls}
-              placeholder="e.g. Flight"
-              value={expense.category}
-              onChange={(e) => onChange({ ...expense, category: e.target.value })}
-            />
-          </Field>
-        </div>
-        <Field label="Currency">
-          <input
-            className={inputCls}
-            placeholder="USD"
-            value={expense.currency}
-            onChange={(e) => onChange({ ...expense, currency: e.target.value })}
-          />
-        </Field>
-      </div>
-      <Field label="Amount">
-        <input
-          className={inputCls}
-          type="number"
-          min="0"
-          step="0.01"
-          placeholder="0.00"
-          value={expense.amount}
-          onChange={(e) => onChange({ ...expense, amount: e.target.value })}
-        />
-      </Field>
-    </div>
-  );
-}
-
 // ── Modal ──────────────────────────────────────────────────────────────────────
 
 function Modal({ title, onClose, children }: {
@@ -304,11 +244,10 @@ interface TripDraft {
   endDate:   string;
   notes:     string;
   stops:     StopDraft[];
-  expenses:  ExpenseDraft[];
 }
 
 function emptyTrip(): TripDraft {
-  return { title: "", startDate: "", endDate: "", notes: "", stops: [emptyStop(), emptyStop()], expenses: [] };
+  return { title: "", startDate: "", endDate: "", notes: "", stops: [emptyStop(), emptyStop()] };
 }
 
 function draftFromRecord(r: TravelRecord): TripDraft {
@@ -326,11 +265,6 @@ function draftFromRecord(r: TravelRecord): TripDraft {
       flightNumber: s.flightNumber ?? "",
       seatNumber:   s.seatNumber ?? "",
       notes:        s.notes ?? "",
-    })),
-    expenses: r.expenses.map((e) => ({
-      category: e.category,
-      amount:   String(e.amount),
-      currency: e.currency,
     })),
   };
 }
@@ -351,13 +285,6 @@ function draftToPayload(d: TripDraft) {
       seatNumber:   s.seatNumber || null,
       notes:        s.notes || null,
     })),
-    expenses: d.expenses
-      .filter((e) => e.category.trim() !== "")
-      .map((e) => ({
-        category: e.category,
-        amount:   parseFloat(e.amount) || 0,
-        currency: e.currency || "USD",
-      })),
   };
 }
 
@@ -376,15 +303,6 @@ function TripForm({
 
   const removeStop = (i: number) =>
     setF((p) => ({ ...p, stops: p.stops.filter((_, idx) => idx !== i) }));
-
-  const updateExpense = (i: number, e: ExpenseDraft) => {
-    setF((p) => { const expenses = [...p.expenses]; expenses[i] = e; return { ...p, expenses }; });
-  };
-
-  const addExpense = () => setF((p) => ({ ...p, expenses: [...p.expenses, emptyExpense()] }));
-
-  const removeExpense = (i: number) =>
-    setF((p) => ({ ...p, expenses: p.expenses.filter((_, idx) => idx !== i) }));
 
   return (
     <form
@@ -444,30 +362,6 @@ function TripForm({
           className="mt-2 flex items-center gap-1.5 text-xs text-[--color-primary] hover:underline"
         >
           <Plus className="h-3 w-3" /> Add stop
-        </button>
-      </div>
-
-      <div>
-        <p className="text-xs text-[--color-muted] mb-2">
-          Expenses — optional, track trip costs
-        </p>
-        <div className="flex flex-col gap-2">
-          {f.expenses.map((e, i) => (
-            <ExpenseRow
-              key={i}
-              index={i}
-              expense={e}
-              onChange={(ne) => updateExpense(i, ne)}
-              onRemove={() => removeExpense(i)}
-            />
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={addExpense}
-          className="mt-2 flex items-center gap-1.5 text-xs text-[--color-primary] hover:underline"
-        >
-          <Plus className="h-3 w-3" /> Add expense
         </button>
       </div>
 
@@ -588,6 +482,337 @@ function Legend() {
       <span className="flex items-center gap-1">
         <span style={{ display: "inline-block", width: 20, borderBottom: "2px solid #6b7280" }} /> 🚌/🚗/🚶 Land
       </span>
+    </div>
+  );
+}
+
+// ── Expense components ─────────────────────────────────────────────────────────
+
+const tinyInput =
+  "w-full rounded border border-[--color-border] bg-[--color-surface] px-1.5 py-1 text-xs " +
+  "outline-none focus:border-[--color-primary]";
+
+function ExpenseEntryRow({
+  entry, currencies, onChange, onRemove,
+}: {
+  entry: RichExpenseEntry; currencies: string[];
+  onChange: (e: RichExpenseEntry) => void; onRemove: () => void;
+}) {
+  return (
+    <tr className="border-t border-[--color-border]/50">
+      <td className="px-2 py-1">
+        <input
+          className={tinyInput}
+          placeholder="Item name"
+          value={entry.name}
+          onChange={(e) => onChange({ ...entry, name: e.target.value })}
+        />
+      </td>
+      <td className="px-2 py-1 text-center">
+        <input
+          type="checkbox"
+          checked={entry.confirmed}
+          onChange={(e) => onChange({ ...entry, confirmed: e.target.checked })}
+          className="cursor-pointer"
+        />
+      </td>
+      {currencies.map((c) => (
+        <td key={c} className="px-2 py-1">
+          <input
+            className={`${tinyInput} text-right`}
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0"
+            value={entry.amounts[c] ?? ""}
+            onChange={(ev) => {
+              const v = parseFloat(ev.target.value);
+              const amounts = { ...entry.amounts };
+              if (isNaN(v) || ev.target.value === "") { delete amounts[c]; } else { amounts[c] = v; }
+              onChange({ ...entry, amounts });
+            }}
+          />
+        </td>
+      ))}
+      <td className="px-2 py-1">
+        <input
+          className={`${tinyInput} text-right`}
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="0"
+          value={entry.cashback || ""}
+          onChange={(e) => onChange({ ...entry, cashback: parseFloat(e.target.value) || 0 })}
+        />
+      </td>
+      <td className="px-2 py-1">
+        <input
+          className={tinyInput}
+          placeholder="Card"
+          value={entry.creditCard}
+          onChange={(e) => onChange({ ...entry, creditCard: e.target.value })}
+        />
+      </td>
+      <td className="px-2 py-1">
+        <button onClick={onRemove} className="text-[--color-muted] hover:text-red-400 p-0.5">
+          <X className="h-3 w-3" />
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function ExpenseTable({
+  currencies, entries, onUpdate, onRemove,
+}: {
+  currencies: string[]; entries: RichExpenseEntry[];
+  onUpdate: (id: string, e: RichExpenseEntry) => void; onRemove: (id: string) => void;
+}) {
+  if (entries.length === 0) return null;
+  return (
+    <div className="overflow-x-auto rounded-lg border border-[--color-border]">
+      <table className="min-w-full text-xs">
+        <thead className="bg-[--color-surface]/80">
+          <tr>
+            <th className="text-left px-2 py-1.5 text-[--color-muted] font-medium min-w-[110px]">Name</th>
+            <th className="px-2 py-1.5 text-[--color-muted] font-medium w-7 text-center">✓</th>
+            {currencies.map((c) => (
+              <th key={c} className="text-right px-2 py-1.5 text-[--color-muted] font-medium min-w-[70px]">{c}</th>
+            ))}
+            <th className="text-right px-2 py-1.5 text-[--color-muted] font-medium min-w-[70px]">Cashback</th>
+            <th className="text-left px-2 py-1.5 text-[--color-muted] font-medium min-w-[80px]">Card</th>
+            <th className="w-6" />
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => (
+            <ExpenseEntryRow
+              key={entry.id}
+              entry={entry}
+              currencies={currencies}
+              onChange={(e) => onUpdate(entry.id, e)}
+              onRemove={() => onRemove(entry.id)}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ExpenseTab({
+  record, onSaved,
+}: {
+  record: TravelRecord; onSaved: () => void;
+}) {
+  const init = (): TripExpenseData => {
+    const existing = parseTripExpenseData(record.expenses);
+    return {
+      __v: 2,
+      currencies:   existing?.currencies   ?? [],
+      itemExpenses: existing?.itemExpenses ?? [],
+      dateExpenses: buildDateGroups(record.startDate, record.endDate, existing?.dateExpenses ?? []),
+    };
+  };
+
+  const [data, setData]           = useState<TripExpenseData>(init);
+  const [saving, setSaving]       = useState(false);
+  const [newCurrency, setNewCurrency] = useState("");
+
+  useEffect(() => { setData(init()); }, [record.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function save() {
+    setSaving(true);
+    try {
+      await apiUpdate(record.id, { expenses: [data] });
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function addCurrency() {
+    const c = newCurrency.trim().toUpperCase();
+    if (c && !data.currencies.includes(c)) setData((d) => ({ ...d, currencies: [...d.currencies, c] }));
+    setNewCurrency("");
+  }
+
+  function removeCurrency(c: string) {
+    setData((d) => ({ ...d, currencies: d.currencies.filter((x) => x !== c) }));
+  }
+
+  function addItem() {
+    setData((d) => ({ ...d, itemExpenses: [...d.itemExpenses, newExpenseEntry()] }));
+  }
+
+  function updateItem(id: string, e: RichExpenseEntry) {
+    setData((d) => ({ ...d, itemExpenses: d.itemExpenses.map((x) => x.id === id ? e : x) }));
+  }
+
+  function removeItem(id: string) {
+    setData((d) => ({ ...d, itemExpenses: d.itemExpenses.filter((x) => x.id !== id) }));
+  }
+
+  function addDateEntry(date: string) {
+    setData((d) => ({
+      ...d,
+      dateExpenses: d.dateExpenses.map((g) =>
+        g.date === date ? { ...g, entries: [...g.entries, newExpenseEntry()] } : g,
+      ),
+    }));
+  }
+
+  function updateDateEntry(date: string, id: string, e: RichExpenseEntry) {
+    setData((d) => ({
+      ...d,
+      dateExpenses: d.dateExpenses.map((g) =>
+        g.date === date ? { ...g, entries: g.entries.map((x) => x.id === id ? e : x) } : g,
+      ),
+    }));
+  }
+
+  function removeDateEntry(date: string, id: string) {
+    setData((d) => ({
+      ...d,
+      dateExpenses: d.dateExpenses.map((g) =>
+        g.date === date ? { ...g, entries: g.entries.filter((x) => x.id !== id) } : g,
+      ),
+    }));
+  }
+
+  // Compute totals
+  const allEntries = [...data.itemExpenses, ...data.dateExpenses.flatMap((g) => g.entries)];
+  const totalsByCur: Record<string, number> = {};
+  let totalCashback = 0;
+  for (const entry of allEntries) {
+    for (const [c, amt] of Object.entries(entry.amounts)) {
+      totalsByCur[c] = (totalsByCur[c] ?? 0) + amt;
+    }
+    totalCashback += entry.cashback;
+  }
+  const primaryCur = data.currencies[0];
+  const netTotal   = primaryCur != null ? (totalsByCur[primaryCur] ?? 0) - totalCashback : null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Currencies */}
+      <div>
+        <p className="text-xs text-[--color-muted] mb-1.5">Currencies tracked</p>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {data.currencies.length === 0 && (
+            <span className="text-xs text-[--color-muted]">None — add at least one to start</span>
+          )}
+          {data.currencies.map((c) => (
+            <span key={c} className="inline-flex items-center gap-1 rounded-full bg-[--color-border]/60 px-2 py-0.5 text-xs font-medium">
+              {c}
+              <button onClick={() => removeCurrency(c)} className="text-[--color-muted] hover:text-red-400">
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="flex gap-1.5">
+          <input
+            className={`${inputCls} max-w-[72px] uppercase`}
+            placeholder="HKD"
+            value={newCurrency}
+            onChange={(e) => setNewCurrency(e.target.value.toUpperCase())}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCurrency(); } }}
+          />
+          <button
+            onClick={addCurrency}
+            className="text-xs text-[--color-primary] hover:underline px-1"
+          >
+            + Add currency
+          </button>
+        </div>
+      </div>
+
+      {data.currencies.length > 0 && (
+        <>
+          {/* Item expenses */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-[--color-muted] uppercase tracking-wide">Pre-trip / Fixed</p>
+              <button onClick={addItem} className="flex items-center gap-1 text-xs text-[--color-primary] hover:underline">
+                <Plus className="h-3 w-3" /> Add item
+              </button>
+            </div>
+            {data.itemExpenses.length === 0 ? (
+              <p className="text-xs text-[--color-muted] pl-1">No items yet</p>
+            ) : (
+              <ExpenseTable
+                currencies={data.currencies}
+                entries={data.itemExpenses}
+                onUpdate={updateItem}
+                onRemove={removeItem}
+              />
+            )}
+          </div>
+
+          {/* Daily expenses */}
+          <div>
+            <p className="text-xs font-semibold text-[--color-muted] uppercase tracking-wide mb-2">Daily</p>
+            <div className="space-y-3">
+              {data.dateExpenses.map((group) => (
+                <div key={group.date}>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-medium">{group.date.replace(/-/g, "/")}</p>
+                    <button
+                      onClick={() => addDateEntry(group.date)}
+                      className="flex items-center gap-1 text-xs text-[--color-primary] hover:underline"
+                    >
+                      <Plus className="h-3 w-3" /> Add
+                    </button>
+                  </div>
+                  {group.entries.length > 0 ? (
+                    <ExpenseTable
+                      currencies={data.currencies}
+                      entries={group.entries}
+                      onUpdate={(id, e) => updateDateEntry(group.date, id, e)}
+                      onRemove={(id) => removeDateEntry(group.date, id)}
+                    />
+                  ) : (
+                    <p className="text-xs text-[--color-muted] pl-1">—</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Totals */}
+          {allEntries.length > 0 && (
+            <div className="rounded-lg border border-[--color-border] bg-[--color-surface] px-3.5 py-2.5 space-y-1">
+              <p className="text-[10px] font-semibold text-[--color-muted] uppercase tracking-wide mb-1">Summary</p>
+              {data.currencies.map((c) => (
+                <div key={c} className="flex justify-between text-sm">
+                  <span className="text-[--color-muted]">Total {c}</span>
+                  <span className="font-medium">{(totalsByCur[c] ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              ))}
+              {totalCashback > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-[--color-muted]">Cashback</span>
+                  <span className="font-medium text-emerald-500">−{totalCashback.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              {netTotal !== null && primaryCur && (
+                <div className="flex justify-between text-sm border-t border-[--color-border] pt-1 mt-1">
+                  <span className="font-semibold">Net ({primaryCur})</span>
+                  <span className="font-bold">{netTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Save */}
+      <div className="flex justify-end pt-1">
+        <Button size="sm" onClick={save} disabled={saving}>
+          {saving ? "Saving…" : "Save expenses"}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -768,9 +993,9 @@ function EmptyTab({ icon, text }: { icon: string; text: string }) {
 }
 
 function TravelDetailPanel({
-  record, color, onClose,
+  record, color, onClose, onUpdate,
 }: {
-  record: TravelRecord; color: string; onClose: () => void;
+  record: TravelRecord; color: string; onClose: () => void; onUpdate: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
   const [tab, setTab] = useState<DetailTab>("detail");
@@ -819,11 +1044,6 @@ function TravelDetailPanel({
     seatNumber:   s.seatNumber,
     notes:        s.notes,
   }));
-
-  const totalsByCurrency = record.expenses.reduce<Record<string, number>>((acc, e) => {
-    acc[e.currency] = (acc[e.currency] ?? 0) + e.amount;
-    return acc;
-  }, {});
 
   return createPortal(
     <div className="fixed inset-0 z-[9999]">
@@ -907,29 +1127,7 @@ function TravelDetailPanel({
           )}
 
           {tab === "expense" && (
-            record.expenses.length === 0 ? (
-              <EmptyTab icon="💰" text="No expenses logged yet." />
-            ) : (
-              <div className="space-y-2.5">
-                {record.expenses.map((e, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-lg border border-[--color-border] bg-[--color-surface] px-3.5 py-2.5">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: TRIP_COLORS[i % TRIP_COLORS.length] }} />
-                      {e.category}
-                    </div>
-                    <span className="text-sm font-semibold">{e.amount.toLocaleString()} {e.currency}</span>
-                  </div>
-                ))}
-                <div className="mt-1 flex flex-col gap-1 rounded-lg border border-[--color-border] bg-[--color-surface] px-3.5 py-2.5">
-                  {Object.entries(totalsByCurrency).map(([currency, total]) => (
-                    <div key={currency} className="flex items-center justify-between text-sm">
-                      <span className="text-[--color-muted]">Total ({currency})</span>
-                      <span className="font-semibold">{total.toLocaleString()} {currency}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
+            <ExpenseTab record={record} onSaved={onUpdate} />
           )}
 
           {tab === "transport" && (
@@ -1176,6 +1374,7 @@ export function TravelManager() {
           record={detailRecord}
           color={TRIP_COLORS[detailIndex % TRIP_COLORS.length] ?? "#6b7280"}
           onClose={() => setDetailId(null)}
+          onUpdate={load}
         />
       )}
     </div>

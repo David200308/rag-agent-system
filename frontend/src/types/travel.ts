@@ -30,10 +30,25 @@ export interface TravelStop {
   notes?:       string;
 }
 
-export interface TravelExpense {
-  category: string;
-  amount:   number;
-  currency: string;
+export interface RichExpenseEntry {
+  id:         string;
+  name:       string;
+  confirmed:  boolean;
+  amounts:    Record<string, number>;  // e.g. { HKD: 7629.86, JPY: 14000 }
+  cashback:   number;
+  creditCard: string;
+}
+
+export interface DateExpenseGroup {
+  date:    string;  // YYYY-MM-DD
+  entries: RichExpenseEntry[];
+}
+
+export interface TripExpenseData {
+  __v:          2;
+  currencies:   string[];
+  itemExpenses: RichExpenseEntry[];
+  dateExpenses: DateExpenseGroup[];
 }
 
 export interface TravelRecord {
@@ -43,10 +58,40 @@ export interface TravelRecord {
   startDate:  string;
   endDate:    string;
   stops:      TravelStop[];
-  expenses:   TravelExpense[];
+  expenses:   unknown[];  // stores [TripExpenseData] (v2) or legacy format
   notes?:     string;
   createdAt:  string;
   updatedAt:  string;
+}
+
+export function parseTripExpenseData(expenses: unknown[]): TripExpenseData | null {
+  if (expenses.length > 0 && (expenses[0] as { __v?: number }).__v === 2) {
+    return expenses[0] as TripExpenseData;
+  }
+  return null;
+}
+
+export function buildDateGroups(startDate: string, endDate: string, existing: DateExpenseGroup[]): DateExpenseGroup[] {
+  const existingMap = new Map(existing.map((g) => [g.date, g]));
+  const groups: DateExpenseGroup[] = [];
+  const start = new Date(startDate + "T12:00:00Z");
+  const end   = new Date(endDate   + "T12:00:00Z");
+  for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+    const key = d.toISOString().slice(0, 10);
+    groups.push(existingMap.get(key) ?? { date: key, entries: [] });
+  }
+  return groups;
+}
+
+export function newExpenseEntry(): RichExpenseEntry {
+  return {
+    id: crypto.randomUUID(),
+    name: "",
+    confirmed: false,
+    amounts: {},
+    cashback: 0,
+    creditCard: "",
+  };
 }
 
 export function tripDays(record: TravelRecord): number {
