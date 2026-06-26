@@ -505,15 +505,29 @@ function CardMultiSelect({
   selected: string[]; options: FinancialCard[]; onChange: (v: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
+    if (!open) return;
     const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (btnRef.current && !btnRef.current.closest("[data-card-select]")?.contains(e.target as Node)) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
-  }, []);
+  }, [open]);
+
+  const handleToggle = () => {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 180) });
+    }
+    setOpen((o) => !o);
+  };
 
   const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter((c) => c !== id) : [...selected, id]);
@@ -524,35 +538,43 @@ function CardMultiSelect({
 
   const label = selected.length === 0 ? "Select cards" : selectedNames;
 
+  const dropdown = open && mounted && dropPos ? createPortal(
+    <div
+      data-card-select
+      style={{ position: "fixed", top: dropPos.top, left: dropPos.left, minWidth: dropPos.width, zIndex: 99999 }}
+      className="rounded-md border border-[--color-border] bg-white dark:bg-neutral-900 shadow-xl py-1 max-h-48 overflow-y-auto"
+    >
+      {options.length === 0 ? (
+        <p className="px-3 py-2 text-xs text-[--color-muted]">No cards in financial section</p>
+      ) : (
+        options.map((card) => (
+          <label key={card.id} className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-[--color-border]/30 whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={selected.includes(card.id)}
+              onChange={() => toggle(card.id)}
+              className="cursor-pointer"
+            />
+            {card.name}
+          </label>
+        ))
+      )}
+    </div>,
+    document.body,
+  ) : null;
+
   return (
-    <div ref={ref} className="relative w-full">
+    <div data-card-select className="w-full">
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={handleToggle}
         className={`${tinyInput} text-left flex items-center justify-between gap-1 cursor-pointer`}
       >
         <span className={`truncate ${selected.length === 0 ? "text-[--color-muted]" : ""}`}>{label}</span>
         <span className="text-[--color-muted] text-[10px] shrink-0">▾</span>
       </button>
-      {open && (
-        <div className="absolute z-50 top-full left-0 mt-0.5 min-w-[180px] w-max max-w-[260px] rounded-md border border-[--color-border] bg-white dark:bg-neutral-900 shadow-lg py-1">
-          {options.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-[--color-muted]">No cards in financial section</p>
-          ) : (
-            options.map((card) => (
-              <label key={card.id} className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-[--color-border]/30 whitespace-nowrap">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(card.id)}
-                  onChange={() => toggle(card.id)}
-                  className="cursor-pointer"
-                />
-                {card.name}
-              </label>
-            ))
-          )}
-        </div>
-      )}
+      {dropdown}
     </div>
   );
 }
