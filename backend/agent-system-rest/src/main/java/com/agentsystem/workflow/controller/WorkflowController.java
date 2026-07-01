@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -148,8 +149,11 @@ public class WorkflowController {
 
     @GetMapping("/{workflowId}/runs")
     @Operation(summary = "List runs for a workflow")
-    public ResponseEntity<List<WorkflowRun>> listRuns(@PathVariable String workflowId) {
-        return ResponseEntity.ok(runService.getRuns(workflowId));
+    public ResponseEntity<Page<WorkflowRun>> listRuns(
+            @PathVariable String workflowId,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(runService.getRuns(workflowId, page, size));
     }
 
     @PostMapping("/{workflowId}/runs")

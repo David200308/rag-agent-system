@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { X, RefreshCw, CheckCircle2, XCircle, CircleDot, Clock } from "lucide-react";
+import { X, RefreshCw, CheckCircle2, XCircle, CircleDot, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import { WorkflowRunViewer } from "./WorkflowRunViewer";
-import { fetchWorkflowRuns } from "@/lib/api";
+import { fetchWorkflowRuns, type PagedWorkflowRuns } from "@/lib/api";
 import type { WorkflowRun } from "@/types/agent";
 import { cn } from "@/lib/utils";
 
@@ -40,34 +40,47 @@ function timeAgo(iso: string) {
 }
 
 export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplete, width }: Props) {
-  const [runs,        setRuns]        = useState<WorkflowRun[]>([]);
-  const [selectedId,  setSelectedId]  = useState<string | null>(liveRunId);
-  const [loading,     setLoading]     = useState(false);
+  const [runs,         setRuns]        = useState<WorkflowRun[]>([]);
+  const [selectedId,   setSelectedId]  = useState<string | null>(liveRunId);
+  const [loading,      setLoading]     = useState(false);
+  const [page,         setPage]        = useState(0);
+  const [pageSize,     setPageSize]    = useState(10);
+  const [totalElements, setTotal]      = useState(0);
+  const [totalPages,   setTotalPages]  = useState(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (p = page, ps = pageSize) => {
     setLoading(true);
     try {
-      const data = await fetchWorkflowRuns(workflowId);
-      setRuns(data);
+      const data = await fetchWorkflowRuns(workflowId, p, ps);
+      setRuns(data.content);
+      setTotal(data.totalElements);
+      setTotalPages(data.totalPages);
     } catch {
       // ignore fetch errors
     } finally {
       setLoading(false);
     }
-  }, [workflowId]);
+  }, [workflowId, page, pageSize]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(page, pageSize); }, [workflowId, page, pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select the live run and refresh the list when it changes
   useEffect(() => {
     if (!liveRunId) return;
     setSelectedId(liveRunId);
-    load();
-  }, [liveRunId, load]);
+    load(0, pageSize);
+    setPage(0);
+  }, [liveRunId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset to first page when page size changes
+  function handlePageSizeChange(newSize: number) {
+    setPageSize(newSize);
+    setPage(0);
+  }
 
   // Refresh list when a run finishes
   function handleRunDone(output: string, status: WorkflowRun["status"]) {
-    setTimeout(load, 500);
+    setTimeout(() => load(page, pageSize), 500);
     onRunComplete?.(output, status);
   }
 
@@ -130,6 +143,49 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
           </button>
         ))}
       </div>
+
+      {/* Pagination controls */}
+      {totalElements > 0 && (
+        <div className="shrink-0 flex items-center justify-between border-t border-[--color-border] px-3 py-2">
+          <div className="flex items-center gap-1 text-[10px] text-[--color-muted]">
+            <span>Rows:</span>
+            {[5, 10, 20, 50].map(s => (
+              <button
+                key={s}
+                onClick={() => handlePageSizeChange(s)}
+                className={cn(
+                  "px-1.5 py-0.5 rounded transition-colors",
+                  pageSize === s
+                    ? "bg-[--color-surface-raised] text-[--color-fg] font-semibold"
+                    : "hover:text-[--color-fg]",
+                )}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-[--color-muted]">
+              {page * pageSize + 1}–{Math.min((page + 1) * pageSize, totalElements)} of {totalElements}
+            </span>
+            <button
+              onClick={() => setPage(p => p - 1)}
+              disabled={page === 0}
+              className="text-[--color-muted] hover:text-[--color-fg] disabled:opacity-30"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={page >= totalPages - 1}
+              className="text-[--color-muted] hover:text-[--color-fg] disabled:opacity-30"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
 
       {/* Log detail — fills remaining height */}
       {selectedId && (

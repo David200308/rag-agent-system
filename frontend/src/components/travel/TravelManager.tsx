@@ -954,7 +954,8 @@ function computeAnalysis(records: TravelRecord[]) {
   const transportCounts: Partial<Record<TransportType, number>> = {};
 
   for (const r of records) {
-    for (const s of r.stops) {
+    // exclude origin (first) and return stop (last) — only count destinations visited
+    for (const s of r.stops.slice(1, -1)) {
       countryCounts[s.country] = (countryCounts[s.country] ?? 0) + 1;
       cityCounts[s.city]       = (cityCounts[s.city]       ?? 0) + 1;
       if (s.transport) transportCounts[s.transport] = (transportCounts[s.transport] ?? 0) + 1;
@@ -1400,7 +1401,7 @@ export function TravelManager() {
           <h1 className="text-sm font-semibold">Travel</h1>
           {records.length > 0 && (
             <p className="text-xs text-[--color-muted]">
-              {records.length} trip{records.length !== 1 ? "s" : ""} · {new Set(records.flatMap((r) => r.stops.map((s) => s.city))).size} cities
+              {records.length} trip{records.length !== 1 ? "s" : ""} · {new Set(records.flatMap((r) => r.stops.slice(1, -1).map((s) => s.city))).size} cities
             </p>
           )}
         </div>

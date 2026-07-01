@@ -28,6 +28,9 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -164,8 +167,9 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
     }
 
     @Override
-    public List<WorkflowRun> getRuns(String workflowId) {
-        return runRepo.findByWorkflowIdOrderByStartedAtDesc(workflowId);
+    public Page<WorkflowRun> getRuns(String workflowId, int page, int size) {
+        return runRepo.findByWorkflowIdOrderByStartedAtDesc(
+                workflowId, PageRequest.of(page, Math.min(size, 50)));
     }
 
     // ── Execution engine ──────────────────────────────────────────────────────

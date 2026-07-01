@@ -26,6 +26,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -123,19 +126,24 @@ class WorkflowRunServiceTest {
     @Test
     void getRuns_delegatesToRepository() {
         WorkflowRun run = new WorkflowRun("r1", "wf-1", "owner@test.com", "input");
-        when(runRepo.findByWorkflowIdOrderByStartedAtDesc("wf-1")).thenReturn(List.of(run));
+        PageRequest pageable = PageRequest.of(0, 10);
+        when(runRepo.findByWorkflowIdOrderByStartedAtDesc("wf-1", pageable))
+                .thenReturn(new PageImpl<>(List.of(run)));
 
-        List<WorkflowRun> result = service.getRuns("wf-1");
+        Page<WorkflowRun> result = service.getRuns("wf-1", 0, 10);
 
-        assertThat(result).containsExactly(run);
-        verify(runRepo).findByWorkflowIdOrderByStartedAtDesc("wf-1");
+        assertThat(result.getContent()).containsExactly(run);
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        verify(runRepo).findByWorkflowIdOrderByStartedAtDesc("wf-1", pageable);
     }
 
     @Test
-    void getRuns_noRuns_returnsEmptyList() {
-        when(runRepo.findByWorkflowIdOrderByStartedAtDesc("wf-empty")).thenReturn(List.of());
+    void getRuns_noRuns_returnsEmptyPage() {
+        PageRequest pageable = PageRequest.of(0, 10);
+        when(runRepo.findByWorkflowIdOrderByStartedAtDesc("wf-empty", pageable))
+                .thenReturn(Page.empty());
 
-        assertThat(service.getRuns("wf-empty")).isEmpty();
+        assertThat(service.getRuns("wf-empty", 0, 10).getContent()).isEmpty();
     }
 
     // ── getLogs ───────────────────────────────────────────────────────────────

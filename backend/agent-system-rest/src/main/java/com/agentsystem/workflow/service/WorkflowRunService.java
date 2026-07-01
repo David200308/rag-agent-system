@@ -2,6 +2,7 @@ package com.agentsystem.workflow.service;
 
 import com.agentsystem.workflow.entity.WorkflowRun;
 import com.agentsystem.workflow.entity.WorkflowRunLog;
+import org.springframework.data.domain.Page;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
@@ -21,5 +22,5 @@ public interface WorkflowRunService {
 
     List<WorkflowRunLog> getLogs(String runId);
 
-    List<WorkflowRun> getRuns(String workflowId);
+    Page<WorkflowRun> getRuns(String workflowId, int page, int size);
 }

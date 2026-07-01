@@ -14,6 +14,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
@@ -203,12 +205,14 @@ class WorkflowControllerTest {
 
     @Test
     void listRuns_returnsRunList() {
-        when(runService.getRuns("wf-1")).thenReturn(List.of(new WorkflowRun()));
+        when(runService.getRuns("wf-1", 0, 10))
+                .thenReturn(new PageImpl<>(List.of(new WorkflowRun())));
 
-        ResponseEntity<List<WorkflowRun>> resp = controller.listRuns("wf-1");
+        ResponseEntity<Page<WorkflowRun>> resp = controller.listRuns("wf-1", 0, 10);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
-        assertThat(resp.getBody()).hasSize(1);
+        assertThat(resp.getBody().getContent()).hasSize(1);
+        assertThat(resp.getBody().getTotalElements()).isEqualTo(1);
     }
 
     // ── startRun ──────────────────────────────────────────────────────────────

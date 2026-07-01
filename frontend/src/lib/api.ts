@@ -374,10 +374,22 @@ export async function deleteWorkflowAgent(workflowId: string, agentId: number): 
 }
 
 // Runs
-export async function fetchWorkflowRuns(workflowId: string): Promise<WorkflowRun[]> {
-  const res = await fetch(`/api/workflow/${workflowId}/runs`);
-  if (!res.ok) return [];
-  return res.json() as Promise<WorkflowRun[]>;
+export interface PagedWorkflowRuns {
+  content: WorkflowRun[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
+
+export async function fetchWorkflowRuns(
+  workflowId: string,
+  page = 0,
+  size = 10,
+): Promise<PagedWorkflowRuns> {
+  const res = await fetch(`/api/workflow/${workflowId}/runs?page=${page}&size=${size}`);
+  if (!res.ok) return { content: [], totalElements: 0, totalPages: 0, number: page, size };
+  return res.json() as Promise<PagedWorkflowRuns>;
 }
 
 export async function startWorkflowRun(
