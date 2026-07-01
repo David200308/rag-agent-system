@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { X, RefreshCw, CheckCircle2, XCircle, CircleDot, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import { WorkflowRunViewer } from "./WorkflowRunViewer";
-import { fetchWorkflowRuns, type PagedWorkflowRuns } from "@/lib/api";
+import { fetchWorkflowRuns } from "@/lib/api";
 import type { WorkflowRun } from "@/types/agent";
 import { cn } from "@/lib/utils";
 
