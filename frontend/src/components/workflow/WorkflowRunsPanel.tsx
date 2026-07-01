@@ -93,7 +93,7 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
       <div className="flex shrink-0 items-center gap-2 border-b border-[--color-border] px-4 py-3">
         <span className="text-sm font-semibold flex-1">Runs</span>
         <button
-          onClick={load}
+          onClick={() => load(page, pageSize)}
           disabled={loading}
           className="text-[--color-muted] hover:text-[--color-fg] disabled:opacity-40"
           title="Refresh"
