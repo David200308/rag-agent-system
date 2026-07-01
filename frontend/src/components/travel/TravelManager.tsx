@@ -954,10 +954,12 @@ function computeAnalysis(records: TravelRecord[]) {
   const transportCounts: Partial<Record<TransportType, number>> = {};
 
   for (const r of records) {
-    // exclude origin (first) and return stop (last) — only count destinations visited
-    for (const s of r.stops.slice(1, -1)) {
-      countryCounts[s.country] = (countryCounts[s.country] ?? 0) + 1;
-      cityCounts[s.city]       = (cityCounts[s.city]       ?? 0) + 1;
+    const intermediate = r.stops.slice(1, -1);
+    // deduplicate cities/countries within a trip so revisiting the same city counts once per trip
+    for (const city    of new Set(intermediate.map(s => s.city)))    cityCounts[city]       = (cityCounts[city]       ?? 0) + 1;
+    for (const country of new Set(intermediate.map(s => s.country))) countryCounts[country] = (countryCounts[country] ?? 0) + 1;
+    // transport counts every leg (not deduplicated)
+    for (const s of intermediate) {
       if (s.transport) transportCounts[s.transport] = (transportCounts[s.transport] ?? 0) + 1;
     }
   }
