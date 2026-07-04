@@ -19,9 +19,8 @@ public interface UserAccountService {
     Optional<User> findByEmail(String email);
 
     /**
-     * Resolves a user's plaintext email from their uuid, via a Redis cache (3h TTL) in
-     * front of the encrypted DB column — avoids re-decrypting on every authenticated
-     * request.
+     * Resolves a user's email from their uuid, via a Redis cache (3h TTL) in front of the
+     * DB — avoids a DB round-trip on every authenticated request.
      */
     String getEmailByUuid(String uuid);
 }

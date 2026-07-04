@@ -66,7 +66,7 @@ public class AuthFilter extends OncePerRequestFilter {
         var    claims = (token != null) ? authService.validateTokenFull(token) : null;
         // Every table besides `users` still keys rows by plaintext email (Phase 2 will
         // migrate them to user_uuid), so resolve email here — via the Redis-cached
-        // decrypt path — and keep populating the same "authenticatedEmail" attribute the
+        // lookup — and keep populating the same "authenticatedEmail" attribute the
         // rest of the app already reads, rather than requiring every call site to change.
         String email = (claims != null) ? userAccountService.getEmailByUuid(claims.userUuid()) : null;
 

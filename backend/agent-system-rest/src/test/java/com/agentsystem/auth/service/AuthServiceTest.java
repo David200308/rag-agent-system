@@ -38,9 +38,8 @@ class AuthServiceTest {
     @Mock OrganizationService             orgService;
 
     // AuthProperties is a record (final) — instantiate directly
-    private final AuthProperties authProperties = new AuthProperties(
-            true, 10, "test-jwt-secret-32-chars-xxxxxxxxx", 24,
-            "dGVzdC1lbWFpbC1lbmNyeXB0aW9uLWtleS0zMmJ5dGVz");
+    private final AuthProperties authProperties =
+            new AuthProperties(true, 10, "test-jwt-secret-32-chars-xxxxxxxxx", 24);
 
     AuthService authService;
 

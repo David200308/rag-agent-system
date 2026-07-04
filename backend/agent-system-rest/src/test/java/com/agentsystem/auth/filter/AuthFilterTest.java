@@ -34,12 +34,10 @@ class AuthFilterTest {
     AuthFilter filterEnabled;
     AuthFilter filterDisabled;
 
-    private static final String TEST_EMAIL_KEY = "dGVzdC1lbWFpbC1lbmNyeXB0aW9uLWtleS0zMmJ5dGVz";
-
     @BeforeEach
     void setUp() {
-        AuthProperties enabled  = new AuthProperties(true,  10, "secret-key", 24, TEST_EMAIL_KEY);
-        AuthProperties disabled = new AuthProperties(false, 10, "secret-key", 24, TEST_EMAIL_KEY);
+        AuthProperties enabled  = new AuthProperties(true,  10, "secret-key", 24);
+        AuthProperties disabled = new AuthProperties(false, 10, "secret-key", 24);
         filterEnabled  = new AuthFilter(enabled,  authService, userAccountService, new ObjectMapper());
         filterDisabled = new AuthFilter(disabled, authService, userAccountService, new ObjectMapper());
     }

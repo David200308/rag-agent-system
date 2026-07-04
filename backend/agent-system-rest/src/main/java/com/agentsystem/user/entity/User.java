@@ -1,6 +1,5 @@
 package com.agentsystem.user.entity;
 
-import com.agentsystem.user.crypto.EmailAttributeConverter;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -9,10 +8,9 @@ import lombok.Setter;
 import java.time.Instant;
 
 /**
- * Replaces the old email_whitelist table. {@code email} is encrypted at rest (see
- * {@link EmailAttributeConverter}) — the column holds ciphertext, not plaintext.
- * New rows start at {@link UserStatus#PRE_USER}; an admin manually flips {@code status}
- * to {@link UserStatus#USER} directly in the database to grant access.
+ * Replaces the old email_whitelist table. New rows start at {@link UserStatus#PRE_USER};
+ * an admin manually flips {@code status} to {@link UserStatus#USER} directly in the
+ * database to grant access.
  */
 @Entity
 @Table(name = "users")
@@ -28,8 +26,7 @@ public class User {
     @Column(nullable = false, unique = true, updatable = false)
     private String uuid;
 
-    @Convert(converter = EmailAttributeConverter.class)
-    @Column(nullable = false, unique = true, length = 512)
+    @Column(nullable = false, unique = true, length = 255)
     private String email;
 
     @Enumerated(EnumType.STRING)

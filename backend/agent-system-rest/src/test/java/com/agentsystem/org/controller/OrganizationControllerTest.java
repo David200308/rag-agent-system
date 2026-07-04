@@ -30,10 +30,12 @@ class OrganizationControllerTest {
 
     private void stubAdmin(String email) {
         when(request.getAttribute("authenticatedEmail")).thenReturn(email);
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
     }
 
     private void stubNotAdmin(String email) {
         when(request.getAttribute("authenticatedEmail")).thenReturn(email);
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         doThrow(new SecurityException("Admin access required."))
                 .when(service).requireSystemAdmin(email);
     }

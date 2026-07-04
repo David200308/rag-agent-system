@@ -285,9 +285,6 @@ auth:
   otp-expiry-minutes: ${AUTH_OTP_EXPIRY_MINUTES:10}
   jwt-secret: ${AUTH_JWT_SECRET:changeme-use-a-long-random-base64-string-in-production}
   jwt-expiry-hours: ${AUTH_JWT_EXPIRY_HOURS:24}
-  # 32-byte (256-bit) key, base64-encoded, used to encrypt the `users.email` column at
-  # rest (deterministic AES-GCM). Generate with: openssl rand -base64 32
-  email-encryption-key: ${AUTH_EMAIL_ENCRYPTION_KEY:changeme-use-a-32-byte-base64-key-in-production}
   passkey:
     # Must match the domain serving the app (no port, no scheme).
     # For local dev: localhost. For production: yourdomain.com

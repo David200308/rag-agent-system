@@ -14,11 +14,9 @@ class JwtServiceTest {
 
     // ── constructor — secret strength ────────────────────────────────────────
 
-    private static final String TEST_EMAIL_KEY = "dGVzdC1lbWFpbC1lbmNyeXB0aW9uLWtleS0zMmJ5dGVz";
-
     @Test
     void constructor_secretUnder32Bytes_throwsWeakKeyException() {
-        AuthProperties shortSecretProps = new AuthProperties(true, 10, "too-short-secret", 24, TEST_EMAIL_KEY);
+        AuthProperties shortSecretProps = new AuthProperties(true, 10, "too-short-secret", 24);
 
         assertThatThrownBy(() -> new JwtServiceImpl(shortSecretProps))
                 .isInstanceOf(WeakKeyException.class);
@@ -26,7 +24,7 @@ class JwtServiceTest {
 
     @Test
     void constructor_secretExactly32Bytes_doesNotThrow() {
-        AuthProperties props32 = new AuthProperties(true, 10, "a".repeat(32), 24, TEST_EMAIL_KEY);
+        AuthProperties props32 = new AuthProperties(true, 10, "a".repeat(32), 24);
 
         JwtService service = new JwtServiceImpl(props32);
 
@@ -41,8 +39,7 @@ class JwtServiceTest {
                 true,
                 10,
                 "test-secret-key-that-is-at-least-32-characters-long",
-                24,
-                TEST_EMAIL_KEY
+                24
         );
         jwtService = new JwtServiceImpl(props);
     }
@@ -132,7 +129,7 @@ class JwtServiceTest {
     void validate_expiredToken_returnsNull() {
         // Token signed with 0-hour expiry should be instantly expired
         AuthProperties shortProps = new AuthProperties(true, 10,
-                "test-secret-key-that-is-at-least-32-characters-long", 0, TEST_EMAIL_KEY);
+                "test-secret-key-that-is-at-least-32-characters-long", 0);
         JwtService shortLived = new JwtServiceImpl(shortProps);
         String token = shortLived.generate("user@example.com");
         // Token expires immediately (0 hours = 0 ms), so validation should return null

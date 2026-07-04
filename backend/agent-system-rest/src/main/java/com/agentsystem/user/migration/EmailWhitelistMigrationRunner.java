@@ -18,10 +18,9 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * One-time, opt-in copy of the old email_whitelist table into the new encrypted `users`
- * table. Off by default — encryption happens in application code (the JPA converter), so
- * this can't be a plain SQL migration. Enable with app.migrate-email-whitelist=true for a
- * single deploy, verify the `users` table looks right, then drop email_whitelist by hand.
+ * One-time, opt-in copy of the old email_whitelist table into the new `users` table. Off
+ * by default. Enable with app.migrate-email-whitelist=true for a single deploy, verify the
+ * `users` table looks right, then drop email_whitelist by hand.
  */
 @Slf4j
 @Component

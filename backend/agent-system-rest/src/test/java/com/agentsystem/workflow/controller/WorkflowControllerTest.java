@@ -25,6 +25,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -49,6 +50,7 @@ class WorkflowControllerTest {
     @Test
     void listWorkflows_returnsWorkflows() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         when(workflowService.list(any(OrgContext.class))).thenReturn(List.of(makeWorkflow("wf-1")));
@@ -62,6 +64,7 @@ class WorkflowControllerTest {
     @Test
     void listWorkflows_nullEmail_returnsEmptyList() {
         when(request.getAttribute("authenticatedEmail")).thenReturn(null);
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn(null);
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         when(workflowService.list(any(OrgContext.class))).thenReturn(List.of());
@@ -97,6 +100,7 @@ class WorkflowControllerTest {
     @Test
     void createWorkflow_success_returns200() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         Workflow created = makeWorkflow("wf-new");
@@ -120,6 +124,7 @@ class WorkflowControllerTest {
 
     private void setupRequest(String email) {
         when(request.getAttribute("authenticatedEmail")).thenReturn(email);
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
     }
@@ -232,6 +237,7 @@ class WorkflowControllerTest {
     @Test
     void startRun_success_returnsRunId() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(runService.startRun(anyString(), anyString(), anyString(), anyBoolean())).thenReturn("run-xyz");
 
         ResponseEntity<Map<String, String>> resp = controller.startRun("wf-1",
@@ -381,6 +387,7 @@ class WorkflowControllerTest {
     @Test
     void startRun_emailNotifyTrue_passesFlag() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(runService.startRun(eq("wf-1"), anyString(), anyString(), eq(true))).thenReturn("run-1");
 
         ResponseEntity<Map<String, String>> resp = controller.startRun("wf-1",

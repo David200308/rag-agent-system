@@ -32,6 +32,7 @@ class SkillControllerTest {
 
     private void stubRequest(String email) {
         when(request.getAttribute("authenticatedEmail")).thenReturn(email);
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
     }
@@ -58,6 +59,7 @@ class SkillControllerTest {
     @Test
     void list_noEmail_returnsEmptyList() {
         when(request.getAttribute("authenticatedEmail")).thenReturn(null);
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn(null);
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         when(skillService.list(any(OrgContext.class))).thenReturn(List.of());

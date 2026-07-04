@@ -59,7 +59,7 @@ class RateLimitFilterTest {
 
     @BeforeEach
     void setUp() {
-        RateLimitProperties props = new RateLimitProperties(20, 10, 100, 5, false);
+        RateLimitProperties props = new RateLimitProperties(20, 10, 100, 5, 5, false);
         agentMetrics = new AgentMetrics(new SimpleMeterRegistry());
         filter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics, newProxyManager());
     }
@@ -234,7 +234,7 @@ class RateLimitFilterTest {
 
     @Test
     void extractClientIp_trustForwardedForEnabled_usesFirstHeaderIp() throws Exception {
-        RateLimitProperties props = new RateLimitProperties(20, 10, 100, 5, true);
+        RateLimitProperties props = new RateLimitProperties(20, 10, 100, 5, 5, true);
         RateLimitFilter trustingFilter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics, newProxyManager());
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.setRemoteAddr("203.0.113.9");
@@ -245,7 +245,7 @@ class RateLimitFilterTest {
 
     @Test
     void extractClientIp_trustForwardedForEnabled_noHeader_fallsBackToRemoteAddr() throws Exception {
-        RateLimitProperties props = new RateLimitProperties(20, 10, 100, 5, true);
+        RateLimitProperties props = new RateLimitProperties(20, 10, 100, 5, 5, true);
         RateLimitFilter trustingFilter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics, newProxyManager());
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.setRemoteAddr("203.0.113.9");
@@ -255,7 +255,7 @@ class RateLimitFilterTest {
 
     @Test
     void doFilterInternal_trustForwardedForDisabled_spoofedHeaderSharedAcrossDifferentClients_doesNotShareBucket() throws Exception {
-        RateLimitProperties props = new RateLimitProperties(1, 1, 1, 1, false);
+        RateLimitProperties props = new RateLimitProperties(1, 1, 1, 1, 1, false);
         RateLimitFilter limitFilter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics, newProxyManager());
 
         MockHttpServletRequest reqA = new MockHttpServletRequest();
@@ -283,7 +283,7 @@ class RateLimitFilterTest {
     @Test
     void doFilterInternal_limitExceeded_returns429() throws Exception {
         // Use a very low limit so we can exhaust it
-        RateLimitProperties props = new RateLimitProperties(1, 1, 1, 1, false);
+        RateLimitProperties props = new RateLimitProperties(1, 1, 1, 1, 1, false);
         RateLimitFilter limitFilter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics, newProxyManager());
 
         MockHttpServletRequest  req  = new MockHttpServletRequest();
@@ -305,7 +305,7 @@ class RateLimitFilterTest {
 
     @Test
     void doFilterInternal_otpBucketExceeded_returns429() throws Exception {
-        RateLimitProperties props = new RateLimitProperties(20, 10, 100, 1, false);
+        RateLimitProperties props = new RateLimitProperties(20, 10, 100, 1, 5, false);
         RateLimitFilter limitFilter = new RateLimitFilter(props, new ObjectMapper(), agentMetrics, newProxyManager());
 
         MockHttpServletRequest req = new MockHttpServletRequest();

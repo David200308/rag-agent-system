@@ -36,12 +36,14 @@ class TeamControllerTest {
 
     private void stubTeamRequest(String email) {
         when(request.getAttribute("authenticatedEmail")).thenReturn(email);
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("TEAM");
         when(request.getAttribute("authenticatedOrgId")).thenReturn("skyproton");
     }
 
     private void stubPersonalRequest(String email) {
         when(request.getAttribute("authenticatedEmail")).thenReturn(email);
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
     }

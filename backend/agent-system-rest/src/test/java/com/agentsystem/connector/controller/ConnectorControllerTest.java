@@ -37,6 +37,7 @@ class ConnectorControllerTest {
     @Test
     void authUrl_returnsAuthUrl() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         when(connectorService.getAuthUrl("google", "user@example.com", null))
@@ -78,6 +79,7 @@ class ConnectorControllerTest {
     @Test
     void status_returnsConnectionStatus() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         when(connectorService.getStatus("user@example.com", null))
@@ -94,6 +96,7 @@ class ConnectorControllerTest {
     @Test
     void disconnect_returns204() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
 
@@ -120,6 +123,7 @@ class ConnectorControllerTest {
     @Test
     void telegramConnect_success_returns200() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         Map<String, Object> authData = Map.of("id", 12345L, "hash", "abc");
@@ -133,6 +137,7 @@ class ConnectorControllerTest {
     @Test
     void telegramConnect_invalidHash_returns400() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         doThrow(new IllegalArgumentException("invalid hash"))
@@ -148,6 +153,7 @@ class ConnectorControllerTest {
     @Test
     void createGoogleDoc_blankContent_returns400() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
 
@@ -160,6 +166,7 @@ class ConnectorControllerTest {
     @Test
     void createGoogleDoc_success_returnsUrl() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         when(googleDocsService.createDocument("Test Doc", "Hello world", "user@example.com", null))
@@ -175,6 +182,7 @@ class ConnectorControllerTest {
     @Test
     void createGoogleDoc_missingContent_returns400() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
 
@@ -189,6 +197,7 @@ class ConnectorControllerTest {
     @Test
     void createGoogleSheet_success_returnsUrl() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         when(googleSheetsService.createSpreadsheet(anyString(), anyString(), anyString(), any()))
@@ -204,6 +213,7 @@ class ConnectorControllerTest {
     @Test
     void createGoogleSheet_blankContent_returns400() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
 
@@ -218,6 +228,7 @@ class ConnectorControllerTest {
     @Test
     void createGoogleSlides_success_returnsUrl() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         when(googleSlidesService.createPresentation(anyString(), anyString(), anyString(), any()))
@@ -232,6 +243,7 @@ class ConnectorControllerTest {
     @Test
     void createGoogleSlides_blankContent_returns400() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
 
@@ -246,6 +258,7 @@ class ConnectorControllerTest {
     @Test
     void listCalendarEvents_returnsEventsString() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         when(googleCalendarService.listEvents("user@example.com", null, 10))
@@ -262,6 +275,7 @@ class ConnectorControllerTest {
     @Test
     void createCalendarEvent_success_returns200() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
         when(googleCalendarService.createEvent(
@@ -282,6 +296,7 @@ class ConnectorControllerTest {
     @Test
     void createCalendarEvent_missingTitle_returns400() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
 
@@ -297,6 +312,7 @@ class ConnectorControllerTest {
     @Test
     void createCalendarEvent_missingStartDateTime_returns400() {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(request.getAttribute("authenticatedMode")).thenReturn("PERSONAL");
         when(request.getAttribute("authenticatedOrgId")).thenReturn(null);
 
