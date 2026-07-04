@@ -9,6 +9,7 @@
 #      echo "ragagent"                     > secrets/mysql_password
 #      echo "sk-..."                       > secrets/openai_api_key
 #      echo "$(openssl rand -base64 64)"   > secrets/auth_jwt_secret
+#      echo "$(openssl rand -base64 32)"   > secrets/auth_email_encryption_key
 #      echo "$(openssl rand -base64 32)"   > secrets/scheduler_service_key
 #      echo "$(openssl rand -base64 32)"   > secrets/storage_service_key
 #      echo "$(openssl rand -base64 32)"   > secrets/notification_service_key
@@ -42,6 +43,8 @@ secrets:
     file: ./secrets/openrouter_api_key
   auth_jwt_secret:
     file: ./secrets/auth_jwt_secret
+  auth_email_encryption_key:
+    file: ./secrets/auth_email_encryption_key
   resend_api_key:
     file: ./secrets/resend_api_key
   resend_from_email:
@@ -313,6 +316,7 @@ services:
       - anthropic_api_key
       - openrouter_api_key
       - auth_jwt_secret
+      - auth_email_encryption_key
       - finnhub_api_key
       - scheduler_service_key
       - storage_service_key

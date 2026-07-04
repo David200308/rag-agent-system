@@ -1,10 +1,16 @@
 -- ── Auth schema ────────────────────────────────────────────────────────────────
-
-CREATE TABLE IF NOT EXISTS email_whitelist (
+-- Replaces the old email_whitelist table. `email` is encrypted at rest (deterministic
+-- AES-GCM, see com.agentsystem.user.crypto.EmailAttributeConverter) so the column holds
+-- ciphertext, not plaintext. New rows start at status=PRE_USER; an admin manually flips
+-- status to USER (directly in the DB) to grant access.
+CREATE TABLE IF NOT EXISTS users (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
-    email      VARCHAR(255) NOT NULL UNIQUE,
+    uuid       VARCHAR(36)  NOT NULL UNIQUE,
+    email      VARCHAR(512) NOT NULL UNIQUE,
+    status     VARCHAR(20)  NOT NULL DEFAULT 'PRE_USER',  -- PRE_USER | USER
     enabled    BOOLEAN      NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- ── Conversation history schema ───────────────────────────────────────────────

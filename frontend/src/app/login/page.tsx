@@ -263,6 +263,15 @@ export default function LoginPage() {
             >
               {mode === "TEAM" ? "Back — change org ID" : "Back — choose a different mode"}
             </button>
+            {mode === "PERSONAL" && (
+              <button
+                type="button"
+                onClick={() => router.push("/register")}
+                className="w-full text-center text-xs text-[--color-muted] hover:text-current transition-colors"
+              >
+                New here? Register
+              </button>
+            )}
           </form>
         )}
 

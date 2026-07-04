@@ -3,6 +3,7 @@ package com.agentsystem.auth.filter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.agentsystem.auth.AuthProperties;
 import com.agentsystem.auth.service.AuthService;
+import com.agentsystem.user.service.UserAccountService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,9 +35,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthFilter extends OncePerRequestFilter {
 
-    private final AuthProperties authProperties;
-    private final AuthService    authService;
-    private final ObjectMapper   objectMapper;
+    private final AuthProperties     authProperties;
+    private final AuthService        authService;
+    private final UserAccountService userAccountService;
+    private final ObjectMapper       objectMapper;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -62,7 +64,11 @@ public class AuthFilter extends OncePerRequestFilter {
         String path  = request.getRequestURI();
         String token = extractToken(request);
         var    claims = (token != null) ? authService.validateTokenFull(token) : null;
-        String email  = (claims != null) ? claims.email() : null;
+        // Every table besides `users` still keys rows by plaintext email (Phase 2 will
+        // migrate them to user_uuid), so resolve email here — via the Redis-cached
+        // decrypt path — and keep populating the same "authenticatedEmail" attribute the
+        // rest of the app already reads, rather than requiring every call site to change.
+        String email = (claims != null) ? userAccountService.getEmailByUuid(claims.userUuid()) : null;
 
         // Connector routes are JWT-optional: a valid token sets the email so tokens
         // are stored/looked up under the real user, but the request is never blocked.
@@ -78,7 +84,8 @@ public class AuthFilter extends OncePerRequestFilter {
         }
 
         if (claims != null) {
-            request.setAttribute("authenticatedEmail", claims.email());
+            request.setAttribute("authenticatedUserUuid", claims.userUuid());
+            request.setAttribute("authenticatedEmail", email);
             request.setAttribute("authenticatedMode",  claims.mode());
             request.setAttribute("authenticatedOrgId", claims.orgId());
         }

@@ -3,6 +3,8 @@ package com.agentsystem.auth.controller;
 import com.agentsystem.auth.service.AuthService;
 import com.agentsystem.auth.service.CliKeyService;
 import com.agentsystem.org.service.OrganizationService;
+import com.agentsystem.user.entity.UserStatus;
+import com.agentsystem.user.service.UserAccountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +17,9 @@ import java.util.Map;
 /**
  * Auth endpoints — always public (excluded from AuthFilter).
  *
- *  POST /api/v1/auth/request-otp  — send OTP to whitelisted email
+ *  POST /api/v1/auth/register/request-otp — send OTP to verify a new email for registration
+ *  POST /api/v1/auth/register/verify-otp  — verify code, create a PRE_USER row
+ *  POST /api/v1/auth/request-otp  — send OTP to an approved (status=USER) email
  *  POST /api/v1/auth/verify-otp   — validate OTP, return signed JWT
  *  POST /api/v1/auth/logout        — client-side only (JWT is stateless)
  *  GET  /api/v1/auth/validate      — check if a JWT is still valid
@@ -31,6 +35,60 @@ public class AuthController {
     private final AuthService         authService;
     private final CliKeyService       cliKeyService;
     private final OrganizationService orgService;
+    private final UserAccountService  userAccountService;
+
+    // ── Register: request OTP ─────────────────────────────────────────────────────
+
+    @PostMapping("/register/request-otp")
+    @Operation(summary = "Send a 6-digit code to verify an email for registration")
+    public ResponseEntity<Map<String, String>> registerRequestOtp(
+            @RequestBody Map<String, String> body) {
+
+        String email = body.get("email");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "email is required"));
+        }
+
+        try {
+            authService.requestRegistrationOtp(email);
+            return ResponseEntity.ok(Map.of("message", "Code sent to " + email));
+        } catch (Exception e) {
+            log.error("[AuthController] registerRequestOtp error: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "Failed to send code. Please try again."));
+        }
+    }
+
+    // ── Register: verify OTP ──────────────────────────────────────────────────────
+
+    @PostMapping("/register/verify-otp")
+    @Operation(summary = "Verify a registration code and create a pending user record")
+    public ResponseEntity<Map<String, String>> registerVerifyOtp(
+            @RequestBody Map<String, String> body) {
+
+        String email = body.get("email");
+        String code  = body.get("code");
+        if (email == null || email.isBlank() || code == null || code.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "email and code are required"));
+        }
+
+        try {
+            UserStatus status = authService.verifyRegistrationOtp(email, code);
+            String message = status == UserStatus.USER
+                    ? "This email is already approved — you can sign in."
+                    : "Thanks! Your registration is pending approval.";
+            return ResponseEntity.ok(Map.of("status", status.name(), "message", message));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(401)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("[AuthController] registerVerifyOtp error: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "Verification failed. Please try again."));
+        }
+    }
 
     // ── Request OTP ──────────────────────────────────────────────────────────────
 
@@ -113,7 +171,7 @@ public class AuthController {
         }
         java.util.Map<String, Object> result = new java.util.HashMap<>();
         result.put("valid", true);
-        result.put("email", claims.email());
+        result.put("email", userAccountService.getEmailByUuid(claims.userUuid()));
         result.put("mode",  claims.mode());
         if (claims.orgId() != null) result.put("orgId", claims.orgId());
         return ResponseEntity.ok(result);

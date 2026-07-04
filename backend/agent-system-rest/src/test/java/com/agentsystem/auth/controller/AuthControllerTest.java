@@ -3,6 +3,7 @@ package com.agentsystem.auth.controller;
 import com.agentsystem.auth.service.AuthService;
 import com.agentsystem.auth.service.JwtService;
 import com.agentsystem.org.service.OrganizationService;
+import com.agentsystem.user.service.UserAccountService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -19,6 +20,7 @@ class AuthControllerTest {
 
     @Mock AuthService         authService;
     @Mock OrganizationService orgService;
+    @Mock UserAccountService  userAccountService;
     @InjectMocks AuthController controller;
 
     // ── requestOtp ─────────────────────────────────────────────────────────────
@@ -135,7 +137,8 @@ class AuthControllerTest {
     @Test
     void validate_validBearerToken_returnsValidTrueWithEmailAndMode() {
         when(authService.validateTokenFull("my-token"))
-                .thenReturn(new JwtService.TokenClaims("user@example.com", "PERSONAL", null));
+                .thenReturn(new JwtService.TokenClaims("uuid-1", "PERSONAL", null));
+        when(userAccountService.getEmailByUuid("uuid-1")).thenReturn("user@example.com");
         var resp = controller.validate("Bearer my-token");
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("valid", true);
@@ -146,7 +149,8 @@ class AuthControllerTest {
     @Test
     void validate_teamToken_returnsOrgId() {
         when(authService.validateTokenFull("team-token"))
-                .thenReturn(new JwtService.TokenClaims("user@example.com", "TEAM", "skyproton"));
+                .thenReturn(new JwtService.TokenClaims("uuid-1", "TEAM", "skyproton"));
+        when(userAccountService.getEmailByUuid("uuid-1")).thenReturn("user@example.com");
         var resp = controller.validate("Bearer team-token");
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("mode", "TEAM");

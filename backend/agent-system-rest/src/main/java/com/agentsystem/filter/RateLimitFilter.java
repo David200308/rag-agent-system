@@ -45,6 +45,7 @@ import java.util.concurrent.TimeUnit;
  *   AGENT_QUERY  — LLM query calls               (default 20/min)
  *   INGEST       — document ingest calls         (default 10/min)
  *   OTP          — /api/v1/auth/request-otp,verify-otp (default 5/min per IP)
+ *   REGISTER_OTP — /api/v1/auth/register/request-otp,verify-otp (default 5/min per IP)
  *   DEFAULT      — everything else               (default 100/min)
  */
 @Slf4j
@@ -118,6 +119,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/v1/agent/ingest"))     return "INGEST";
         if (path.equals("/api/v1/auth/request-otp")
                 || path.equals("/api/v1/auth/verify-otp")) return "OTP";
+        if (path.equals("/api/v1/auth/register/request-otp")
+                || path.equals("/api/v1/auth/register/verify-otp")) return "REGISTER_OTP";
         return "DEFAULT";
     }
 
@@ -125,8 +128,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         long capacity = switch (category) {
             case "QUERY"  -> props.agentQueryLimit();
             case "INGEST" -> props.ingestLimit();
-            case "OTP"    -> props.otpLimit();
-            default       -> props.defaultLimit();
+            case "OTP"          -> props.otpLimit();
+            case "REGISTER_OTP" -> props.registerOtpLimit();
+            default             -> props.defaultLimit();
         };
         return BucketConfiguration.builder()
                 .addLimit(Bandwidth.classic(capacity, Refill.greedy(capacity, Duration.ofMinutes(1))))

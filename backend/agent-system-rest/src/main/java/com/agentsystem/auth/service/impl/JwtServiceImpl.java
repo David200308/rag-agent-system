@@ -18,7 +18,7 @@ import java.util.Date;
  * Stateless JWT generation and validation.
  *
  * Tokens contain:
- *  - sub   : email address
+ *  - sub   : user_uuid (not the numeric users.id, and never the raw email)
  *  - mode  : PERSONAL | TEAM
  *  - orgId : org slug (TEAM mode only; absent for PERSONAL)
  *  - iat   : issued-at
@@ -44,16 +44,16 @@ public class JwtServiceImpl implements JwtService {
 
     /** Create a signed JWT for personal mode. */
     @Override
-    public String generate(String email) {
-        return generate(email, "PERSONAL", null);
+    public String generate(String userUuid) {
+        return generate(userUuid, "PERSONAL", null);
     }
 
     /** Create a signed JWT with explicit mode and optional orgId. */
     @Override
-    public String generate(String email, String mode, String orgId) {
+    public String generate(String userUuid, String mode, String orgId) {
         long now = System.currentTimeMillis();
         var builder = Jwts.builder()
-                .subject(email)
+                .subject(userUuid)
                 .claim("mode", mode != null ? mode : "PERSONAL")
                 .issuedAt(new Date(now))
                 .expiration(new Date(now + expiryMillis))
@@ -84,10 +84,10 @@ public class JwtServiceImpl implements JwtService {
         }
     }
 
-    /** Backward-compatible: returns email only (used by passkey path and register-key). */
+    /** Backward-compatible: returns the user_uuid subject only. */
     @Override
     public String validate(String token) {
         TokenClaims c = validateFull(token);
-        return c != null ? c.email() : null;
+        return c != null ? c.userUuid() : null;
     }
 }

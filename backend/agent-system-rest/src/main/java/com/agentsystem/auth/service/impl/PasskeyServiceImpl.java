@@ -11,6 +11,8 @@ import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.agentsystem.auth.PasskeyProperties;
 import com.agentsystem.auth.entity.PasskeyCredential;
 import com.agentsystem.auth.repository.PasskeyCredentialRepository;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.service.UserAccountService;
 import com.yubico.webauthn.*;
 import com.yubico.webauthn.data.*;
 import com.yubico.webauthn.data.exception.Base64UrlException;
@@ -44,6 +46,7 @@ public class PasskeyServiceImpl implements PasskeyService, CredentialRepository 
     private final PasskeyCredentialRepository credRepo;
     private final StringRedisTemplate         redisTemplate;
     private final JwtService                  jwtService;
+    private final UserAccountService          userAccountService;
 
     private RelyingParty relyingParty;
 
@@ -262,8 +265,15 @@ public class PasskeyServiceImpl implements PasskeyService, CredentialRepository 
 
         redisTemplate.delete(challengeKey(email, "AUTHENTICATE"));
 
+        // Passkey login bypassed the whitelist entirely before this change — apply the
+        // same status=USER/enabled gate as OTP login so PRE_USER can't use a registered
+        // passkey as a backdoor around approval.
+        User user = userAccountService.findActiveUser(email)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "This account is not authorised to access the system."));
+
         String resolvedMode = challenge.mode() != null ? challenge.mode() : "PERSONAL";
-        String jwt = jwtService.generate(email, resolvedMode, challenge.orgId());
+        String jwt = jwtService.generate(user.getUuid(), resolvedMode, challenge.orgId());
         log.info("[PasskeyService] Passkey authentication successful for {} mode={}", email, resolvedMode);
         return jwt;
     }

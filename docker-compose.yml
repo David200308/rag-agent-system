@@ -97,6 +97,7 @@ services:
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-changeme-use-a-long-random-base64-string-in-production}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
       AUTH_OTP_EXPIRY_MINUTES: ${AUTH_OTP_EXPIRY_MINUTES:-10}
+      AUTH_EMAIL_ENCRYPTION_KEY: ${AUTH_EMAIL_ENCRYPTION_KEY:-changeme-use-a-32-byte-base64-key-in-production}
       # ── Admin (comma-separated emails allowed to manage orgs system-wide)
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       # ── MCP transport auth (blank = /mcp/** closed)
