@@ -8,7 +8,7 @@ import { NextResponse } from "next/server";
  * Set AUTH_ENABLED=false in .env.local to open the app without login.
  *
  * Protected: all pages and /api/agent/* proxy routes.
- * Public:    /login, /api/auth/*, Next.js internals (_next/*).
+ * Public:    /login, /register, /api/auth/*, Next.js internals (_next/*).
  */
 
 const AUTH_ENABLED = process.env.AUTH_ENABLED !== "false";
@@ -19,6 +19,7 @@ export function middleware(request: NextRequest) {
   // Always allow public paths regardless of auth config
   const isPublic =
     pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
     pathname.startsWith("/api/auth/") ||
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico";
