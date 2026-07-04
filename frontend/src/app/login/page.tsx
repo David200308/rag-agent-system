@@ -399,7 +399,7 @@ export default function LoginPage() {
           </form>
         )}
       </div>
-      <p className="absolute bottom-6 text-center text-xs text-[--color-muted]">
+      <p className="absolute bottom-6 pointer-events-none text-center text-xs text-[--color-muted]">
         &copy; {new Date().getFullYear()} SkyProton
       </p>
     </div>
