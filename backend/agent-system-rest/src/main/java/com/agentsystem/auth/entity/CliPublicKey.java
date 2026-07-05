@@ -18,8 +18,8 @@ public class CliPublicKey {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
-    private String userEmail;
+    @Column(name = "user_uuid", nullable = false, unique = true, length = 36)
+    private String userUuid;
 
     // Raw Ed25519 public key (32 bytes), Base64-encoded — 44 chars
     @Column(nullable = false, length = 64)
@@ -34,8 +34,8 @@ public class CliPublicKey {
 
     private Instant lastSeenAt;
 
-    public CliPublicKey(String userEmail, String publicKeyBase64) {
-        this.userEmail      = userEmail;
+    public CliPublicKey(String userUuid, String publicKeyBase64) {
+        this.userUuid       = userUuid;
         this.publicKeyBase64 = publicKeyBase64;
         this.fingerprint    = publicKeyBase64.substring(0, 8);
     }

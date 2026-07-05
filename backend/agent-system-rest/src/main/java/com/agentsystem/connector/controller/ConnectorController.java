@@ -45,7 +45,7 @@ public class ConnectorController {
             HttpServletRequest request) {
 
         OrgContext ctx = OrgContext.from(request);
-        String url = connectorService.getAuthUrl(provider, ctx.email(), ctx.orgId());
+        String url = connectorService.getAuthUrl(provider, ctx.userUuid(), ctx.orgId());
         return ResponseEntity.ok(Map.of("authUrl", url));
     }
 
@@ -66,7 +66,7 @@ public class ConnectorController {
     @GetMapping("/status")
     public ResponseEntity<Map<String, Boolean>> status(HttpServletRequest request) {
         OrgContext ctx = OrgContext.from(request);
-        return ResponseEntity.ok(connectorService.getStatus(ctx.email(), ctx.orgId()));
+        return ResponseEntity.ok(connectorService.getStatus(ctx.userUuid(), ctx.orgId()));
     }
 
     @DeleteMapping("/{provider}")
@@ -75,7 +75,7 @@ public class ConnectorController {
             HttpServletRequest request) {
 
         OrgContext ctx = OrgContext.from(request);
-        connectorService.disconnect(provider, ctx.email(), ctx.orgId());
+        connectorService.disconnect(provider, ctx.userUuid(), ctx.orgId());
         return ResponseEntity.noContent().build();
     }
 
@@ -105,7 +105,7 @@ public class ConnectorController {
 
         OrgContext ctx = OrgContext.from(request);
         try {
-            telegramService.validateAndConnect(authData, ctx.email(), ctx.orgId());
+            telegramService.validateAndConnect(authData, ctx.userUuid(), ctx.orgId());
             return ResponseEntity.ok().build();
         } catch (IllegalArgumentException e) {
             log.warn("[ConnectorController] Telegram connect rejected: {}", e.getMessage());
@@ -126,7 +126,7 @@ public class ConnectorController {
         String content = body.get("content");
         if (content == null || content.isBlank()) return ResponseEntity.badRequest().build();
 
-        String url = googleDocsService.createDocument(title, content, ctx.email(), ctx.orgId());
+        String url = googleDocsService.createDocument(title, content, ctx.userUuid(), ctx.orgId());
         return ResponseEntity.ok(Map.of("url", url));
     }
 
@@ -141,7 +141,7 @@ public class ConnectorController {
         String content = body.get("content");
         if (content == null || content.isBlank()) return ResponseEntity.badRequest().build();
 
-        String url = googleSheetsService.createSpreadsheet(title, content, ctx.email(), ctx.orgId());
+        String url = googleSheetsService.createSpreadsheet(title, content, ctx.userUuid(), ctx.orgId());
         return ResponseEntity.ok(Map.of("url", url));
     }
 
@@ -156,7 +156,7 @@ public class ConnectorController {
         String content = body.get("content");
         if (content == null || content.isBlank()) return ResponseEntity.badRequest().build();
 
-        String url = googleSlidesService.createPresentation(title, content, ctx.email(), ctx.orgId());
+        String url = googleSlidesService.createPresentation(title, content, ctx.userUuid(), ctx.orgId());
         return ResponseEntity.ok(Map.of("url", url));
     }
 
@@ -169,7 +169,7 @@ public class ConnectorController {
             HttpServletRequest request) {
 
         OrgContext ctx = OrgContext.from(request);
-        String result = googleCalendarService.listEvents(ctx.email(), ctx.orgId(), maxResults);
+        String result = googleCalendarService.listEvents(ctx.userUuid(), ctx.orgId(), maxResults);
         return ResponseEntity.ok(Map.of("events", result));
     }
 
@@ -187,7 +187,7 @@ public class ConnectorController {
             return ResponseEntity.badRequest().body(Map.of("error", "title, startDateTime and endDateTime are required"));
         }
         String result = googleCalendarService.createEvent(
-                ctx.email(), ctx.orgId(), title, startDateTime, endDateTime,
+                ctx.userUuid(), ctx.orgId(), title, startDateTime, endDateTime,
                 body.get("description"), body.get("location"));
         return ResponseEntity.ok(Map.of("result", result));
     }

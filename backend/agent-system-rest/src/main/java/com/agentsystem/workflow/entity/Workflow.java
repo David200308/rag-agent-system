@@ -27,8 +27,8 @@ public class Workflow {
     @Column(length = 1000)
     private String description;
 
-    @Column(name = "owner_email")
-    private String ownerEmail;
+    @Column(name = "owner_uuid", length = 36)
+    private String ownerUuid;
 
     /** Org slug when in team mode; null = personal. */
     @Column(name = "org_id", length = 100)
@@ -52,10 +52,10 @@ public class Workflow {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
-    public Workflow(String id, String name, String ownerEmail, AgentPattern pattern) {
+    public Workflow(String id, String name, String ownerUuid, AgentPattern pattern) {
         this.id = id;
         this.name = name;
-        this.ownerEmail = ownerEmail;
+        this.ownerUuid = ownerUuid;
         this.agentPattern = pattern;
     }
 

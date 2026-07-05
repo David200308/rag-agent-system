@@ -78,7 +78,9 @@ public class PasskeyServiceImpl implements PasskeyService, CredentialRepository 
 
     @Override
     public Set<PublicKeyCredentialDescriptor> getCredentialIdsForUsername(String email) {
-        return credRepo.findByEmail(email).stream()
+        String uuid = resolveUuid(email);
+        if (uuid == null) return Set.of();
+        return credRepo.findByUserUuid(uuid).stream()
                 .map(c -> PublicKeyCredentialDescriptor.builder()
                         .id(b64(c.getCredentialId()))
                         .type(PublicKeyCredentialType.PUBLIC_KEY)
@@ -88,7 +90,9 @@ public class PasskeyServiceImpl implements PasskeyService, CredentialRepository 
 
     @Override
     public Optional<ByteArray> getUserHandleForUsername(String email) {
-        return credRepo.findByEmail(email).stream()
+        String uuid = resolveUuid(email);
+        if (uuid == null) return Optional.empty();
+        return credRepo.findByUserUuid(uuid).stream()
                 .findFirst()
                 .map(c -> b64(c.getUserHandle()));
     }
@@ -96,7 +100,7 @@ public class PasskeyServiceImpl implements PasskeyService, CredentialRepository 
     @Override
     public Optional<String> getUsernameForUserHandle(ByteArray userHandle) {
         return credRepo.findByUserHandle(userHandle.getBase64Url())
-                .map(PasskeyCredential::getEmail);
+                .map(c -> resolveEmail(c.getUserUuid()));
     }
 
     @Override
@@ -137,7 +141,9 @@ public class PasskeyServiceImpl implements PasskeyService, CredentialRepository 
     @Transactional
     @Override
     public String startRegistration(String email) throws Exception {
-        String userHandle = credRepo.findByEmail(email).stream()
+        String uuid = resolveUuid(email);
+        String userHandle = (uuid != null ? credRepo.findByUserUuid(uuid) : java.util.List.<PasskeyCredential>of())
+                .stream()
                 .findFirst()
                 .map(PasskeyCredential::getUserHandle)
                 .orElseGet(this::generateUserHandle);
@@ -194,9 +200,14 @@ public class PasskeyServiceImpl implements PasskeyService, CredentialRepository 
         String publicKeyCose = result.getPublicKeyCose().getBase64Url();
         String userHandle = options.getUser().getId().getBase64Url();
 
+        String uuid = resolveUuid(email);
+        if (uuid == null) {
+            throw new IllegalArgumentException("No registered user for email: " + email);
+        }
+
         PasskeyCredential cred = credRepo.findByCredentialId(credentialId)
                 .orElseGet(PasskeyCredential::new);
-        cred.setEmail(email);
+        cred.setUserUuid(uuid);
         cred.setCredentialId(credentialId);
         cred.setPublicKeyCose(publicKeyCose);
         cred.setSignCount(result.getSignatureCount());
@@ -212,7 +223,8 @@ public class PasskeyServiceImpl implements PasskeyService, CredentialRepository 
     @Transactional
     @Override
     public String startAuthentication(String email, String mode, String orgId) throws Exception {
-        if (!credRepo.existsByEmail(email)) {
+        String uuid = resolveUuid(email);
+        if (uuid == null || !credRepo.existsByUserUuid(uuid)) {
             throw new IllegalArgumentException("No passkey registered for this email");
         }
 
@@ -282,19 +294,35 @@ public class PasskeyServiceImpl implements PasskeyService, CredentialRepository 
 
     @Override
     public boolean hasPasskey(String email) {
-        return credRepo.existsByEmail(email);
+        String uuid = resolveUuid(email);
+        return uuid != null && credRepo.existsByUserUuid(uuid);
     }
 
     @Transactional
     @Override
     public void deletePasskeys(String email) {
-        credRepo.deleteByEmail(email);
+        String uuid = resolveUuid(email);
+        if (uuid != null) {
+            credRepo.deleteByUserUuid(uuid);
+        }
         redisTemplate.delete(challengeKey(email, "REGISTER"));
         redisTemplate.delete(challengeKey(email, "AUTHENTICATE"));
         log.info("[PasskeyService] Passkeys deleted for {}", email);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
+
+    /** Resolves an email to its user_uuid, or null if no such email is a registered user. */
+    private String resolveUuid(String email) {
+        if (email == null || email.isBlank()) return null;
+        return userAccountService.findByEmail(email).map(User::getUuid).orElse(null);
+    }
+
+    /** Resolves a user_uuid to its (Redis-cached) email, or null. */
+    private String resolveEmail(String uuid) {
+        if (uuid == null || uuid.isBlank()) return null;
+        return userAccountService.getEmailByUuid(uuid);
+    }
 
     private String challengeKey(String email, String type) {
         return CHALLENGE_KEY_PREFIX + type + ":" + email;

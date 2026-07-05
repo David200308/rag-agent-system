@@ -4,6 +4,9 @@ import com.agentsystem.auth.service.impl.CliKeyServiceImpl;
 
 import com.agentsystem.auth.entity.CliPublicKey;
 import com.agentsystem.auth.repository.CliPublicKeyRepository;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.entity.UserStatus;
+import com.agentsystem.user.service.UserAccountService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,23 +30,31 @@ import static org.mockito.Mockito.*;
 class CliKeyServiceTest {
 
     @Mock CliPublicKeyRepository repo;
+    @Mock UserAccountService     userAccountService;
 
     CliKeyService service;
 
     @BeforeEach
     void setUp() {
-        service = new CliKeyServiceImpl(repo);
+        service = new CliKeyServiceImpl(repo, userAccountService);
+    }
+
+    /** resolveUuid() bridges email -> uuid; reuse the email string as the uuid for test simplicity. */
+    private void stubUuid(String email) {
+        lenient().when(userAccountService.findByEmail(email))
+                .thenReturn(Optional.of(new User(email, email, UserStatus.USER, true)));
     }
 
     // ── registerKey ───────────────────────────────────────────────────────────
 
     @Test
     void registerKey_validKey_savesAndReturnsFingerprint() {
+        stubUuid("user@test.com");
         byte[] raw32 = new byte[32];
         raw32[0] = (byte) 0xAB;
         String key64 = Base64.getEncoder().encodeToString(raw32);
 
-        when(repo.findByUserEmail("user@test.com")).thenReturn(Optional.empty());
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.empty());
         when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         String fp = service.registerKey("user@test.com", key64);
@@ -64,14 +75,25 @@ class CliKeyServiceTest {
     }
 
     @Test
+    void registerKey_unregisteredEmail_throwsIllegalArgument() {
+        byte[] raw32 = new byte[32];
+        String key64 = Base64.getEncoder().encodeToString(raw32);
+
+        assertThatThrownBy(() -> service.registerKey("ghost@test.com", key64))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not a registered user");
+    }
+
+    @Test
     void registerKey_existingKey_updatesIt() {
+        stubUuid("user@test.com");
         byte[] raw32 = new byte[32];
         String key64 = Base64.getEncoder().encodeToString(raw32);
 
         CliPublicKey existing = new CliPublicKey("user@test.com", key64);
         existing.setRegisteredAt(Instant.now().minusSeconds(3600));
 
-        when(repo.findByUserEmail("user@test.com")).thenReturn(Optional.of(existing));
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.of(existing));
         when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         String fp = service.registerKey("user@test.com", key64);
@@ -92,7 +114,7 @@ class CliKeyServiceTest {
         boolean result = service.verify("user@test.com", "sig", "1.0.0", "GET", "/api/test", staleTs);
 
         assertThat(result).isFalse();
-        verify(repo, never()).findByUserEmail(any());
+        verify(repo, never()).findByUserUuid(any());
     }
 
     @Test
@@ -108,18 +130,30 @@ class CliKeyServiceTest {
 
     @Test
     void verify_noKeyRegistered_returnsFalse() {
+        stubUuid("user@test.com");
         long now = Instant.now().getEpochSecond();
-        when(repo.findByUserEmail("user@test.com")).thenReturn(Optional.empty());
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.empty());
 
         boolean result = service.verify("user@test.com", "sig", "1.0.0", "GET", "/api/test", now);
 
         assertThat(result).isFalse();
     }
 
+    @Test
+    void verify_unregisteredEmail_returnsFalse() {
+        long now = Instant.now().getEpochSecond();
+
+        boolean result = service.verify("ghost@test.com", "sig", "1.0.0", "GET", "/api/test", now);
+
+        assertThat(result).isFalse();
+        verify(repo, never()).findByUserUuid(any());
+    }
+
     // ── verify — valid Ed25519 signature ─────────────────────────────────────
 
     @Test
     void verify_validEd25519Signature_returnsTrue() throws Exception {
+        stubUuid("user@test.com");
         KeyPairGenerator kpg = KeyPairGenerator.getInstance("Ed25519");
         KeyPair kp = kpg.generateKeyPair();
 
@@ -141,7 +175,7 @@ class CliKeyServiceTest {
         String sig64 = Base64.getEncoder().encodeToString(signer.sign());
 
         CliPublicKey record = new CliPublicKey("user@test.com", pubKey64);
-        when(repo.findByUserEmail("user@test.com")).thenReturn(Optional.of(record));
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.of(record));
         when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         boolean result = service.verify("user@test.com", sig64, "1.0.0", "GET", "/api/test", now);
@@ -151,6 +185,7 @@ class CliKeyServiceTest {
 
     @Test
     void verify_wrongSignature_returnsFalse() throws Exception {
+        stubUuid("user@test.com");
         KeyPairGenerator kpg = KeyPairGenerator.getInstance("Ed25519");
         KeyPair kp = kpg.generateKeyPair();
 
@@ -170,7 +205,7 @@ class CliKeyServiceTest {
         String wrongSig = Base64.getEncoder().encodeToString(signer.sign());
 
         CliPublicKey record = new CliPublicKey("user@test.com", pubKey64);
-        when(repo.findByUserEmail("user@test.com")).thenReturn(Optional.of(record));
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.of(record));
 
         boolean result = service.verify("user@test.com", wrongSig, "1.0.0", "GET", "/api/test", now);
 
@@ -179,12 +214,13 @@ class CliKeyServiceTest {
 
     @Test
     void verify_invalidBase64Signature_returnsFalse() {
+        stubUuid("user@test.com");
         long now = Instant.now().getEpochSecond();
 
         byte[] raw32 = new byte[32];
         String pubKey64 = Base64.getEncoder().encodeToString(raw32);
         CliPublicKey record = new CliPublicKey("user@test.com", pubKey64);
-        when(repo.findByUserEmail("user@test.com")).thenReturn(Optional.of(record));
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.of(record));
 
         boolean result = service.verify("user@test.com", "not!!valid!!base64", "1.0.0", "GET", "/api/test", now);
 

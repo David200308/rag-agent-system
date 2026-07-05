@@ -26,7 +26,7 @@ const Queue = "rag-scheduler"
 // Either ConversationID+Message or WorkflowID+WorkflowInput must be set.
 type TriggerPayload struct {
 	ScheduleID       string `json:"scheduleId"`
-	UserEmail        string `json:"userEmail"`
+	UserUuid         string `json:"userUuid"`
 	ConversationID   string `json:"conversationId"`
 	Message          string `json:"message"`
 	WorkflowID       string `json:"workflowId,omitempty"`
@@ -90,13 +90,13 @@ func NewHandler(cfg *config.Config, st *store.Store) asynq.HandlerFunc {
 
 func callChatBackend(ctx context.Context, backendURL, serviceKey, idempotencyKey string, p TriggerPayload) error {
 	body, err := json.Marshal(struct {
-		UserEmail        string `json:"userEmail"`
+		UserUuid         string `json:"userUuid"`
 		ConversationID   string `json:"conversationId"`
 		Message          string `json:"message"`
 		TopK             int    `json:"topK"`
 		UseKnowledgeBase bool   `json:"useKnowledgeBase"`
 		UseWebFetch      bool   `json:"useWebFetch"`
-	}{p.UserEmail, p.ConversationID, p.Message, p.TopK, p.UseKnowledgeBase, p.UseWebFetch})
+	}{p.UserUuid, p.ConversationID, p.Message, p.TopK, p.UseKnowledgeBase, p.UseWebFetch})
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
@@ -123,10 +123,10 @@ func callChatBackend(ctx context.Context, backendURL, serviceKey, idempotencyKey
 
 func callWorkflowBackend(ctx context.Context, backendURL, serviceKey, idempotencyKey string, p TriggerPayload) error {
 	body, err := json.Marshal(struct {
-		UserEmail     string `json:"userEmail"`
+		UserUuid      string `json:"userUuid"`
 		WorkflowID    string `json:"workflowId"`
 		WorkflowInput string `json:"workflowInput"`
-	}{p.UserEmail, p.WorkflowID, p.WorkflowInput})
+	}{p.UserUuid, p.WorkflowID, p.WorkflowInput})
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}

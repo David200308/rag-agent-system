@@ -23,8 +23,8 @@ public class WorkflowRun {
     @Column(name = "workflow_id", nullable = false, length = 36)
     private String workflowId;
 
-    @Column(name = "owner_email")
-    private String ownerEmail;
+    @Column(name = "owner_uuid", length = 36)
+    private String ownerUuid;
 
     /** Org slug when in team mode; null = personal. */
     @Column(name = "org_id", length = 100)
@@ -49,10 +49,10 @@ public class WorkflowRun {
     @Column(name = "finished_at")
     private Instant finishedAt;
 
-    public WorkflowRun(String id, String workflowId, String ownerEmail, String userInput) {
+    public WorkflowRun(String id, String workflowId, String ownerUuid, String userInput) {
         this.id = id;
         this.workflowId = workflowId;
-        this.ownerEmail = ownerEmail;
+        this.ownerUuid = ownerUuid;
         this.userInput = userInput;
     }
 }

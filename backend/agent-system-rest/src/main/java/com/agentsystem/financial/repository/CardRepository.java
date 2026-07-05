@@ -8,5 +8,5 @@ import java.util.List;
 
 @Repository
 public interface CardRepository extends JpaRepository<Card, String> {
-    List<Card> findByOwnerEmailOrderByCreatedAtDesc(String ownerEmail);
+    List<Card> findByOwnerUuidOrderByCreatedAtDesc(String ownerUuid);
 }

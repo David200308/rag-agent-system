@@ -10,23 +10,23 @@ import java.util.Optional;
 public interface ConnectorTokenRepository extends JpaRepository<ConnectorToken, Long> {
 
     // Personal mode (orgId = null)
-    Optional<ConnectorToken> findByOwnerEmailAndProviderAndOrgIdIsNull(String ownerEmail, String provider);
-    List<ConnectorToken> findByOwnerEmailAndOrgIdIsNull(String ownerEmail);
-    void deleteByOwnerEmailAndProviderAndOrgIdIsNull(String ownerEmail, String provider);
+    Optional<ConnectorToken> findByOwnerUuidAndProviderAndOrgIdIsNull(String ownerUuid, String provider);
+    List<ConnectorToken> findByOwnerUuidAndOrgIdIsNull(String ownerUuid);
+    void deleteByOwnerUuidAndProviderAndOrgIdIsNull(String ownerUuid, String provider);
 
     // Team mode (orgId set)
-    Optional<ConnectorToken> findByOwnerEmailAndProviderAndOrgId(String ownerEmail, String provider, String orgId);
-    List<ConnectorToken> findByOwnerEmailAndOrgId(String ownerEmail, String orgId);
-    void deleteByOwnerEmailAndProviderAndOrgId(String ownerEmail, String provider, String orgId);
+    Optional<ConnectorToken> findByOwnerUuidAndProviderAndOrgId(String ownerUuid, String provider, String orgId);
+    List<ConnectorToken> findByOwnerUuidAndOrgId(String ownerUuid, String orgId);
+    void deleteByOwnerUuidAndProviderAndOrgId(String ownerUuid, String provider, String orgId);
 
     // Backward-compatible aliases → personal
-    default Optional<ConnectorToken> findByOwnerEmailAndProvider(String ownerEmail, String provider) {
-        return findByOwnerEmailAndProviderAndOrgIdIsNull(ownerEmail, provider);
+    default Optional<ConnectorToken> findByOwnerUuidAndProvider(String ownerUuid, String provider) {
+        return findByOwnerUuidAndProviderAndOrgIdIsNull(ownerUuid, provider);
     }
-    default List<ConnectorToken> findByOwnerEmail(String ownerEmail) {
-        return findByOwnerEmailAndOrgIdIsNull(ownerEmail);
+    default List<ConnectorToken> findByOwnerUuid(String ownerUuid) {
+        return findByOwnerUuidAndOrgIdIsNull(ownerUuid);
     }
-    default void deleteByOwnerEmailAndProvider(String ownerEmail, String provider) {
-        deleteByOwnerEmailAndProviderAndOrgIdIsNull(ownerEmail, provider);
+    default void deleteByOwnerUuidAndProvider(String ownerUuid, String provider) {
+        deleteByOwnerUuidAndProviderAndOrgIdIsNull(ownerUuid, provider);
     }
 }

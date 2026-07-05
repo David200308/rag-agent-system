@@ -5,6 +5,8 @@ import com.agentsystem.webfetch.service.WebFetchService;
 import com.agentsystem.config.WebFetchProperties;
 import com.agentsystem.org.OrgContext;
 import com.agentsystem.schema.DocumentResult;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.webfetch.entity.WebFetchWhitelist;
 import com.agentsystem.webfetch.repository.WebFetchWhitelistRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,23 +34,25 @@ public class WebFetchServiceImpl implements WebFetchService {
 
     private final WebFetchProperties          props;
     private final WebFetchWhitelistRepository whitelistRepo;
+    private final UserAccountService          userAccountService;
 
     // ── Whitelist CRUD ────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     @Override
     public List<WebFetchWhitelist> listWhitelist(OrgContext ctx) {
-        if (ctx == null || ctx.email() == null) return whitelistRepo.findAllByOrderByDomainAsc();
+        if (ctx == null || ctx.userUuid() == null) return whitelistRepo.findAllByOrderByDomainAsc();
         if (ctx.isTeam()) return whitelistRepo.findAllByOrgIdOrderByDomainAsc(ctx.orgId());
-        return whitelistRepo.findAllByAddedByOrderByDomainAsc(ctx.email());
+        return whitelistRepo.findAllByAddedByUuidOrderByDomainAsc(ctx.userUuid());
     }
 
-    /** Backward-compatible personal-mode overload. */
+    /** Backward-compatible personal-mode overload. Resolves email to a user_uuid internally. */
     @Transactional(readOnly = true)
     @Override
     public List<WebFetchWhitelist> listWhitelist(String userEmail) {
-        if (userEmail == null) return whitelistRepo.findAllByOrderByDomainAsc();
-        return whitelistRepo.findAllByAddedByOrderByDomainAsc(userEmail);
+        String uuid = resolveUuid(userEmail);
+        if (uuid == null) return whitelistRepo.findAllByOrderByDomainAsc();
+        return whitelistRepo.findAllByAddedByUuidOrderByDomainAsc(uuid);
     }
 
     @Transactional
@@ -59,22 +63,22 @@ public class WebFetchServiceImpl implements WebFetchService {
             if (whitelistRepo.existsByDomainAndOrgId(normalized, ctx.orgId())) {
                 throw new IllegalArgumentException("Domain already in org whitelist: " + normalized);
             }
-            return whitelistRepo.save(new WebFetchWhitelist(normalized, ctx.email(), ctx.orgId()));
+            return whitelistRepo.save(new WebFetchWhitelist(normalized, ctx.userUuid(), ctx.orgId()));
         }
-        String addedBy = ctx != null ? ctx.email() : null;
-        boolean exists = addedBy != null
-                ? whitelistRepo.existsByDomainAndAddedBy(normalized, addedBy)
+        String addedByUuid = ctx != null ? ctx.userUuid() : null;
+        boolean exists = addedByUuid != null
+                ? whitelistRepo.existsByDomainAndAddedByUuid(normalized, addedByUuid)
                 : whitelistRepo.existsByDomain(normalized);
         if (exists) {
             throw new IllegalArgumentException("Domain already in your whitelist: " + normalized);
         }
-        return whitelistRepo.save(new WebFetchWhitelist(normalized, addedBy));
+        return whitelistRepo.save(new WebFetchWhitelist(normalized, addedByUuid));
     }
 
     @Transactional
     @Override
     public WebFetchWhitelist addDomain(String domain, String addedBy) {
-        return addDomain(domain, new OrgContext(addedBy, "PERSONAL", null));
+        return addDomain(domain, new OrgContext(resolveUuid(addedBy), addedBy, "PERSONAL", null));
     }
 
     @Transactional
@@ -88,12 +92,12 @@ public class WebFetchServiceImpl implements WebFetchService {
             whitelistRepo.deleteByDomainAndOrgId(normalized, ctx.orgId());
             return;
         }
-        String userEmail = ctx != null ? ctx.email() : null;
-        if (userEmail != null) {
-            if (!whitelistRepo.existsByDomainAndAddedBy(normalized, userEmail)) {
+        String userUuid = ctx != null ? ctx.userUuid() : null;
+        if (userUuid != null) {
+            if (!whitelistRepo.existsByDomainAndAddedByUuid(normalized, userUuid)) {
                 throw new IllegalArgumentException("Domain not found in your whitelist: " + normalized);
             }
-            whitelistRepo.deleteByDomainAndAddedBy(normalized, userEmail);
+            whitelistRepo.deleteByDomainAndAddedByUuid(normalized, userUuid);
         } else {
             if (!whitelistRepo.existsByDomain(normalized)) {
                 throw new IllegalArgumentException("Domain not found in whitelist: " + normalized);
@@ -105,7 +109,7 @@ public class WebFetchServiceImpl implements WebFetchService {
     @Transactional
     @Override
     public void removeDomain(String domain, String userEmail) {
-        removeDomain(domain, new OrgContext(userEmail, "PERSONAL", null));
+        removeDomain(domain, new OrgContext(resolveUuid(userEmail), userEmail, "PERSONAL", null));
     }
 
     // ── Fetch ─────────────────────────────────────────────────────────────────
@@ -120,12 +124,17 @@ public class WebFetchServiceImpl implements WebFetchService {
      */
     @Override
     public DocumentResult fetch(String url, String userEmail) {
+        return fetch(url, new OrgContext(resolveUuid(userEmail), userEmail, "PERSONAL", null));
+    }
+
+    @Override
+    public DocumentResult fetch(String url, OrgContext ctx) {
         if (!props.enabled()) {
             throw new IllegalStateException("Web fetch is disabled.");
         }
 
         String host = extractHost(url);
-        if (!isAllowed(host, userEmail)) {
+        if (!isAllowed(host, ctx)) {
             throw new IllegalStateException(
                     "Domain not whitelisted: " + host + ". Add it via POST /api/v1/agent/web-fetch/whitelist");
         }
@@ -165,8 +174,8 @@ public class WebFetchServiceImpl implements WebFetchService {
         List<WebFetchWhitelist> entries;
         if (ctx != null && ctx.isTeam()) {
             entries = whitelistRepo.findAllByOrgIdOrderByDomainAsc(ctx.orgId());
-        } else if (ctx != null && ctx.email() != null) {
-            entries = whitelistRepo.findAllByAddedByOrderByDomainAsc(ctx.email());
+        } else if (ctx != null && ctx.userUuid() != null) {
+            entries = whitelistRepo.findAllByAddedByUuidOrderByDomainAsc(ctx.userUuid());
         } else {
             entries = whitelistRepo.findAllByOrderByDomainAsc();
         }
@@ -176,7 +185,7 @@ public class WebFetchServiceImpl implements WebFetchService {
 
     @Override
     public boolean isAllowed(String host, String userEmail) {
-        return isAllowed(host, new OrgContext(userEmail, "PERSONAL", null));
+        return isAllowed(host, new OrgContext(resolveUuid(userEmail), userEmail, "PERSONAL", null));
     }
 
     @Override
@@ -219,5 +228,11 @@ public class WebFetchServiceImpl implements WebFetchService {
         return domain.toLowerCase().strip()
                 .replaceAll("^https?://", "")
                 .replaceAll("/.*$", "");
+    }
+
+    /** Resolves an email to its user_uuid, or null if no such email is a registered user. */
+    private String resolveUuid(String email) {
+        if (email == null || email.isBlank()) return null;
+        return userAccountService.findByEmail(email).map(User::getUuid).orElse(null);
     }
 }

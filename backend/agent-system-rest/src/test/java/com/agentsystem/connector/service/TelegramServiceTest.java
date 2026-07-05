@@ -5,6 +5,7 @@ import com.agentsystem.connector.service.impl.TelegramServiceImpl;
 import com.agentsystem.connector.ConnectorProperties;
 import com.agentsystem.connector.entity.ConnectorToken;
 import com.agentsystem.connector.repository.ConnectorTokenRepository;
+import com.agentsystem.user.service.UserAccountService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,7 @@ class TelegramServiceTest {
 
     @Mock ConnectorTokenRepository tokenRepo;
     @Mock RestClient.Builder       restClientBuilder;
+    @Mock UserAccountService       userAccountService;
 
     private TelegramServiceImpl service;
 
@@ -49,7 +51,7 @@ class TelegramServiceTest {
                 new ConnectorProperties.Telegram(BOT_TOKEN, BOT_USERNAME),
                 "https://app.example.com"
         );
-        service = new TelegramServiceImpl(props, tokenRepo, restClientBuilder);
+        service = new TelegramServiceImpl(props, tokenRepo, restClientBuilder, userAccountService);
     }
 
     // ── getBotUsername ────────────────────────────────────────────────────────
@@ -67,7 +69,7 @@ class TelegramServiceTest {
                 null,
                 "https://app.example.com"
         );
-        TelegramServiceImpl svc = new TelegramServiceImpl(noTelegram, tokenRepo, restClientBuilder);
+        TelegramServiceImpl svc = new TelegramServiceImpl(noTelegram, tokenRepo, restClientBuilder, userAccountService);
         assertThat(svc.getBotUsername()).isEmpty();
     }
 
@@ -77,7 +79,7 @@ class TelegramServiceTest {
     void validateAndConnect_validPayload_savesToken() {
         Map<String, Object> authData = buildAuthData("123456", "John", Instant.now().getEpochSecond());
 
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
                 .thenReturn(Optional.empty());
         when(tokenRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -86,7 +88,7 @@ class TelegramServiceTest {
         ArgumentCaptor<ConnectorToken> captor = ArgumentCaptor.forClass(ConnectorToken.class);
         verify(tokenRepo).save(captor.capture());
         assertThat(captor.getValue().getAccessToken()).isEqualTo("123456");
-        assertThat(captor.getValue().getOwnerEmail()).isEqualTo("user@test.com");
+        assertThat(captor.getValue().getOwnerUuid()).isEqualTo("user@test.com");
         assertThat(captor.getValue().getProvider()).isEqualTo("telegram");
         assertThat(captor.getValue().getTokenType()).isEqualTo("telegram");
     }
@@ -96,8 +98,8 @@ class TelegramServiceTest {
         Map<String, Object> authData = buildAuthData("777", null, Instant.now().getEpochSecond());
 
         ConnectorToken existing = ConnectorToken.builder()
-                .ownerEmail("user@test.com").provider("telegram").accessToken("old-id").build();
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
+                .ownerUuid("user@test.com").provider("telegram").accessToken("old-id").build();
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
                 .thenReturn(Optional.of(existing));
         when(tokenRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -112,14 +114,14 @@ class TelegramServiceTest {
     void validateAndConnect_nullEmail_normalizedToEmpty() {
         Map<String, Object> authData = buildAuthData("999", null, Instant.now().getEpochSecond());
 
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("", "telegram")).thenReturn(Optional.empty());
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("", "telegram")).thenReturn(Optional.empty());
         when(tokenRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         service.validateAndConnect(authData, null, null);
 
         ArgumentCaptor<ConnectorToken> captor = ArgumentCaptor.forClass(ConnectorToken.class);
         verify(tokenRepo).save(captor.capture());
-        assertThat(captor.getValue().getOwnerEmail()).isEmpty();
+        assertThat(captor.getValue().getOwnerUuid()).isEmpty();
     }
 
     @Test
@@ -157,23 +159,23 @@ class TelegramServiceTest {
 
     @Test
     void isConnected_tokenPresent_returnsTrue() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
                 .thenReturn(Optional.of(ConnectorToken.builder().build()));
         assertThat(service.isConnected("user@test.com", null)).isTrue();
     }
 
     @Test
     void isConnected_noToken_returnsFalse() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
                 .thenReturn(Optional.empty());
         assertThat(service.isConnected("user@test.com", null)).isFalse();
     }
 
     @Test
     void isConnected_nullEmail_normalizedToEmpty() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("", "telegram")).thenReturn(Optional.empty());
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("", "telegram")).thenReturn(Optional.empty());
         assertThat(service.isConnected(null, null)).isFalse();
-        verify(tokenRepo).findByOwnerEmailAndProviderAndOrgIdIsNull("", "telegram");
+        verify(tokenRepo).findByOwnerUuidAndProviderAndOrgIdIsNull("", "telegram");
     }
 
     // ── disconnect ────────────────────────────────────────────────────────────
@@ -181,20 +183,20 @@ class TelegramServiceTest {
     @Test
     void disconnect_deletesToken() {
         service.disconnect("user@test.com", null);
-        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "telegram");
+        verify(tokenRepo).deleteByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "telegram");
     }
 
     @Test
     void disconnect_nullEmail_normalizedToEmpty() {
         service.disconnect(null, null);
-        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgIdIsNull("", "telegram");
+        verify(tokenRepo).deleteByOwnerUuidAndProviderAndOrgIdIsNull("", "telegram");
     }
 
     // ── sendMessage ───────────────────────────────────────────────────────────
 
     @Test
     void sendMessage_notConnected_throws() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "telegram"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.sendMessage("user@test.com", null, "hello"))
@@ -206,7 +208,7 @@ class TelegramServiceTest {
 
     @Test
     void sendMessage_notConnected_withOrgId_throws() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgId("user@test.com", "telegram", "org-1"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgId("user@test.com", "telegram", "org-1"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.sendMessage("user@test.com", "org-1", "hello"))
@@ -218,7 +220,7 @@ class TelegramServiceTest {
 
     @Test
     void isConnected_withOrgId_tokenPresent_returnsTrue() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgId("user@test.com", "telegram", "org-1"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgId("user@test.com", "telegram", "org-1"))
                 .thenReturn(Optional.of(ConnectorToken.builder().build()));
 
         assertThat(service.isConnected("user@test.com", "org-1")).isTrue();
@@ -226,7 +228,7 @@ class TelegramServiceTest {
 
     @Test
     void isConnected_withOrgId_noToken_returnsFalse() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgId("user@test.com", "telegram", "org-1"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgId("user@test.com", "telegram", "org-1"))
                 .thenReturn(Optional.empty());
 
         assertThat(service.isConnected("user@test.com", "org-1")).isFalse();
@@ -238,15 +240,15 @@ class TelegramServiceTest {
     void disconnect_withOrgId_callsOrgScopedDelete() {
         service.disconnect("user@test.com", "org-1");
 
-        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgId("user@test.com", "telegram", "org-1");
-        verify(tokenRepo, never()).deleteByOwnerEmailAndProviderAndOrgIdIsNull(anyString(), anyString());
+        verify(tokenRepo).deleteByOwnerUuidAndProviderAndOrgId("user@test.com", "telegram", "org-1");
+        verify(tokenRepo, never()).deleteByOwnerUuidAndProviderAndOrgIdIsNull(anyString(), anyString());
     }
 
     // ── sendGroupNotification ─────────────────────────────────────────────────
 
     @Test
     void sendGroupNotification_ownerNotConnected_returnsOwnerNotConnectedMessage() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("owner@test.com", "telegram"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("owner@test.com", "telegram"))
                 .thenReturn(Optional.empty());
 
         String result = service.sendGroupNotification("owner@test.com", null, null, "Hello");
@@ -259,7 +261,7 @@ class TelegramServiceTest {
         ConnectorToken token = ConnectorToken.builder()
                 .accessToken("chat-id-owner")
                 .build();
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("owner@test.com", "telegram"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("owner@test.com", "telegram"))
                 .thenReturn(Optional.of(token));
 
         // Use lenient to avoid stubbing problem — restClientBuilder.build() is called by sendBotMessage
@@ -274,12 +276,12 @@ class TelegramServiceTest {
         } catch (Exception ignored) {
             // HTTP send throws — that's fine; we just verify the token was checked
         }
-        verify(tokenRepo, atLeastOnce()).findByOwnerEmailAndProviderAndOrgIdIsNull("owner@test.com", "telegram");
+        verify(tokenRepo, atLeastOnce()).findByOwnerUuidAndProviderAndOrgIdIsNull("owner@test.com", "telegram");
     }
 
     @Test
     void sendGroupNotification_visitorNotConnected_ownerAlsoNotConnected_returnsMessage() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("owner@test.com", "telegram"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("owner@test.com", "telegram"))
                 .thenReturn(Optional.empty());
 
         String result = service.sendGroupNotification("owner@test.com", "visitor@test.com", null, "Message");

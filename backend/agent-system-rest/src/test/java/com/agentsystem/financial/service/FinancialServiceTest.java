@@ -65,7 +65,7 @@ class FinancialServiceTest {
     @Test
     void listDeposits_returnsDtosWithConvertedAmount() {
         CashDeposit d = deposit("d-1", "user@test.com", "USD", new BigDecimal("1000"));
-        when(depositRepo.findByOwnerEmailOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(d));
+        when(depositRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(d));
         when(fxService.convert(1000.0, "USD", "HKD")).thenReturn(7800.0);
 
         var result = service.listDeposits("user@test.com", "HKD");
@@ -76,7 +76,7 @@ class FinancialServiceTest {
     }
 
     @Test
-    void createDeposit_savesWithOwnerEmailAndUuid() {
+    void createDeposit_savesWithOwnerUuid() {
         when(depositRepo.save(any())).thenAnswer(i -> i.getArgument(0));
         ArgumentCaptor<CashDeposit> cap = ArgumentCaptor.forClass(CashDeposit.class);
 
@@ -85,7 +85,7 @@ class FinancialServiceTest {
                 "amount", "5000", "depositType", "FIXED", "countryRegion", "HK"));
 
         verify(depositRepo).save(cap.capture());
-        assertThat(cap.getValue().getOwnerEmail()).isEqualTo("owner@test.com");
+        assertThat(cap.getValue().getOwnerUuid()).isEqualTo("owner@test.com");
         assertThat(cap.getValue().getId()).isNotBlank();
         assertThat(cap.getValue().getPlatform()).isEqualTo("HSBC");
         assertThat(cap.getValue().getAmount()).isEqualByComparingTo("5000");
@@ -137,7 +137,7 @@ class FinancialServiceTest {
     @Test
     void listStocks_freshCache_doesNotTriggerRefresh() {
         StockInvestment s = stock("s-1", "user@test.com", "AAPL");
-        when(stockRepo.findByOwnerEmailOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(s));
+        when(stockRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(s));
         when(priceService.isStockStale()).thenReturn(false);
         when(priceService.getStockPrice("AAPL")).thenReturn(Optional.empty());
         when(priceService.getStockCurrency("AAPL")).thenReturn(Optional.empty());
@@ -151,7 +151,7 @@ class FinancialServiceTest {
     @Test
     void listStocks_staleCache_triggersRefresh() {
         StockInvestment s = stock("s-1", "user@test.com", "AAPL");
-        when(stockRepo.findByOwnerEmailOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(s));
+        when(stockRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(s));
         when(priceService.isStockStale()).thenReturn(true);
         when(priceService.getStockPrice("AAPL")).thenReturn(Optional.empty());
         when(priceService.getStockCurrency("AAPL")).thenReturn(Optional.empty());
@@ -169,7 +169,7 @@ class FinancialServiceTest {
         s.setInvestAmount(new BigDecimal("1000"));
         s.setCurrency("USD");
 
-        when(stockRepo.findByOwnerEmailOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(s));
+        when(stockRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(s));
         when(priceService.isStockStale()).thenReturn(false);
         when(priceService.getStockPrice("AAPL")).thenReturn(Optional.of(120.0));
         when(priceService.getStockCurrency("AAPL")).thenReturn(Optional.of("USD"));
@@ -188,7 +188,7 @@ class FinancialServiceTest {
         s.setInvestAmount(new BigDecimal("500"));
         s.setCurrency("USD");
 
-        when(stockRepo.findByOwnerEmailOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(s));
+        when(stockRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(s));
         when(priceService.isStockStale()).thenReturn(false);
         when(priceService.getStockPrice("UNKNOWN")).thenReturn(Optional.empty());
         when(priceService.getStockCurrency("UNKNOWN")).thenReturn(Optional.empty());
@@ -201,7 +201,7 @@ class FinancialServiceTest {
     }
 
     @Test
-    void createStock_savesWithOwnerEmailAndUuid() {
+    void createStock_savesWithOwnerUuid() {
         when(stockRepo.save(any())).thenAnswer(i -> i.getArgument(0));
         ArgumentCaptor<StockInvestment> cap = ArgumentCaptor.forClass(StockInvestment.class);
 
@@ -212,7 +212,7 @@ class FinancialServiceTest {
                 "currency", "USD", "fee", "1.5"));
 
         verify(stockRepo).save(cap.capture());
-        assertThat(cap.getValue().getOwnerEmail()).isEqualTo("user@test.com");
+        assertThat(cap.getValue().getOwnerUuid()).isEqualTo("user@test.com");
         assertThat(cap.getValue().getId()).isNotBlank();
         assertThat(cap.getValue().getSymbol()).isEqualTo("NVDA");
         assertThat(cap.getValue().getFee()).isEqualByComparingTo("1.5");
@@ -243,7 +243,7 @@ class FinancialServiceTest {
     @Test
     void listCrypto_staleCache_triggersRefresh() {
         CryptoInvestment c = crypto("c-1", "user@test.com", "BTC");
-        when(cryptoRepo.findByOwnerEmailOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(c));
+        when(cryptoRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(c));
         when(priceService.isCryptoStale()).thenReturn(true);
         when(priceService.getCryptoPrice("BTC")).thenReturn(Optional.empty());
         when(fxService.convert(anyDouble(), any(), any())).thenReturn(0.0);
@@ -260,7 +260,7 @@ class FinancialServiceTest {
         c.setInvestAmount(new BigDecimal("4000"));
         c.setCurrency("USD");
 
-        when(cryptoRepo.findByOwnerEmailOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(c));
+        when(cryptoRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(c));
         when(priceService.isCryptoStale()).thenReturn(false);
         when(priceService.getCryptoPrice("ETH")).thenReturn(Optional.of(2500.0));
         when(fxService.convert(5000.0, "USD", "USD")).thenReturn(5000.0);
@@ -302,7 +302,7 @@ class FinancialServiceTest {
     @Test
     void listCards_returnsTypesAsList() {
         Card c = card("card-1", "user@test.com", "Credit,Debit");
-        when(cardRepo.findByOwnerEmailOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(c));
+        when(cardRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(c));
 
         var result = service.listCards("user@test.com");
 
@@ -313,7 +313,7 @@ class FinancialServiceTest {
     @Test
     void listCards_emptyTypes_returnsEmptyList() {
         Card c = card("card-1", "user@test.com", "");
-        when(cardRepo.findByOwnerEmailOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(c));
+        when(cardRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(c));
 
         var result = service.listCards("user@test.com");
 
@@ -359,11 +359,11 @@ class FinancialServiceTest {
     }
 
     @Test
-    void ownerCheck_caseInsensitiveMatch_doesNotThrow() {
-        CashDeposit d = deposit("d-1", "Owner@Test.COM", "USD", new BigDecimal("100"));
+    void ownerCheck_exactUuidMatch_doesNotThrow() {
+        CashDeposit d = deposit("d-1", "owner-uuid", "USD", new BigDecimal("100"));
         when(depositRepo.findById("d-1")).thenReturn(Optional.of(d));
 
-        service.deleteDeposit("d-1", "owner@test.com");
+        service.deleteDeposit("d-1", "owner-uuid");
 
         verify(depositRepo).delete(d);
     }
@@ -374,8 +374,8 @@ class FinancialServiceTest {
     void refreshPrices_triggersStockAndCryptoRefresh() {
         StockInvestment s = stock("s-1", "user@test.com", "AAPL");
         CryptoInvestment c = crypto("c-1", "user@test.com", "ETH");
-        when(stockRepo.findByOwnerEmailOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(s));
-        when(cryptoRepo.findByOwnerEmailOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(c));
+        when(stockRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(s));
+        when(cryptoRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(c));
 
         service.refreshPrices("user@test.com");
 
@@ -385,8 +385,8 @@ class FinancialServiceTest {
 
     @Test
     void refreshPrices_noSymbols_noRefreshCalled() {
-        when(stockRepo.findByOwnerEmailOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of());
-        when(cryptoRepo.findByOwnerEmailOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of());
+        when(stockRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of());
+        when(cryptoRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of());
 
         service.refreshPrices("user@test.com");
 
@@ -503,24 +503,24 @@ class FinancialServiceTest {
     @Test
     void listSalary_returnsAllRecords() {
         SalaryUsageRecord r = salary("sal-1", "user@test.com");
-        when(salaryRepo.findByOwnerEmailOrderByYearDescMonthDesc("user@test.com")).thenReturn(List.of(r));
+        when(salaryRepo.findByOwnerUuidOrderByYearDescMonthDesc("user@test.com")).thenReturn(List.of(r));
 
         var result = service.listSalary("user@test.com");
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo("sal-1");
-        assertThat(result.get(0).ownerEmail()).isEqualTo("user@test.com");
+        assertThat(result.get(0).ownerUuid()).isEqualTo("user@test.com");
     }
 
     @Test
     void listSalary_noRecords_returnsEmpty() {
-        when(salaryRepo.findByOwnerEmailOrderByYearDescMonthDesc("user@test.com")).thenReturn(List.of());
+        when(salaryRepo.findByOwnerUuidOrderByYearDescMonthDesc("user@test.com")).thenReturn(List.of());
 
         assertThat(service.listSalary("user@test.com")).isEmpty();
     }
 
     @Test
-    void createSalary_savesWithOwnerEmailAndUuid() {
+    void createSalary_savesWithOwnerUuid() {
         when(salaryRepo.save(any())).thenAnswer(i -> i.getArgument(0));
         var body = new java.util.HashMap<String, Object>();
         body.put("year", 2025); body.put("month", 6); body.put("region", "HK");
@@ -531,7 +531,7 @@ class FinancialServiceTest {
 
         SalaryUsageRecord result = service.createSalary("owner@test.com", body);
 
-        assertThat(result.getOwnerEmail()).isEqualTo("owner@test.com");
+        assertThat(result.getOwnerUuid()).isEqualTo("owner@test.com");
         assertThat(result.getId()).isNotBlank();
         assertThat(result.getYear()).isEqualTo(2025);
         assertThat(result.getCurrency()).isEqualTo("HKD");
@@ -631,7 +631,7 @@ class FinancialServiceTest {
     private CashDeposit deposit(String id, String email, String currency, BigDecimal amount) {
         CashDeposit d = new CashDeposit();
         d.setId(id);
-        d.setOwnerEmail(email);
+        d.setOwnerUuid(email);
         d.setCurrency(currency);
         d.setAmount(amount);
         return d;
@@ -640,7 +640,7 @@ class FinancialServiceTest {
     private StockInvestment stock(String id, String email, String symbol) {
         StockInvestment s = new StockInvestment();
         s.setId(id);
-        s.setOwnerEmail(email);
+        s.setOwnerUuid(email);
         s.setSymbol(symbol);
         s.setStockAmount(new BigDecimal("10"));
         s.setInvestAmount(new BigDecimal("1000"));
@@ -652,7 +652,7 @@ class FinancialServiceTest {
     private CryptoInvestment crypto(String id, String email, String symbol) {
         CryptoInvestment c = new CryptoInvestment();
         c.setId(id);
-        c.setOwnerEmail(email);
+        c.setOwnerUuid(email);
         c.setSymbol(symbol);
         c.setAmount(new BigDecimal("1"));
         c.setInvestAmount(new BigDecimal("1000"));
@@ -663,7 +663,7 @@ class FinancialServiceTest {
     private Card card(String id, String email, String types) {
         Card c = new Card();
         c.setId(id);
-        c.setOwnerEmail(email);
+        c.setOwnerUuid(email);
         c.setTypes(types);
         return c;
     }
@@ -671,7 +671,7 @@ class FinancialServiceTest {
     private SalaryUsageRecord salary(String id, String email) {
         SalaryUsageRecord r = new SalaryUsageRecord();
         r.setId(id);
-        r.setOwnerEmail(email);
+        r.setOwnerUuid(email);
         r.setYear(2025);
         r.setMonth(6);
         r.setRegion("HK");

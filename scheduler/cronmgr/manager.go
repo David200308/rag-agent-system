@@ -86,7 +86,7 @@ func buildTask(sc *model.Schedule) (*asynq.Task, error) {
 	// instead (stable across that execution's own retries, unique per tick).
 	return worker.NewTriggerTask(worker.TriggerPayload{
 		ScheduleID:       sc.ID,
-		UserEmail:        sc.OwnerEmail,
+		UserUuid:         sc.OwnerUuid,
 		ConversationID:   sc.ConversationID,
 		Message:          sc.Message,
 		WorkflowID:       sc.WorkflowID,

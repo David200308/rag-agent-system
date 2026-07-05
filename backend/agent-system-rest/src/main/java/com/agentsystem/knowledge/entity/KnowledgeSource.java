@@ -34,9 +34,9 @@ public class KnowledgeSource {
     @Column(name = "chunk_count", nullable = false)
     private int chunkCount;
 
-    /** Email of the user who ingested this source. Null when auth is disabled. */
-    @Column(name = "owner_email", length = 255)
-    private String ownerEmail;
+    /** Uuid of the user who ingested this source. Null when auth is disabled. */
+    @Column(name = "owner_uuid", length = 36)
+    private String ownerUuid;
 
     /** Org slug when in team mode; null = personal. */
     @Column(name = "org_id", length = 100)
@@ -52,23 +52,23 @@ public class KnowledgeSource {
     @OneToMany(mappedBy = "knowledgeSource", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<KnowledgeSourceShare> shares = new ArrayList<>();
 
-    public KnowledgeSource(String source, String label, String category, int chunkCount, String ownerEmail) {
-        this(source, label, category, chunkCount, ownerEmail, null);
+    public KnowledgeSource(String source, String label, String category, int chunkCount, String ownerUuid) {
+        this(source, label, category, chunkCount, ownerUuid, null);
     }
 
     public KnowledgeSource(String source, String label, String category, int chunkCount,
-                           String ownerEmail, String orgId) {
+                           String ownerUuid, String orgId) {
         this.source     = source;
         this.label      = label;
         this.category   = category;
         this.chunkCount = chunkCount;
-        this.ownerEmail = ownerEmail;
+        this.ownerUuid  = ownerUuid;
         this.orgId      = orgId;
         this.ingestedAt = Instant.now();
     }
 
-    /** Convenience: collect all shared emails. */
-    public List<String> sharedEmails() {
-        return shares.stream().map(KnowledgeSourceShare::getSharedEmail).toList();
+    /** Convenience: collect all shared-target uuids. */
+    public List<String> sharedUuids() {
+        return shares.stream().map(KnowledgeSourceShare::getSharedUuid).toList();
     }
 }

@@ -11,9 +11,9 @@ import org.springframework.stereotype.Component;
 /**
  * Spring AI tool: write content to a new Google Docs document.
  *
- * The tool is stateless; the current user's email is injected per-request via
- * {@link #setCurrentEmail(String)} before the ChatClient call and cleared
- * immediately after via {@link #clearCurrentEmail()}.
+ * The tool is stateless; the current user's user_uuid is injected per-request via
+ * {@link #setCurrentUserUuid(String)} before the ChatClient call and cleared
+ * immediately after via {@link #clearCurrentUserUuid()}.
  *
  * Thread-safety: virtual threads each get their own ThreadLocal storage,
  * so concurrent requests never share state.
@@ -26,11 +26,11 @@ public class GoogleDocsAgentTool {
     private final GoogleDocsService googleDocsService;
     private final ToolCallBudget    toolCallBudget;
 
-    private static final ThreadLocal<String> CURRENT_EMAIL  = new ThreadLocal<>();
-    private static final ThreadLocal<String> CURRENT_ORG_ID = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_USER_UUID = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_ORG_ID    = new ThreadLocal<>();
 
-    public void setCurrentEmail(String email)  { CURRENT_EMAIL.set(email != null ? email : ""); }
-    public void clearCurrentEmail()            { CURRENT_EMAIL.remove(); }
+    public void setCurrentUserUuid(String uuid) { CURRENT_USER_UUID.set(uuid != null ? uuid : ""); }
+    public void clearCurrentUserUuid()          { CURRENT_USER_UUID.remove(); }
 
     public void setCurrentOrgId(String orgId)  { CURRENT_ORG_ID.set(orgId); }
     public void clearCurrentOrgId()            { CURRENT_ORG_ID.remove(); }
@@ -49,10 +49,10 @@ public class GoogleDocsAgentTool {
             """)
     public String writeToGoogleDocs(String title, String content) {
         if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
-        String email = CURRENT_EMAIL.get();
-        log.info("[GoogleDocsAgentTool] Creating doc '{}' for user '{}'", title, email);
+        String uuid = CURRENT_USER_UUID.get();
+        log.info("[GoogleDocsAgentTool] Creating doc '{}' for user '{}'", title, uuid);
         try {
-            String url = googleDocsService.createDocument(title, content, email, CURRENT_ORG_ID.get());
+            String url = googleDocsService.createDocument(title, content, uuid, CURRENT_ORG_ID.get());
             return "Document created successfully. Open it here: " + url;
         } catch (IllegalStateException e) {
             return "Could not write to Google Docs: " + e.getMessage();
@@ -73,10 +73,10 @@ public class GoogleDocsAgentTool {
             """)
     public String readGoogleDoc(String docUrl) {
         if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
-        String email = CURRENT_EMAIL.get();
-        log.info("[GoogleDocsAgentTool] Reading doc '{}' for user '{}'", docUrl, email);
+        String uuid = CURRENT_USER_UUID.get();
+        log.info("[GoogleDocsAgentTool] Reading doc '{}' for user '{}'", docUrl, uuid);
         try {
-            String content = googleDocsService.readDocument(docUrl, email, CURRENT_ORG_ID.get());
+            String content = googleDocsService.readDocument(docUrl, uuid, CURRENT_ORG_ID.get());
             return content.isBlank() ? "The document appears to be empty." : content;
         } catch (IllegalStateException e) {
             return "Could not read Google Doc: " + e.getMessage();

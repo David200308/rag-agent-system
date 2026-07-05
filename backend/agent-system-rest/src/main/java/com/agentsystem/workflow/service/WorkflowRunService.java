@@ -14,6 +14,9 @@ public interface WorkflowRunService {
      */
     String startRun(String workflowId, String userInput, String ownerEmail, boolean emailNotify);
 
+    /** Resolves ownership directly from ownerUuid — no email bridge needed. */
+    String startRunByUuid(String workflowId, String userInput, String ownerUuid, boolean emailNotify);
+
     /**
      * Opens an SSE stream for a run. The caller must hold the connection open.
      * Historical logs are replayed first, then live events streamed.

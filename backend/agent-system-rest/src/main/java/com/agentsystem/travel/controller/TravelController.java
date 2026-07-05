@@ -23,13 +23,13 @@ public class TravelController {
 
     @GetMapping
     public ResponseEntity<List<TravelRecordDto>> list(HttpServletRequest req) {
-        return ResponseEntity.ok(service.list(email(req)));
+        return ResponseEntity.ok(service.list(ownerUuid(req)));
     }
 
     @PostMapping
     public ResponseEntity<TravelRecord> create(
             @RequestBody Map<String, Object> body, HttpServletRequest req) {
-        return ResponseEntity.status(201).body(service.create(email(req), body));
+        return ResponseEntity.status(201).body(service.create(ownerUuid(req), body));
     }
 
     @PutMapping("/{id}")
@@ -38,7 +38,7 @@ public class TravelController {
             @RequestBody Map<String, Object> body,
             HttpServletRequest req) {
         try {
-            return ResponseEntity.ok(service.update(id, email(req), body));
+            return ResponseEntity.ok(service.update(id, ownerUuid(req), body));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
         }
@@ -47,15 +47,15 @@ public class TravelController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable String id, HttpServletRequest req) {
         try {
-            service.delete(id, email(req));
+            service.delete(id, ownerUuid(req));
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
         }
     }
 
-    private String email(HttpServletRequest req) {
-        String email = (String) req.getAttribute("authenticatedEmail");
-        return email != null ? email : "anonymous";
+    private String ownerUuid(HttpServletRequest req) {
+        String uuid = (String) req.getAttribute("authenticatedUserUuid");
+        return uuid != null ? uuid : "anonymous";
     }
 }

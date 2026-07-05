@@ -8,18 +8,18 @@ import java.util.List;
 public interface ConversationRepository extends JpaRepository<Conversation, String> {
 
     /** Personal mode (orgId = null). */
-    List<Conversation> findByUserEmailAndOrgIdIsNullAndArchivedFalseOrderByUpdatedAtDesc(String userEmail);
-    List<Conversation> findByUserEmailAndOrgIdIsNullAndArchivedTrueOrderByUpdatedAtDesc(String userEmail);
+    List<Conversation> findByUserUuidAndOrgIdIsNullAndArchivedFalseOrderByUpdatedAtDesc(String userUuid);
+    List<Conversation> findByUserUuidAndOrgIdIsNullAndArchivedTrueOrderByUpdatedAtDesc(String userUuid);
 
     /** Team mode (orgId set). */
-    List<Conversation> findByUserEmailAndOrgIdAndArchivedFalseOrderByUpdatedAtDesc(String userEmail, String orgId);
-    List<Conversation> findByUserEmailAndOrgIdAndArchivedTrueOrderByUpdatedAtDesc(String userEmail, String orgId);
+    List<Conversation> findByUserUuidAndOrgIdAndArchivedFalseOrderByUpdatedAtDesc(String userUuid, String orgId);
+    List<Conversation> findByUserUuidAndOrgIdAndArchivedTrueOrderByUpdatedAtDesc(String userUuid, String orgId);
 
     /** Backward-compatible aliases (existing callers without org context → personal). */
-    default List<Conversation> findByUserEmailAndArchivedFalseOrderByUpdatedAtDesc(String userEmail) {
-        return findByUserEmailAndOrgIdIsNullAndArchivedFalseOrderByUpdatedAtDesc(userEmail);
+    default List<Conversation> findByUserUuidAndArchivedFalseOrderByUpdatedAtDesc(String userUuid) {
+        return findByUserUuidAndOrgIdIsNullAndArchivedFalseOrderByUpdatedAtDesc(userUuid);
     }
-    default List<Conversation> findByUserEmailAndArchivedTrueOrderByUpdatedAtDesc(String userEmail) {
-        return findByUserEmailAndOrgIdIsNullAndArchivedTrueOrderByUpdatedAtDesc(userEmail);
+    default List<Conversation> findByUserUuidAndArchivedTrueOrderByUpdatedAtDesc(String userUuid) {
+        return findByUserUuidAndOrgIdIsNullAndArchivedTrueOrderByUpdatedAtDesc(userUuid);
     }
 }

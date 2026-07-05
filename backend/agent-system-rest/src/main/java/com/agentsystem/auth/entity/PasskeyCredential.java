@@ -9,7 +9,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "passkey_credentials",
-       indexes = @Index(name = "idx_pk_email", columnList = "email"))
+       indexes = @Index(name = "idx_pk_user_uuid", columnList = "user_uuid"))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -19,8 +19,8 @@ public class PasskeyCredential {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 255)
-    private String email;
+    @Column(name = "user_uuid", nullable = false, length = 36)
+    private String userUuid;
 
     @Column(name = "credential_id", nullable = false, unique = true, length = 512)
     private String credentialId;  // base64url-encoded

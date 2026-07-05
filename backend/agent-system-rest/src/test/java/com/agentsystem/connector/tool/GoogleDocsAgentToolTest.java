@@ -30,7 +30,7 @@ class GoogleDocsAgentToolTest {
 
     @AfterEach
     void tearDown() {
-        tool.clearCurrentEmail();
+        tool.clearCurrentUserUuid();
     }
 
     @Test
@@ -46,8 +46,8 @@ class GoogleDocsAgentToolTest {
     // ── ThreadLocal email management ──────────────────────────────────────────
 
     @Test
-    void setCurrentEmail_null_setsEmptyString() {
-        tool.setCurrentEmail(null);
+    void setCurrentUserUuid_null_setsEmptyString() {
+        tool.setCurrentUserUuid(null);
         // Verify writeToGoogleDocs reads the ThreadLocal (empty email)
         when(googleDocsService.createDocument(anyString(), anyString(), eq(""), isNull()))
                 .thenReturn("https://docs.google.com/document/d/abc");
@@ -58,11 +58,11 @@ class GoogleDocsAgentToolTest {
     }
 
     @Test
-    void clearCurrentEmail_removesFromThreadLocal() {
-        tool.setCurrentEmail("user@example.com");
-        tool.clearCurrentEmail();
+    void clearCurrentUserUuid_removesFromThreadLocal() {
+        tool.setCurrentUserUuid("user@example.com");
+        tool.clearCurrentUserUuid();
 
-        // After clear, ThreadLocal returns null → createDocument called with null
+        // After clear, ThreadLocal.remove() leaves it unset → raw null passed straight through.
         when(googleDocsService.createDocument(anyString(), anyString(), isNull(), isNull()))
                 .thenReturn("https://docs.google.com/document/d/abc");
 
@@ -75,7 +75,7 @@ class GoogleDocsAgentToolTest {
 
     @Test
     void writeToGoogleDocs_success_returnsUrlMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleDocsService.createDocument("My Title", "Body text", "user@example.com", null))
                 .thenReturn("https://docs.google.com/document/d/abc123");
 
@@ -87,7 +87,7 @@ class GoogleDocsAgentToolTest {
 
     @Test
     void writeToGoogleDocs_notConnected_returnsErrorMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleDocsService.createDocument(anyString(), anyString(), anyString(), any()))
                 .thenThrow(new IllegalStateException("Google Docs not connected"));
 
@@ -101,7 +101,7 @@ class GoogleDocsAgentToolTest {
 
     @Test
     void readGoogleDoc_success_returnsContent() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleDocsService.readDocument("https://docs.google.com/document/d/abc", "user@example.com", null))
                 .thenReturn("Document content here");
 
@@ -112,7 +112,7 @@ class GoogleDocsAgentToolTest {
 
     @Test
     void readGoogleDoc_emptyDocument_returnsEmptyMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleDocsService.readDocument(anyString(), anyString(), any())).thenReturn("");
 
         String result = tool.readGoogleDoc("https://docs.google.com/document/d/abc");
@@ -122,7 +122,7 @@ class GoogleDocsAgentToolTest {
 
     @Test
     void readGoogleDoc_notConnected_returnsErrorMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleDocsService.readDocument(anyString(), anyString(), any()))
                 .thenThrow(new IllegalStateException("Not connected to Google Docs"));
 

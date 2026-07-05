@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Spring AI tool: create a Google Slides presentation.
- * Uses the same ThreadLocal email-injection pattern as {@link GoogleDocsAgentTool}.
+ * Uses the same ThreadLocal user_uuid-injection pattern as {@link GoogleDocsAgentTool}.
  */
 @Slf4j
 @Component
@@ -20,11 +20,11 @@ public class GoogleSlidesAgentTool {
     private final GoogleSlidesService googleSlidesService;
     private final ToolCallBudget      toolCallBudget;
 
-    private static final ThreadLocal<String> CURRENT_EMAIL  = new ThreadLocal<>();
-    private static final ThreadLocal<String> CURRENT_ORG_ID = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_USER_UUID = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_ORG_ID    = new ThreadLocal<>();
 
-    public void setCurrentEmail(String email) { CURRENT_EMAIL.set(email != null ? email : ""); }
-    public void clearCurrentEmail()           { CURRENT_EMAIL.remove(); }
+    public void setCurrentUserUuid(String uuid) { CURRENT_USER_UUID.set(uuid != null ? uuid : ""); }
+    public void clearCurrentUserUuid()          { CURRENT_USER_UUID.remove(); }
 
     public void setCurrentOrgId(String orgId)  { CURRENT_ORG_ID.set(orgId); }
     public void clearCurrentOrgId()            { CURRENT_ORG_ID.remove(); }
@@ -46,10 +46,10 @@ public class GoogleSlidesAgentTool {
             """)
     public String writeToGoogleSlides(String title, String content) {
         if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
-        String email = CURRENT_EMAIL.get();
-        log.info("[GoogleSlidesAgentTool] Creating presentation '{}' for '{}'", title, email);
+        String uuid = CURRENT_USER_UUID.get();
+        log.info("[GoogleSlidesAgentTool] Creating presentation '{}' for '{}'", title, uuid);
         try {
-            String url = googleSlidesService.createPresentation(title, content, email, CURRENT_ORG_ID.get());
+            String url = googleSlidesService.createPresentation(title, content, uuid, CURRENT_ORG_ID.get());
             return "Presentation created successfully. Open it here: " + url;
         } catch (IllegalStateException e) {
             return "Could not write to Google Slides: " + e.getMessage();
@@ -64,10 +64,10 @@ public class GoogleSlidesAgentTool {
             """)
     public String readGoogleSlide(String presUrl) {
         if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
-        String email = CURRENT_EMAIL.get();
-        log.info("[GoogleSlidesAgentTool] Reading presentation '{}' for '{}'", presUrl, email);
+        String uuid = CURRENT_USER_UUID.get();
+        log.info("[GoogleSlidesAgentTool] Reading presentation '{}' for '{}'", presUrl, uuid);
         try {
-            String content = googleSlidesService.readPresentation(presUrl, email, CURRENT_ORG_ID.get());
+            String content = googleSlidesService.readPresentation(presUrl, uuid, CURRENT_ORG_ID.get());
             return content.isBlank() ? "The presentation appears to be empty." : content;
         } catch (IllegalStateException e) {
             return "Could not read Google Slides: " + e.getMessage();

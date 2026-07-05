@@ -3,6 +3,7 @@ package com.agentsystem.agent.nodes;
 import com.agentsystem.agent.state.AgentState;
 import com.agentsystem.knowledge.service.KnowledgeSourceService;
 import com.agentsystem.knowledge.entity.KnowledgeSource;
+import com.agentsystem.org.OrgContext;
 import com.agentsystem.rag.service.RetrievalService;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.DocumentResult;
@@ -23,6 +24,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class RetrievalNodeTest {
+
+    private static final OrgContext USER_CTX = new OrgContext("user-uuid-1", null, "PERSONAL", null);
 
     @Mock RetrievalService       retrievalService;
     @Mock KnowledgeSourceService knowledgeSourceService;
@@ -63,7 +66,7 @@ class RetrievalNodeTest {
 
     @Test
     void process_documentsFound_returnsDocumentsList() {
-        when(knowledgeSourceService.listAccessible("user@example.com"))
+        when(knowledgeSourceService.listAccessible(USER_CTX))
                 .thenReturn(List.of(ks("source.pdf")));
         when(retrievalService.retrieve(anyString(), anyInt(), any(), any()))
                 .thenReturn(List.of(doc("id-1"), doc("id-2")));
@@ -71,7 +74,7 @@ class RetrievalNodeTest {
         AgentState state = new AgentState(Map.of(
                 "request",       request(true),
                 "queryAnalysis", analysis(),
-                "userEmail",     "user@example.com"
+                "userUuid",      "user-uuid-1"
         ));
 
         Map<String, Object> result = retrievalNode.process(state);
@@ -86,13 +89,13 @@ class RetrievalNodeTest {
 
     @Test
     void process_noDocuments_routesToFallbackWithReason() {
-        when(knowledgeSourceService.listAccessible("user@example.com")).thenReturn(List.of());
+        when(knowledgeSourceService.listAccessible(USER_CTX)).thenReturn(List.of());
         when(retrievalService.retrieve(anyString(), anyInt(), any(), any())).thenReturn(List.of());
 
         AgentState state = new AgentState(Map.of(
                 "request",       request(true),
                 "queryAnalysis", analysis(),
-                "userEmail",     "user@example.com"
+                "userUuid",      "user-uuid-1"
         ));
 
         Map<String, Object> result = retrievalNode.process(state);
@@ -101,10 +104,10 @@ class RetrievalNodeTest {
         assertThat(result.get("fallbackReason").toString()).contains("No relevant");
     }
 
-    // ── null userEmail (auth disabled) ─────────────────────────────────────────
+    // ── null userUuid (auth disabled) ──────────────────────────────────────────
 
     @Test
-    void process_nullUserEmail_passesNullAllowedSources() {
+    void process_nullUserUuid_passesNullAllowedSources() {
         DocumentResult doc = doc("id-1");
         when(retrievalService.retrieve(anyString(), anyInt(), any(), isNull()))
                 .thenReturn(List.of(doc));
@@ -112,7 +115,7 @@ class RetrievalNodeTest {
         AgentState state = new AgentState(Map.of(
                 "request",       request(true),
                 "queryAnalysis", analysis()
-                // no userEmail → null → unrestricted
+                // no userUuid → null → unrestricted
         ));
 
         Map<String, Object> result = retrievalNode.process(state);
@@ -126,9 +129,9 @@ class RetrievalNodeTest {
     // ── allowed source resolution ──────────────────────────────────────────────
 
     @Test
-    void process_userEmailSet_restrictsToAccessibleSources() {
+    void process_userUuidSet_restrictsToAccessibleSources() {
         KnowledgeSource source = ks("my-doc.pdf");
-        when(knowledgeSourceService.listAccessible("user@example.com"))
+        when(knowledgeSourceService.listAccessible(USER_CTX))
                 .thenReturn(List.of(source));
         when(retrievalService.retrieve(anyString(), anyInt(), any(), argThat(set ->
                 set != null && set.contains("my-doc.pdf"))))
@@ -137,11 +140,11 @@ class RetrievalNodeTest {
         AgentState state = new AgentState(Map.of(
                 "request",       request(true),
                 "queryAnalysis", analysis(),
-                "userEmail",     "user@example.com"
+                "userUuid",      "user-uuid-1"
         ));
 
         retrievalNode.process(state);
 
-        verify(knowledgeSourceService).listAccessible("user@example.com");
+        verify(knowledgeSourceService).listAccessible(USER_CTX);
     }
 }

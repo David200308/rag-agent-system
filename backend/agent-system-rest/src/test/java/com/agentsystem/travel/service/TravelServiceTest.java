@@ -38,7 +38,7 @@ class TravelServiceTest {
     private TravelRecord makeRecord(String id, String email) {
         TravelRecord r = new TravelRecord();
         r.setId(id);
-        r.setOwnerEmail(email);
+        r.setOwnerUuid(email);
         r.setTitle("Trip to Paris");
         r.setStartDate("2025-06-01");
         r.setEndDate("2025-06-10");
@@ -52,19 +52,19 @@ class TravelServiceTest {
     @Test
     void list_returnsAllRecordsForEmail() {
         TravelRecord r = makeRecord("id-1", "user@test.com");
-        when(repo.findByOwnerEmailOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+        when(repo.findByOwnerUuidOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
 
         List<TravelRecordDto> result = service.list("user@test.com");
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo("id-1");
-        assertThat(result.get(0).ownerEmail()).isEqualTo("user@test.com");
+        assertThat(result.get(0).ownerUuid()).isEqualTo("user@test.com");
         assertThat(result.get(0).title()).isEqualTo("Trip to Paris");
     }
 
     @Test
     void list_noRecords_returnsEmpty() {
-        when(repo.findByOwnerEmailOrderByStartDateDesc("other@test.com")).thenReturn(List.of());
+        when(repo.findByOwnerUuidOrderByStartDateDesc("other@test.com")).thenReturn(List.of());
 
         assertThat(service.list("other@test.com")).isEmpty();
     }
@@ -73,7 +73,7 @@ class TravelServiceTest {
     void list_recordWithStopsJson_parsesStops() {
         TravelRecord r = makeRecord("id-2", "user@test.com");
         r.setStopsJson("[{\"city\":\"Paris\",\"days\":3}]");
-        when(repo.findByOwnerEmailOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+        when(repo.findByOwnerUuidOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
 
         List<TravelRecordDto> result = service.list("user@test.com");
 
@@ -85,7 +85,7 @@ class TravelServiceTest {
     void list_recordWithInvalidStopsJson_returnsEmptyStops() {
         TravelRecord r = makeRecord("id-3", "user@test.com");
         r.setStopsJson("not-valid-json");
-        when(repo.findByOwnerEmailOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+        when(repo.findByOwnerUuidOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
 
         List<TravelRecordDto> result = service.list("user@test.com");
 
@@ -96,7 +96,7 @@ class TravelServiceTest {
     void list_recordWithBlankStopsJson_returnsEmptyStops() {
         TravelRecord r = makeRecord("id-4", "user@test.com");
         r.setStopsJson("   ");
-        when(repo.findByOwnerEmailOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+        when(repo.findByOwnerUuidOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
 
         List<TravelRecordDto> result = service.list("user@test.com");
 
@@ -107,7 +107,7 @@ class TravelServiceTest {
     void list_recordWithExpensesJson_parsesExpenses() {
         TravelRecord r = makeRecord("id-5", "user@test.com");
         r.setExpensesJson("[{\"category\":\"Flight\",\"amount\":1200,\"currency\":\"USD\"}]");
-        when(repo.findByOwnerEmailOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+        when(repo.findByOwnerUuidOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
 
         List<TravelRecordDto> result = service.list("user@test.com");
 
@@ -119,7 +119,7 @@ class TravelServiceTest {
     void list_recordWithInvalidExpensesJson_returnsEmptyExpenses() {
         TravelRecord r = makeRecord("id-6", "user@test.com");
         r.setExpensesJson("not-valid-json");
-        when(repo.findByOwnerEmailOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+        when(repo.findByOwnerUuidOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
 
         List<TravelRecordDto> result = service.list("user@test.com");
 
@@ -135,7 +135,7 @@ class TravelServiceTest {
         Map<String, Object> body = Map.of("title", "Japan Trip", "startDate", "2025-04-01", "endDate", "2025-04-14");
         TravelRecord result = service.create("user@test.com", body);
 
-        assertThat(result.getOwnerEmail()).isEqualTo("user@test.com");
+        assertThat(result.getOwnerUuid()).isEqualTo("user@test.com");
         assertThat(result.getTitle()).isEqualTo("Japan Trip");
         assertThat(result.getId()).isNotBlank();
         verify(repo).save(result);

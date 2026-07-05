@@ -13,7 +13,10 @@ import com.agentsystem.connector.service.TelegramService;
 import com.agentsystem.model.service.ModelConfigService;
 import com.agentsystem.notification.NotificationClient;
 import com.agentsystem.sandbox.service.SandboxService;
+import com.agentsystem.org.OrgContext;
 import com.agentsystem.skill.service.SkillService;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.webfetch.service.WebFetchService;
 import com.agentsystem.workflow.entity.Workflow;
 import com.agentsystem.workflow.entity.WorkflowAgent;
@@ -87,6 +90,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
     private final GoogleSheetsService      googleSheetsService;
     private final GoogleSlidesService      googleSlidesService;
     private final TelegramService          telegramService;
+    private final UserAccountService       userAccountService;
 
     private static final java.util.Set<String> CONNECTOR_TOOL_NAMES = java.util.Set.of(
             "GOOGLE_DOCS_WRITE", "GOOGLE_DOCS_READ",
@@ -110,10 +114,15 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
      */
     @Override
     public String startRun(String workflowId, String userInput, String ownerEmail, boolean emailNotify) {
-        WorkflowRun run = new WorkflowRun(UUID.randomUUID().toString(), workflowId, ownerEmail, userInput);
+        return startRunByUuid(workflowId, userInput, resolveUuid(ownerEmail), emailNotify);
+    }
+
+    @Override
+    public String startRunByUuid(String workflowId, String userInput, String ownerUuid, boolean emailNotify) {
+        WorkflowRun run = new WorkflowRun(UUID.randomUUID().toString(), workflowId, ownerUuid, userInput);
         run.setStatus(WorkflowRun.RunStatus.PENDING);
         runRepo.save(run);
-        if (emailNotify && ownerEmail != null && !ownerEmail.equals("anonymous")) {
+        if (emailNotify && ownerUuid != null) {
             emailNotifyRuns.put(run.getId(), true);
         }
         log.info("[WorkflowRun] Starting run {} for workflow {} (emailNotify={})", run.getId(), workflowId, emailNotify);
@@ -279,8 +288,8 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
 
     private void maybeSendCompletionEmail(WorkflowRun run, String workflowName) {
         if (!emailNotifyRuns.remove(run.getId(), true)) return;
-        String to = run.getOwnerEmail();
-        if (to == null || to.equals("anonymous")) return;
+        String to = resolveEmail(run.getOwnerUuid());
+        if (to == null) return;
         asyncPool.submit(() -> notificationClient.sendWorkflowComplete(
                 to, workflowName, run.getStatus().name(), run.getFinalOutput()));
     }
@@ -471,11 +480,11 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                 String toolResult;
 
                 if ("SCHEDULE".equalsIgnoreCase(toolName)) {
-                    toolResult = dispatchScheduleTool(run.getOwnerEmail(), command);
+                    toolResult = dispatchScheduleTool(run.getOwnerUuid(), command);
                 } else if (CONNECTOR_TOOL_NAMES.contains(toolName.toUpperCase())) {
-                    toolResult = dispatchConnectorTool(toolName.toUpperCase(), command, run.getOwnerEmail(), run.getOrgId());
+                    toolResult = dispatchConnectorTool(toolName.toUpperCase(), command, run.getOwnerUuid(), run.getOrgId());
                 } else {
-                    String blocked = validateNetworkCommand(command, run.getOwnerEmail());
+                    String blocked = validateNetworkCommand(command, run.getOwnerUuid());
                     if (blocked != null) {
                         emit(run.getId(), agent.getId(), agent.getName(),
                                 WorkflowRunLog.LogType.TOOL_RESULT, blocked);
@@ -513,14 +522,14 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
 
     // ── Prompt building ───────────────────────────────────────────────────────
 
-    private String dispatchScheduleTool(String ownerEmail, String json) {
+    private String dispatchScheduleTool(String ownerUuid, String json) {
         try {
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
             com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(json);
             String action = node.path("action").asText("create");
             return switch (action.toLowerCase()) {
                 case "create" -> workflowScheduleClient.createSchedule(
-                        ownerEmail,
+                        ownerUuid,
                         node.path("conversationId").asText(),
                         node.path("message").asText(),
                         node.path("cron").asText("0 9 * * *"),
@@ -530,11 +539,11 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                         node.path("useWebFetch").asBoolean(false)
                 );
                 case "list" -> workflowScheduleClient.listSchedules(
-                        ownerEmail,
+                        ownerUuid,
                         node.path("conversationId").asText()
                 );
                 case "delete" -> workflowScheduleClient.deleteSchedule(
-                        ownerEmail,
+                        ownerUuid,
                         node.path("scheduleId").asText()
                 );
                 default -> "Unknown SCHEDULE action: " + action + ". Valid actions: create, list, delete";
@@ -544,7 +553,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         }
     }
 
-    private String dispatchConnectorTool(String toolName, String payload, String ownerEmail, String orgId) {
+    private String dispatchConnectorTool(String toolName, String payload, String ownerUuid, String orgId) {
         try {
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
             com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(payload.trim());
@@ -553,28 +562,28 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                 case "GOOGLE_DOCS_WRITE" -> googleDocsService.createDocument(
                         node.path("title").asText("Untitled"),
                         node.path("content").asText(""),
-                        ownerEmail, orgId);
+                        ownerUuid, orgId);
 
                 case "GOOGLE_DOCS_READ" -> {
                     String url = node.isTextual() ? node.asText()
                             : node.path("url").asText(payload.trim());
-                    yield googleDocsService.readDocument(url, ownerEmail, orgId);
+                    yield googleDocsService.readDocument(url, ownerUuid, orgId);
                 }
 
                 case "GOOGLE_SHEETS_WRITE" -> googleSheetsService.createSpreadsheet(
                         node.path("title").asText("Untitled"),
                         node.path("content").asText(""),
-                        ownerEmail, orgId);
+                        ownerUuid, orgId);
 
                 case "GOOGLE_SLIDES_WRITE" -> googleSlidesService.createPresentation(
                         node.path("title").asText("Untitled"),
                         node.path("content").asText(""),
-                        ownerEmail, orgId);
+                        ownerUuid, orgId);
 
                 case "TELEGRAM_SEND" -> {
                     String msg = node.isTextual() ? node.asText()
                             : node.path("message").asText(payload.trim());
-                    yield telegramService.sendMessage(ownerEmail, orgId, msg);
+                    yield telegramService.sendMessage(ownerUuid, orgId, msg);
                 }
 
                 default -> "Unknown connector tool: " + toolName;
@@ -759,7 +768,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
      * Returns a block message if the command contains curl/wget targeting a domain not in
      * the owner's whitelist. Returns null if the command is allowed.
      */
-    private String validateNetworkCommand(String command, String ownerEmail) {
+    private String validateNetworkCommand(String command, String ownerUuid) {
         if (!command.contains("curl") && !command.contains("wget")) {
             return null;
         }
@@ -771,13 +780,28 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         if (urls.isEmpty()) {
             return "[Blocked: curl/wget without a recognizable URL is not permitted]";
         }
+        OrgContext ownerCtx = new OrgContext(ownerUuid, null, "PERSONAL", null);
         for (String url : urls) {
-            if (!webFetchService.isUrlAllowed(url, ownerEmail)) {
+            if (!webFetchService.isUrlAllowed(url, ownerCtx)) {
                 String host = url.replaceAll("^https?://([^/?#]+).*", "$1");
                 return "[Blocked: domain '" + host + "' is not in your web-fetch whitelist. "
                         + "Add it in Settings → Web Fetch before using it in a workflow.]";
             }
         }
         return null;
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────────
+
+    /** Resolves an email to its user_uuid, or null if no such email is a registered user. */
+    private String resolveUuid(String email) {
+        if (email == null || email.isBlank()) return null;
+        return userAccountService.findByEmail(email).map(User::getUuid).orElse(null);
+    }
+
+    /** Resolves a user_uuid to its (Redis-cached) email, or null. */
+    private String resolveEmail(String uuid) {
+        if (uuid == null || uuid.isBlank()) return null;
+        return userAccountService.getEmailByUuid(uuid);
     }
 }

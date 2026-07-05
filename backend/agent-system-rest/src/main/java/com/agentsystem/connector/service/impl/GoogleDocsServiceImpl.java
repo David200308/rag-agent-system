@@ -49,13 +49,13 @@ public class GoogleDocsServiceImpl implements GoogleDocsService {
      *
      * @param title      document title
      * @param content    body text (may contain newlines)
-     * @param ownerEmail the user whose token to use; {@code ""} when auth is disabled
+     * @param ownerUuid the user whose token to use; {@code ""} when auth is disabled
      * @return the document's browser URL (https://docs.google.com/document/d/{id}/edit)
      */
     @Override
-    public String createDocument(String title, String content, String ownerEmail, String orgId) {
-        String email = ownerEmail != null ? ownerEmail : "";
-        String token = resolveAccessToken(email, orgId);
+    public String createDocument(String title, String content, String ownerUuid, String orgId) {
+        String uuid = ownerUuid != null ? ownerUuid : "";
+        String token = resolveAccessToken(uuid, orgId);
 
         // ── Step 1: create an empty document ────────────────────────────────
         CreateDocResponse created = restClientBuilder.build()
@@ -71,7 +71,7 @@ public class GoogleDocsServiceImpl implements GoogleDocsService {
             throw new IllegalStateException("Google Docs API returned no documentId");
         }
         String docId = created.documentId();
-        log.info("[GoogleDocsService] Created doc {} for {}", docId, email);
+        log.info("[GoogleDocsService] Created doc {} for {}", docId, uuid);
 
         // ── Step 2: insert content via batchUpdate ───────────────────────────
         // The document starts with one empty paragraph at index 0..1.
@@ -104,13 +104,13 @@ public class GoogleDocsServiceImpl implements GoogleDocsService {
      * Reads the plain-text content of an existing Google Doc.
      *
      * @param docUrl     the browser URL or document ID of the Google Doc
-     * @param ownerEmail the user whose token to use
+     * @param ownerUuid the user whose token to use
      * @return the document title and body text concatenated
      */
     @Override
-    public String readDocument(String docUrl, String ownerEmail, String orgId) {
-        String email  = ownerEmail != null ? ownerEmail : "";
-        String token  = resolveAccessToken(email, orgId);
+    public String readDocument(String docUrl, String ownerUuid, String orgId) {
+        String uuid  = ownerUuid != null ? ownerUuid : "";
+        String token  = resolveAccessToken(uuid, orgId);
         String docId  = extractDocId(docUrl);
 
         DocContent doc = restClientBuilder.build()
@@ -149,15 +149,15 @@ public class GoogleDocsServiceImpl implements GoogleDocsService {
 
     /** Returns true if the user has a valid (possibly refreshable) Google token. */
     @Override
-    public boolean isConnected(String ownerEmail, String orgId) {
-        String email = ownerEmail != null ? ownerEmail : "";
-        return findToken(email, orgId).isPresent();
+    public boolean isConnected(String ownerUuid, String orgId) {
+        String uuid = ownerUuid != null ? ownerUuid : "";
+        return findToken(uuid, orgId).isPresent();
     }
 
     // ── Token management ──────────────────────────────────────────────────────
 
-    private String resolveAccessToken(String email, String orgId) {
-        ConnectorToken ct = findToken(email, orgId)
+    private String resolveAccessToken(String uuid, String orgId) {
+        ConnectorToken ct = findToken(uuid, orgId)
                 .orElseThrow(() -> new IllegalStateException(
                         "Google account not connected. Visit /mcp to connect."));
 
@@ -167,10 +167,10 @@ public class GoogleDocsServiceImpl implements GoogleDocsService {
         return ct.getAccessToken();
     }
 
-    private java.util.Optional<ConnectorToken> findToken(String email, String orgId) {
+    private java.util.Optional<ConnectorToken> findToken(String uuid, String orgId) {
         return orgId != null
-                ? tokenRepo.findByOwnerEmailAndProviderAndOrgId(email, "google", orgId)
-                : tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull(email, "google");
+                ? tokenRepo.findByOwnerUuidAndProviderAndOrgId(uuid, "google", orgId)
+                : tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull(uuid, "google");
     }
 
     private boolean isExpiringSoon(ConnectorToken ct) {
@@ -184,7 +184,7 @@ public class GoogleDocsServiceImpl implements GoogleDocsService {
             return ct;
         }
 
-        log.info("[GoogleDocsService] Refreshing Google token for {}", ct.getOwnerEmail());
+        log.info("[GoogleDocsService] Refreshing Google token for {}", ct.getOwnerUuid());
 
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("client_id",     props.google().clientId());

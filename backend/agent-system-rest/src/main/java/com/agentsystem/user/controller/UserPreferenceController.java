@@ -22,11 +22,11 @@ public class UserPreferenceController {
     @GetMapping("/preferences")
     @Operation(summary = "Get the current user's preferences")
     public ResponseEntity<Map<String, Object>> getPreferences(HttpServletRequest req) {
-        String email = (String) req.getAttribute("authenticatedEmail");
-        if (email == null) {
+        String userUuid = (String) req.getAttribute("authenticatedUserUuid");
+        if (userUuid == null) {
             return ResponseEntity.status(401).build();
         }
-        UserPreference pref = service.getOrDefault(email);
+        UserPreference pref = service.getOrDefault(userUuid);
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("timezone",         pref.getTimezone());
         result.put("selectedModel",    pref.getSelectedModel());
@@ -40,24 +40,24 @@ public class UserPreferenceController {
             @RequestBody Map<String, String> body,
             HttpServletRequest req) {
 
-        String email = (String) req.getAttribute("authenticatedEmail");
-        if (email == null) {
+        String userUuid = (String) req.getAttribute("authenticatedUserUuid");
+        if (userUuid == null) {
             return ResponseEntity.status(401).build();
         }
-        UserPreference pref = service.getOrDefault(email);
+        UserPreference pref = service.getOrDefault(userUuid);
 
         String timezone = body.get("timezone");
         if (timezone != null && !timezone.isBlank()) {
-            pref = service.setTimezone(email, timezone.trim());
+            pref = service.setTimezone(userUuid, timezone.trim());
         }
 
         if (body.containsKey("selectedModel")) {
             String model = body.get("selectedModel");
-            pref = service.setSelectedModel(email, model == null || model.isBlank() ? null : model.trim());
+            pref = service.setSelectedModel(userUuid, model == null || model.isBlank() ? null : model.trim());
         }
 
         if (body.containsKey("defaultCurrency")) {
-            pref = service.setDefaultCurrency(email, body.get("defaultCurrency"));
+            pref = service.setDefaultCurrency(userUuid, body.get("defaultCurrency"));
         }
 
         Map<String, Object> result = new java.util.LinkedHashMap<>();

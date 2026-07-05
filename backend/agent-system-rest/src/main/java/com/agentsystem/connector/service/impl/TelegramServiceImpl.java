@@ -5,6 +5,7 @@ import com.agentsystem.connector.service.TelegramService;
 import com.agentsystem.connector.ConnectorProperties;
 import com.agentsystem.connector.entity.ConnectorToken;
 import com.agentsystem.connector.repository.ConnectorTokenRepository;
+import com.agentsystem.user.service.UserAccountService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +49,7 @@ public class TelegramServiceImpl implements TelegramService {
     private final ConnectorProperties      props;
     private final ConnectorTokenRepository tokenRepo;
     private final RestClient.Builder       restClientBuilder;
+    private final UserAccountService       userAccountService;
 
     // ── Config ────────────────────────────────────────────────────────────────
 
@@ -69,7 +71,7 @@ public class TelegramServiceImpl implements TelegramService {
      */
     @Override
     @Transactional
-    public void validateAndConnect(Map<String, Object> authData, String ownerEmail, String orgId) {
+    public void validateAndConnect(Map<String, Object> authData, String ownerUuid, String orgId) {
         String receivedHash = extract(authData, "hash");
         if (receivedHash == null || receivedHash.isBlank()) {
             throw new IllegalArgumentException("Missing hash in Telegram auth data");
@@ -107,27 +109,27 @@ public class TelegramServiceImpl implements TelegramService {
             throw new IllegalArgumentException("Missing id in Telegram auth data");
         }
 
-        String email = ownerEmail != null ? ownerEmail : "";
-        ConnectorToken token = findToken(email, orgId)
-                .orElse(ConnectorToken.builder().ownerEmail(email).provider("telegram").orgId(orgId).build());
+        String uuid = ownerUuid != null ? ownerUuid : "";
+        ConnectorToken token = findToken(uuid, orgId)
+                .orElse(ConnectorToken.builder().ownerUuid(uuid).provider("telegram").orgId(orgId).build());
 
         token.setAccessToken(chatId);
         token.setTokenType("telegram");
         tokenRepo.save(token);
-        log.info("[TelegramService] Connected Telegram chat {} for user {} orgId={}", chatId, email, orgId);
+        log.info("[TelegramService] Connected Telegram chat {} for user {} orgId={}", chatId, uuid, orgId);
     }
 
     // ── Send message ──────────────────────────────────────────────────────────
 
     @Override
-    public String sendMessage(String ownerEmail, String orgId, String text) {
-        String email = ownerEmail != null ? ownerEmail : "";
-        ConnectorToken token = findToken(email, orgId)
+    public String sendMessage(String ownerUuid, String orgId, String text) {
+        String uuid = ownerUuid != null ? ownerUuid : "";
+        ConnectorToken token = findToken(uuid, orgId)
                 .orElseThrow(() -> new IllegalStateException(
                         "Telegram is not connected. Please connect your Telegram account first."));
 
         sendBotMessage(token.getAccessToken(), text);
-        log.info("[TelegramService] Sent Telegram message for user {}", email);
+        log.info("[TelegramService] Sent Telegram message for user {}", uuid);
         return "Message sent to your Telegram successfully.";
     }
 
@@ -136,25 +138,27 @@ public class TelegramServiceImpl implements TelegramService {
      * Used by the createTelegramGroupSession tool in interactive shared conversations.
      */
     @Override
-    public String sendGroupNotification(String ownerEmail, String visitorEmail, String orgId, String content) {
+    public String sendGroupNotification(String ownerUuid, String visitorUuid, String orgId, String content) {
         StringBuilder result = new StringBuilder();
 
         // Notify the owner
         try {
+            String visitorEmail = (visitorUuid != null && !visitorUuid.isBlank())
+                    ? userAccountService.getEmailByUuid(visitorUuid) : null;
             String ownerMsg = (visitorEmail != null && !visitorEmail.isBlank())
                     ? "Message from shared conversation (sent by " + visitorEmail + "):\n\n" + content
                     : "Message from a shared conversation:\n\n" + content;
-            sendMessage(ownerEmail, orgId, ownerMsg);
+            sendMessage(ownerUuid, orgId, ownerMsg);
             result.append("Message delivered to the conversation owner via Telegram.");
         } catch (IllegalStateException e) {
             result.append("Conversation owner's Telegram is not connected.");
         }
 
         // Confirm to the visitor (if distinct from owner and has Telegram)
-        if (visitorEmail != null && !visitorEmail.isBlank()
-                && !visitorEmail.equalsIgnoreCase(ownerEmail)) {
+        if (visitorUuid != null && !visitorUuid.isBlank()
+                && !visitorUuid.equals(ownerUuid)) {
             try {
-                sendMessage(visitorEmail, orgId,
+                sendMessage(visitorUuid, orgId,
                         "Your message was forwarded to the conversation owner via Telegram:\n\n" + content);
                 result.append(" Confirmation also sent to your Telegram.");
             } catch (IllegalStateException ignored) {
@@ -162,34 +166,34 @@ public class TelegramServiceImpl implements TelegramService {
             }
         }
 
-        log.info("[TelegramService] Group notification sent owner={} visitor={}", ownerEmail, visitorEmail);
+        log.info("[TelegramService] Group notification sent owner={} visitor={}", ownerUuid, visitorUuid);
         return result.toString().trim();
     }
 
     // ── Status / disconnect ───────────────────────────────────────────────────
 
     @Override
-    public boolean isConnected(String ownerEmail, String orgId) {
-        String email = ownerEmail != null ? ownerEmail : "";
-        return findToken(email, orgId).isPresent();
+    public boolean isConnected(String ownerUuid, String orgId) {
+        String uuid = ownerUuid != null ? ownerUuid : "";
+        return findToken(uuid, orgId).isPresent();
     }
 
     @Override
     @Transactional
-    public void disconnect(String ownerEmail, String orgId) {
-        String email = ownerEmail != null ? ownerEmail : "";
+    public void disconnect(String ownerUuid, String orgId) {
+        String uuid = ownerUuid != null ? ownerUuid : "";
         if (orgId != null) {
-            tokenRepo.deleteByOwnerEmailAndProviderAndOrgId(email, "telegram", orgId);
+            tokenRepo.deleteByOwnerUuidAndProviderAndOrgId(uuid, "telegram", orgId);
         } else {
-            tokenRepo.deleteByOwnerEmailAndProviderAndOrgIdIsNull(email, "telegram");
+            tokenRepo.deleteByOwnerUuidAndProviderAndOrgIdIsNull(uuid, "telegram");
         }
-        log.info("[TelegramService] Disconnected Telegram for {} orgId={}", email, orgId);
+        log.info("[TelegramService] Disconnected Telegram for {} orgId={}", uuid, orgId);
     }
 
-    private Optional<ConnectorToken> findToken(String email, String orgId) {
+    private Optional<ConnectorToken> findToken(String ownerUuid, String orgId) {
         return orgId != null
-                ? tokenRepo.findByOwnerEmailAndProviderAndOrgId(email, "telegram", orgId)
-                : tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull(email, "telegram");
+                ? tokenRepo.findByOwnerUuidAndProviderAndOrgId(ownerUuid, "telegram", orgId)
+                : tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull(ownerUuid, "telegram");
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────

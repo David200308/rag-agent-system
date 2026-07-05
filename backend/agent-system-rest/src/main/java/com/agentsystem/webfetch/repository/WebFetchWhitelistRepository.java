@@ -18,11 +18,11 @@ public interface WebFetchWhitelistRepository extends JpaRepository<WebFetchWhite
 
     // ── Per-user (personal mode) queries ─────────────────────────────────────
 
-    List<WebFetchWhitelist> findAllByAddedByOrderByDomainAsc(String addedBy);
+    List<WebFetchWhitelist> findAllByAddedByUuidOrderByDomainAsc(String addedByUuid);
 
-    boolean existsByDomainAndAddedBy(String domain, String addedBy);
+    boolean existsByDomainAndAddedByUuid(String domain, String addedByUuid);
 
-    void deleteByDomainAndAddedBy(String domain, String addedBy);
+    void deleteByDomainAndAddedByUuid(String domain, String addedByUuid);
 
     // ── Per-org (team mode) queries ───────────────────────────────────────────
 

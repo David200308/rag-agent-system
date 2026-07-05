@@ -9,17 +9,17 @@ public interface TelegramService {
     /**
      * Validate the Telegram Login Widget auth payload and persist the chat_id.
      */
-    void validateAndConnect(Map<String, Object> authData, String ownerEmail, String orgId);
+    void validateAndConnect(Map<String, Object> authData, String ownerUuid, String orgId);
 
-    String sendMessage(String ownerEmail, String orgId, String text);
+    String sendMessage(String ownerUuid, String orgId, String text);
 
     /**
      * Sends a message to both the conversation owner and the visitor (shared user).
      * Used by the createTelegramGroupSession tool in interactive shared conversations.
      */
-    String sendGroupNotification(String ownerEmail, String visitorEmail, String orgId, String content);
+    String sendGroupNotification(String ownerUuid, String visitorUuid, String orgId, String content);
 
-    boolean isConnected(String ownerEmail, String orgId);
+    boolean isConnected(String ownerUuid, String orgId);
 
-    void disconnect(String ownerEmail, String orgId);
+    void disconnect(String ownerUuid, String orgId);
 }

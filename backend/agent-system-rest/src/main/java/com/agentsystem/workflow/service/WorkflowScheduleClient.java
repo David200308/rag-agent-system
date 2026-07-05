@@ -28,13 +28,13 @@ public class WorkflowScheduleClient {
                 .build();
     }
 
-    /** Create a schedule on behalf of ownerEmail. Returns a human-readable result string. */
-    public String createSchedule(String ownerEmail, String conversationId, String message,
+    /** Create a schedule on behalf of ownerUuid. Returns a human-readable result string. */
+    public String createSchedule(String ownerUuid, String conversationId, String message,
                                   String cronExpr, String timezone, int topK,
                                   boolean useKnowledgeBase, boolean useWebFetch) {
         try {
             Map<String, Object> body = new HashMap<>();
-            body.put("ownerEmail",       ownerEmail);
+            body.put("ownerUuid",       ownerUuid);
             body.put("conversationId",   conversationId);
             body.put("message",          message);
             body.put("cronExpr",         cronExpr.isBlank() ? "0 9 * * *" : cronExpr);
@@ -59,11 +59,11 @@ public class WorkflowScheduleClient {
     }
 
     /** List schedules for a conversation. Returns JSON array as a string. */
-    public String listSchedules(String ownerEmail, String conversationId) {
+    public String listSchedules(String ownerUuid, String conversationId) {
         try {
             String response = restClient.get()
-                    .uri("/internal/schedules?conversationId={cid}&ownerEmail={email}",
-                            conversationId, ownerEmail)
+                    .uri("/internal/schedules?conversationId={cid}&ownerUuid={uuid}",
+                            conversationId, ownerUuid)
                     .retrieve()
                     .body(String.class);
             return response != null ? response : "[]";
@@ -74,10 +74,10 @@ public class WorkflowScheduleClient {
     }
 
     /** Delete a schedule by ID. Returns a human-readable result string. */
-    public String deleteSchedule(String ownerEmail, String scheduleId) {
+    public String deleteSchedule(String ownerUuid, String scheduleId) {
         try {
             restClient.delete()
-                    .uri("/internal/schedules/{id}?ownerEmail={email}", scheduleId, ownerEmail)
+                    .uri("/internal/schedules/{id}?ownerUuid={uuid}", scheduleId, ownerUuid)
                     .retrieve()
                     .toBodilessEntity();
             return "Schedule " + scheduleId + " deleted successfully.";

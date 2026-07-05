@@ -5,6 +5,8 @@ import com.agentsystem.workflow.service.WorkflowService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.agentsystem.org.OrgContext;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.workflow.entity.Workflow;
 import com.agentsystem.workflow.entity.WorkflowAgent;
 import com.agentsystem.workflow.repository.WorkflowAgentRepository;
@@ -27,19 +29,20 @@ public class WorkflowServiceImpl implements WorkflowService {
     private final WorkflowRepository       workflowRepo;
     private final WorkflowAgentRepository  agentRepo;
     private final ObjectMapper             objectMapper;
+    private final UserAccountService       userAccountService;
 
     // ── Workflow CRUD ─────────────────────────────────────────────────────────
 
     @Override
     public List<Workflow> list(OrgContext ctx) {
         if (ctx.isTeam()) return workflowRepo.findByOrgIdOrderByUpdatedAtDesc(ctx.orgId());
-        return workflowRepo.findByOwnerEmailAndOrgIdIsNullOrderByUpdatedAtDesc(ctx.email());
+        return workflowRepo.findByOwnerUuidAndOrgIdIsNullOrderByUpdatedAtDesc(ctx.userUuid());
     }
 
-    /** Backward-compatible alias. */
+    /** Backward-compatible alias. Resolves email to a user_uuid internally. */
     @Override
     public List<Workflow> listByOwner(String ownerEmail) {
-        return workflowRepo.findByOwnerEmailAndOrgIdIsNullOrderByUpdatedAtDesc(ownerEmail);
+        return workflowRepo.findByOwnerUuidAndOrgIdIsNullOrderByUpdatedAtDesc(resolveUuid(ownerEmail));
     }
 
     @Override
@@ -51,7 +54,7 @@ public class WorkflowServiceImpl implements WorkflowService {
     @Override
     public Workflow create(String name, String description, OrgContext ctx,
                            Workflow.AgentPattern pattern, Workflow.TeamExecMode teamExecMode) {
-        Workflow wf = new Workflow(UUID.randomUUID().toString(), name, ctx.email(), pattern);
+        Workflow wf = new Workflow(UUID.randomUUID().toString(), name, ctx.userUuid(), pattern);
         wf.setDescription(description);
         wf.setTeamExecMode(teamExecMode);
         if (ctx.isTeam()) wf.setOrgId(ctx.orgId());
@@ -62,7 +65,7 @@ public class WorkflowServiceImpl implements WorkflowService {
     @Override
     public Workflow create(String name, String description, String ownerEmail,
                            Workflow.AgentPattern pattern, Workflow.TeamExecMode teamExecMode) {
-        return create(name, description, new OrgContext(ownerEmail, "PERSONAL", null), pattern, teamExecMode);
+        return create(name, description, new OrgContext(resolveUuid(ownerEmail), ownerEmail, "PERSONAL", null), pattern, teamExecMode);
     }
 
     @Transactional
@@ -71,7 +74,7 @@ public class WorkflowServiceImpl implements WorkflowService {
         Workflow wf = workflowRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Workflow not found: " + id));
         // Team mode: any member can edit; personal mode: only owner
-        if (!ctx.isTeam() && !ctx.email().equals(wf.getOwnerEmail())) {
+        if (!ctx.isTeam() && !ctx.userUuid().equals(wf.getOwnerUuid())) {
             throw new SecurityException("Not the owner");
         }
         if (patch.containsKey("name"))        wf.setName((String) patch.get("name"));
@@ -93,7 +96,7 @@ public class WorkflowServiceImpl implements WorkflowService {
     @Transactional
     @Override
     public Workflow update(String id, String ownerEmail, Map<String, Object> patch) {
-        return update(id, new OrgContext(ownerEmail, "PERSONAL", null), patch);
+        return update(id, new OrgContext(resolveUuid(ownerEmail), ownerEmail, "PERSONAL", null), patch);
     }
 
     @Transactional
@@ -101,7 +104,7 @@ public class WorkflowServiceImpl implements WorkflowService {
     public void delete(String id, OrgContext ctx) {
         Workflow wf = workflowRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Workflow not found"));
-        if (!ctx.isTeam() && !ctx.email().equals(wf.getOwnerEmail())) {
+        if (!ctx.isTeam() && !ctx.userUuid().equals(wf.getOwnerUuid())) {
             throw new SecurityException("Not the owner");
         }
         workflowRepo.delete(wf);
@@ -110,7 +113,7 @@ public class WorkflowServiceImpl implements WorkflowService {
     @Transactional
     @Override
     public void delete(String id, String ownerEmail) {
-        delete(id, new OrgContext(ownerEmail, "PERSONAL", null));
+        delete(id, new OrgContext(resolveUuid(ownerEmail), ownerEmail, "PERSONAL", null));
     }
 
     // ── Agent CRUD ────────────────────────────────────────────────────────────
@@ -180,5 +183,13 @@ public class WorkflowServiceImpl implements WorkflowService {
         } catch (Exception e) {
             return List.of();
         }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────────
+
+    /** Resolves an email to its user_uuid, or null if no such email is a registered user. */
+    private String resolveUuid(String email) {
+        if (email == null || email.isBlank()) return null;
+        return userAccountService.findByEmail(email).map(User::getUuid).orElse(null);
     }
 }

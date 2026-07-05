@@ -10,6 +10,9 @@ import com.agentsystem.conversation.repository.ConversationRepository;
 import com.agentsystem.conversation.repository.ConversationShareRepository;
 import com.agentsystem.org.OrgContext;
 import com.agentsystem.schema.AgentRequest;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.entity.UserStatus;
+import com.agentsystem.user.service.UserAccountService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -32,8 +35,15 @@ class ConversationServiceTest {
     @Mock ConversationRepository        conversationRepo;
     @Mock ConversationMessageRepository messageRepo;
     @Mock ConversationShareRepository   shareRepo;
+    @Mock UserAccountService            userAccountService;
 
     @InjectMocks ConversationServiceImpl conversationService;
+
+    /** Stubs userAccountService to resolve {@code email} to a matching uuid (same string, for simplicity). */
+    private void stubUuidResolution(String email) {
+        lenient().when(userAccountService.findByEmail(email))
+                .thenReturn(Optional.of(new User(email, email, UserStatus.USER, true)));
+    }
 
     // ── resolveConversation ───────────────────────────────────────────────────
 
@@ -49,6 +59,7 @@ class ConversationServiceTest {
 
     @Test
     void resolveConversation_nullId_createsNewConversation() {
+        stubUuidResolution("user@test.com");
         ArgumentCaptor<Conversation> captor = ArgumentCaptor.forClass(Conversation.class);
         when(conversationRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -56,11 +67,12 @@ class ConversationServiceTest {
 
         assertThat(result).isNotBlank();
         verify(conversationRepo).save(captor.capture());
-        assertThat(captor.getValue().getUserEmail()).isEqualTo("user@test.com");
+        assertThat(captor.getValue().getUserUuid()).isEqualTo("user@test.com");
     }
 
     @Test
     void resolveConversation_blankId_createsNewConversation() {
+        stubUuidResolution("user@test.com");
         when(conversationRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         String result = conversationService.resolveConversation("  ", "user@test.com");
@@ -71,6 +83,7 @@ class ConversationServiceTest {
 
     @Test
     void resolveConversation_unknownId_createsNewConversation() {
+        stubUuidResolution("user@test.com");
         when(conversationRepo.existsById("ghost-id")).thenReturn(false);
         when(conversationRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -182,7 +195,7 @@ class ConversationServiceTest {
     void createShare_ownerCreatesShareWithExpiry() {
         Conversation conv = new Conversation("c1", "owner@test.com");
         when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
-        when(shareRepo.findByConversationIdAndOwnerEmail("c1", "owner@test.com"))
+        when(shareRepo.findByConversationIdAndOwnerUuid("c1", "owner@test.com"))
                 .thenReturn(Optional.empty());
         when(shareRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -190,7 +203,7 @@ class ConversationServiceTest {
                 "c1", "owner@test.com", 7, "READ_ONLY", "EVERYONE", List.of());
 
         assertThat(share.getConversationId()).isEqualTo("c1");
-        assertThat(share.getOwnerEmail()).isEqualTo("owner@test.com");
+        assertThat(share.getOwnerUuid()).isEqualTo("owner@test.com");
         assertThat(share.getExpiresAt()).isAfter(Instant.now());
     }
 
@@ -209,7 +222,7 @@ class ConversationServiceTest {
     void createShare_nullExpireDays_createsNeverExpiringShare() {
         Conversation conv = new Conversation("c1", "owner@test.com");
         when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
-        when(shareRepo.findByConversationIdAndOwnerEmail("c1", "owner@test.com"))
+        when(shareRepo.findByConversationIdAndOwnerUuid("c1", "owner@test.com"))
                 .thenReturn(Optional.empty());
         when(shareRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -224,7 +237,7 @@ class ConversationServiceTest {
     void createShare_readOnlyMode_setsShareMode() {
         Conversation conv = new Conversation("c1", "owner@test.com");
         when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
-        when(shareRepo.findByConversationIdAndOwnerEmail("c1", "owner@test.com"))
+        when(shareRepo.findByConversationIdAndOwnerUuid("c1", "owner@test.com"))
                 .thenReturn(Optional.empty());
         when(shareRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -238,7 +251,7 @@ class ConversationServiceTest {
     void createShare_whitelistMode_setsAccessType() {
         Conversation conv = new Conversation("c1", "owner@test.com");
         when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
-        when(shareRepo.findByConversationIdAndOwnerEmail("c1", "owner@test.com"))
+        when(shareRepo.findByConversationIdAndOwnerUuid("c1", "owner@test.com"))
                 .thenReturn(Optional.empty());
         when(shareRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -335,8 +348,9 @@ class ConversationServiceTest {
 
     @Test
     void listConversations_returnsNonArchivedForUser() {
+        stubUuidResolution("user@test.com");
         Conversation c = new Conversation("c1", "user@test.com");
-        when(conversationRepo.findByUserEmailAndArchivedFalseOrderByUpdatedAtDesc("user@test.com"))
+        when(conversationRepo.findByUserUuidAndArchivedFalseOrderByUpdatedAtDesc("user@test.com"))
                 .thenReturn(List.of(c));
 
         List<Conversation> result = conversationService.listConversations("user@test.com");
@@ -438,7 +452,7 @@ class ConversationServiceTest {
     @Test
     void getShare_found_returnsShare() {
         ConversationShare share = new ConversationShare("c1", "tok-1", "owner@test.com", null, "READ_ONLY", "EVERYONE");
-        when(shareRepo.findByConversationIdAndOwnerEmail("c1", "owner@test.com"))
+        when(shareRepo.findByConversationIdAndOwnerUuid("c1", "owner@test.com"))
                 .thenReturn(Optional.of(share));
 
         ConversationShare result = conversationService.getShare("c1", "owner@test.com");
@@ -448,7 +462,7 @@ class ConversationServiceTest {
 
     @Test
     void getShare_notFound_throwsIllegalArgument() {
-        when(shareRepo.findByConversationIdAndOwnerEmail("c1", "owner@test.com"))
+        when(shareRepo.findByConversationIdAndOwnerUuid("c1", "owner@test.com"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> conversationService.getShare("c1", "owner@test.com"))
@@ -462,7 +476,7 @@ class ConversationServiceTest {
     void revokeShare_ownerCanRevoke() {
         ConversationShare share = new ConversationShare("c1", "tok-1", "owner@test.com", null, "READ_ONLY", "EVERYONE");
         Conversation conv = new Conversation("c1", "owner@test.com");
-        when(shareRepo.findByConversationIdAndOwnerEmail("c1", "owner@test.com"))
+        when(shareRepo.findByConversationIdAndOwnerUuid("c1", "owner@test.com"))
                 .thenReturn(Optional.of(share));
         when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
 
@@ -475,7 +489,7 @@ class ConversationServiceTest {
     void revokeShare_nonOwner_throwsSecurityException() {
         ConversationShare share = new ConversationShare("c1", "tok-1", "owner@test.com", null, "READ_ONLY", "EVERYONE");
         Conversation conv = new Conversation("c1", "owner@test.com");
-        when(shareRepo.findByConversationIdAndOwnerEmail("c1", "intruder@test.com"))
+        when(shareRepo.findByConversationIdAndOwnerUuid("c1", "intruder@test.com"))
                 .thenReturn(Optional.of(share));
         when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
 
@@ -488,7 +502,7 @@ class ConversationServiceTest {
 
     @Test
     void resolveConversation_teamContext_setsOrgId() {
-        OrgContext ctx = new OrgContext("user@test.com", "TEAM", "skyproton");
+        OrgContext ctx = new OrgContext("user@test.com", "user@test.com", "TEAM", "skyproton");
         ArgumentCaptor<Conversation> captor = ArgumentCaptor.forClass(Conversation.class);
         when(conversationRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -503,29 +517,29 @@ class ConversationServiceTest {
 
     @Test
     void listConversations_teamMode_queriesTeamRepo() {
-        OrgContext ctx = new OrgContext("user@test.com", "TEAM", "skyproton");
+        OrgContext ctx = new OrgContext("user@test.com", "user@test.com", "TEAM", "skyproton");
         Conversation c = new Conversation("c1", "user@test.com");
-        when(conversationRepo.findByUserEmailAndOrgIdAndArchivedFalseOrderByUpdatedAtDesc(
+        when(conversationRepo.findByUserUuidAndOrgIdAndArchivedFalseOrderByUpdatedAtDesc(
                 "user@test.com", "skyproton")).thenReturn(List.of(c));
 
         List<Conversation> result = conversationService.listConversations(ctx);
 
         assertThat(result).containsExactly(c);
-        verify(conversationRepo).findByUserEmailAndOrgIdAndArchivedFalseOrderByUpdatedAtDesc(
+        verify(conversationRepo).findByUserUuidAndOrgIdAndArchivedFalseOrderByUpdatedAtDesc(
                 "user@test.com", "skyproton");
     }
 
     @Test
     void listConversations_personalMode_queriesPersonalRepo() {
-        OrgContext ctx = new OrgContext("user@test.com", "PERSONAL", null);
+        OrgContext ctx = new OrgContext("user@test.com", "user@test.com", "PERSONAL", null);
         Conversation c = new Conversation("c1", "user@test.com");
-        when(conversationRepo.findByUserEmailAndOrgIdIsNullAndArchivedFalseOrderByUpdatedAtDesc(
+        when(conversationRepo.findByUserUuidAndOrgIdIsNullAndArchivedFalseOrderByUpdatedAtDesc(
                 "user@test.com")).thenReturn(List.of(c));
 
         List<Conversation> result = conversationService.listConversations(ctx);
 
         assertThat(result).containsExactly(c);
-        verify(conversationRepo).findByUserEmailAndOrgIdIsNullAndArchivedFalseOrderByUpdatedAtDesc(
+        verify(conversationRepo).findByUserUuidAndOrgIdIsNullAndArchivedFalseOrderByUpdatedAtDesc(
                 "user@test.com");
     }
 
@@ -533,25 +547,26 @@ class ConversationServiceTest {
 
     @Test
     void listArchivedConversations_teamMode_queriesTeamRepo() {
-        OrgContext ctx = new OrgContext("user@test.com", "TEAM", "skyproton");
+        OrgContext ctx = new OrgContext("user@test.com", "user@test.com", "TEAM", "skyproton");
         Conversation c = new Conversation("c1", "user@test.com");
-        when(conversationRepo.findByUserEmailAndOrgIdAndArchivedTrueOrderByUpdatedAtDesc(
+        when(conversationRepo.findByUserUuidAndOrgIdAndArchivedTrueOrderByUpdatedAtDesc(
                 "user@test.com", "skyproton")).thenReturn(List.of(c));
 
         List<Conversation> result = conversationService.listArchivedConversations(ctx);
 
         assertThat(result).containsExactly(c);
-        verify(conversationRepo).findByUserEmailAndOrgIdAndArchivedTrueOrderByUpdatedAtDesc(
+        verify(conversationRepo).findByUserUuidAndOrgIdAndArchivedTrueOrderByUpdatedAtDesc(
                 "user@test.com", "skyproton");
     }
 
     @Test
     void listArchivedConversations_emailOverload_returnsResults() {
+        stubUuidResolution("user@test.com");
         Conversation c = new Conversation("c1", "user@test.com");
         // ConversationService.listArchivedConversations(String) calls
-        // conversationRepo.findByUserEmailAndArchivedTrueOrderByUpdatedAtDesc (the default interface method)
+        // conversationRepo.findByUserUuidAndArchivedTrueOrderByUpdatedAtDesc (the default interface method)
         // On a mock, we stub the default method directly
-        when(conversationRepo.findByUserEmailAndArchivedTrueOrderByUpdatedAtDesc("user@test.com"))
+        when(conversationRepo.findByUserUuidAndArchivedTrueOrderByUpdatedAtDesc("user@test.com"))
                 .thenReturn(List.of(c));
 
         List<Conversation> result = conversationService.listArchivedConversations("user@test.com");

@@ -4,6 +4,7 @@ import com.agentsystem.agent.AgentSystemGraph;
 import com.agentsystem.agent.state.AgentState;
 import com.agentsystem.config.SchedulerProperties;
 import com.agentsystem.conversation.service.ConversationService;
+import com.agentsystem.org.OrgContext;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.AgentResponse;
 import com.agentsystem.workflow.service.WorkflowRunService;
@@ -47,7 +48,7 @@ public class SchedulerTriggerController {
 
     /** Body sent by the Go scheduler when a cron fires. */
     public record TriggerRequest(
-            String  userEmail,
+            String  userUuid,
             String  conversationId,
             String  message,
             int     topK,
@@ -80,10 +81,11 @@ public class SchedulerTriggerController {
 
         String runId = idempotencyKey != null ? idempotencyKey : UUID.randomUUID().toString();
         log.info("[SchedulerTrigger] Firing runId={} conv={} user={} message='{}'",
-                runId, body.conversationId(), body.userEmail(), body.message());
+                runId, body.conversationId(), body.userUuid(), body.message());
 
+        OrgContext ctx = new OrgContext(body.userUuid(), null, "PERSONAL", null);
         String conversationId = conversationService.resolveConversation(
-                body.conversationId(), body.userEmail());
+                body.conversationId(), ctx);
         conversationService.saveUserMessage(conversationId, body.message());
 
         try {
@@ -102,8 +104,8 @@ public class SchedulerTriggerController {
             Map<String, Object> initData = new HashMap<>();
             initData.put("request", agentRequest);
             initData.put("runId", runId);
-            if (body.userEmail() != null) {
-                initData.put("userEmail", body.userEmail());
+            if (body.userUuid() != null) {
+                initData.put("userUuid", body.userUuid());
             }
 
             var result = agentGraph.getGraph()
@@ -128,7 +130,7 @@ public class SchedulerTriggerController {
 
     /** Body sent by the Go scheduler when a workflow cron fires. */
     public record WorkflowTriggerRequest(
-            String userEmail,
+            String userUuid,
             String workflowId,
             String workflowInput
     ) {}
@@ -153,11 +155,11 @@ public class SchedulerTriggerController {
             return ResponseEntity.ok(Map.of("status", "duplicate"));
         }
 
-        log.info("[SchedulerTrigger] workflow-trigger workflowId={} user={}", body.workflowId(), body.userEmail());
+        log.info("[SchedulerTrigger] workflow-trigger workflowId={} user={}", body.workflowId(), body.userUuid());
 
-        String runId = workflowRunService.startRun(
+        String runId = workflowRunService.startRunByUuid(
                 body.workflowId(), body.workflowInput(),
-                body.userEmail() != null ? body.userEmail() : "anonymous",
+                body.userUuid() != null ? body.userUuid() : "anonymous",
                 false);
         return ResponseEntity.ok(Map.of("runId", runId));
     }

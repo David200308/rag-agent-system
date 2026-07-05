@@ -16,11 +16,11 @@ public interface WorkflowRunRepository extends JpaRepository<WorkflowRun, String
     Page<WorkflowRun> findByWorkflowIdOrderByStartedAtDesc(String workflowId, Pageable pageable);
 
     /** Runs for a specific owner — used to scope to personal or team context. */
-    List<WorkflowRun> findByWorkflowIdAndOwnerEmailOrderByStartedAtDesc(String workflowId, String ownerEmail);
+    List<WorkflowRun> findByWorkflowIdAndOwnerUuidOrderByStartedAtDesc(String workflowId, String ownerUuid);
 
     /** Personal mode runs: owner + no org. */
-    List<WorkflowRun> findByOwnerEmailAndOrgIdIsNullOrderByStartedAtDesc(String ownerEmail);
+    List<WorkflowRun> findByOwnerUuidAndOrgIdIsNullOrderByStartedAtDesc(String ownerUuid);
 
     /** Team mode runs: owner + org (still private per user). */
-    List<WorkflowRun> findByOwnerEmailAndOrgIdOrderByStartedAtDesc(String ownerEmail, String orgId);
+    List<WorkflowRun> findByOwnerUuidAndOrgIdOrderByStartedAtDesc(String ownerUuid, String orgId);
 }

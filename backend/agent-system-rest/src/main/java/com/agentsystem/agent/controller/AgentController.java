@@ -85,15 +85,15 @@ public class AgentController {
             Map<String, Object> initData = new HashMap<>();
             initData.put("request", request);
             initData.put("runId", runId);
-            if (ctx.email() != null) {
-                initData.put("userEmail", ctx.email());
-                initData.put("orgId",     ctx.orgId());
-                initData.put("mode",      ctx.mode());
+            if (ctx.userUuid() != null) {
+                initData.put("userUuid", ctx.userUuid());
+                initData.put("orgId",    ctx.orgId());
+                initData.put("mode",     ctx.mode());
             }
             // Model priority: conversation → user default → configured DEFAULT_MODEL → raw provider
             String selectedModel = conversationService.getConversationModel(conversationId);
-            if (selectedModel == null && ctx.email() != null) {
-                selectedModel = userPreferenceService.getSelectedModel(ctx.email());
+            if (selectedModel == null && ctx.userUuid() != null) {
+                selectedModel = userPreferenceService.getSelectedModel(ctx.userUuid());
             }
             if (selectedModel == null) {
                 String dm = llmProperties.getDefaultModel();
@@ -137,7 +137,7 @@ public class AgentController {
     public ResponseEntity<List<com.agentsystem.conversation.entity.Conversation>> listConversations(
             HttpServletRequest httpRequest) {
         OrgContext ctx = OrgContext.from(httpRequest);
-        if (ctx.email() == null) return ResponseEntity.status(401).build();
+        if (ctx.userUuid() == null) return ResponseEntity.status(401).build();
         return ResponseEntity.ok(conversationService.listConversations(ctx));
     }
 
@@ -146,7 +146,7 @@ public class AgentController {
     public ResponseEntity<List<com.agentsystem.conversation.entity.Conversation>> listArchivedConversations(
             HttpServletRequest httpRequest) {
         OrgContext ctx = OrgContext.from(httpRequest);
-        if (ctx.email() == null) return ResponseEntity.status(401).build();
+        if (ctx.userUuid() == null) return ResponseEntity.status(401).build();
         return ResponseEntity.ok(conversationService.listArchivedConversations(ctx));
     }
 
@@ -156,10 +156,10 @@ public class AgentController {
             @PathVariable String conversationId,
             @RequestBody Map<String, String> body,
             HttpServletRequest httpRequest) {
-        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        String userUuid = (String) httpRequest.getAttribute("authenticatedUserUuid");
         String displayName = body.get("selectedModel");
         try {
-            var conv = conversationService.setConversationModel(conversationId, email, displayName);
+            var conv = conversationService.setConversationModel(conversationId, userUuid, displayName);
             return ResponseEntity.ok(Map.of(
                     "conversationId", conv.getId(),
                     "selectedModel", conv.getSelectedModel() != null ? conv.getSelectedModel() : ""
@@ -176,9 +176,9 @@ public class AgentController {
     public ResponseEntity<Void> archiveConversation(
             @PathVariable String conversationId,
             HttpServletRequest httpRequest) {
-        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        String userUuid = (String) httpRequest.getAttribute("authenticatedUserUuid");
         try {
-            conversationService.setArchived(conversationId, email, true);
+            conversationService.setArchived(conversationId, userUuid, true);
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
@@ -192,9 +192,9 @@ public class AgentController {
     public ResponseEntity<Void> unarchiveConversation(
             @PathVariable String conversationId,
             HttpServletRequest httpRequest) {
-        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        String userUuid = (String) httpRequest.getAttribute("authenticatedUserUuid");
         try {
-            conversationService.setArchived(conversationId, email, false);
+            conversationService.setArchived(conversationId, userUuid, false);
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
@@ -219,9 +219,9 @@ public class AgentController {
     public ResponseEntity<Void> deleteConversation(
             @PathVariable String conversationId,
             HttpServletRequest httpRequest) {
-        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        String userUuid = (String) httpRequest.getAttribute("authenticatedUserUuid");
         try {
-            conversationService.deleteConversation(conversationId, email);
+            conversationService.deleteConversation(conversationId, userUuid);
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
@@ -245,7 +245,7 @@ public class AgentController {
             @RequestBody(required = false) Map<String, Object> body,
             HttpServletRequest httpRequest) {
 
-        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        String userUuid = (String) httpRequest.getAttribute("authenticatedUserUuid");
 
         Integer expireDays = null;
         String accessType  = "EVERYONE";
@@ -264,7 +264,7 @@ public class AgentController {
 
         try {
             var share = conversationService.createShare(
-                    conversationId, email, expireDays, "READ_ONLY", accessType, whitelist);
+                    conversationId, userUuid, expireDays, "READ_ONLY", accessType, whitelist);
             return ResponseEntity.ok(shareToMap(share));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
@@ -280,9 +280,9 @@ public class AgentController {
             @PathVariable String conversationId,
             HttpServletRequest httpRequest) {
 
-        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        String userUuid = (String) httpRequest.getAttribute("authenticatedUserUuid");
         try {
-            var share = conversationService.getShare(conversationId, email);
+            var share = conversationService.getShare(conversationId, userUuid);
             return ResponseEntity.ok(shareToMap(share));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
@@ -296,9 +296,9 @@ public class AgentController {
             @PathVariable String conversationId,
             HttpServletRequest httpRequest) {
 
-        String email = (String) httpRequest.getAttribute("authenticatedEmail");
+        String userUuid = (String) httpRequest.getAttribute("authenticatedUserUuid");
         try {
-            conversationService.revokeShare(conversationId, email);
+            conversationService.revokeShare(conversationId, userUuid);
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
@@ -339,8 +339,7 @@ public class AgentController {
 
         OrgContext ctx = OrgContext.from(httpRequest);
         String sourceKey = source != null ? source : file.getOriginalFilename();
-        knowledgeSourceService.upsert(sourceKey, file.getOriginalFilename(), category, chunkCount,
-                ctx.email(), ctx.orgId());
+        knowledgeSourceService.upsert(sourceKey, file.getOriginalFilename(), category, chunkCount, ctx);
         agentMetrics.recordIngest();
 
         return ResponseEntity.ok(Map.of(
@@ -364,7 +363,7 @@ public class AgentController {
             return ResponseEntity.badRequest().build();
         }
 
-        UrlIngestionResult result = mcpConnectorService.fetchAndIngest(url, category, ctx.email());
+        UrlIngestionResult result = mcpConnectorService.fetchAndIngest(url, category, ctx);
         return ResponseEntity.ok(result);
     }
 
@@ -385,7 +384,7 @@ public class AgentController {
         boolean replace = Boolean.parseBoolean(body.getOrDefault("replace", "false"));
         OrgContext ctx  = OrgContext.from(httpRequest);
         int chunkCount = ingestionService.ingestText(text, sourceId, Map.of(), replace);
-        knowledgeSourceService.upsert(sourceId, sourceId, null, chunkCount, ctx.email(), ctx.orgId());
+        knowledgeSourceService.upsert(sourceId, sourceId, null, chunkCount, ctx);
         return ResponseEntity.ok(Map.of(
                 "status",     "ingested",
                 "source",     sourceId,
@@ -442,15 +441,14 @@ public class AgentController {
             @RequestBody Map<String, Object> body,
             HttpServletRequest httpRequest) {
         OrgContext ctx = OrgContext.from(httpRequest);
-        String email   = ctx.email();
         String source = (String) body.get("source");
         @SuppressWarnings("unchecked")
         java.util.List<String> emails = (java.util.List<String>) body.getOrDefault("emails", java.util.List.of());
         try {
-            var updated = knowledgeSourceService.updateSharing(source, emails, email);
+            var updated = knowledgeSourceService.updateSharing(source, emails, ctx);
             return ResponseEntity.ok(Map.of(
-                    "source",       updated.getSource(),
-                    "sharedEmails", updated.sharedEmails()
+                    "source",      updated.getSource(),
+                    "sharedUuids", updated.sharedUuids()
             ));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));

@@ -9,8 +9,8 @@ public interface ConversationShareRepository extends JpaRepository<ConversationS
 
     Optional<ConversationShare> findByToken(String token);
 
-    Optional<ConversationShare> findByConversationIdAndOwnerEmail(
-            String conversationId, String ownerEmail);
+    Optional<ConversationShare> findByConversationIdAndOwnerUuid(
+            String conversationId, String ownerUuid);
 
     void deleteByConversationId(String conversationId);
 }

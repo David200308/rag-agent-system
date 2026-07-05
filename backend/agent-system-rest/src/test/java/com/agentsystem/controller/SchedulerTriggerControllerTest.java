@@ -3,6 +3,7 @@ package com.agentsystem.controller;
 import com.agentsystem.agent.AgentSystemGraph;
 import com.agentsystem.config.SchedulerProperties;
 import com.agentsystem.conversation.service.ConversationService;
+import com.agentsystem.org.OrgContext;
 import com.agentsystem.schema.AgentResponse;
 import com.agentsystem.workflow.service.WorkflowRunService;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +29,8 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class SchedulerTriggerControllerTest {
+
+    private static final OrgContext NO_USER_CTX = new OrgContext(null, null, "PERSONAL", null);
 
     @Mock AgentSystemGraph       agentGraph;
     @Mock ConversationService conversationService;
@@ -58,7 +61,7 @@ class SchedulerTriggerControllerTest {
     @Test
     void trigger_nullServiceKey_returns401() {
         var body = new SchedulerTriggerController.TriggerRequest(
-                "user@example.com", "conv-1", "Hello?", 5, true, false);
+                "user-uuid-1", "conv-1", "Hello?", 5, true, false);
 
         ResponseEntity<?> resp = controller.trigger(null, null, body);
 
@@ -68,7 +71,7 @@ class SchedulerTriggerControllerTest {
     @Test
     void trigger_wrongServiceKey_returns401() {
         var body = new SchedulerTriggerController.TriggerRequest(
-                "user@example.com", "conv-1", "Hello?", 5, true, false);
+                "user-uuid-1", "conv-1", "Hello?", 5, true, false);
 
         ResponseEntity<?> resp = controller.trigger("wrong-key", null, body);
 
@@ -79,12 +82,12 @@ class SchedulerTriggerControllerTest {
 
     @Test
     void trigger_duplicateIdempotencyKey_skipsExecutionReturns200() {
-        when(conversationService.resolveConversation(anyString(), anyString())).thenReturn("conv-resolved");
+        when(conversationService.resolveConversation(anyString(), any(OrgContext.class))).thenReturn("conv-resolved");
         when(conversationService.loadHistory(anyString())).thenReturn(List.of());
         when(agentGraph.getGraph()).thenThrow(new RuntimeException("should not be reached on duplicate"));
 
         var body = new SchedulerTriggerController.TriggerRequest(
-                "user@example.com", "conv-1", "Hello?", 5, true, false);
+                "user-uuid-1", "conv-1", "Hello?", 5, true, false);
 
         ResponseEntity<?> first = controller.trigger("secret-key", "run-dup-1", body);
         // First call still hits the pipeline (which we've stubbed to throw → 500),
@@ -102,17 +105,17 @@ class SchedulerTriggerControllerTest {
 
     @Test
     void trigger_noIdempotencyKey_alwaysExecutes() {
-        when(conversationService.resolveConversation(anyString(), anyString())).thenReturn("conv-resolved");
+        when(conversationService.resolveConversation(anyString(), any(OrgContext.class))).thenReturn("conv-resolved");
         when(conversationService.loadHistory(anyString())).thenReturn(List.of());
         when(agentGraph.getGraph()).thenThrow(new RuntimeException("expected"));
 
         var body = new SchedulerTriggerController.TriggerRequest(
-                "user@example.com", "conv-1", "Hello?", 5, true, false);
+                "user-uuid-1", "conv-1", "Hello?", 5, true, false);
 
         controller.trigger("secret-key", null, body);
         controller.trigger("secret-key", null, body);
 
-        verify(conversationService, times(2)).resolveConversation(anyString(), anyString());
+        verify(conversationService, times(2)).resolveConversation(anyString(), any(OrgContext.class));
     }
 
     // ── /workflow-trigger — service key validation ─────────────────────────────
@@ -120,7 +123,7 @@ class SchedulerTriggerControllerTest {
     @Test
     void workflowTrigger_nullServiceKey_returns401() {
         var body = new SchedulerTriggerController.WorkflowTriggerRequest(
-                "user@example.com", "wf-123", "Run this");
+                "user-uuid-1", "wf-123", "Run this");
 
         ResponseEntity<?> resp = controller.workflowTrigger(null, null, body);
 
@@ -130,7 +133,7 @@ class SchedulerTriggerControllerTest {
     @Test
     void workflowTrigger_wrongKey_returns401() {
         var body = new SchedulerTriggerController.WorkflowTriggerRequest(
-                "user@example.com", "wf-123", "Run this");
+                "user-uuid-1", "wf-123", "Run this");
 
         ResponseEntity<?> resp = controller.workflowTrigger("bad-key", null, body);
 
@@ -139,11 +142,11 @@ class SchedulerTriggerControllerTest {
 
     @Test
     void workflowTrigger_validKey_returnsRunId() {
-        when(workflowRunService.startRun(eq("wf-123"), eq("Run this"), anyString(), anyBoolean()))
+        when(workflowRunService.startRunByUuid(eq("wf-123"), eq("Run this"), anyString(), anyBoolean()))
                 .thenReturn("run-abc");
 
         var body = new SchedulerTriggerController.WorkflowTriggerRequest(
-                "user@example.com", "wf-123", "Run this");
+                "user-uuid-1", "wf-123", "Run this");
 
         ResponseEntity<Map<String, String>> resp = controller.workflowTrigger("secret-key", null, body);
 
@@ -152,8 +155,8 @@ class SchedulerTriggerControllerTest {
     }
 
     @Test
-    void workflowTrigger_nullUserEmail_usesAnonymous() {
-        when(workflowRunService.startRun(anyString(), anyString(), eq("anonymous"), anyBoolean()))
+    void workflowTrigger_nullUserUuid_usesAnonymous() {
+        when(workflowRunService.startRunByUuid(anyString(), anyString(), eq("anonymous"), anyBoolean()))
                 .thenReturn("run-xyz");
 
         var body = new SchedulerTriggerController.WorkflowTriggerRequest(
@@ -167,17 +170,17 @@ class SchedulerTriggerControllerTest {
 
     @Test
     void workflowTrigger_duplicateIdempotencyKey_skipsStartRun() {
-        when(workflowRunService.startRun(anyString(), anyString(), anyString(), anyBoolean()))
+        when(workflowRunService.startRunByUuid(anyString(), anyString(), anyString(), anyBoolean()))
                 .thenReturn("run-once");
         var body = new SchedulerTriggerController.WorkflowTriggerRequest(
-                "user@example.com", "wf-123", "Run this");
+                "user-uuid-1", "wf-123", "Run this");
 
         ResponseEntity<Map<String, String>> first = controller.workflowTrigger("secret-key", "run-dup-2", body);
         ResponseEntity<Map<String, String>> second = controller.workflowTrigger("secret-key", "run-dup-2", body);
 
         assertThat(first.getBody()).containsEntry("runId", "run-once");
         assertThat(second.getBody()).containsEntry("status", "duplicate");
-        verify(workflowRunService, times(1)).startRun(anyString(), anyString(), anyString(), anyBoolean());
+        verify(workflowRunService, times(1)).startRunByUuid(anyString(), anyString(), anyString(), anyBoolean());
     }
 
     // ── withConversationId ────────────────────────────────────────────────────
@@ -223,8 +226,8 @@ class SchedulerTriggerControllerTest {
     @Test
     void triggerRequest_record_fields() {
         var req = new SchedulerTriggerController.TriggerRequest(
-                "user@test.com", "conv-1", "Hello?", 5, true, false);
-        assertThat(req.userEmail()).isEqualTo("user@test.com");
+                "user-uuid-1", "conv-1", "Hello?", 5, true, false);
+        assertThat(req.userUuid()).isEqualTo("user-uuid-1");
         assertThat(req.conversationId()).isEqualTo("conv-1");
         assertThat(req.message()).isEqualTo("Hello?");
         assertThat(req.topK()).isEqualTo(5);
@@ -235,8 +238,8 @@ class SchedulerTriggerControllerTest {
     @Test
     void workflowTriggerRequest_record_fields() {
         var req = new SchedulerTriggerController.WorkflowTriggerRequest(
-                "owner@test.com", "wf-1", "Run analysis");
-        assertThat(req.userEmail()).isEqualTo("owner@test.com");
+                "owner-uuid-1", "wf-1", "Run analysis");
+        assertThat(req.userUuid()).isEqualTo("owner-uuid-1");
         assertThat(req.workflowId()).isEqualTo("wf-1");
         assertThat(req.workflowInput()).isEqualTo("Run analysis");
     }
@@ -246,12 +249,12 @@ class SchedulerTriggerControllerTest {
     @Test
     void trigger_validKey_pipelineThrowsException_returns500() {
         // agentGraph.getGraph() throws — covers the catch(Exception) branch in trigger()
-        when(conversationService.resolveConversation(anyString(), anyString())).thenReturn("conv-resolved");
+        when(conversationService.resolveConversation(anyString(), any(OrgContext.class))).thenReturn("conv-resolved");
         when(conversationService.loadHistory(anyString())).thenReturn(List.of());
         when(agentGraph.getGraph()).thenThrow(new RuntimeException("Graph init failed"));
 
         var body = new SchedulerTriggerController.TriggerRequest(
-                "user@example.com", "conv-1", "Hello?", 5, true, false);
+                "user-uuid-1", "conv-1", "Hello?", 5, true, false);
 
         ResponseEntity<?> resp = controller.trigger("secret-key", null, body);
 
@@ -259,10 +262,10 @@ class SchedulerTriggerControllerTest {
     }
 
     @Test
-    void trigger_validKey_nullUserEmail_processesWithoutNPE() {
-        // null email path: initData.put("userEmail",...) is skipped when null
-        // resolveConversation is called with (conversationId, null) when userEmail is null
-        when(conversationService.resolveConversation(anyString(), (String) isNull())).thenReturn("conv-resolved");
+    void trigger_validKey_nullUserUuid_processesWithoutNPE() {
+        // null uuid path: resolveConversation is called with an OrgContext whose
+        // userUuid is null (the controller always builds a ctx, never a null identity value)
+        when(conversationService.resolveConversation(anyString(), eq(NO_USER_CTX))).thenReturn("conv-resolved");
         when(conversationService.loadHistory(anyString())).thenReturn(List.of());
         when(agentGraph.getGraph()).thenThrow(new RuntimeException("expected failure"));
 

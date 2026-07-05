@@ -6,7 +6,7 @@ import java.util.Map;
 
 public record TravelRecordDto(
         String id,
-        String ownerEmail,
+        String ownerUuid,
         String title,
         String startDate,
         String endDate,

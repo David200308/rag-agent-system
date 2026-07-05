@@ -6,6 +6,9 @@ import com.agentsystem.knowledge.service.KnowledgeSourceService;
 import com.agentsystem.org.OrgContext;
 import com.agentsystem.rag.service.DocumentIngestionService;
 import com.agentsystem.schema.UrlIngestionResult;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.entity.UserStatus;
+import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.webfetch.service.WebFetchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,6 +16,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.client.RestClient;
+
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -32,13 +37,16 @@ class McpConnectorServiceTest {
     @Mock RestClient.RequestHeadersUriSpec uriSpec;
     @Mock RestClient.RequestHeadersSpec    headersSpec;
     @Mock RestClient.ResponseSpec          responseSpec;
+    @Mock UserAccountService        userAccountService;
 
     McpConnectorServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new McpConnectorServiceImpl(ingestionService, knowledgeSourceService, webFetchService, restClientBuilder);
-        lenient().when(webFetchService.isUrlAllowed(anyString(), any(OrgContext.class))).thenReturn(true);
+        service = new McpConnectorServiceImpl(ingestionService, knowledgeSourceService, webFetchService, restClientBuilder, userAccountService);
+        lenient().when(userAccountService.findByEmail(anyString()))
+                .thenAnswer(inv -> Optional.of(new User(inv.getArgument(0), inv.getArgument(0), UserStatus.USER, true)));
+        lenient().when(webFetchService.isUrlAllowed(anyString(), nullable(OrgContext.class))).thenReturn(true);
         lenient().when(restClientBuilder.build()).thenReturn(restClient);
         lenient().when(restClient.get()).thenReturn(uriSpec);
         lenient().when(uriSpec.uri(anyString())).thenReturn(headersSpec);
@@ -50,7 +58,7 @@ class McpConnectorServiceTest {
 
     @Test
     void fetchAndIngest_domainNotWhitelisted_throwsIllegalState() {
-        when(webFetchService.isUrlAllowed(anyString(), any(OrgContext.class))).thenReturn(false);
+        when(webFetchService.isUrlAllowed(anyString(), nullable(OrgContext.class))).thenReturn(false);
 
         assertThatThrownBy(() -> service.fetchAndIngest("https://evil.example.com", "tech"))
                 .isInstanceOf(IllegalStateException.class)

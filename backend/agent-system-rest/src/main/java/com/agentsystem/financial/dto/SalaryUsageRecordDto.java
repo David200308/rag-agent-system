@@ -5,7 +5,7 @@ import java.time.Instant;
 
 public record SalaryUsageRecordDto(
         String     id,
-        String     ownerEmail,
+        String     ownerUuid,
         int        year,
         int        month,
         String     region,

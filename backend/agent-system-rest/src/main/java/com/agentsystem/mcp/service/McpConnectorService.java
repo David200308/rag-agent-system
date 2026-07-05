@@ -1,5 +1,6 @@
 package com.agentsystem.mcp.service;
 
+import com.agentsystem.org.OrgContext;
 import com.agentsystem.schema.UrlIngestionResult;
 
 public interface McpConnectorService {
@@ -13,4 +14,7 @@ public interface McpConnectorService {
     UrlIngestionResult fetchAndIngest(String url, String category);
 
     UrlIngestionResult fetchAndIngest(String url, String category, String ownerEmail);
+
+    /** Resolves ownership directly from ctx.userUuid() — no email bridge needed. */
+    UrlIngestionResult fetchAndIngest(String url, String category, OrgContext ctx);
 }

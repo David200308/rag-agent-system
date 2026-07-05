@@ -29,7 +29,7 @@ class UserPreferenceServiceTest {
     @Test
     void getOrDefault_existingPreference_returnsIt() {
         UserPreference pref = new UserPreference("user@test.com", "America/New_York");
-        when(repo.findByEmail("user@test.com")).thenReturn(Optional.of(pref));
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.of(pref));
 
         UserPreference result = service.getOrDefault("user@test.com");
 
@@ -38,7 +38,7 @@ class UserPreferenceServiceTest {
 
     @Test
     void getOrDefault_noPreference_returnsUtcDefault() {
-        when(repo.findByEmail("user@test.com")).thenReturn(Optional.empty());
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.empty());
 
         UserPreference result = service.getOrDefault("user@test.com");
 
@@ -51,7 +51,7 @@ class UserPreferenceServiceTest {
     @Test
     void setTimezone_existingPreference_updatesTimezone() {
         UserPreference pref = new UserPreference("user@test.com", "UTC");
-        when(repo.findByEmail("user@test.com")).thenReturn(Optional.of(pref));
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.of(pref));
         when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         UserPreference result = service.setTimezone("user@test.com", "Asia/Tokyo");
@@ -61,14 +61,14 @@ class UserPreferenceServiceTest {
 
     @Test
     void setTimezone_noExistingPreference_createsAndSaves() {
-        when(repo.findByEmail("new@test.com")).thenReturn(Optional.empty());
+        when(repo.findByUserUuid("new@test.com")).thenReturn(Optional.empty());
         when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
         ArgumentCaptor<UserPreference> captor = ArgumentCaptor.forClass(UserPreference.class);
 
         service.setTimezone("new@test.com", "Europe/London");
 
         verify(repo).save(captor.capture());
-        assertThat(captor.getValue().getEmail()).isEqualTo("new@test.com");
+        assertThat(captor.getValue().getUserUuid()).isEqualTo("new@test.com");
         assertThat(captor.getValue().getTimezone()).isEqualTo("Europe/London");
     }
 
@@ -77,7 +77,7 @@ class UserPreferenceServiceTest {
     @Test
     void setSelectedModel_savesDisplayName() {
         UserPreference pref = new UserPreference("user@test.com", "UTC");
-        when(repo.findByEmail("user@test.com")).thenReturn(Optional.of(pref));
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.of(pref));
         when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         UserPreference result = service.setSelectedModel("user@test.com", "GPT-4o");
@@ -89,7 +89,7 @@ class UserPreferenceServiceTest {
     void setSelectedModel_nullValue_clearsModel() {
         UserPreference pref = new UserPreference("user@test.com", "UTC");
         pref.setSelectedModel("GPT-4o");
-        when(repo.findByEmail("user@test.com")).thenReturn(Optional.of(pref));
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.of(pref));
         when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         UserPreference result = service.setSelectedModel("user@test.com", null);
@@ -99,7 +99,7 @@ class UserPreferenceServiceTest {
 
     @Test
     void setSelectedModel_noExistingPreference_createsRecord() {
-        when(repo.findByEmail("new@test.com")).thenReturn(Optional.empty());
+        when(repo.findByUserUuid("new@test.com")).thenReturn(Optional.empty());
         when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
         ArgumentCaptor<UserPreference> captor = ArgumentCaptor.forClass(UserPreference.class);
 
@@ -115,14 +115,14 @@ class UserPreferenceServiceTest {
     void getSelectedModel_returnsStoredModel() {
         UserPreference pref = new UserPreference("user@test.com", "UTC");
         pref.setSelectedModel("DeepSeek-R1");
-        when(repo.findByEmail("user@test.com")).thenReturn(Optional.of(pref));
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.of(pref));
 
         assertThat(service.getSelectedModel("user@test.com")).isEqualTo("DeepSeek-R1");
     }
 
     @Test
     void getSelectedModel_noPreference_returnsNull() {
-        when(repo.findByEmail("user@test.com")).thenReturn(Optional.empty());
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.empty());
 
         assertThat(service.getSelectedModel("user@test.com")).isNull();
     }
@@ -130,7 +130,7 @@ class UserPreferenceServiceTest {
     @Test
     void getSelectedModel_preferenceExistsButNoModel_returnsNull() {
         UserPreference pref = new UserPreference("user@test.com", "UTC");
-        when(repo.findByEmail("user@test.com")).thenReturn(Optional.of(pref));
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.of(pref));
 
         assertThat(service.getSelectedModel("user@test.com")).isNull();
     }
@@ -140,7 +140,7 @@ class UserPreferenceServiceTest {
     @Test
     void setDefaultCurrency_validCurrency_savesUppercase() {
         UserPreference pref = new UserPreference("user@test.com", "UTC");
-        when(repo.findByEmail("user@test.com")).thenReturn(Optional.of(pref));
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.of(pref));
         when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         UserPreference result = service.setDefaultCurrency("user@test.com", "hkd");
@@ -151,7 +151,7 @@ class UserPreferenceServiceTest {
     @Test
     void setDefaultCurrency_nullCurrency_defaultsToUSD() {
         UserPreference pref = new UserPreference("user@test.com", "UTC");
-        when(repo.findByEmail("user@test.com")).thenReturn(Optional.of(pref));
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.of(pref));
         when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         UserPreference result = service.setDefaultCurrency("user@test.com", null);
@@ -162,7 +162,7 @@ class UserPreferenceServiceTest {
     @Test
     void setDefaultCurrency_blankCurrency_defaultsToUSD() {
         UserPreference pref = new UserPreference("user@test.com", "UTC");
-        when(repo.findByEmail("user@test.com")).thenReturn(Optional.of(pref));
+        when(repo.findByUserUuid("user@test.com")).thenReturn(Optional.of(pref));
         when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         UserPreference result = service.setDefaultCurrency("user@test.com", "  ");
@@ -172,7 +172,7 @@ class UserPreferenceServiceTest {
 
     @Test
     void setDefaultCurrency_noPref_createsNewRecord() {
-        when(repo.findByEmail("new@test.com")).thenReturn(Optional.empty());
+        when(repo.findByUserUuid("new@test.com")).thenReturn(Optional.empty());
         when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         UserPreference result = service.setDefaultCurrency("new@test.com", "EUR");

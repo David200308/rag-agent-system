@@ -26,14 +26,14 @@ class TravelControllerTest {
     @Mock HttpServletRequest request;
     @InjectMocks TravelController controller;
 
-    private void stubEmail(String email) {
-        when(request.getAttribute("authenticatedEmail")).thenReturn(email);
+    private void stubUuid(String uuid) {
+        when(request.getAttribute("authenticatedUserUuid")).thenReturn(uuid);
     }
 
     private TravelRecord record(String id, String email) {
         TravelRecord r = new TravelRecord();
         r.setId(id);
-        r.setOwnerEmail(email);
+        r.setOwnerUuid(email);
         r.setTitle("Trip");
         r.setCreatedAt(Instant.now());
         r.setUpdatedAt(Instant.now());
@@ -44,7 +44,7 @@ class TravelControllerTest {
 
     @Test
     void list_returnsOkWithRecords() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         TravelRecordDto dto = new TravelRecordDto("id-1", "user@test.com", "Trip", null, null, null, null, null, Instant.now(), Instant.now());
         when(service.list("user@test.com")).thenReturn(List.of(dto));
 
@@ -56,8 +56,8 @@ class TravelControllerTest {
     }
 
     @Test
-    void list_noEmail_usesAnonymous() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn(null);
+    void list_noUuid_usesAnonymous() {
+        when(request.getAttribute("authenticatedUserUuid")).thenReturn(null);
         when(service.list("anonymous")).thenReturn(List.of());
 
         ResponseEntity<List<TravelRecordDto>> resp = controller.list(request);
@@ -71,7 +71,7 @@ class TravelControllerTest {
 
     @Test
     void create_returns201WithRecord() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         TravelRecord saved = record("new-id", "user@test.com");
         Map<String, Object> body = Map.of("title", "Japan Trip");
         when(service.create("user@test.com", body)).thenReturn(saved);
@@ -87,7 +87,7 @@ class TravelControllerTest {
 
     @Test
     void update_ownerMatch_returns200() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         TravelRecord updated = record("id-1", "user@test.com");
         updated.setTitle("Updated");
         Map<String, Object> body = Map.of("title", "Updated");
@@ -101,7 +101,7 @@ class TravelControllerTest {
 
     @Test
     void update_wrongOwner_returns403() {
-        stubEmail("other@test.com");
+        stubUuid("other@test.com");
         Map<String, Object> body = Map.of("title", "X");
         when(service.update("id-1", "other@test.com", body))
                 .thenThrow(new SecurityException("Forbidden"));
@@ -115,7 +115,7 @@ class TravelControllerTest {
 
     @Test
     void delete_ownerMatch_returns204() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
 
         ResponseEntity<Void> resp = controller.delete("id-1", request);
 
@@ -125,7 +125,7 @@ class TravelControllerTest {
 
     @Test
     void delete_wrongOwner_returns403() {
-        stubEmail("other@test.com");
+        stubUuid("other@test.com");
         doThrow(new SecurityException("Forbidden")).when(service).delete("id-1", "other@test.com");
 
         ResponseEntity<Void> resp = controller.delete("id-1", request);

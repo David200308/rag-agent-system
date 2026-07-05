@@ -9,19 +9,19 @@ import java.util.List;
 
 public interface SkillRepository extends JpaRepository<Skill, String> {
 
-    /** Personal mode: skills owned by this email. */
-    List<Skill> findByOwnerEmailAndOrgIdIsNullOrderByCreatedAtDesc(String ownerEmail);
+    /** Personal mode: skills owned by this uuid. */
+    List<Skill> findByOwnerUuidAndOrgIdIsNullOrderByCreatedAtDesc(String ownerUuid);
 
     /** Team mode UI: skills with an approved version + caller's own submissions (even if still pending). */
     @Query("""
         SELECT s FROM Skill s
         WHERE s.orgId = :orgId
-          AND (s.ownerEmail = :callerEmail
+          AND (s.ownerUuid = :callerUuid
                OR EXISTS (SELECT 1 FROM SkillVersion v WHERE v.skillId = s.id AND v.status = 'APPROVED'))
         ORDER BY s.createdAt DESC
         """)
     List<Skill> findByOrgIdForMember(@Param("orgId") String orgId,
-                                     @Param("callerEmail") String callerEmail);
+                                     @Param("callerUuid") String callerUuid);
 
     /** Team mode agent use: skills with at least one approved version. */
     @Query("""
@@ -35,7 +35,7 @@ public interface SkillRepository extends JpaRepository<Skill, String> {
     List<Skill> findAllByOrderByCreatedAtDesc();
 
     /** Backward-compatible alias. */
-    default List<Skill> findByOwnerEmailOrderByCreatedAtDesc(String ownerEmail) {
-        return findByOwnerEmailAndOrgIdIsNullOrderByCreatedAtDesc(ownerEmail);
+    default List<Skill> findByOwnerUuidOrderByCreatedAtDesc(String ownerUuid) {
+        return findByOwnerUuidAndOrgIdIsNullOrderByCreatedAtDesc(ownerUuid);
     }
 }

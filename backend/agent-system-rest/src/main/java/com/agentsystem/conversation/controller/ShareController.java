@@ -3,6 +3,7 @@ package com.agentsystem.conversation.controller;
 import com.agentsystem.conversation.service.ConversationService;
 import com.agentsystem.conversation.entity.ConversationMessage;
 import com.agentsystem.conversation.entity.ConversationShare;
+import com.agentsystem.user.service.UserAccountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import java.util.List;
 public class ShareController {
 
     private final ConversationService conversationService;
+    private final UserAccountService  userAccountService;
 
     // ── Response record ───────────────────────────────────────────────────────
 
@@ -46,7 +48,7 @@ public class ShareController {
             return ResponseEntity.ok(new ShareMetaResponse(
                 share.getShareMode(),
                 share.getAccessType(),
-                share.getOwnerEmail(),
+                userAccountService.getEmailByUuid(share.getOwnerUuid()),
                 share.getExpiresAt() != null ? share.getExpiresAt().toString() : null,
                 messages
             ));

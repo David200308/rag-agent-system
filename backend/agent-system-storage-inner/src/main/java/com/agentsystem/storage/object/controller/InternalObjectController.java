@@ -31,14 +31,14 @@ public class InternalObjectController {
     public record UploadResponse(String id, String objectKey) {}
 
     public record ObjectMetadataResponse(
-            String id, String objectKey, String ownerEmail, String entityType,
+            String id, String objectKey, String ownerUuid, String entityType,
             String entityId, String contentType, long sizeBytes, String url) {}
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<UploadResponse> upload(
             @RequestHeader(value = "X-Storage-Key", required = false) String serviceKey,
             @RequestParam("file") MultipartFile file,
-            @RequestParam("ownerEmail") String ownerEmail,
+            @RequestParam("ownerUuid") String ownerUuid,
             @RequestParam("entityType") String entityType,
             @RequestParam(value = "entityId", required = false) String entityId) {
 
@@ -46,7 +46,7 @@ public class InternalObjectController {
 
         try {
             StoredObject object = objectStorageService.upload(
-                    file.getBytes(), file.getContentType(), ownerEmail, entityType, entityId);
+                    file.getBytes(), file.getContentType(), ownerUuid, entityType, entityId);
             return ResponseEntity.status(201).body(new UploadResponse(object.getId(), object.getObjectKey()));
         } catch (IOException e) {
             log.warn("[InternalObjectController] upload failed: {}", e.getMessage());
@@ -86,11 +86,11 @@ public class InternalObjectController {
             @RequestHeader(value = "X-Storage-Key", required = false) String serviceKey,
             @RequestParam String entityType,
             @RequestParam String entityId,
-            @RequestParam String ownerEmail) {
+            @RequestParam String ownerUuid) {
 
         if (!validKey(serviceKey)) return ResponseEntity.status(401).build();
 
-        List<ObjectMetadataResponse> objects = objectStorageService.list(entityType, entityId, ownerEmail)
+        List<ObjectMetadataResponse> objects = objectStorageService.list(entityType, entityId, ownerUuid)
                 .stream().map(this::toResponse).toList();
         return ResponseEntity.ok(objects);
     }
@@ -99,12 +99,12 @@ public class InternalObjectController {
     public ResponseEntity<Void> delete(
             @RequestHeader(value = "X-Storage-Key", required = false) String serviceKey,
             @PathVariable String id,
-            @RequestParam String ownerEmail) {
+            @RequestParam String ownerUuid) {
 
         if (!validKey(serviceKey)) return ResponseEntity.status(401).build();
 
         try {
-            objectStorageService.delete(id, ownerEmail);
+            objectStorageService.delete(id, ownerUuid);
             return ResponseEntity.noContent().build();
         } catch (NoSuchElementException e) {
             return ResponseEntity.notFound().build();
@@ -118,7 +118,7 @@ public class InternalObjectController {
     }
 
     private ObjectMetadataResponse toResponse(StoredObject object) {
-        return new ObjectMetadataResponse(object.getId(), object.getObjectKey(), object.getOwnerEmail(),
+        return new ObjectMetadataResponse(object.getId(), object.getObjectKey(), object.getOwnerUuid(),
                 object.getEntityType(), object.getEntityId(), object.getContentType(), object.getSizeBytes(),
                 objectStorageService.presignedUrl(object));
     }

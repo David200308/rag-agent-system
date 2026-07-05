@@ -18,8 +18,8 @@ public class Conversation {
     @Column(length = 36)
     private String id;   // UUID assigned by the application
 
-    @Column(name = "user_email")
-    private String userEmail;
+    @Column(name = "user_uuid", length = 36)
+    private String userUuid;
 
     /** Org slug when in team mode; null = personal. */
     @Column(name = "org_id", length = 100)
@@ -38,9 +38,9 @@ public class Conversation {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
-    public Conversation(String id, String userEmail) {
-        this.id        = id;
-        this.userEmail = userEmail;
+    public Conversation(String id, String userUuid) {
+        this.id       = id;
+        this.userUuid = userUuid;
     }
 
     @PreUpdate

@@ -8,5 +8,5 @@ import java.util.List;
 
 public interface StoredObjectRepository extends JpaRepository<StoredObject, String> {
 
-    List<StoredObject> findByEntityTypeAndEntityIdAndOwnerEmail(String entityType, String entityId, String ownerEmail);
+    List<StoredObject> findByEntityTypeAndEntityIdAndOwnerUuid(String entityType, String entityId, String ownerUuid);
 }

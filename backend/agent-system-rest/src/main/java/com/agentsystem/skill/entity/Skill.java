@@ -23,8 +23,8 @@ public class Skill {
     @Column(length = 36)
     private String id;
 
-    @Column(name = "owner_email", length = 255)
-    private String ownerEmail;
+    @Column(name = "owner_uuid", length = 36)
+    private String ownerUuid;
 
     /** Org slug when in team mode; null = personal. */
     @Column(name = "org_id", length = 100)
@@ -36,10 +36,10 @@ public class Skill {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
-    public Skill(String id, String ownerEmail, String name) {
-        this.id         = id;
-        this.ownerEmail = ownerEmail;
-        this.name       = name;
-        this.createdAt  = Instant.now();
+    public Skill(String id, String ownerUuid, String name) {
+        this.id        = id;
+        this.ownerUuid = ownerUuid;
+        this.name      = name;
+        this.createdAt = Instant.now();
     }
 }

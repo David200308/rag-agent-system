@@ -4,13 +4,13 @@ import com.agentsystem.user.entity.UserPreference;
 
 public interface UserPreferenceService {
 
-    UserPreference getOrDefault(String email);
+    UserPreference getOrDefault(String userUuid);
 
-    UserPreference setTimezone(String email, String timezone);
+    UserPreference setTimezone(String userUuid, String timezone);
 
-    UserPreference setSelectedModel(String email, String displayName);
+    UserPreference setSelectedModel(String userUuid, String displayName);
 
-    String getSelectedModel(String email);
+    String getSelectedModel(String userUuid);
 
-    UserPreference setDefaultCurrency(String email, String currency);
+    UserPreference setDefaultCurrency(String userUuid, String currency);
 }

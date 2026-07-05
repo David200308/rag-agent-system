@@ -6,7 +6,7 @@ import java.util.List;
 
 public record CardDto(
         String       id,
-        String       ownerEmail,
+        String       ownerUuid,
         String       bank,
         String       countryRegion,
         List<String> types,

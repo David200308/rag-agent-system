@@ -3,6 +3,7 @@ package com.agentsystem.conversation.controller;
 import com.agentsystem.conversation.service.ConversationService;
 import com.agentsystem.conversation.entity.ConversationMessage;
 import com.agentsystem.conversation.entity.ConversationShare;
+import com.agentsystem.user.service.UserAccountService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -13,16 +14,19 @@ import org.springframework.http.ResponseEntity;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ShareControllerTest {
 
     @Mock ConversationService conversationService;
+    @Mock UserAccountService  userAccountService;
     @InjectMocks ShareController controller;
 
     private ConversationShare readOnlyShare(String token, String convId) {
-        return new ConversationShare(convId, token, "owner@example.com", null,
+        lenient().when(userAccountService.getEmailByUuid("owner-uuid")).thenReturn("owner@example.com");
+        return new ConversationShare(convId, token, "owner-uuid", null,
                 "READ_ONLY", "EVERYONE");
     }
 

@@ -8,5 +8,5 @@ import java.util.List;
 
 @Repository
 public interface SalaryUsageRecordRepository extends JpaRepository<SalaryUsageRecord, String> {
-    List<SalaryUsageRecord> findByOwnerEmailOrderByYearDescMonthDesc(String ownerEmail);
+    List<SalaryUsageRecord> findByOwnerUuidOrderByYearDescMonthDesc(String ownerUuid);
 }

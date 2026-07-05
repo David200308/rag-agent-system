@@ -39,7 +39,7 @@ public class ObjectStorageServiceImpl implements ObjectStorageService {
     @CircuitBreaker(name = "garage")
     @Retry(name = "garage")
     @Override
-    public StoredObject upload(byte[] content, String contentType, String ownerEmail,
+    public StoredObject upload(byte[] content, String contentType, String ownerUuid,
                                 String entityType, String entityId) {
         String id = UUID.randomUUID().toString();
         String objectKey = entityType.toLowerCase() + "/" + id + extensionFor(contentType);
@@ -52,7 +52,7 @@ public class ObjectStorageServiceImpl implements ObjectStorageService {
                         .build(),
                 RequestBody.fromBytes(content));
 
-        StoredObject object = new StoredObject(id, objectKey, ownerEmail, entityType, entityId,
+        StoredObject object = new StoredObject(id, objectKey, ownerUuid, entityType, entityId,
                 contentType, content.length, Instant.now());
         return repository.save(object);
     }
@@ -63,17 +63,17 @@ public class ObjectStorageServiceImpl implements ObjectStorageService {
     }
 
     @Override
-    public List<StoredObject> list(String entityType, String entityId, String ownerEmail) {
-        return repository.findByEntityTypeAndEntityIdAndOwnerEmail(entityType, entityId, ownerEmail);
+    public List<StoredObject> list(String entityType, String entityId, String ownerUuid) {
+        return repository.findByEntityTypeAndEntityIdAndOwnerUuid(entityType, entityId, ownerUuid);
     }
 
     @CircuitBreaker(name = "garage")
     @Retry(name = "garage")
     @Override
-    public void delete(String id, String ownerEmail) {
+    public void delete(String id, String ownerUuid) {
         StoredObject object = repository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException("object not found: " + id));
-        if (!object.getOwnerEmail().equals(ownerEmail)) {
+        if (!object.getOwnerUuid().equals(ownerUuid)) {
             throw new SecurityException("not the owner of object " + id);
         }
         s3Client.deleteObject(DeleteObjectRequest.builder()

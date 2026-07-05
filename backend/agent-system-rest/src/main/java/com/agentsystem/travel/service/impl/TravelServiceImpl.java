@@ -28,28 +28,28 @@ public class TravelServiceImpl implements TravelService {
 
     @Transactional(readOnly = true)
     @Override
-    public List<TravelRecordDto> list(String ownerEmail) {
-        return repo.findByOwnerEmailOrderByStartDateDesc(ownerEmail).stream()
+    public List<TravelRecordDto> list(String ownerUuid) {
+        return repo.findByOwnerUuidOrderByStartDateDesc(ownerUuid).stream()
                 .map(this::toDto)
                 .toList();
     }
 
     @Transactional
     @Override
-    public TravelRecord create(String ownerEmail, Map<String, Object> body) {
+    public TravelRecord create(String ownerUuid, Map<String, Object> body) {
         TravelRecord r = new TravelRecord();
         r.setId(UUID.randomUUID().toString());
-        r.setOwnerEmail(ownerEmail);
+        r.setOwnerUuid(ownerUuid);
         applyFields(r, body);
         return repo.save(r);
     }
 
     @Transactional
     @Override
-    public TravelRecord update(String id, String ownerEmail, Map<String, Object> body) {
+    public TravelRecord update(String id, String ownerUuid, Map<String, Object> body) {
         TravelRecord r = repo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Not found"));
-        if (!r.getOwnerEmail().equals(ownerEmail)) throw new SecurityException("Forbidden");
+        if (!r.getOwnerUuid().equals(ownerUuid)) throw new SecurityException("Forbidden");
         applyFields(r, body);
         r.setUpdatedAt(Instant.now());
         return repo.save(r);
@@ -57,9 +57,9 @@ public class TravelServiceImpl implements TravelService {
 
     @Transactional
     @Override
-    public void delete(String id, String ownerEmail) {
+    public void delete(String id, String ownerUuid) {
         repo.findById(id).ifPresent(r -> {
-            if (!r.getOwnerEmail().equals(ownerEmail)) throw new SecurityException("Forbidden");
+            if (!r.getOwnerUuid().equals(ownerUuid)) throw new SecurityException("Forbidden");
             repo.delete(r);
         });
     }
@@ -111,7 +111,7 @@ public class TravelServiceImpl implements TravelService {
             }
         }
         return new TravelRecordDto(
-                r.getId(), r.getOwnerEmail(), r.getTitle(),
+                r.getId(), r.getOwnerUuid(), r.getTitle(),
                 r.getStartDate(), r.getEndDate(),
                 stops, expenses, r.getNotes(),
                 r.getCreatedAt(), r.getUpdatedAt()

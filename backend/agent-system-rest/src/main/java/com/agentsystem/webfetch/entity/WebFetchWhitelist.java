@@ -20,7 +20,7 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "web_fetch_whitelist",
-       uniqueConstraints = @UniqueConstraint(name = "uq_wfw_domain_user", columnNames = {"domain", "added_by"}))
+       uniqueConstraints = @UniqueConstraint(name = "uq_wfw_domain_user", columnNames = {"domain", "added_by_uuid"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -34,8 +34,8 @@ public class WebFetchWhitelist {
     @Column(nullable = false, length = 253)
     private String domain;
 
-    @Column(name = "added_by", length = 255)
-    private String addedBy;
+    @Column(name = "added_by_uuid", length = 36)
+    private String addedByUuid;
 
     /** Org slug when in team mode; null = personal. */
     @Column(name = "org_id", length = 100)
@@ -44,13 +44,13 @@ public class WebFetchWhitelist {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
-    public WebFetchWhitelist(String domain, String addedBy) {
-        this(domain, addedBy, null);
+    public WebFetchWhitelist(String domain, String addedByUuid) {
+        this(domain, addedByUuid, null);
     }
 
-    public WebFetchWhitelist(String domain, String addedBy, String orgId) {
-        this.domain  = domain.toLowerCase().strip();
-        this.addedBy = addedBy;
-        this.orgId   = orgId;
+    public WebFetchWhitelist(String domain, String addedByUuid, String orgId) {
+        this.domain      = domain.toLowerCase().strip();
+        this.addedByUuid = addedByUuid;
+        this.orgId       = orgId;
     }
 }

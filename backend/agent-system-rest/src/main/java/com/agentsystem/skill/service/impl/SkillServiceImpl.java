@@ -9,6 +9,8 @@ import com.agentsystem.skill.entity.SkillVersion;
 import com.agentsystem.skill.repository.SkillRepository;
 import com.agentsystem.skill.repository.SkillVersionRepository;
 import com.agentsystem.storage.StorageClient;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.service.UserAccountService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,6 +39,7 @@ public class SkillServiceImpl implements SkillService {
     private final SkillVersionRepository versionRepo;
     private final StorageClient storageClient;
     private final SkillTextExtractor textExtractor;
+    private final UserAccountService userAccountService;
 
     /**
      * List skills for the UI.
@@ -47,12 +50,12 @@ public class SkillServiceImpl implements SkillService {
     @Override
     public List<SkillSummary> list(OrgContext ctx) {
         List<Skill> skills;
-        if (ctx == null || ctx.email() == null) {
+        if (ctx == null || ctx.userUuid() == null) {
             skills = repo.findAllByOrderByCreatedAtDesc();
         } else if (ctx.isTeam()) {
-            skills = repo.findByOrgIdForMember(ctx.orgId(), ctx.email());
+            skills = repo.findByOrgIdForMember(ctx.orgId(), ctx.userUuid());
         } else {
-            skills = repo.findByOwnerEmailAndOrgIdIsNullOrderByCreatedAtDesc(ctx.email());
+            skills = repo.findByOwnerUuidAndOrgIdIsNullOrderByCreatedAtDesc(ctx.userUuid());
         }
         return skills.stream().map(this::toSummary).toList();
     }
@@ -60,21 +63,21 @@ public class SkillServiceImpl implements SkillService {
     @Transactional
     @Override
     public Skill create(OrgContext ctx, String name, MultipartFile file, String fileType) throws IOException {
-        Skill skill = new Skill(UUID.randomUUID().toString(), ctx.email(), name);
+        Skill skill = new Skill(UUID.randomUUID().toString(), ctx.userUuid(), name);
         if (ctx.isTeam()) {
             skill.setOrgId(ctx.orgId());
         }
         repo.save(skill);
         createVersion(ctx, skill, file, fileType, 1);
         log.info("[SkillService] Created skill '{}' (id={}) for {} (org={})",
-                name, skill.getId(), ctx.email(), ctx.orgId());
+                name, skill.getId(), ctx.userUuid(), ctx.orgId());
         return skill;
     }
 
     @Transactional
     @Override
     public Skill create(String ownerEmail, String name, MultipartFile file, String fileType) throws IOException {
-        return create(new OrgContext(ownerEmail, "PERSONAL", null), name, file, fileType);
+        return create(new OrgContext(resolveUuid(ownerEmail), ownerEmail, "PERSONAL", null), name, file, fileType);
     }
 
     /** Upload a new version of an existing skill. Team mode: goes back to PENDING for re-approval. */
@@ -98,15 +101,15 @@ public class SkillServiceImpl implements SkillService {
 
         StorageClient.UploadResult uploaded = storageClient.uploadObject(
                 bytes, file.getOriginalFilename(), contentType,
-                ctx.email(), ENTITY_TYPE, skill.getId());
+                ctx.userUuid(), ENTITY_TYPE, skill.getId());
 
         String status = ctx.isTeam() ? "PENDING" : "APPROVED";
         SkillVersion version = new SkillVersion(
                 UUID.randomUUID().toString(), skill.getId(), versionNumber, uploaded.id(),
-                file.getOriginalFilename(), fileType, bytes.length, status, ctx.email(), Instant.now());
+                file.getOriginalFilename(), fileType, bytes.length, status, ctx.userUuid(), Instant.now());
         versionRepo.save(version);
         log.info("[SkillService] Skill id={} version={} status={} by {}",
-                skill.getId(), versionNumber, status, ctx.email());
+                skill.getId(), versionNumber, status, ctx.userUuid());
         return version;
     }
 
@@ -141,9 +144,9 @@ public class SkillServiceImpl implements SkillService {
                     return new PendingSkillVersion(
                             v.getId(), v.getSkillId(),
                             skill != null ? skill.getName() : "(deleted)",
-                            skill != null ? skill.getOwnerEmail() : null,
+                            skill != null ? skill.getOwnerUuid() : null,
                             v.getVersionNumber(), v.getFileName(), v.getFileType(), v.getSizeBytes(),
-                            v.getCreatedByEmail(), v.getCreatedAt());
+                            v.getCreatedByUuid(), v.getCreatedAt());
                 })
                 .toList();
     }
@@ -179,29 +182,29 @@ public class SkillServiceImpl implements SkillService {
             requireCanModify(skill, ctx);
             for (SkillVersion version : versionRepo.findBySkillIdOrderByVersionNumberDesc(id)) {
                 try {
-                    storageClient.deleteObject(version.getObjectId(), skill.getOwnerEmail());
+                    storageClient.deleteObject(version.getObjectId(), skill.getOwnerUuid());
                 } catch (Exception e) {
                     log.warn("[SkillService] Failed to delete object {} for skill {}: {}",
                             version.getObjectId(), id, e.getMessage());
                 }
             }
             repo.deleteById(id); // cascades skill_versions rows via FK
-            log.info("[SkillService] Deleted skill id={} by {}", id, ctx.email());
+            log.info("[SkillService] Deleted skill id={} by {}", id, ctx.userUuid());
         });
     }
 
     @Transactional
     @Override
     public void delete(String id, String callerEmail) {
-        delete(id, new OrgContext(callerEmail, "PERSONAL", null));
+        delete(id, new OrgContext(resolveUuid(callerEmail), callerEmail, "PERSONAL", null));
     }
 
     /** Team mode: any org member may modify. Personal mode: owner only. */
     private void requireCanModify(Skill skill, OrgContext ctx) {
         if (!ctx.isTeam()) {
-            String callerEmail = ctx.email();
-            if (callerEmail != null && skill.getOwnerEmail() != null
-                    && !skill.getOwnerEmail().equalsIgnoreCase(callerEmail)) {
+            String callerUuid = ctx.userUuid();
+            if (callerUuid != null && skill.getOwnerUuid() != null
+                    && !skill.getOwnerUuid().equals(callerUuid)) {
                 throw new SecurityException("Only the owner can modify this skill.");
             }
         }
@@ -210,12 +213,20 @@ public class SkillServiceImpl implements SkillService {
     private SkillSummary toSummary(Skill skill) {
         SkillVersion latest = versionRepo.findTopBySkillIdOrderByVersionNumberDesc(skill.getId()).orElse(null);
         return new SkillSummary(
-                skill.getId(), skill.getOwnerEmail(), skill.getOrgId(), skill.getName(),
+                skill.getId(), skill.getOwnerUuid(), skill.getOrgId(), skill.getName(),
                 latest != null ? latest.getFileName() : null,
                 latest != null ? latest.getFileType() : null,
                 latest != null ? latest.getSizeBytes() : 0L,
                 latest != null ? latest.getStatus() : "APPROVED",
                 latest != null ? latest.getVersionNumber() : 0,
                 skill.getCreatedAt());
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────────
+
+    /** Resolves an email to its user_uuid, or null if no such email is a registered user. */
+    private String resolveUuid(String email) {
+        if (email == null || email.isBlank()) return null;
+        return userAccountService.findByEmail(email).map(User::getUuid).orElse(null);
     }
 }

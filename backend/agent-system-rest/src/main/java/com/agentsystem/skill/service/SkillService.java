@@ -14,15 +14,15 @@ public interface SkillService {
 
     /** Metadata-only summary for list views — sourced from the skill's latest version. */
     record SkillSummary(
-            String id, String ownerEmail, String orgId, String name,
+            String id, String ownerUuid, String orgId, String name,
             String fileName, String fileType, long size, String status,
             int versionNumber, Instant createdAt) {}
 
     /** A pending version enriched with its parent skill's name/owner for the approval queue UI. */
     record PendingSkillVersion(
-            String versionId, String skillId, String skillName, String ownerEmail,
+            String versionId, String skillId, String skillName, String ownerUuid,
             int versionNumber, String fileName, String fileType, long sizeBytes,
-            String createdByEmail, Instant createdAt) {}
+            String createdByUuid, Instant createdAt) {}
 
     /**
      * List skills for the UI.

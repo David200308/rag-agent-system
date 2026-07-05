@@ -4,6 +4,9 @@ import com.agentsystem.workflow.service.impl.WorkflowServiceImpl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.agentsystem.org.OrgContext;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.entity.UserStatus;
+import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.workflow.entity.Workflow;
 import com.agentsystem.workflow.entity.WorkflowAgent;
 import com.agentsystem.workflow.repository.WorkflowAgentRepository;
@@ -29,20 +32,34 @@ class WorkflowServiceTest {
 
     @Mock WorkflowRepository      workflowRepo;
     @Mock WorkflowAgentRepository agentRepo;
+    @Mock UserAccountService      userAccountService;
 
     WorkflowServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new WorkflowServiceImpl(workflowRepo, agentRepo, new ObjectMapper());
+        service = new WorkflowServiceImpl(workflowRepo, agentRepo, new ObjectMapper(), userAccountService);
+        // Resolve every email used across this file to a uuid equal to itself, for simplicity.
+        // lenient() since not every test triggers every resolution.
+        for (String email : List.of("owner@test.com", "other@test.com", "intruder@test.com",
+                "creator@test.com", "member@test.com")) {
+            stubUuidResolution(email);
+        }
+    }
+
+    /** Stubs userAccountService to resolve {@code email} to a matching uuid (same string, for simplicity). */
+    private void stubUuidResolution(String email) {
+        lenient().when(userAccountService.findByEmail(email))
+                .thenReturn(Optional.of(new User(email, email, UserStatus.USER, true)));
     }
 
     // ── list / listByOwner ────────────────────────────────────────────────────
 
     @Test
     void listByOwner_personalMode_delegatesToPersonalQuery() {
+        stubUuidResolution("owner@test.com");
         Workflow wf = new Workflow("w1", "My Flow", "owner@test.com", Workflow.AgentPattern.ORCHESTRATOR);
-        when(workflowRepo.findByOwnerEmailAndOrgIdIsNullOrderByUpdatedAtDesc("owner@test.com"))
+        when(workflowRepo.findByOwnerUuidAndOrgIdIsNullOrderByUpdatedAtDesc("owner@test.com"))
                 .thenReturn(List.of(wf));
 
         List<Workflow> result = service.listByOwner("owner@test.com");
@@ -56,7 +73,7 @@ class WorkflowServiceTest {
         wf.setOrgId("skyproton");
         when(workflowRepo.findByOrgIdOrderByUpdatedAtDesc("skyproton")).thenReturn(List.of(wf));
 
-        OrgContext teamCtx = new OrgContext("owner@test.com", "TEAM", "skyproton");
+        OrgContext teamCtx = new OrgContext("owner@test.com", "owner@test.com", "TEAM", "skyproton");
         List<Workflow> result = service.list(teamCtx);
 
         assertThat(result).containsExactly(wf);
@@ -67,7 +84,7 @@ class WorkflowServiceTest {
     void create_teamMode_setsOrgId() {
         when(workflowRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        OrgContext teamCtx = new OrgContext("owner@test.com", "TEAM", "skyproton");
+        OrgContext teamCtx = new OrgContext("owner@test.com", "owner@test.com", "TEAM", "skyproton");
         Workflow result = service.create("Team Flow", "desc", teamCtx,
                 Workflow.AgentPattern.ORCHESTRATOR, null);
 
@@ -81,7 +98,7 @@ class WorkflowServiceTest {
         when(workflowRepo.findById("w1")).thenReturn(Optional.of(wf));
         when(workflowRepo.save(wf)).thenReturn(wf);
 
-        OrgContext teamCtx = new OrgContext("member@test.com", "TEAM", "skyproton");
+        OrgContext teamCtx = new OrgContext("member@test.com", "member@test.com", "TEAM", "skyproton");
         service.update("w1", teamCtx, Map.of("name", "Updated"));
 
         assertThat(wf.getName()).isEqualTo("Updated");
@@ -116,7 +133,7 @@ class WorkflowServiceTest {
 
         verify(workflowRepo).save(captor.capture());
         assertThat(captor.getValue().getName()).isEqualTo("My Flow");
-        assertThat(captor.getValue().getOwnerEmail()).isEqualTo("owner@test.com");
+        assertThat(captor.getValue().getOwnerUuid()).isEqualTo("owner@test.com");
         assertThat(captor.getValue().getId()).isNotBlank();
     }
 

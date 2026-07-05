@@ -112,7 +112,7 @@ class InternalObjectControllerTest {
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody().id()).isEqualTo("id-1");
         assertThat(resp.getBody().objectKey()).isEqualTo("avatar/id-1.png");
-        assertThat(resp.getBody().ownerEmail()).isEqualTo("user@test.com");
+        assertThat(resp.getBody().ownerUuid()).isEqualTo("user@test.com");
         assertThat(resp.getBody().url()).isEqualTo("https://signed-url");
     }
 

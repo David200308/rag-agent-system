@@ -5,7 +5,7 @@ import java.time.Instant;
 
 public record CashDepositDto(
         String     id,
-        String     ownerEmail,
+        String     ownerUuid,
         String     platform,
         String     platformType,
         String     countryRegion,

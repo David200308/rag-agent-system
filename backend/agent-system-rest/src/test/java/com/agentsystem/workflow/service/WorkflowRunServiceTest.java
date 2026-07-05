@@ -10,8 +10,12 @@ import com.agentsystem.connector.service.GoogleSlidesService;
 import com.agentsystem.connector.service.TelegramService;
 import com.agentsystem.model.service.ModelConfigService;
 import com.agentsystem.notification.NotificationClient;
+import com.agentsystem.org.OrgContext;
 import com.agentsystem.sandbox.service.SandboxService;
 import com.agentsystem.skill.service.SkillService;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.entity.UserStatus;
+import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.webfetch.service.WebFetchService;
 import com.agentsystem.workflow.entity.Workflow;
 import com.agentsystem.workflow.entity.WorkflowRun;
@@ -33,6 +37,7 @@ import org.springframework.data.domain.PageRequest;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -62,6 +67,7 @@ class WorkflowRunServiceTest {
     @Mock GoogleSheetsService      googleSheetsService;
     @Mock GoogleSlidesService      googleSlidesService;
     @Mock TelegramService          telegramService;
+    @Mock UserAccountService       userAccountService;
 
     WorkflowRunServiceImpl service;
 
@@ -72,7 +78,13 @@ class WorkflowRunServiceTest {
                 webFetchService, skillService, chatClient, chatModelFactory,
                 modelConfigService, llmProperties, notificationClient,
                 workflowScheduleClient,
-                googleDocsService, googleSheetsService, googleSlidesService, telegramService);
+                googleDocsService, googleSheetsService, googleSlidesService, telegramService,
+                userAccountService);
+        // Resolve every email used across this file to a uuid equal to itself, for simplicity.
+        for (String email : List.of("owner@test.com", "user@test.com")) {
+            lenient().when(userAccountService.findByEmail(email))
+                    .thenReturn(Optional.of(new User(email, email, UserStatus.USER, true)));
+        }
     }
 
     // ── startRun ──────────────────────────────────────────────────────────────
@@ -93,7 +105,7 @@ class WorkflowRunServiceTest {
 
         assertThat(initial.getWorkflowId()).isEqualTo("wf-1");
         assertThat(initial.getUserInput()).isEqualTo("Do something");
-        assertThat(initial.getOwnerEmail()).isEqualTo("owner@test.com");
+        assertThat(initial.getOwnerUuid()).isEqualTo("owner@test.com");
         assertThat(initial.getId()).isNotBlank();
     }
 
@@ -181,7 +193,7 @@ class WorkflowRunServiceTest {
 
     @Test
     void validateNetworkCommand_curlToAllowedDomain_allowed() throws Exception {
-        when(webFetchService.isUrlAllowed("https://api.example.com/data", "owner@test.com"))
+        when(webFetchService.isUrlAllowed(eq("https://api.example.com/data"), any(OrgContext.class)))
                 .thenReturn(true);
 
         assertThat(callValidate("curl https://api.example.com/data", "owner@test.com")).isNull();
@@ -189,7 +201,7 @@ class WorkflowRunServiceTest {
 
     @Test
     void validateNetworkCommand_curlToBlockedDomain_returnsBlockedMessage() throws Exception {
-        when(webFetchService.isUrlAllowed("https://evil.io/payload", "owner@test.com"))
+        when(webFetchService.isUrlAllowed(eq("https://evil.io/payload"), any(OrgContext.class)))
                 .thenReturn(false);
 
         String result = callValidate("curl https://evil.io/payload", "owner@test.com");
@@ -201,7 +213,7 @@ class WorkflowRunServiceTest {
 
     @Test
     void validateNetworkCommand_wgetToBlockedDomain_returnsBlockedMessage() throws Exception {
-        when(webFetchService.isUrlAllowed("https://blocked.net/file.zip", "owner@test.com"))
+        when(webFetchService.isUrlAllowed(eq("https://blocked.net/file.zip"), any(OrgContext.class)))
                 .thenReturn(false);
 
         String result = callValidate("wget https://blocked.net/file.zip", "owner@test.com");
@@ -227,8 +239,8 @@ class WorkflowRunServiceTest {
 
     @Test
     void validateNetworkCommand_multipleCurlUrls_blockedIfAnyNotAllowed() throws Exception {
-        when(webFetchService.isUrlAllowed("https://ok.com", "owner@test.com")).thenReturn(true);
-        when(webFetchService.isUrlAllowed("https://bad.com", "owner@test.com")).thenReturn(false);
+        when(webFetchService.isUrlAllowed(eq("https://ok.com"), any(OrgContext.class))).thenReturn(true);
+        when(webFetchService.isUrlAllowed(eq("https://bad.com"), any(OrgContext.class))).thenReturn(false);
 
         String result = callValidate("curl https://ok.com && curl https://bad.com", "owner@test.com");
 

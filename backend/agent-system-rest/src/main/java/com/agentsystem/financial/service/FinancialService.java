@@ -16,45 +16,45 @@ import java.util.Map;
 
 public interface FinancialService {
 
-    List<CashDepositDto> listDeposits(String ownerEmail, String defaultCurrency);
+    List<CashDepositDto> listDeposits(String ownerUuid, String defaultCurrency);
 
-    CashDeposit createDeposit(String ownerEmail, Map<String, Object> body);
+    CashDeposit createDeposit(String ownerUuid, Map<String, Object> body);
 
-    CashDeposit updateDeposit(String id, String ownerEmail, Map<String, Object> body);
+    CashDeposit updateDeposit(String id, String ownerUuid, Map<String, Object> body);
 
-    void deleteDeposit(String id, String ownerEmail);
+    void deleteDeposit(String id, String ownerUuid);
 
-    List<StockInvestmentDto> listStocks(String ownerEmail, String defaultCurrency);
+    List<StockInvestmentDto> listStocks(String ownerUuid, String defaultCurrency);
 
-    StockInvestment createStock(String ownerEmail, Map<String, Object> body);
+    StockInvestment createStock(String ownerUuid, Map<String, Object> body);
 
-    StockInvestment updateStock(String id, String ownerEmail, Map<String, Object> body);
+    StockInvestment updateStock(String id, String ownerUuid, Map<String, Object> body);
 
-    void deleteStock(String id, String ownerEmail);
+    void deleteStock(String id, String ownerUuid);
 
-    List<CryptoInvestmentDto> listCrypto(String ownerEmail, String defaultCurrency);
+    List<CryptoInvestmentDto> listCrypto(String ownerUuid, String defaultCurrency);
 
-    CryptoInvestment createCrypto(String ownerEmail, Map<String, Object> body);
+    CryptoInvestment createCrypto(String ownerUuid, Map<String, Object> body);
 
-    CryptoInvestment updateCrypto(String id, String ownerEmail, Map<String, Object> body);
+    CryptoInvestment updateCrypto(String id, String ownerUuid, Map<String, Object> body);
 
-    void deleteCrypto(String id, String ownerEmail);
+    void deleteCrypto(String id, String ownerUuid);
 
-    List<CardDto> listCards(String ownerEmail);
+    List<CardDto> listCards(String ownerUuid);
 
-    Card createCard(String ownerEmail, Map<String, Object> body);
+    Card createCard(String ownerUuid, Map<String, Object> body);
 
-    Card updateCard(String id, String ownerEmail, Map<String, Object> body);
+    Card updateCard(String id, String ownerUuid, Map<String, Object> body);
 
-    void deleteCard(String id, String ownerEmail);
+    void deleteCard(String id, String ownerUuid);
 
-    List<SalaryUsageRecordDto> listSalary(String ownerEmail);
+    List<SalaryUsageRecordDto> listSalary(String ownerUuid);
 
-    SalaryUsageRecord createSalary(String ownerEmail, Map<String, Object> body);
+    SalaryUsageRecord createSalary(String ownerUuid, Map<String, Object> body);
 
-    SalaryUsageRecord updateSalary(String id, String ownerEmail, Map<String, Object> body);
+    SalaryUsageRecord updateSalary(String id, String ownerUuid, Map<String, Object> body);
 
-    void deleteSalary(String id, String ownerEmail);
+    void deleteSalary(String id, String ownerUuid);
 
-    void refreshPrices(String ownerEmail);
+    void refreshPrices(String ownerUuid);
 }

@@ -6,6 +6,8 @@ import com.agentsystem.knowledge.service.KnowledgeSourceService;
 import com.agentsystem.org.OrgContext;
 import com.agentsystem.rag.service.DocumentIngestionService;
 import com.agentsystem.schema.UrlIngestionResult;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.webfetch.service.WebFetchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +38,7 @@ public class McpConnectorServiceImpl implements McpConnectorService {
     private final KnowledgeSourceService   knowledgeSourceService;
     private final WebFetchService          webFetchService;
     private final RestClient.Builder       restClientBuilder;
+    private final UserAccountService       userAccountService;
 
     /**
      * Fetch {@code url}, strip HTML, and ingest the resulting text into Weaviate.
@@ -45,14 +48,19 @@ public class McpConnectorServiceImpl implements McpConnectorService {
      */
     @Override
     public UrlIngestionResult fetchAndIngest(String url, String category) {
-        return fetchAndIngest(url, category, null);
+        return fetchAndIngest(url, category, (OrgContext) null);
     }
 
     @Override
     public UrlIngestionResult fetchAndIngest(String url, String category, String ownerEmail) {
+        return fetchAndIngest(url, category, new OrgContext(resolveUuid(ownerEmail), ownerEmail, "PERSONAL", null));
+    }
+
+    @Override
+    public UrlIngestionResult fetchAndIngest(String url, String category, OrgContext ctx) {
         log.info("[McpConnectorService] Fetching URL: {}", url);
 
-        if (!webFetchService.isUrlAllowed(url, new OrgContext(ownerEmail, "PERSONAL", null))) {
+        if (!webFetchService.isUrlAllowed(url, ctx)) {
             throw new IllegalStateException(
                     "Domain not whitelisted: " + url + ". Add it via POST /api/v1/agent/web-fetch/whitelist");
         }
@@ -83,9 +91,15 @@ public class McpConnectorServiceImpl implements McpConnectorService {
         }
 
         int chunks = ingestionService.ingestText(text, url, meta, false);
-        knowledgeSourceService.upsert(url, title.isBlank() ? url : title, category, chunks, ownerEmail);
+        knowledgeSourceService.upsert(url, title.isBlank() ? url : title, category, chunks, ctx);
         log.info("[McpConnectorService] Ingested {} chunks from {}", chunks, url);
 
         return new UrlIngestionResult("ingested", url, title, chunks);
+    }
+
+    /** Resolves an email to its user_uuid, or null if no such email is a registered user. */
+    private String resolveUuid(String email) {
+        if (email == null || email.isBlank()) return null;
+        return userAccountService.findByEmail(email).map(User::getUuid).orElse(null);
     }
 }

@@ -55,13 +55,13 @@ public class GoogleSlidesServiceImpl implements GoogleSlidesService {
      *
      * @param title      presentation title
      * @param content    text content; slides separated by "---"
-     * @param ownerEmail user whose token to use
+     * @param ownerUuid user whose token to use
      * @return the presentation's browser URL
      */
     @Override
-    public String createPresentation(String title, String content, String ownerEmail, String orgId) {
-        String email = ownerEmail != null ? ownerEmail : "";
-        String token = resolveAccessToken(email, orgId);
+    public String createPresentation(String title, String content, String ownerUuid, String orgId) {
+        String uuid = ownerUuid != null ? ownerUuid : "";
+        String token = resolveAccessToken(uuid, orgId);
 
         // ── Step 1: create empty presentation ────────────────────────────────
         CreatePresentationResponse created = restClientBuilder.build()
@@ -78,7 +78,7 @@ public class GoogleSlidesServiceImpl implements GoogleSlidesService {
         }
         String presId    = created.presentationId();
         String firstSlideId = created.firstSlideId();
-        log.info("[GoogleSlidesService] Created presentation {} for {}", presId, email);
+        log.info("[GoogleSlidesService] Created presentation {} for {}", presId, uuid);
 
         // ── Step 2: build batchUpdate requests for each slide ─────────────────
         List<Map<String, Object>> requests = buildSlideRequests(content, firstSlideId);
@@ -102,13 +102,13 @@ public class GoogleSlidesServiceImpl implements GoogleSlidesService {
      * Read the text content of an existing Google Slides presentation.
      *
      * @param presUrl    the browser URL or presentation ID
-     * @param ownerEmail user whose token to use
+     * @param ownerUuid user whose token to use
      * @return slide-by-slide text content
      */
     @Override
-    public String readPresentation(String presUrl, String ownerEmail, String orgId) {
-        String email  = ownerEmail != null ? ownerEmail : "";
-        String token  = resolveAccessToken(email, orgId);
+    public String readPresentation(String presUrl, String ownerUuid, String orgId) {
+        String uuid  = ownerUuid != null ? ownerUuid : "";
+        String token  = resolveAccessToken(uuid, orgId);
         String presId = extractPresId(presUrl);
 
         PresentationContent pres = restClientBuilder.build()
@@ -156,9 +156,9 @@ public class GoogleSlidesServiceImpl implements GoogleSlidesService {
     }
 
     @Override
-    public boolean isConnected(String ownerEmail, String orgId) {
-        String email = ownerEmail != null ? ownerEmail : "";
-        return findToken(email, orgId).isPresent();
+    public boolean isConnected(String ownerUuid, String orgId) {
+        String uuid = ownerUuid != null ? ownerUuid : "";
+        return findToken(uuid, orgId).isPresent();
     }
 
     // ── Slide building ────────────────────────────────────────────────────────
@@ -264,18 +264,18 @@ public class GoogleSlidesServiceImpl implements GoogleSlidesService {
 
     // ── Token management ──────────────────────────────────────────────────────
 
-    private String resolveAccessToken(String email, String orgId) {
-        ConnectorToken ct = findToken(email, orgId)
+    private String resolveAccessToken(String uuid, String orgId) {
+        ConnectorToken ct = findToken(uuid, orgId)
                 .orElseThrow(() -> new IllegalStateException(
                         "Google account not connected. Visit /mcp to connect."));
         if (isExpiringSoon(ct)) ct = refreshToken(ct);
         return ct.getAccessToken();
     }
 
-    private java.util.Optional<ConnectorToken> findToken(String email, String orgId) {
+    private java.util.Optional<ConnectorToken> findToken(String uuid, String orgId) {
         return orgId != null
-                ? tokenRepo.findByOwnerEmailAndProviderAndOrgId(email, "google", orgId)
-                : tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull(email, "google");
+                ? tokenRepo.findByOwnerUuidAndProviderAndOrgId(uuid, "google", orgId)
+                : tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull(uuid, "google");
     }
 
     private boolean isExpiringSoon(ConnectorToken ct) {
@@ -285,7 +285,7 @@ public class GoogleSlidesServiceImpl implements GoogleSlidesService {
 
     private ConnectorToken refreshToken(ConnectorToken ct) {
         if (ct.getRefreshToken() == null) return ct;
-        log.info("[GoogleSlidesService] Refreshing token for {}", ct.getOwnerEmail());
+        log.info("[GoogleSlidesService] Refreshing token for {}", ct.getOwnerUuid());
 
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("client_id",     props.google().clientId());

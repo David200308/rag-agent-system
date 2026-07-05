@@ -304,7 +304,7 @@ class TeamControllerTest {
     @Test
     void listMembers_teamMode_delegatesToService() {
         stubTeamRequest("owner@test.com");
-        OrgMember m = new OrgMember("skyproton", "owner@test.com", OrgMember.Role.OWNER);
+        OrgMember m = new OrgMember("skyproton", "owner@test.com", "owner@test.com", OrgMember.Role.OWNER);
         when(orgService.listMembers("skyproton")).thenReturn(List.of(m));
 
         ResponseEntity<?> resp = controller.listMembers(request);
@@ -360,7 +360,7 @@ class TeamControllerTest {
     void addMember_success_returns201() {
         stubTeamRequest("owner@test.com");
         doNothing().when(orgService).requireOwner("skyproton", "owner@test.com");
-        OrgMember member = new OrgMember("skyproton", "new@test.com", OrgMember.Role.MEMBER);
+        OrgMember member = new OrgMember("skyproton", "new@test.com", "new@test.com", OrgMember.Role.MEMBER);
         when(orgService.addMember("skyproton", "new@test.com", OrgMember.Role.MEMBER)).thenReturn(member);
 
         ResponseEntity<?> resp = controller.addMember(Map.of("email", "new@test.com", "role", "MEMBER"), request);

@@ -34,30 +34,30 @@ func nullStr(s string) sql.NullString {
 func (s *Store) Create(sc *model.Schedule) error {
 	_, err := s.db.Exec(`
 		INSERT INTO scheduled_messages
-			(id, conversation_id, workflow_id, workflow_input, owner_email, message, cron_expr, timezone,
+			(id, conversation_id, workflow_id, workflow_input, owner_uuid, message, cron_expr, timezone,
 			 top_k, use_knowledge_base, use_web_fetch, enabled, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		sc.ID, nullStr(sc.ConversationID), nullStr(sc.WorkflowID), nullStr(sc.WorkflowInput),
-		sc.OwnerEmail, sc.Message, sc.CronExpr, sc.Timezone,
+		sc.OwnerUuid, sc.Message, sc.CronExpr, sc.Timezone,
 		sc.TopK, sc.UseKnowledgeBase, sc.UseWebFetch, sc.Enabled, sc.CreatedAt)
 	return err
 }
 
 func (s *Store) GetByID(id string) (*model.Schedule, error) {
 	row := s.db.QueryRow(`
-		SELECT id, conversation_id, workflow_id, workflow_input, owner_email, message, cron_expr, timezone,
+		SELECT id, conversation_id, workflow_id, workflow_input, owner_uuid, message, cron_expr, timezone,
 		       top_k, use_knowledge_base, use_web_fetch, enabled, created_at
 		FROM scheduled_messages WHERE id = ?`, id)
 	return scanRow(row)
 }
 
-func (s *Store) ListByConversation(ownerEmail, convID string) ([]*model.Schedule, error) {
+func (s *Store) ListByConversation(ownerUuid, convID string) ([]*model.Schedule, error) {
 	rows, err := s.db.Query(`
-		SELECT id, conversation_id, workflow_id, workflow_input, owner_email, message, cron_expr, timezone,
+		SELECT id, conversation_id, workflow_id, workflow_input, owner_uuid, message, cron_expr, timezone,
 		       top_k, use_knowledge_base, use_web_fetch, enabled, created_at
 		FROM scheduled_messages
-		WHERE conversation_id = ? AND owner_email = ?
-		ORDER BY created_at DESC`, convID, ownerEmail)
+		WHERE conversation_id = ? AND owner_uuid = ?
+		ORDER BY created_at DESC`, convID, ownerUuid)
 	if err != nil {
 		return nil, err
 	}
@@ -66,13 +66,13 @@ func (s *Store) ListByConversation(ownerEmail, convID string) ([]*model.Schedule
 }
 
 // ListByWorkflow returns schedules for a workflow, filtered by owner.
-func (s *Store) ListByWorkflow(ownerEmail, workflowID string) ([]*model.Schedule, error) {
+func (s *Store) ListByWorkflow(ownerUuid, workflowID string) ([]*model.Schedule, error) {
 	rows, err := s.db.Query(`
-		SELECT id, conversation_id, workflow_id, workflow_input, owner_email, message, cron_expr, timezone,
+		SELECT id, conversation_id, workflow_id, workflow_input, owner_uuid, message, cron_expr, timezone,
 		       top_k, use_knowledge_base, use_web_fetch, enabled, created_at
 		FROM scheduled_messages
-		WHERE workflow_id = ? AND owner_email = ?
-		ORDER BY created_at DESC`, workflowID, ownerEmail)
+		WHERE workflow_id = ? AND owner_uuid = ?
+		ORDER BY created_at DESC`, workflowID, ownerUuid)
 	if err != nil {
 		return nil, err
 	}
@@ -81,11 +81,11 @@ func (s *Store) ListByWorkflow(ownerEmail, workflowID string) ([]*model.Schedule
 }
 
 // ListByOwner returns schedules filtered by owner (and optionally conversation).
-func (s *Store) ListByOwner(ownerEmail, convID string) ([]*model.Schedule, error) {
-	query := `SELECT id, conversation_id, workflow_id, workflow_input, owner_email, message, cron_expr, timezone,
+func (s *Store) ListByOwner(ownerUuid, convID string) ([]*model.Schedule, error) {
+	query := `SELECT id, conversation_id, workflow_id, workflow_input, owner_uuid, message, cron_expr, timezone,
 		       top_k, use_knowledge_base, use_web_fetch, enabled, created_at
-		FROM scheduled_messages WHERE owner_email = ?`
-	args := []any{ownerEmail}
+		FROM scheduled_messages WHERE owner_uuid = ?`
+	args := []any{ownerUuid}
 	if convID != "" {
 		query += " AND conversation_id = ?"
 		args = append(args, convID)
@@ -116,7 +116,7 @@ func (s *Store) Delete(id string) error {
 // ListAll returns all schedules (used at startup to reload into Asynq scheduler).
 func (s *Store) ListAll() ([]*model.Schedule, error) {
 	rows, err := s.db.Query(`
-		SELECT id, conversation_id, workflow_id, workflow_input, owner_email, message, cron_expr, timezone,
+		SELECT id, conversation_id, workflow_id, workflow_input, owner_uuid, message, cron_expr, timezone,
 		       top_k, use_knowledge_base, use_web_fetch, enabled, created_at
 		FROM scheduled_messages ORDER BY created_at`)
 	if err != nil {
@@ -183,12 +183,28 @@ func (s *Store) ListRuns(scheduleID string) ([]model.ScheduleRun, error) {
 	return runs, rows.Err()
 }
 
+// ── Identity resolution ───────────────────────────────────────────────────────
+// The scheduler shares its MySQL database with agent-system-rest (same DB, no
+// service boundary at the DB level), so it can resolve identity directly
+// against the `users` table it doesn't otherwise own — there's no Java service
+// call available for this, only the raw connection. Needed only for the public
+// JWT-authenticated endpoints (email in, uuid needed for the uuid-keyed table);
+// the service-key-authenticated internal endpoints already receive uuid directly
+// from agent-system-rest.
+
+// GetUuidByEmail resolves a validated JWT email to its user_uuid.
+func (s *Store) GetUuidByEmail(email string) (string, error) {
+	var uuid string
+	err := s.db.QueryRow(`SELECT uuid FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))`, email).Scan(&uuid)
+	return uuid, err
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 func scanRow(row *sql.Row) (*model.Schedule, error) {
 	var sc model.Schedule
 	var convID, wfID, wfInput sql.NullString
-	err := row.Scan(&sc.ID, &convID, &wfID, &wfInput, &sc.OwnerEmail, &sc.Message,
+	err := row.Scan(&sc.ID, &convID, &wfID, &wfInput, &sc.OwnerUuid, &sc.Message,
 		&sc.CronExpr, &sc.Timezone, &sc.TopK, &sc.UseKnowledgeBase,
 		&sc.UseWebFetch, &sc.Enabled, &sc.CreatedAt)
 	if err != nil {
@@ -205,7 +221,7 @@ func scanRows(rows *sql.Rows) ([]*model.Schedule, error) {
 	for rows.Next() {
 		var sc model.Schedule
 		var convID, wfID, wfInput sql.NullString
-		err := rows.Scan(&sc.ID, &convID, &wfID, &wfInput, &sc.OwnerEmail, &sc.Message,
+		err := rows.Scan(&sc.ID, &convID, &wfID, &wfInput, &sc.OwnerUuid, &sc.Message,
 			&sc.CronExpr, &sc.Timezone, &sc.TopK, &sc.UseKnowledgeBase,
 			&sc.UseWebFetch, &sc.Enabled, &sc.CreatedAt)
 		if err != nil {

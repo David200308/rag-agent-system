@@ -109,9 +109,9 @@ public class GeneratorNode {
         List<DocumentResult> docs = state.documents();
 
         String userPrompt = buildPrompt(request.query(), analysis, docs, request.conversationHistory());
-        String userEmail       = state.userEmail().orElse(null);
-        String orgId           = state.orgId().orElse(null);
-        String shareOwnerEmail = state.shareOwnerEmail().orElse(null);
+        String userUuid         = state.userUuid().orElse(null);
+        String orgId            = state.orgId().orElse(null);
+        String shareOwnerEmail  = state.shareOwnerEmail().orElse(null);
 
         ModelConfig selectedConfig = state.selectedModelDisplayName()
                 .flatMap(modelConfigService::findByDisplayName)
@@ -124,16 +124,16 @@ public class GeneratorNode {
         log.debug("[GeneratorNode] Generating answer (docs={} model={})", docs.size(),
                 selectedConfig != null ? selectedConfig.getDisplayName() : "default");
 
-        // Inject per-request email and orgId so tools know which token to use
-        googleDocsTool.setCurrentEmail(userEmail);
+        // Inject per-request user_uuid and orgId so tools know which token to use
+        googleDocsTool.setCurrentUserUuid(userUuid);
         googleDocsTool.setCurrentOrgId(orgId);
-        googleSheetsTool.setCurrentEmail(userEmail);
+        googleSheetsTool.setCurrentUserUuid(userUuid);
         googleSheetsTool.setCurrentOrgId(orgId);
-        googleSlidesTool.setCurrentEmail(userEmail);
+        googleSlidesTool.setCurrentUserUuid(userUuid);
         googleSlidesTool.setCurrentOrgId(orgId);
-        googleCalendarTool.setCurrentEmail(userEmail);
+        googleCalendarTool.setCurrentUserUuid(userUuid);
         googleCalendarTool.setCurrentOrgId(orgId);
-        telegramTool.setCurrentEmail(userEmail);
+        telegramTool.setCurrentUserUuid(userUuid);
         telegramTool.setCurrentOrgId(orgId);
         telegramTool.setShareOwnerEmail(shareOwnerEmail);
         toolCallBudget.reset();
@@ -146,15 +146,15 @@ public class GeneratorNode {
 
             answer = generationService.generate(effectiveClient, SYSTEM_PROMPT, userPrompt, tools).join();
         } finally {
-            googleDocsTool.clearCurrentEmail();
+            googleDocsTool.clearCurrentUserUuid();
             googleDocsTool.clearCurrentOrgId();
-            googleSheetsTool.clearCurrentEmail();
+            googleSheetsTool.clearCurrentUserUuid();
             googleSheetsTool.clearCurrentOrgId();
-            googleSlidesTool.clearCurrentEmail();
+            googleSlidesTool.clearCurrentUserUuid();
             googleSlidesTool.clearCurrentOrgId();
-            googleCalendarTool.clearCurrentEmail();
+            googleCalendarTool.clearCurrentUserUuid();
             googleCalendarTool.clearCurrentOrgId();
-            telegramTool.clearCurrentEmail();
+            telegramTool.clearCurrentUserUuid();
             telegramTool.clearCurrentOrgId();
             telegramTool.clearShareOwnerEmail();
             toolCallBudget.clear();

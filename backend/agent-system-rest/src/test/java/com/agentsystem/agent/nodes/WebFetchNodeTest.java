@@ -2,6 +2,7 @@ package com.agentsystem.agent.nodes;
 
 import com.agentsystem.agent.state.AgentState;
 import com.agentsystem.config.WebFetchProperties;
+import com.agentsystem.org.OrgContext;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.DocumentResult;
 import com.agentsystem.webfetch.service.WebFetchService;
@@ -21,6 +22,9 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class WebFetchNodeTest {
+
+    private static final OrgContext NO_USER_CTX = new OrgContext(null, null, "PERSONAL", null);
+    private static final OrgContext USER_CTX    = new OrgContext("user-uuid-1", null, "PERSONAL", null);
 
     @Mock WebFetchService webFetchService;
 
@@ -73,7 +77,7 @@ class WebFetchNodeTest {
         Map<String, Object> result = nodeEnabled.process(state);
 
         assertThat(result).doesNotContainKey("documents");
-        verify(webFetchService, never()).fetch(anyString(), any());
+        verify(webFetchService, never()).fetch(anyString(), any(OrgContext.class));
     }
 
     // ── no URLs ────────────────────────────────────────────────────────────────
@@ -94,8 +98,8 @@ class WebFetchNodeTest {
 
     @Test
     void process_allowedExplicitUrl_fetchesAndAddsDocuments() {
-        when(webFetchService.isUrlAllowed("https://example.com", (String) null)).thenReturn(true);
-        when(webFetchService.fetch("https://example.com", null)).thenReturn(doc("https://example.com"));
+        when(webFetchService.isUrlAllowed("https://example.com", NO_USER_CTX)).thenReturn(true);
+        when(webFetchService.fetch("https://example.com", NO_USER_CTX)).thenReturn(doc("https://example.com"));
 
         AgentState state = new AgentState(Map.of(
                 "request", request("summarise this", List.of("https://example.com"), true, true)
@@ -112,8 +116,8 @@ class WebFetchNodeTest {
 
     @Test
     void process_urlInQueryText_extractsAndFetches() {
-        when(webFetchService.isUrlAllowed("https://blog.example.com/post", (String) null)).thenReturn(true);
-        when(webFetchService.fetch("https://blog.example.com/post", null)).thenReturn(doc("https://blog.example.com/post"));
+        when(webFetchService.isUrlAllowed("https://blog.example.com/post", NO_USER_CTX)).thenReturn(true);
+        when(webFetchService.fetch("https://blog.example.com/post", NO_USER_CTX)).thenReturn(doc("https://blog.example.com/post"));
 
         AgentState state = new AgentState(Map.of(
                 "request", request("summarise https://blog.example.com/post for me",
@@ -139,7 +143,7 @@ class WebFetchNodeTest {
         Map<String, Object> result = nodeEnabled.process(state);
 
         assertThat(result).doesNotContainKey("documents");
-        verify(webFetchService, never()).fetch(anyString(), any());
+        verify(webFetchService, never()).fetch(anyString(), any(OrgContext.class));
     }
 
     @Test
@@ -152,14 +156,14 @@ class WebFetchNodeTest {
         Map<String, Object> result = nodeEnabled.process(state);
 
         assertThat(result).doesNotContainKey("documents");
-        verify(webFetchService, never()).fetch(anyString(), any());
+        verify(webFetchService, never()).fetch(anyString(), any(OrgContext.class));
     }
 
     // ── URL not in whitelist ───────────────────────────────────────────────────
 
     @Test
     void process_domainNotAllowed_urlSkipped() {
-        when(webFetchService.isUrlAllowed("https://blocked.com", (String) null)).thenReturn(false);
+        when(webFetchService.isUrlAllowed("https://blocked.com", NO_USER_CTX)).thenReturn(false);
 
         AgentState state = new AgentState(Map.of(
                 "request", request("summarise", List.of("https://blocked.com"), true, true)
@@ -168,17 +172,17 @@ class WebFetchNodeTest {
         Map<String, Object> result = nodeEnabled.process(state);
 
         assertThat(result).doesNotContainKey("documents");
-        verify(webFetchService, never()).fetch(anyString(), any());
+        verify(webFetchService, never()).fetch(anyString(), any(OrgContext.class));
     }
 
     // ── fetch throws exception → URL skipped ──────────────────────────────────
 
     @Test
     void process_fetchThrowsException_urlSkippedAndOthersStillFetched() {
-        when(webFetchService.isUrlAllowed(anyString(), (String) any())).thenReturn(true);
-        when(webFetchService.fetch("https://failing.com", null))
+        when(webFetchService.isUrlAllowed(anyString(), any(OrgContext.class))).thenReturn(true);
+        when(webFetchService.fetch("https://failing.com", NO_USER_CTX))
                 .thenThrow(new RuntimeException("connection refused"));
-        when(webFetchService.fetch("https://ok.com", null)).thenReturn(doc("https://ok.com"));
+        when(webFetchService.fetch("https://ok.com", NO_USER_CTX)).thenReturn(doc("https://ok.com"));
 
         AgentState state = new AgentState(Map.of(
                 "request", request("summarise",
@@ -197,8 +201,8 @@ class WebFetchNodeTest {
 
     @Test
     void process_fallbackRouteWithFetchedDocs_promotedToRetrieve() {
-        when(webFetchService.isUrlAllowed("https://example.com", (String) null)).thenReturn(true);
-        when(webFetchService.fetch("https://example.com", null)).thenReturn(doc("https://example.com"));
+        when(webFetchService.isUrlAllowed("https://example.com", NO_USER_CTX)).thenReturn(true);
+        when(webFetchService.fetch("https://example.com", NO_USER_CTX)).thenReturn(doc("https://example.com"));
 
         AgentState state = new AgentState(Map.of(
                 "request", request("summarise this", List.of("https://example.com"), true, true),
@@ -212,8 +216,8 @@ class WebFetchNodeTest {
 
     @Test
     void process_retrieveRouteWithFetchedDocs_routeNotChanged() {
-        when(webFetchService.isUrlAllowed("https://example.com", (String) null)).thenReturn(true);
-        when(webFetchService.fetch("https://example.com", null)).thenReturn(doc("https://example.com"));
+        when(webFetchService.isUrlAllowed("https://example.com", NO_USER_CTX)).thenReturn(true);
+        when(webFetchService.fetch("https://example.com", NO_USER_CTX)).thenReturn(doc("https://example.com"));
 
         // Default route is RETRIEVE
         AgentState state = new AgentState(Map.of(
@@ -240,8 +244,8 @@ class WebFetchNodeTest {
 
     @Test
     void process_kbDisabledWithFetchedDocs_routeForcedToDirect() {
-        when(webFetchService.isUrlAllowed("https://example.com", (String) null)).thenReturn(true);
-        when(webFetchService.fetch("https://example.com", null)).thenReturn(doc("https://example.com"));
+        when(webFetchService.isUrlAllowed("https://example.com", NO_USER_CTX)).thenReturn(true);
+        when(webFetchService.fetch("https://example.com", NO_USER_CTX)).thenReturn(doc("https://example.com"));
 
         AgentState state = new AgentState(Map.of(
                 "request", request("summarise this", List.of("https://example.com"), true, false)
@@ -253,21 +257,21 @@ class WebFetchNodeTest {
         assertThat(result.get("route")).isEqualTo("DIRECT");
     }
 
-    // ── userEmail propagated to fetch service ──────────────────────────────────
+    // ── userUuid propagated to fetch service ────────────────────────────────────
 
     @Test
-    void process_withUserEmail_passesEmailToFetchService() {
-        when(webFetchService.isUrlAllowed("https://example.com", "user@example.com")).thenReturn(true);
-        when(webFetchService.fetch("https://example.com", "user@example.com")).thenReturn(doc("https://example.com"));
+    void process_withUserUuid_passesUuidToFetchService() {
+        when(webFetchService.isUrlAllowed("https://example.com", USER_CTX)).thenReturn(true);
+        when(webFetchService.fetch("https://example.com", USER_CTX)).thenReturn(doc("https://example.com"));
 
         AgentState state = new AgentState(Map.of(
-                "request",   request("summarise this", List.of("https://example.com"), true, true),
-                "userEmail", "user@example.com"
+                "request",  request("summarise this", List.of("https://example.com"), true, true),
+                "userUuid", "user-uuid-1"
         ));
 
         Map<String, Object> result = nodeEnabled.process(state);
 
-        verify(webFetchService).isUrlAllowed("https://example.com", "user@example.com");
-        verify(webFetchService).fetch("https://example.com", "user@example.com");
+        verify(webFetchService).isUrlAllowed("https://example.com", USER_CTX);
+        verify(webFetchService).fetch("https://example.com", USER_CTX);
     }
 }

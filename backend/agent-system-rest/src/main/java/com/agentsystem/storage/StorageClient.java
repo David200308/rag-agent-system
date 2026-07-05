@@ -28,11 +28,11 @@ public class StorageClient {
     public record UploadResult(String id, String objectKey) {}
 
     public record ObjectMetadata(
-            String id, String objectKey, String ownerEmail, String entityType,
+            String id, String objectKey, String ownerUuid, String entityType,
             String entityId, String contentType, long sizeBytes, String url) {}
 
     public UploadResult uploadObject(byte[] content, String filename, String contentType,
-                                      String ownerEmail, String entityType, String entityId) {
+                                      String ownerUuid, String entityType, String entityId) {
         MultipartBodyBuilder builder = new MultipartBodyBuilder();
         builder.part("file", new ByteArrayResource(content) {
                     @Override
@@ -40,7 +40,7 @@ public class StorageClient {
                 })
                 .contentType(MediaType.parseMediaType(
                         contentType != null ? contentType : MediaType.APPLICATION_OCTET_STREAM_VALUE));
-        builder.part("ownerEmail", ownerEmail);
+        builder.part("ownerUuid", ownerUuid);
         builder.part("entityType", entityType);
         if (entityId != null) {
             builder.part("entityId", entityId);
@@ -69,18 +69,18 @@ public class StorageClient {
                 .body(byte[].class);
     }
 
-    public List<ObjectMetadata> listObjects(String entityType, String entityId, String ownerEmail) {
+    public List<ObjectMetadata> listObjects(String entityType, String entityId, String ownerUuid) {
         ObjectMetadata[] objects = restClient.get()
-                .uri("/internal/objects?entityType={t}&entityId={e}&ownerEmail={o}",
-                        entityType, entityId, ownerEmail)
+                .uri("/internal/objects?entityType={t}&entityId={e}&ownerUuid={o}",
+                        entityType, entityId, ownerUuid)
                 .retrieve()
                 .body(ObjectMetadata[].class);
         return objects != null ? List.of(objects) : List.of();
     }
 
-    public void deleteObject(String id, String ownerEmail) {
+    public void deleteObject(String id, String ownerUuid) {
         restClient.delete()
-                .uri("/internal/objects/{id}?ownerEmail={o}", id, ownerEmail)
+                .uri("/internal/objects/{id}?ownerUuid={o}", id, ownerUuid)
                 .retrieve()
                 .toBodilessEntity();
     }

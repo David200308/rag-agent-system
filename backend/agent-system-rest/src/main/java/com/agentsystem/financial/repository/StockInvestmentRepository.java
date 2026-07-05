@@ -8,5 +8,5 @@ import java.util.List;
 
 @Repository
 public interface StockInvestmentRepository extends JpaRepository<StockInvestment, String> {
-    List<StockInvestment> findByOwnerEmailOrderByCreatedAtDesc(String ownerEmail);
+    List<StockInvestment> findByOwnerUuidOrderByCreatedAtDesc(String ownerUuid);
 }

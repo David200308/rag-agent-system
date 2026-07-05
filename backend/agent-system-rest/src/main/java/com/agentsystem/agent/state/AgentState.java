@@ -33,7 +33,7 @@ public class AgentState extends org.bsc.langgraph4j.state.AgentState {
         Map.entry("error",                    Channels.<String>base((cur, upd) -> upd)),
         Map.entry("fallbackReason",           Channels.<String>base((cur, upd) -> upd)),
         Map.entry("runId",                    Channels.<String>base((cur, upd) -> upd)),
-        Map.entry("userEmail",                Channels.<String>base((cur, upd) -> upd)),
+        Map.entry("userUuid",                 Channels.<String>base((cur, upd) -> upd)),
         Map.entry("orgId",                    Channels.<String>base((cur, upd) -> upd)),
         Map.entry("shareOwnerEmail",          Channels.<String>base((cur, upd) -> upd)),
         Map.entry("selectedModelDisplayName", Channels.<String>base((cur, upd) -> upd))
@@ -78,8 +78,8 @@ public class AgentState extends org.bsc.langgraph4j.state.AgentState {
         return value("runId");
     }
 
-    public Optional<String> userEmail() {
-        return value("userEmail");
+    public Optional<String> userUuid() {
+        return value("userUuid");
     }
 
     public Optional<String> orgId() {

@@ -9,7 +9,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "user_preferences",
-       uniqueConstraints = @UniqueConstraint(columnNames = "email"))
+       uniqueConstraints = @UniqueConstraint(columnNames = "user_uuid"))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -19,8 +19,8 @@ public class UserPreference {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 255)
-    private String email;
+    @Column(name = "user_uuid", nullable = false, length = 36)
+    private String userUuid;
 
     @Column(nullable = false, length = 64)
     private String timezone = "UTC";
@@ -36,8 +36,8 @@ public class UserPreference {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
-    public UserPreference(String email, String timezone) {
-        this.email    = email;
+    public UserPreference(String userUuid, String timezone) {
+        this.userUuid = userUuid;
         this.timezone = timezone;
     }
 }

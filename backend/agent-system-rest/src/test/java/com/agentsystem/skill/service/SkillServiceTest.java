@@ -8,6 +8,10 @@ import com.agentsystem.skill.entity.SkillVersion;
 import com.agentsystem.skill.repository.SkillRepository;
 import com.agentsystem.skill.repository.SkillVersionRepository;
 import com.agentsystem.storage.StorageClient;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.entity.UserStatus;
+import com.agentsystem.user.service.UserAccountService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -34,8 +38,19 @@ class SkillServiceTest {
     @Mock SkillVersionRepository versionRepo;
     @Mock StorageClient storageClient;
     @Mock SkillTextExtractor textExtractor;
+    @Mock UserAccountService userAccountService;
 
     @InjectMocks SkillServiceImpl service;
+
+    @BeforeEach
+    void setUp() {
+        // Resolve every email used across this file to a uuid equal to itself, for simplicity.
+        for (String email : List.of("owner@test.com", "other@test.com", "member@test.com")) {
+            lenient().when(userAccountService.findByEmail(email))
+                    .thenReturn(Optional.of(new User(email, email, UserStatus.USER, true)));
+            lenient().when(userAccountService.getEmailByUuid(email)).thenReturn(email);
+        }
+    }
 
     private static SkillVersion version(String id, String skillId, int num, String status) {
         return new SkillVersion(id, skillId, num, "obj-" + id, "f.py", "python", 10L, status,
@@ -47,12 +62,12 @@ class SkillServiceTest {
     @Test
     void list_personalMode_returnsOwnedSkills() {
         Skill skill = new Skill("id-1", "owner@test.com", "My Script");
-        when(repo.findByOwnerEmailAndOrgIdIsNullOrderByCreatedAtDesc("owner@test.com"))
+        when(repo.findByOwnerUuidAndOrgIdIsNullOrderByCreatedAtDesc("owner@test.com"))
                 .thenReturn(List.of(skill));
         when(versionRepo.findTopBySkillIdOrderByVersionNumberDesc("id-1"))
                 .thenReturn(Optional.of(version("v-1", "id-1", 1, "APPROVED")));
 
-        List<SkillService.SkillSummary> result = service.list(new OrgContext("owner@test.com", "PERSONAL", null));
+        List<SkillService.SkillSummary> result = service.list(new OrgContext("owner@test.com", "owner@test.com", "PERSONAL", null));
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo("id-1");
@@ -69,7 +84,7 @@ class SkillServiceTest {
         List<SkillService.SkillSummary> result = service.list(null);
 
         assertThat(result).extracting(SkillService.SkillSummary::id).containsExactly("id-1", "id-2");
-        verify(repo, never()).findByOwnerEmailAndOrgIdIsNullOrderByCreatedAtDesc(any());
+        verify(repo, never()).findByOwnerUuidAndOrgIdIsNullOrderByCreatedAtDesc(any());
     }
 
     @Test
@@ -78,7 +93,7 @@ class SkillServiceTest {
         skill.setOrgId("skyproton");
         when(repo.findByOrgIdForMember("skyproton", "member@test.com")).thenReturn(List.of(skill));
 
-        OrgContext teamCtx = new OrgContext("member@test.com", "TEAM", "skyproton");
+        OrgContext teamCtx = new OrgContext("member@test.com", "member@test.com", "TEAM", "skyproton");
         List<SkillService.SkillSummary> result = service.list(teamCtx);
 
         assertThat(result).extracting(SkillService.SkillSummary::id).containsExactly("id-1");
@@ -98,7 +113,7 @@ class SkillServiceTest {
         Skill result = service.create("owner@test.com", "My Tool", file, "python");
 
         verify(versionRepo).save(captor.capture());
-        assertThat(result.getOwnerEmail()).isEqualTo("owner@test.com");
+        assertThat(result.getOwnerUuid()).isEqualTo("owner@test.com");
         assertThat(result.getName()).isEqualTo("My Tool");
         assertThat(captor.getValue().getSkillId()).isEqualTo(result.getId());
         assertThat(captor.getValue().getVersionNumber()).isEqualTo(1);
@@ -115,7 +130,7 @@ class SkillServiceTest {
                 .thenReturn(new StorageClient.UploadResult("obj-1", "skill/obj-1"));
         ArgumentCaptor<SkillVersion> captor = ArgumentCaptor.forClass(SkillVersion.class);
 
-        OrgContext teamCtx = new OrgContext("owner@test.com", "TEAM", "skyproton");
+        OrgContext teamCtx = new OrgContext("owner@test.com", "owner@test.com", "TEAM", "skyproton");
         var file = new MockMultipartFile("file", "t.py", "text/x-python", "code".getBytes());
         Skill result = service.create(teamCtx, "Team Tool", file, "python");
 
@@ -165,7 +180,7 @@ class SkillServiceTest {
         ArgumentCaptor<SkillVersion> captor = ArgumentCaptor.forClass(SkillVersion.class);
 
         var file = new MockMultipartFile("file", "v3.py", "text/x-python", "code".getBytes());
-        service.addVersion(new OrgContext("owner@test.com", "PERSONAL", null), "id-1", file, "python");
+        service.addVersion(new OrgContext("owner@test.com", "owner@test.com", "PERSONAL", null), "id-1", file, "python");
 
         verify(versionRepo).save(captor.capture());
         assertThat(captor.getValue().getVersionNumber()).isEqualTo(3);
@@ -183,7 +198,7 @@ class SkillServiceTest {
         ArgumentCaptor<SkillVersion> captor = ArgumentCaptor.forClass(SkillVersion.class);
 
         var file = new MockMultipartFile("file", "v2.py", "text/x-python", "code".getBytes());
-        service.addVersion(new OrgContext("member@test.com", "TEAM", "skyproton"), "id-1", file, "python");
+        service.addVersion(new OrgContext("member@test.com", "member@test.com", "TEAM", "skyproton"), "id-1", file, "python");
 
         verify(versionRepo).save(captor.capture());
         assertThat(captor.getValue().getVersionNumber()).isEqualTo(2);
@@ -197,7 +212,7 @@ class SkillServiceTest {
 
         var file = new MockMultipartFile("file", "v2.py", "text/x-python", "code".getBytes());
         assertThatThrownBy(() ->
-                service.addVersion(new OrgContext("other@test.com", "PERSONAL", null), "id-1", file, "python"))
+                service.addVersion(new OrgContext("other@test.com", "other@test.com", "PERSONAL", null), "id-1", file, "python"))
                 .isInstanceOf(SecurityException.class);
         verify(versionRepo, never()).save(any());
     }
@@ -208,7 +223,7 @@ class SkillServiceTest {
         var file = new MockMultipartFile("file", "v2.py", "text/x-python", "code".getBytes());
 
         assertThatThrownBy(() ->
-                service.addVersion(new OrgContext("owner@test.com", "PERSONAL", null), "ghost", file, "python"))
+                service.addVersion(new OrgContext("owner@test.com", "owner@test.com", "PERSONAL", null), "ghost", file, "python"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -285,8 +300,10 @@ class SkillServiceTest {
     }
 
     @Test
-    void delete_caseInsensitiveEmailMatch() {
-        Skill skill = new Skill("id-1", "Owner@Test.COM", "S");
+    void delete_ownerUuidMatches_deletesSuccessfully() {
+        // Uuid comparison is exact (no case-folding needed — normalisation happens once,
+        // at email->uuid resolution time, not at every comparison).
+        Skill skill = new Skill("id-1", "owner@test.com", "S");
         when(repo.findById("id-1")).thenReturn(Optional.of(skill));
         when(versionRepo.findBySkillIdOrderByVersionNumberDesc("id-1")).thenReturn(List.of());
 
@@ -302,7 +319,7 @@ class SkillServiceTest {
         when(repo.findById("id-1")).thenReturn(Optional.of(skill));
         when(versionRepo.findBySkillIdOrderByVersionNumberDesc("id-1")).thenReturn(List.of());
 
-        OrgContext teamCtx = new OrgContext("member@test.com", "TEAM", "skyproton");
+        OrgContext teamCtx = new OrgContext("member@test.com", "member@test.com", "TEAM", "skyproton");
         service.delete("id-1", teamCtx);
 
         verify(repo).deleteById("id-1");
@@ -322,7 +339,7 @@ class SkillServiceTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).skillName()).isEqualTo("Draft Tool");
-        assertThat(result.get(0).ownerEmail()).isEqualTo("member@test.com");
+        assertThat(result.get(0).ownerUuid()).isEqualTo("member@test.com");
         assertThat(result.get(0).versionNumber()).isEqualTo(2);
     }
 

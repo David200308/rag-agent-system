@@ -34,7 +34,7 @@ func New(cfg *config.Config, st *store.Store, mgr *cronmgr.Manager) *Handler {
 
 type ctxKey string
 
-const emailKey ctxKey = "userEmail"
+const uuidKey ctxKey = "userUuid"
 
 func (h *Handler) withAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +48,12 @@ func (h *Handler) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusUnauthorized, "invalid or expired token")
 			return
 		}
-		next(w, r.WithContext(context.WithValue(r.Context(), emailKey, email)))
+		uid, err := h.st.GetUuidByEmail(email)
+		if err != nil || uid == "" {
+			writeError(w, http.StatusUnauthorized, "user not recognized")
+			return
+		}
+		next(w, r.WithContext(context.WithValue(r.Context(), uuidKey, uid)))
 	}
 }
 
@@ -105,14 +110,14 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "conversationId or workflowId is required")
 			return
 		}
-		email := r.Context().Value(emailKey).(string)
+		uid := r.Context().Value(uuidKey).(string)
 
 		var schedules []*model.Schedule
 		var err error
 		if wfID != "" {
-			schedules, err = h.st.ListByWorkflow(email, wfID)
+			schedules, err = h.st.ListByWorkflow(uid, wfID)
 		} else {
-			schedules, err = h.st.ListByConversation(email, convID)
+			schedules, err = h.st.ListByConversation(uid, convID)
 		}
 		if err != nil {
 			log.Printf("[handler] list error: %v", err)
@@ -134,7 +139,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 // POST /schedules
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	h.withAuth(func(w http.ResponseWriter, r *http.Request) {
-		email := r.Context().Value(emailKey).(string)
+		uid := r.Context().Value(uuidKey).(string)
 
 		body, err := io.ReadAll(io.LimitReader(r.Body, 32*1024))
 		if err != nil {
@@ -170,7 +175,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			ConversationID:   req.ConversationID,
 			WorkflowID:       req.WorkflowID,
 			WorkflowInput:    req.WorkflowInput,
-			OwnerEmail:       email,
+			OwnerUuid:        uid,
 			Message:          req.Message,
 			CronExpr:         model.BuildCronExpr(req.CronMinute, req.CronHour, req.CronDay, req.CronMonth, req.CronWeekday),
 			Timezone:         req.Timezone,
@@ -203,7 +208,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 // PATCH /schedules/{id}
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	h.withAuth(func(w http.ResponseWriter, r *http.Request) {
-		email := r.Context().Value(emailKey).(string)
+		uid := r.Context().Value(uuidKey).(string)
 		id := r.PathValue("id")
 
 		sc, err := h.st.GetByID(id)
@@ -215,7 +220,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to fetch schedule")
 			return
 		}
-		if sc.OwnerEmail != email {
+		if sc.OwnerUuid != uid {
 			writeError(w, http.StatusForbidden, "not the owner")
 			return
 		}
@@ -288,7 +293,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 // DELETE /schedules/{id}
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	h.withAuth(func(w http.ResponseWriter, r *http.Request) {
-		email := r.Context().Value(emailKey).(string)
+		uid := r.Context().Value(uuidKey).(string)
 		id := r.PathValue("id")
 
 		sc, err := h.st.GetByID(id)
@@ -300,7 +305,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to fetch schedule")
 			return
 		}
-		if sc.OwnerEmail != email {
+		if sc.OwnerUuid != uid {
 			writeError(w, http.StatusForbidden, "not the owner")
 			return
 		}
@@ -320,7 +325,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 // GET /schedules/{id}/runs
 func (h *Handler) ListRuns(w http.ResponseWriter, r *http.Request) {
 	h.withAuth(func(w http.ResponseWriter, r *http.Request) {
-		email := r.Context().Value(emailKey).(string)
+		uid := r.Context().Value(uuidKey).(string)
 		id := r.PathValue("id")
 
 		sc, err := h.st.GetByID(id)
@@ -332,7 +337,7 @@ func (h *Handler) ListRuns(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to fetch schedule")
 			return
 		}
-		if sc.OwnerEmail != email {
+		if sc.OwnerUuid != uid {
 			writeError(w, http.StatusForbidden, "not the owner")
 			return
 		}
@@ -365,8 +370,8 @@ func (h *Handler) InternalCreate(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid JSON")
 			return
 		}
-		if req.OwnerEmail == "" {
-			writeError(w, http.StatusBadRequest, "ownerEmail is required")
+		if req.OwnerUuid == "" {
+			writeError(w, http.StatusBadRequest, "ownerUuid is required")
 			return
 		}
 		if req.WorkflowID != "" {
@@ -393,7 +398,7 @@ func (h *Handler) InternalCreate(w http.ResponseWriter, r *http.Request) {
 			ConversationID:   req.ConversationID,
 			WorkflowID:       req.WorkflowID,
 			WorkflowInput:    req.WorkflowInput,
-			OwnerEmail:       req.OwnerEmail,
+			OwnerUuid:        req.OwnerUuid,
 			Message:          req.Message,
 			CronExpr:         req.CronExpr,
 			Timezone:         req.Timezone,
@@ -421,17 +426,17 @@ func (h *Handler) InternalCreate(w http.ResponseWriter, r *http.Request) {
 	})(w, r)
 }
 
-// GET /internal/schedules?conversationId={id}&ownerEmail={email}
+// GET /internal/schedules?conversationId={id}&ownerUuid={uuid}
 func (h *Handler) InternalList(w http.ResponseWriter, r *http.Request) {
 	h.withServiceAuth(func(w http.ResponseWriter, r *http.Request) {
 		convID := r.URL.Query().Get("conversationId")
-		ownerEmail := r.URL.Query().Get("ownerEmail")
+		ownerUuid := r.URL.Query().Get("ownerUuid")
 		if convID == "" {
 			writeError(w, http.StatusBadRequest, "conversationId is required")
 			return
 		}
 
-		schedules, err := h.st.ListByOwner(ownerEmail, convID)
+		schedules, err := h.st.ListByOwner(ownerUuid, convID)
 		if err != nil {
 			log.Printf("[handler] internal list error: %v", err)
 			writeError(w, http.StatusInternalServerError, "failed to list schedules")
@@ -447,11 +452,11 @@ func (h *Handler) InternalList(w http.ResponseWriter, r *http.Request) {
 	})(w, r)
 }
 
-// DELETE /internal/schedules/{id}?ownerEmail={email}
+// DELETE /internal/schedules/{id}?ownerUuid={uuid}
 func (h *Handler) InternalDelete(w http.ResponseWriter, r *http.Request) {
 	h.withServiceAuth(func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
-		ownerEmail := r.URL.Query().Get("ownerEmail")
+		ownerUuid := r.URL.Query().Get("ownerUuid")
 
 		sc, err := h.st.GetByID(id)
 		if err == sql.ErrNoRows {
@@ -462,7 +467,7 @@ func (h *Handler) InternalDelete(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to fetch schedule")
 			return
 		}
-		if ownerEmail != "" && sc.OwnerEmail != ownerEmail {
+		if ownerUuid != "" && sc.OwnerUuid != ownerUuid {
 			writeError(w, http.StatusForbidden, "not the owner")
 			return
 		}

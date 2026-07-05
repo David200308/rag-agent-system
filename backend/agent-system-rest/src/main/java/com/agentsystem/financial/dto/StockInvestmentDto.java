@@ -5,7 +5,7 @@ import java.time.Instant;
 
 public record StockInvestmentDto(
         String     id,
-        String     ownerEmail,
+        String     ownerUuid,
         String     broker,
         String     stockType,
         String     symbol,

@@ -4,6 +4,8 @@ import com.agentsystem.auth.service.CliKeyService;
 
 import com.agentsystem.auth.entity.CliPublicKey;
 import com.agentsystem.auth.repository.CliPublicKeyRepository;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.service.UserAccountService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,7 @@ public class CliKeyServiceImpl implements CliKeyService {
     };
 
     private final CliPublicKeyRepository repo;
+    private final UserAccountService     userAccountService;
 
     // ── Registration ──────────────────────────────────────────────────────────
 
@@ -43,9 +46,14 @@ public class CliKeyServiceImpl implements CliKeyService {
             throw new IllegalArgumentException("Invalid Ed25519 public key: expected 32 bytes");
         }
 
-        CliPublicKey record = repo.findByUserEmail(email)
+        String uuid = resolveUuid(email);
+        if (uuid == null) {
+            throw new IllegalArgumentException(email + " is not a registered user.");
+        }
+
+        CliPublicKey record = repo.findByUserUuid(uuid)
                 .orElseGet(() -> new CliPublicKey());
-        record.setUserEmail(email);
+        record.setUserUuid(uuid);
         record.setPublicKeyBase64(publicKeyBase64);
         record.setFingerprint(publicKeyBase64.substring(0, 8));
         if (record.getRegisteredAt() == null) {
@@ -65,6 +73,10 @@ public class CliKeyServiceImpl implements CliKeyService {
      * Canonical message signed by the CLI:
      *   "{cliVersion} {METHOD} {/api/path} {email} {unixTimestamp}"
      *
+     * The signed message keeps using the plaintext email — it's a fixed client/server
+     * wire contract with the agent-cli binary, independent of how the key is looked up
+     * server-side. Only the storage/lookup key (user_uuid) is affected by this migration.
+     *
      * @return true if signature is valid and timestamp is fresh
      */
     @Override
@@ -82,7 +94,8 @@ public class CliKeyServiceImpl implements CliKeyService {
         }
 
         // 2. Look up stored public key
-        CliPublicKey stored = repo.findByUserEmail(email).orElse(null);
+        String uuid = resolveUuid(email);
+        CliPublicKey stored = uuid != null ? repo.findByUserUuid(uuid).orElse(null) : null;
         if (stored == null) {
             log.warn("[CliKeyService] No CLI key registered for {}", email);
             return false;
@@ -104,7 +117,7 @@ public class CliKeyServiceImpl implements CliKeyService {
 
             boolean valid = sig.verify(Base64.getDecoder().decode(signatureBase64));
             if (valid) {
-                repo.findByUserEmail(email).ifPresent(k -> {
+                repo.findByUserUuid(uuid).ifPresent(k -> {
                     k.setLastSeenAt(Instant.now());
                     repo.save(k);
                 });
@@ -120,6 +133,12 @@ public class CliKeyServiceImpl implements CliKeyService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Resolves an email to its user_uuid, or null if no such email is a registered user. */
+    private String resolveUuid(String email) {
+        if (email == null || email.isBlank()) return null;
+        return userAccountService.findByEmail(email).map(User::getUuid).orElse(null);
+    }
 
     private static byte[] wrapWithPrefix(byte[] rawKey) {
         byte[] out = new byte[ED25519_X509_PREFIX.length + rawKey.length];

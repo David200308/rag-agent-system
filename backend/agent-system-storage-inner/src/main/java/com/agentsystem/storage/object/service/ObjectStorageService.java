@@ -7,14 +7,14 @@ import java.util.Optional;
 
 public interface ObjectStorageService {
 
-    StoredObject upload(byte[] content, String contentType, String ownerEmail,
+    StoredObject upload(byte[] content, String contentType, String ownerUuid,
                          String entityType, String entityId);
 
     Optional<StoredObject> find(String id);
 
-    List<StoredObject> list(String entityType, String entityId, String ownerEmail);
+    List<StoredObject> list(String entityType, String entityId, String ownerUuid);
 
-    void delete(String id, String ownerEmail);
+    void delete(String id, String ownerUuid);
 
     /** Short-lived URL so the browser fetches bytes directly from Garage, not through this service. */
     String presignedUrl(StoredObject object);

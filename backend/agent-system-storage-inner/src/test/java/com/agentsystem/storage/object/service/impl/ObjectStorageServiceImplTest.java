@@ -51,8 +51,8 @@ class ObjectStorageServiceImplTest {
         lenient().when(repository.save(any(StoredObject.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
-    private static StoredObject object(String id, String objectKey, String ownerEmail) {
-        return new StoredObject(id, objectKey, ownerEmail, "AVATAR", "ent-1", "image/png", 5L, Instant.now());
+    private static StoredObject object(String id, String objectKey, String ownerUuid) {
+        return new StoredObject(id, objectKey, ownerUuid, "AVATAR", "ent-1", "image/png", 5L, Instant.now());
     }
 
     // ── upload ────────────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ class ObjectStorageServiceImplTest {
         assertThat(captor.getValue().key()).matches("avatar/.+\\.jpg");
         assertThat(captor.getValue().contentType()).isEqualTo("image/jpeg");
 
-        assertThat(result.getOwnerEmail()).isEqualTo("user@test.com");
+        assertThat(result.getOwnerUuid()).isEqualTo("user@test.com");
         assertThat(result.getEntityType()).isEqualTo("AVATAR");
         assertThat(result.getSizeBytes()).isEqualTo(3L);
         verify(repository).save(result);
@@ -101,7 +101,7 @@ class ObjectStorageServiceImplTest {
     @Test
     void list_delegatesToRepository() {
         List<StoredObject> objs = List.of(object("id-1", "k1", "user@test.com"));
-        when(repository.findByEntityTypeAndEntityIdAndOwnerEmail("AVATAR", "ent-1", "user@test.com"))
+        when(repository.findByEntityTypeAndEntityIdAndOwnerUuid("AVATAR", "ent-1", "user@test.com"))
                 .thenReturn(objs);
 
         assertThat(service.list("AVATAR", "ent-1", "user@test.com")).isEqualTo(objs);

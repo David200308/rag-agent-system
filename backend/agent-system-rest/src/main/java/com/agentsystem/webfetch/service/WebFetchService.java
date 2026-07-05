@@ -35,6 +35,9 @@ public interface WebFetchService {
      */
     DocumentResult fetch(String url, String userEmail);
 
+    /** Resolves ownership directly from ctx.userUuid() — no email bridge needed. */
+    DocumentResult fetch(String url, OrgContext ctx);
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     boolean isAllowed(String host, OrgContext ctx);

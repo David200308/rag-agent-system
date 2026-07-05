@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 /**
  * Spring AI tools for Google Calendar: list upcoming events and create new events.
  *
- * Email and orgId are injected per-request via ThreadLocals (same pattern as other tools).
+ * user_uuid and orgId are injected per-request via ThreadLocals (same pattern as other tools).
  */
 @Slf4j
 @Component
@@ -21,11 +21,11 @@ public class GoogleCalendarAgentTool {
     private final GoogleCalendarService googleCalendarService;
     private final ToolCallBudget        toolCallBudget;
 
-    private static final ThreadLocal<String> CURRENT_EMAIL  = new ThreadLocal<>();
-    private static final ThreadLocal<String> CURRENT_ORG_ID = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_USER_UUID = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_ORG_ID    = new ThreadLocal<>();
 
-    public void setCurrentEmail(String email)  { CURRENT_EMAIL.set(email != null ? email : ""); }
-    public void clearCurrentEmail()            { CURRENT_EMAIL.remove(); }
+    public void setCurrentUserUuid(String uuid) { CURRENT_USER_UUID.set(uuid != null ? uuid : ""); }
+    public void clearCurrentUserUuid()          { CURRENT_USER_UUID.remove(); }
 
     public void setCurrentOrgId(String orgId)  { CURRENT_ORG_ID.set(orgId); }
     public void clearCurrentOrgId()            { CURRENT_ORG_ID.remove(); }
@@ -40,9 +40,9 @@ public class GoogleCalendarAgentTool {
     public String listUpcomingEvents(int maxResults) {
         if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
         int limit = Math.min(Math.max(maxResults, 1), 25);
-        log.info("[GoogleCalendarAgentTool] Listing {} events for '{}'", limit, CURRENT_EMAIL.get());
+        log.info("[GoogleCalendarAgentTool] Listing {} events for '{}'", limit, CURRENT_USER_UUID.get());
         try {
-            return googleCalendarService.listEvents(CURRENT_EMAIL.get(), CURRENT_ORG_ID.get(), limit);
+            return googleCalendarService.listEvents(CURRENT_USER_UUID.get(), CURRENT_ORG_ID.get(), limit);
         } catch (IllegalStateException e) {
             return "Could not list calendar events: " + e.getMessage();
         }
@@ -59,10 +59,10 @@ public class GoogleCalendarAgentTool {
     public String createCalendarEvent(String title, String startDateTime, String endDateTime,
                                       String description, String location) {
         if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
-        log.info("[GoogleCalendarAgentTool] Creating event '{}' for '{}'", title, CURRENT_EMAIL.get());
+        log.info("[GoogleCalendarAgentTool] Creating event '{}' for '{}'", title, CURRENT_USER_UUID.get());
         try {
             return googleCalendarService.createEvent(
-                    CURRENT_EMAIL.get(), CURRENT_ORG_ID.get(),
+                    CURRENT_USER_UUID.get(), CURRENT_ORG_ID.get(),
                     title, startDateTime, endDateTime, description, location);
         } catch (IllegalStateException e) {
             return "Could not create calendar event: " + e.getMessage();

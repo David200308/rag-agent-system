@@ -7,6 +7,8 @@ import com.agentsystem.knowledge.entity.KnowledgeSourceShare;
 import com.agentsystem.knowledge.repository.KnowledgeSourceRepository;
 import com.agentsystem.org.OrgContext;
 import com.agentsystem.rag.service.DocumentIngestionService;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.service.UserAccountService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,7 @@ public class KnowledgeSourceServiceImpl implements KnowledgeSourceService {
 
     private final KnowledgeSourceRepository repo;
     private final DocumentIngestionService  ingestionService;
+    private final UserAccountService        userAccountService;
 
     /**
      * Record (or update) a source after successful ingestion.
@@ -30,23 +33,7 @@ public class KnowledgeSourceServiceImpl implements KnowledgeSourceService {
     @Override
     public void upsert(String source, String label, String category, int chunkCount,
                        String ownerEmail, String orgId) {
-        var existing = orgId != null
-                ? repo.findBySourceAndOrgId(source, orgId)
-                : repo.findBySource(source);
-        existing.ifPresentOrElse(
-                ks -> {
-                    ks.setLabel(label);
-                    ks.setCategory(category);
-                    ks.setChunkCount(chunkCount);
-                    if (ks.getOwnerEmail() == null && ownerEmail != null) ks.setOwnerEmail(ownerEmail);
-                    repo.save(ks);
-                },
-                () -> {
-                    KnowledgeSource ks = new KnowledgeSource(source, label, category, chunkCount, ownerEmail, orgId);
-                    if (orgId != null) ks.setStatus("PENDING");
-                    repo.save(ks);
-                }
-        );
+        upsertByUuid(source, label, category, chunkCount, resolveUuid(ownerEmail), orgId);
     }
 
     /** Backward-compatible overload for personal mode callers. */
@@ -56,24 +43,53 @@ public class KnowledgeSourceServiceImpl implements KnowledgeSourceService {
         upsert(source, label, category, chunkCount, ownerEmail, null);
     }
 
+    @Transactional
+    @Override
+    public void upsert(String source, String label, String category, int chunkCount, OrgContext ctx) {
+        upsertByUuid(source, label, category, chunkCount,
+                ctx != null ? ctx.userUuid() : null, ctx != null ? ctx.orgId() : null);
+    }
+
+    private void upsertByUuid(String source, String label, String category, int chunkCount,
+                               String ownerUuid, String orgId) {
+        var existing = orgId != null
+                ? repo.findBySourceAndOrgId(source, orgId)
+                : repo.findBySource(source);
+        existing.ifPresentOrElse(
+                ks -> {
+                    ks.setLabel(label);
+                    ks.setCategory(category);
+                    ks.setChunkCount(chunkCount);
+                    if (ks.getOwnerUuid() == null && ownerUuid != null) ks.setOwnerUuid(ownerUuid);
+                    repo.save(ks);
+                },
+                () -> {
+                    KnowledgeSource ks = new KnowledgeSource(source, label, category, chunkCount, ownerUuid, orgId);
+                    if (orgId != null) ks.setStatus("PENDING");
+                    repo.save(ks);
+                }
+        );
+    }
+
     /**
      * List sources visible given the org context (for management UI).
      * Team mode: APPROVED sources + caller's own PENDING/REJECTED submissions.
-     * Personal: owned or shared with email.
+     * Personal: owned or shared with the caller.
      */
     @Transactional(readOnly = true)
     @Override
     public List<KnowledgeSource> listAccessible(OrgContext ctx) {
-        if (ctx == null || ctx.email() == null) return repo.findAllByOrderByIngestedAtDesc();
-        if (ctx.isTeam()) return repo.findByOrgIdForMember(ctx.orgId(), ctx.email());
-        return repo.findAccessibleByEmail(ctx.email());
+        if (ctx == null || ctx.userUuid() == null) return repo.findAllByOrderByIngestedAtDesc();
+        if (ctx.isTeam()) return repo.findByOrgIdForMember(ctx.orgId(), ctx.userUuid());
+        return repo.findAccessibleByUuid(ctx.userUuid());
     }
 
     @Transactional(readOnly = true)
     @Override
     public List<KnowledgeSource> listAccessible(String email) {
-        if (email == null) return repo.findAllByOrderByIngestedAtDesc();
-        return repo.findAccessibleByEmail(email);
+        String uuid = resolveUuid(email);
+        if (uuid == null) return repo.findAllByOrderByIngestedAtDesc();
+        return repo.findAccessibleByUuid(uuid);
     }
 
     /** All PENDING sources for the org (owner approval queue). */
@@ -114,24 +130,24 @@ public class KnowledgeSourceServiceImpl implements KnowledgeSourceService {
     @Transactional
     @Override
     public void delete(String source, OrgContext ctx) {
-        String callerEmail = ctx != null ? ctx.email() : null;
+        String callerUuid = ctx != null ? ctx.userUuid() : null;
         String orgId       = ctx != null && ctx.isTeam() ? ctx.orgId() : null;
         var optional = orgId != null ? repo.findBySourceAndOrgId(source, orgId) : repo.findBySource(source);
         optional.ifPresent(ks -> {
-            if (!ctx.isTeam() && callerEmail != null && ks.getOwnerEmail() != null
-                    && !ks.getOwnerEmail().equalsIgnoreCase(callerEmail)) {
+            if (!ctx.isTeam() && callerUuid != null && ks.getOwnerUuid() != null
+                    && !ks.getOwnerUuid().equals(callerUuid)) {
                 throw new SecurityException("Only the owner can delete this source.");
             }
             ingestionService.deleteBySource(source);
             repo.delete(ks);
-            log.info("[KnowledgeSourceService] Deleted source='{}' by {}", source, callerEmail);
+            log.info("[KnowledgeSourceService] Deleted source='{}' by {}", source, callerUuid);
         });
     }
 
     @Transactional
     @Override
     public void delete(String source, String callerEmail) {
-        delete(source, new OrgContext(callerEmail, "PERSONAL", null));
+        delete(source, new OrgContext(resolveUuid(callerEmail), callerEmail, "PERSONAL", null));
     }
 
     /**
@@ -143,9 +159,9 @@ public class KnowledgeSourceServiceImpl implements KnowledgeSourceService {
     public KnowledgeSource updateMetadata(String source, String label, String category, OrgContext ctx) {
         KnowledgeSource ks = repo.findBySource(source)
                 .orElseThrow(() -> new IllegalArgumentException("Source not found: " + source));
-        String callerEmail = ctx != null ? ctx.email() : null;
-        if (!ctx.isTeam() && callerEmail != null && ks.getOwnerEmail() != null
-                && !ks.getOwnerEmail().equalsIgnoreCase(callerEmail)) {
+        String callerUuid = ctx != null ? ctx.userUuid() : null;
+        if (!ctx.isTeam() && callerUuid != null && ks.getOwnerUuid() != null
+                && !ks.getOwnerUuid().equals(callerUuid)) {
             throw new SecurityException("Only the owner can edit this source.");
         }
         if (label    != null) ks.setLabel(label.isBlank()       ? null : label.trim());
@@ -156,30 +172,50 @@ public class KnowledgeSourceServiceImpl implements KnowledgeSourceService {
     @Transactional
     @Override
     public KnowledgeSource updateMetadata(String source, String label, String category, String callerEmail) {
-        return updateMetadata(source, label, category, new OrgContext(callerEmail, "PERSONAL", null));
+        return updateMetadata(source, label, category, new OrgContext(resolveUuid(callerEmail), callerEmail, "PERSONAL", null));
     }
 
     /**
-     * Replace the shared-email list. Not applicable in team mode (org-level sharing).
+     * Replace the share-target list. Not applicable in team mode (org-level sharing).
      */
     @Transactional
     @Override
     public KnowledgeSource updateSharing(String source, List<String> emails, String callerEmail) {
+        return updateSharing(source, emails, new OrgContext(resolveUuid(callerEmail), callerEmail, "PERSONAL", null));
+    }
+
+    @Transactional
+    @Override
+    public KnowledgeSource updateSharing(String source, List<String> emails, OrgContext ctx) {
         KnowledgeSource ks = repo.findBySource(source)
                 .orElseThrow(() -> new IllegalArgumentException("Source not found: " + source));
 
-        if (callerEmail != null && ks.getOwnerEmail() != null
-                && !ks.getOwnerEmail().equalsIgnoreCase(callerEmail)) {
+        String callerUuid = ctx != null ? ctx.userUuid() : null;
+        if (callerUuid != null && ks.getOwnerUuid() != null
+                && !ks.getOwnerUuid().equals(callerUuid)) {
             throw new SecurityException("Only the owner can change sharing.");
         }
 
         ks.getShares().clear();
+        // Only entries that already belong to a registered user can be resolved to a uuid —
+        // an unregistered email is silently dropped, since it can't be granted sharing access
+        // without an account.
         emails.stream()
                 .map(String::trim)
                 .filter(e -> !e.isBlank())
+                .map(this::resolveUuid)
+                .filter(java.util.Objects::nonNull)
                 .distinct()
-                .forEach(e -> ks.getShares().add(new KnowledgeSourceShare(ks, e)));
+                .forEach(uuid -> ks.getShares().add(new KnowledgeSourceShare(ks, uuid)));
 
         return repo.save(ks);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────────
+
+    /** Resolves an email to its user_uuid, or null if no such email is a registered user. */
+    private String resolveUuid(String email) {
+        if (email == null || email.isBlank()) return null;
+        return userAccountService.findByEmail(email).map(User::getUuid).orElse(null);
     }
 }

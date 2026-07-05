@@ -11,16 +11,16 @@ import java.util.Optional;
 
 public interface PasskeyCredentialRepository extends JpaRepository<PasskeyCredential, Long> {
 
-    List<PasskeyCredential> findByEmail(String email);
+    List<PasskeyCredential> findByUserUuid(String userUuid);
 
     Optional<PasskeyCredential> findByCredentialId(String credentialId);
 
     Optional<PasskeyCredential> findByUserHandle(String userHandle);
 
-    boolean existsByEmail(String email);
+    boolean existsByUserUuid(String userUuid);
 
     @Modifying
     @Transactional
-    @Query("DELETE FROM PasskeyCredential c WHERE c.email = :email")
-    void deleteByEmail(String email);
+    @Query("DELETE FROM PasskeyCredential c WHERE c.userUuid = :userUuid")
+    void deleteByUserUuid(String userUuid);
 }

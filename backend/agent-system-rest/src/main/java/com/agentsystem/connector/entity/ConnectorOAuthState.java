@@ -20,7 +20,8 @@ public class ConnectorOAuthState {
     @Column(unique = true)
     private String state;
 
-    private String ownerEmail;
+    @Column(name = "owner_uuid", length = 36)
+    private String ownerUuid;
     private String provider;
 
     @Column(name = "org_id", length = 100)

@@ -18,16 +18,16 @@ public class UserPreferenceServiceImpl implements UserPreferenceService {
 
     @Override
     @Transactional(readOnly = true)
-    public UserPreference getOrDefault(String email) {
-        return repo.findByEmail(email)
-                   .orElseGet(() -> new UserPreference(email, "UTC"));
+    public UserPreference getOrDefault(String userUuid) {
+        return repo.findByUserUuid(userUuid)
+                   .orElseGet(() -> new UserPreference(userUuid, "UTC"));
     }
 
     @Override
     @Transactional
-    public UserPreference setTimezone(String email, String timezone) {
-        UserPreference pref = repo.findByEmail(email)
-                .orElseGet(() -> new UserPreference(email, timezone));
+    public UserPreference setTimezone(String userUuid, String timezone) {
+        UserPreference pref = repo.findByUserUuid(userUuid)
+                .orElseGet(() -> new UserPreference(userUuid, timezone));
         pref.setTimezone(timezone);
         pref.setUpdatedAt(Instant.now());
         return repo.save(pref);
@@ -35,26 +35,26 @@ public class UserPreferenceServiceImpl implements UserPreferenceService {
 
     @Override
     @Transactional
-    public UserPreference setSelectedModel(String email, String displayName) {
-        UserPreference pref = repo.findByEmail(email)
-                .orElseGet(() -> new UserPreference(email, "UTC"));
+    public UserPreference setSelectedModel(String userUuid, String displayName) {
+        UserPreference pref = repo.findByUserUuid(userUuid)
+                .orElseGet(() -> new UserPreference(userUuid, "UTC"));
         pref.setSelectedModel(displayName);
         pref.setUpdatedAt(Instant.now());
         return repo.save(pref);
     }
 
     @Override
-    public String getSelectedModel(String email) {
-        return repo.findByEmail(email)
+    public String getSelectedModel(String userUuid) {
+        return repo.findByUserUuid(userUuid)
                 .map(UserPreference::getSelectedModel)
                 .orElse(null);
     }
 
     @Override
     @Transactional
-    public UserPreference setDefaultCurrency(String email, String currency) {
-        UserPreference pref = repo.findByEmail(email)
-                .orElseGet(() -> new UserPreference(email, "UTC"));
+    public UserPreference setDefaultCurrency(String userUuid, String currency) {
+        UserPreference pref = repo.findByUserUuid(userUuid)
+                .orElseGet(() -> new UserPreference(userUuid, "UTC"));
         pref.setDefaultCurrency(currency == null || currency.isBlank() ? "USD" : currency.trim().toUpperCase());
         pref.setUpdatedAt(Instant.now());
         return repo.save(pref);

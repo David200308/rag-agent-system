@@ -31,15 +31,15 @@ class UserPreferenceControllerTest {
         return p;
     }
 
-    private void stubEmail(String email) {
-        when(request.getAttribute("authenticatedEmail")).thenReturn(email);
+    private void stubUserUuid(String email) {
+        when(request.getAttribute("authenticatedUserUuid")).thenReturn(email);
     }
 
     // ── getPreferences ────────────────────────────────────────────────────────
 
     @Test
     void getPreferences_noEmail_returns401() {
-        stubEmail(null);
+        stubUserUuid(null);
 
         ResponseEntity<Map<String, Object>> resp = controller.getPreferences(request);
 
@@ -48,7 +48,7 @@ class UserPreferenceControllerTest {
 
     @Test
     void getPreferences_withEmail_returnsAllFields() {
-        stubEmail("user@test.com");
+        stubUserUuid("user@test.com");
         when(service.getOrDefault("user@test.com")).thenReturn(pref("UTC", "GPT-4", "USD"));
 
         ResponseEntity<Map<String, Object>> resp = controller.getPreferences(request);
@@ -61,7 +61,7 @@ class UserPreferenceControllerTest {
 
     @Test
     void getPreferences_nullFields_areIncluded() {
-        stubEmail("user@test.com");
+        stubUserUuid("user@test.com");
         when(service.getOrDefault("user@test.com")).thenReturn(pref(null, null, null));
 
         ResponseEntity<Map<String, Object>> resp = controller.getPreferences(request);
@@ -76,7 +76,7 @@ class UserPreferenceControllerTest {
 
     @Test
     void updatePreferences_noEmail_returns401() {
-        stubEmail(null);
+        stubUserUuid(null);
 
         ResponseEntity<Map<String, Object>> resp =
                 controller.updatePreferences(Map.of("timezone", "Asia/Tokyo"), request);
@@ -86,7 +86,7 @@ class UserPreferenceControllerTest {
 
     @Test
     void updatePreferences_timezone_callsSetTimezone() {
-        stubEmail("user@test.com");
+        stubUserUuid("user@test.com");
         when(service.getOrDefault("user@test.com")).thenReturn(pref("UTC", null, null));
         when(service.setTimezone("user@test.com", "Asia/Tokyo")).thenReturn(pref("Asia/Tokyo", null, null));
 
@@ -100,7 +100,7 @@ class UserPreferenceControllerTest {
 
     @Test
     void updatePreferences_blankTimezone_doesNotCallSetTimezone() {
-        stubEmail("user@test.com");
+        stubUserUuid("user@test.com");
         when(service.getOrDefault("user@test.com")).thenReturn(pref("UTC", null, null));
 
         controller.updatePreferences(Map.of("timezone", "  "), request);
@@ -110,7 +110,7 @@ class UserPreferenceControllerTest {
 
     @Test
     void updatePreferences_selectedModel_callsSetSelectedModel() {
-        stubEmail("user@test.com");
+        stubUserUuid("user@test.com");
         when(service.getOrDefault("user@test.com")).thenReturn(pref("UTC", null, null));
         when(service.setSelectedModel("user@test.com", "GPT-4")).thenReturn(pref("UTC", "GPT-4", null));
 
@@ -124,7 +124,7 @@ class UserPreferenceControllerTest {
 
     @Test
     void updatePreferences_nullSelectedModel_setsNull() {
-        stubEmail("user@test.com");
+        stubUserUuid("user@test.com");
         when(service.getOrDefault("user@test.com")).thenReturn(pref("UTC", "GPT-4", null));
         when(service.setSelectedModel("user@test.com", null)).thenReturn(pref("UTC", null, null));
 
@@ -138,7 +138,7 @@ class UserPreferenceControllerTest {
 
     @Test
     void updatePreferences_defaultCurrency_callsSetDefaultCurrency() {
-        stubEmail("user@test.com");
+        stubUserUuid("user@test.com");
         when(service.getOrDefault("user@test.com")).thenReturn(pref("UTC", null, "USD"));
         when(service.setDefaultCurrency("user@test.com", "HKD")).thenReturn(pref("UTC", null, "HKD"));
 
@@ -152,7 +152,7 @@ class UserPreferenceControllerTest {
 
     @Test
     void updatePreferences_allFields_callsAllSetters() {
-        stubEmail("user@test.com");
+        stubUserUuid("user@test.com");
         when(service.getOrDefault("user@test.com")).thenReturn(pref("UTC", null, "USD"));
         when(service.setTimezone("user@test.com", "Europe/London")).thenReturn(pref("Europe/London", null, "USD"));
         when(service.setSelectedModel("user@test.com", "Claude")).thenReturn(pref("Europe/London", "Claude", "USD"));

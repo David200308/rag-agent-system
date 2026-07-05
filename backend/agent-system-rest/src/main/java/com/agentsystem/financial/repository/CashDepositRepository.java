@@ -8,5 +8,5 @@ import java.util.List;
 
 @Repository
 public interface CashDepositRepository extends JpaRepository<CashDeposit, String> {
-    List<CashDeposit> findByOwnerEmailOrderByCreatedAtDesc(String ownerEmail);
+    List<CashDeposit> findByOwnerUuidOrderByCreatedAtDesc(String ownerUuid);
 }

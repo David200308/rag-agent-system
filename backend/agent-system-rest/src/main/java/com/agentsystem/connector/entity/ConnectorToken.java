@@ -17,7 +17,8 @@ public class ConnectorToken {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String ownerEmail;
+    @Column(name = "owner_uuid", length = 36)
+    private String ownerUuid;
     private String provider;
 
     /** Org slug when in team mode; null = personal. */

@@ -8,5 +8,5 @@ import java.util.List;
 
 @Repository
 public interface CryptoInvestmentRepository extends JpaRepository<CryptoInvestment, String> {
-    List<CryptoInvestment> findByOwnerEmailOrderByCreatedAtDesc(String ownerEmail);
+    List<CryptoInvestment> findByOwnerUuidOrderByCreatedAtDesc(String ownerUuid);
 }

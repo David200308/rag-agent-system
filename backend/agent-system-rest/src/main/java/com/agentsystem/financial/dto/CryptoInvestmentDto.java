@@ -5,7 +5,7 @@ import java.time.Instant;
 
 public record CryptoInvestmentDto(
         String     id,
-        String     ownerEmail,
+        String     ownerUuid,
         String     name,
         String     symbol,
         BigDecimal amount,

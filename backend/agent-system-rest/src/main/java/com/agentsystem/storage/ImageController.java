@@ -37,11 +37,11 @@ public class ImageController {
             @RequestParam(value = "entityId", required = false) String entityId,
             HttpServletRequest req) {
 
-        String ownerEmail = OrgContext.from(req).email();
+        String ownerUuid = OrgContext.from(req).userUuid();
         try {
             StorageClient.UploadResult result = storageClient.uploadObject(
                     file.getBytes(), file.getOriginalFilename(), file.getContentType(),
-                    ownerEmail, entityType, entityId);
+                    ownerUuid, entityType, entityId);
             return ResponseEntity.status(201).body(result);
         } catch (IOException e) {
             return ResponseEntity.badRequest().body(Map.of("error", "Could not read uploaded file"));
@@ -73,9 +73,9 @@ public class ImageController {
             @RequestParam String entityId,
             HttpServletRequest req) {
 
-        String ownerEmail = OrgContext.from(req).email();
+        String ownerUuid = OrgContext.from(req).userUuid();
         try {
-            List<StorageClient.ObjectMetadata> images = storageClient.listObjects(entityType, entityId, ownerEmail);
+            List<StorageClient.ObjectMetadata> images = storageClient.listObjects(entityType, entityId, ownerUuid);
             return ResponseEntity.ok(images);
         } catch (RestClientResponseException e) {
             return ResponseEntity.status(e.getStatusCode()).build();
@@ -88,9 +88,9 @@ public class ImageController {
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete an image (owner only)")
     public ResponseEntity<?> delete(@PathVariable String id, HttpServletRequest req) {
-        String ownerEmail = OrgContext.from(req).email();
+        String ownerUuid = OrgContext.from(req).userUuid();
         try {
-            storageClient.deleteObject(id, ownerEmail);
+            storageClient.deleteObject(id, ownerUuid);
             return ResponseEntity.noContent().build();
         } catch (RestClientResponseException e) {
             return ResponseEntity.status(e.getStatusCode()).build();

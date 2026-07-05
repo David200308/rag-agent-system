@@ -17,15 +17,15 @@ public interface KnowledgeSourceRepository extends JpaRepository<KnowledgeSource
     void deleteBySource(String source);
 
     /**
-     * Personal mode: sources owned by or shared with the given email.
+     * Personal mode: sources owned by or shared with the given uuid.
      */
     @Query("""
         SELECT DISTINCT ks FROM KnowledgeSource ks
         LEFT JOIN ks.shares sh
-        WHERE ks.orgId IS NULL AND (ks.ownerEmail = :email OR sh.sharedEmail = :email)
+        WHERE ks.orgId IS NULL AND (ks.ownerUuid = :uuid OR sh.sharedUuid = :uuid)
         ORDER BY ks.ingestedAt DESC
         """)
-    List<KnowledgeSource> findAccessibleByEmail(@Param("email") String email);
+    List<KnowledgeSource> findAccessibleByUuid(@Param("uuid") String uuid);
 
     /**
      * Team mode UI: approved sources + the caller's own pending/rejected submissions.
@@ -33,11 +33,11 @@ public interface KnowledgeSourceRepository extends JpaRepository<KnowledgeSource
     @Query("""
         SELECT ks FROM KnowledgeSource ks
         WHERE ks.orgId = :orgId
-          AND (ks.status = 'APPROVED' OR ks.ownerEmail = :callerEmail)
+          AND (ks.status = 'APPROVED' OR ks.ownerUuid = :callerUuid)
         ORDER BY ks.ingestedAt DESC
         """)
     List<KnowledgeSource> findByOrgIdForMember(@Param("orgId") String orgId,
-                                               @Param("callerEmail") String callerEmail);
+                                               @Param("callerUuid") String callerUuid);
 
     /**
      * Team mode agent retrieval: approved sources only.

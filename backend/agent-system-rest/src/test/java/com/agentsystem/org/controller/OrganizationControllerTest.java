@@ -175,7 +175,7 @@ class OrganizationControllerTest {
     @Test
     void listMembers_returns200WithMembers() {
         stubAdmin("admin@test.com");
-        OrgMember member = new OrgMember("acme", "owner@test.com", OrgMember.Role.OWNER);
+        OrgMember member = new OrgMember("acme", "owner@test.com", "owner@test.com", OrgMember.Role.OWNER);
         when(service.listMembers("acme")).thenReturn(List.of(member));
 
         ResponseEntity<?> resp = controller.listMembers("acme", request);
@@ -210,7 +210,7 @@ class OrganizationControllerTest {
     @Test
     void addMember_success_returns201() {
         stubAdmin("admin@test.com");
-        OrgMember member = new OrgMember("acme", "user@test.com", OrgMember.Role.MEMBER);
+        OrgMember member = new OrgMember("acme", "user@test.com", "user@test.com", OrgMember.Role.MEMBER);
         when(service.addMember("acme", "user@test.com", OrgMember.Role.MEMBER)).thenReturn(member);
 
         ResponseEntity<?> resp = controller.addMember("acme",
@@ -265,7 +265,7 @@ class OrganizationControllerTest {
     @Test
     void addMember_defaultRoleMember_usedWhenRoleOmitted() {
         stubAdmin("admin@test.com");
-        OrgMember member = new OrgMember("acme", "user@test.com", OrgMember.Role.MEMBER);
+        OrgMember member = new OrgMember("acme", "user@test.com", "user@test.com", OrgMember.Role.MEMBER);
         when(service.addMember("acme", "user@test.com", OrgMember.Role.MEMBER)).thenReturn(member);
 
         ResponseEntity<?> resp = controller.addMember("acme", Map.of("email", "user@test.com"), request);

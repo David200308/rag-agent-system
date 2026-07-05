@@ -8,12 +8,15 @@ import com.agentsystem.org.entity.OrgMemberId;
 import com.agentsystem.org.entity.Organization;
 import com.agentsystem.org.repository.OrgMemberRepository;
 import com.agentsystem.org.repository.OrganizationRepository;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.service.UserAccountService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -23,6 +26,7 @@ public class OrganizationServiceImpl implements OrganizationService {
     private final OrganizationRepository orgRepo;
     private final OrgMemberRepository    memberRepo;
     private final AdminProperties        adminProperties;
+    private final UserAccountService     userAccountService;
 
     /**
      * Requires the caller to be a configured system admin (admin.emails); throws
@@ -81,10 +85,14 @@ public class OrganizationServiceImpl implements OrganizationService {
         if (!orgRepo.existsById(orgId)) {
             throw new IllegalArgumentException("Organization not found: " + orgId);
         }
-        if (memberRepo.existsByOrgIdAndEmail(orgId, email)) {
+        String uuid = resolveUuid(email);
+        if (uuid == null) {
+            throw new IllegalArgumentException(email + " is not a registered user.");
+        }
+        if (memberRepo.existsByOrgIdAndUserUuid(orgId, uuid)) {
             throw new IllegalArgumentException(email + " is already a member of " + orgId);
         }
-        OrgMember m = memberRepo.save(new OrgMember(orgId, email, role));
+        OrgMember m = memberRepo.save(new OrgMember(orgId, uuid, email, role));
         log.info("[OrganizationService] Added {} as {} to org '{}'", email, role, orgId);
         return m;
     }
@@ -92,7 +100,11 @@ public class OrganizationServiceImpl implements OrganizationService {
     @Override
     @Transactional
     public void removeMember(String orgId, String email) {
-        memberRepo.deleteById(new OrgMemberId(orgId, email));
+        String uuid = resolveUuid(email);
+        if (uuid == null) {
+            throw new IllegalArgumentException(email + " is not a registered user.");
+        }
+        memberRepo.deleteById(new OrgMemberId(orgId, uuid));
         log.info("[OrganizationService] Removed {} from org '{}'", email, orgId);
     }
 
@@ -109,7 +121,8 @@ public class OrganizationServiceImpl implements OrganizationService {
      */
     @Override
     public void requireOwner(String orgId, String callerEmail) {
-        OrgMember m = memberRepo.findByOrgIdAndEmail(orgId, callerEmail)
+        String uuid = resolveUuid(callerEmail);
+        OrgMember m = (uuid != null ? memberRepo.findByOrgIdAndUserUuid(orgId, uuid) : Optional.<OrgMember>empty())
                 .orElseThrow(() -> new SecurityException("You are not a member of " + orgId));
         if (m.getRole() != OrgMember.Role.OWNER) {
             throw new SecurityException("Only the organization owner can perform this action.");
@@ -126,11 +139,12 @@ public class OrganizationServiceImpl implements OrganizationService {
     public void transferOwner(String orgId, String currentOwnerEmail, String newOwnerEmail) {
         requireOwner(orgId, currentOwnerEmail);
 
-        OrgMember newOwner = memberRepo.findByOrgIdAndEmail(orgId, newOwnerEmail)
+        String newUuid = resolveUuid(newOwnerEmail);
+        OrgMember newOwner = (newUuid != null ? memberRepo.findByOrgIdAndUserUuid(orgId, newUuid) : Optional.<OrgMember>empty())
                 .orElseThrow(() -> new IllegalArgumentException(
                         newOwnerEmail + " is not a member of " + orgId));
 
-        OrgMember currentOwner = memberRepo.findByOrgIdAndEmail(orgId, currentOwnerEmail)
+        OrgMember currentOwner = memberRepo.findByOrgIdAndUserUuid(orgId, resolveUuid(currentOwnerEmail))
                 .orElseThrow();
 
         currentOwner.setRole(OrgMember.Role.MEMBER);
@@ -148,7 +162,9 @@ public class OrganizationServiceImpl implements OrganizationService {
     /** Returns true if the org exists and the email is a member. */
     @Override
     public boolean isMember(String orgId, String email) {
-        return orgRepo.existsById(orgId) && memberRepo.existsByOrgIdAndEmail(orgId, email);
+        if (!orgRepo.existsById(orgId)) return false;
+        String uuid = resolveUuid(email);
+        return uuid != null && memberRepo.existsByOrgIdAndUserUuid(orgId, uuid);
     }
 
     /** Validates that the org exists; throws if not. */
@@ -157,5 +173,13 @@ public class OrganizationServiceImpl implements OrganizationService {
         if (!orgRepo.existsById(orgId)) {
             throw new IllegalArgumentException("Organization not found: " + orgId);
         }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────────
+
+    /** Resolves an email to its user_uuid, or null if no such email is a registered user. */
+    private String resolveUuid(String email) {
+        if (email == null || email.isBlank()) return null;
+        return userAccountService.findByEmail(email).map(User::getUuid).orElse(null);
     }
 }

@@ -7,19 +7,19 @@ public interface GoogleSheetsService {
      *
      * @param title      spreadsheet title
      * @param content    plain text — rows separated by {@code \n}, columns by tab or comma
-     * @param ownerEmail user whose token to use
+     * @param ownerUuid user whose token to use
      * @return the spreadsheet's browser URL
      */
-    String createSpreadsheet(String title, String content, String ownerEmail, String orgId);
+    String createSpreadsheet(String title, String content, String ownerUuid, String orgId);
 
     /**
      * Read the contents of an existing Google Sheet.
      *
      * @param sheetUrl   the browser URL or spreadsheet ID
-     * @param ownerEmail user whose token to use
+     * @param ownerUuid user whose token to use
      * @return all cell values formatted as a tab-separated table
      */
-    String readSpreadsheet(String sheetUrl, String ownerEmail, String orgId);
+    String readSpreadsheet(String sheetUrl, String ownerUuid, String orgId);
 
-    boolean isConnected(String ownerEmail, String orgId);
+    boolean isConnected(String ownerUuid, String orgId);
 }

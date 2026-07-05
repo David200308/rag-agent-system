@@ -30,7 +30,7 @@ class GoogleSheetsAgentToolTest {
 
     @AfterEach
     void tearDown() {
-        tool.clearCurrentEmail();
+        tool.clearCurrentUserUuid();
     }
 
     @Test
@@ -46,8 +46,8 @@ class GoogleSheetsAgentToolTest {
     // ── ThreadLocal email management ──────────────────────────────────────────
 
     @Test
-    void setCurrentEmail_null_setsEmptyString() {
-        tool.setCurrentEmail(null);
+    void setCurrentUserUuid_null_setsEmptyString() {
+        tool.setCurrentUserUuid(null);
         when(googleSheetsService.createSpreadsheet(anyString(), anyString(), eq(""), isNull()))
                 .thenReturn("https://docs.google.com/spreadsheets/d/abc");
 
@@ -57,9 +57,9 @@ class GoogleSheetsAgentToolTest {
     }
 
     @Test
-    void clearCurrentEmail_removesFromThreadLocal() {
-        tool.setCurrentEmail("user@example.com");
-        tool.clearCurrentEmail();
+    void clearCurrentUserUuid_removesFromThreadLocal() {
+        tool.setCurrentUserUuid("user@example.com");
+        tool.clearCurrentUserUuid();
 
         when(googleSheetsService.createSpreadsheet(anyString(), anyString(), isNull(), isNull()))
                 .thenReturn("https://docs.google.com/spreadsheets/d/abc");
@@ -73,7 +73,7 @@ class GoogleSheetsAgentToolTest {
 
     @Test
     void writeToGoogleSheets_success_returnsUrlMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleSheetsService.createSpreadsheet("Budget", "Name,Amount", "user@example.com", null))
                 .thenReturn("https://docs.google.com/spreadsheets/d/xyz");
 
@@ -85,7 +85,7 @@ class GoogleSheetsAgentToolTest {
 
     @Test
     void writeToGoogleSheets_notConnected_returnsErrorMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleSheetsService.createSpreadsheet(anyString(), anyString(), anyString(), any()))
                 .thenThrow(new IllegalStateException("Google Sheets not connected"));
 
@@ -97,7 +97,7 @@ class GoogleSheetsAgentToolTest {
 
     @Test
     void writeToGoogleSheets_usesCurrentEmailFromThreadLocal() {
-        tool.setCurrentEmail("sheet-user@example.com");
+        tool.setCurrentUserUuid("sheet-user@example.com");
         when(googleSheetsService.createSpreadsheet(anyString(), anyString(), eq("sheet-user@example.com"), isNull()))
                 .thenReturn("https://docs.google.com/spreadsheets/d/new");
 
@@ -110,7 +110,7 @@ class GoogleSheetsAgentToolTest {
 
     @Test
     void readGoogleSheet_success_returnsContent() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleSheetsService.readSpreadsheet(
                 "https://docs.google.com/spreadsheets/d/abc", "user@example.com", null))
                 .thenReturn("Name\tAge\nAlice\t30");
@@ -122,7 +122,7 @@ class GoogleSheetsAgentToolTest {
 
     @Test
     void readGoogleSheet_emptySpreadsheet_returnsEmptyMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleSheetsService.readSpreadsheet(anyString(), anyString(), any())).thenReturn("");
 
         String result = tool.readGoogleSheet("https://docs.google.com/spreadsheets/d/abc");
@@ -132,7 +132,7 @@ class GoogleSheetsAgentToolTest {
 
     @Test
     void readGoogleSheet_notConnected_returnsErrorMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleSheetsService.readSpreadsheet(anyString(), anyString(), any()))
                 .thenThrow(new IllegalStateException("Google Sheets not connected"));
 
@@ -144,7 +144,7 @@ class GoogleSheetsAgentToolTest {
 
     @Test
     void readGoogleSheet_usesCurrentEmailFromThreadLocal() {
-        tool.setCurrentEmail("reader@example.com");
+        tool.setCurrentUserUuid("reader@example.com");
         when(googleSheetsService.readSpreadsheet(anyString(), eq("reader@example.com"), isNull()))
                 .thenReturn("data");
 
@@ -156,7 +156,7 @@ class GoogleSheetsAgentToolTest {
 
     @Test
     void readGoogleSheet_blankContent_returnsEmptyMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleSheetsService.readSpreadsheet(anyString(), anyString(), any())).thenReturn("   ");
 
         String result = tool.readGoogleSheet("https://docs.google.com/spreadsheets/d/abc");

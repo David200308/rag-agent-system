@@ -24,14 +24,14 @@ public class KnowledgeSourceShare {
     @JoinColumn(name = "source_id", nullable = false)
     private KnowledgeSource knowledgeSource;
 
-    @Column(name = "shared_email", nullable = false, length = 255)
-    private String sharedEmail;
+    @Column(name = "shared_uuid", nullable = false, length = 36)
+    private String sharedUuid;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
-    public KnowledgeSourceShare(KnowledgeSource knowledgeSource, String sharedEmail) {
+    public KnowledgeSourceShare(KnowledgeSource knowledgeSource, String sharedUuid) {
         this.knowledgeSource = knowledgeSource;
-        this.sharedEmail     = sharedEmail;
+        this.sharedUuid      = sharedUuid;
     }
 }

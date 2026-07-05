@@ -45,7 +45,7 @@ class GoogleCalendarServiceTest {
 
     @Test
     void isConnected_tokenPresent_returnsTrue() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.of(ConnectorToken.builder().build()));
 
         assertThat(service.isConnected("user@test.com", null)).isTrue();
@@ -53,7 +53,7 @@ class GoogleCalendarServiceTest {
 
     @Test
     void isConnected_noToken_returnsFalse() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
         assertThat(service.isConnected("user@test.com", null)).isFalse();
@@ -61,7 +61,7 @@ class GoogleCalendarServiceTest {
 
     @Test
     void isConnected_nullEmail_checksEmptyStringInRepo() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("", "google"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("", "google"))
                 .thenReturn(Optional.empty());
 
         assertThat(service.isConnected(null, null)).isFalse();
@@ -69,7 +69,7 @@ class GoogleCalendarServiceTest {
 
     @Test
     void isConnected_withOrgId_usesOrgScopedRepo() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgId("user@test.com", "google", "org-1"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgId("user@test.com", "google", "org-1"))
                 .thenReturn(Optional.of(ConnectorToken.builder().build()));
 
         assertThat(service.isConnected("user@test.com", "org-1")).isTrue();
@@ -77,7 +77,7 @@ class GoogleCalendarServiceTest {
 
     @Test
     void isConnected_withOrgId_noToken_returnsFalse() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgId("user@test.com", "google", "org-1"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgId("user@test.com", "google", "org-1"))
                 .thenReturn(Optional.empty());
 
         assertThat(service.isConnected("user@test.com", "org-1")).isFalse();
@@ -87,7 +87,7 @@ class GoogleCalendarServiceTest {
 
     @Test
     void listEvents_noToken_throwsIllegalState() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.listEvents("user@test.com", null, 10))
@@ -99,7 +99,7 @@ class GoogleCalendarServiceTest {
 
     @Test
     void createEvent_noToken_throwsIllegalState() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
@@ -114,12 +114,12 @@ class GoogleCalendarServiceTest {
     @Test
     void listEvents_nonExpiringToken_attemptsHttpCall() {
         ConnectorToken token = ConnectorToken.builder()
-                .ownerEmail("user@test.com")
+                .ownerUuid("user@test.com")
                 .provider("google")
                 .accessToken("valid-token")
                 .expiresAt(LocalDateTime.now().plusHours(1))
                 .build();
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.of(token));
 
         // RestClient not set up — service will throw when attempting the HTTP call,
@@ -131,12 +131,12 @@ class GoogleCalendarServiceTest {
     @Test
     void createEvent_nonExpiringToken_attemptsHttpCall() {
         ConnectorToken token = ConnectorToken.builder()
-                .ownerEmail("user@test.com")
+                .ownerUuid("user@test.com")
                 .provider("google")
                 .accessToken("valid-token")
                 .expiresAt(LocalDateTime.now().plusHours(1))
                 .build();
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.of(token));
 
         assertThatThrownBy(() ->

@@ -43,8 +43,8 @@ public class SkillVersion {
     @Column(nullable = false, length = 20)
     private String status = "APPROVED";
 
-    @Column(name = "created_by_email")
-    private String createdByEmail;
+    @Column(name = "created_by_uuid", length = 36)
+    private String createdByUuid;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();

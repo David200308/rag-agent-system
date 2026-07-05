@@ -22,6 +22,10 @@ public class OrgMember {
     private String orgId;
 
     @Id
+    @Column(name = "user_uuid", length = 36)
+    private String userUuid;
+
+    /** Denormalized display copy — not part of the key. */
     @Column(length = 255)
     private String email;
 
@@ -32,8 +36,9 @@ public class OrgMember {
     @Column(name = "joined_at", nullable = false, updatable = false)
     private Instant joinedAt = Instant.now();
 
-    public OrgMember(String orgId, String email, Role role) {
+    public OrgMember(String orgId, String userUuid, String email, Role role) {
         this.orgId    = orgId;
+        this.userUuid = userUuid;
         this.email    = email;
         this.role     = role;
         this.joinedAt = Instant.now();

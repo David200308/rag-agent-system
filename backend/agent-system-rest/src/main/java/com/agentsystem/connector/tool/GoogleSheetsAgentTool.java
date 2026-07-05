@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Spring AI tool: write tabular data to a new Google Sheets spreadsheet.
- * Uses the same ThreadLocal email-injection pattern as {@link GoogleDocsAgentTool}.
+ * Uses the same ThreadLocal user_uuid-injection pattern as {@link GoogleDocsAgentTool}.
  */
 @Slf4j
 @Component
@@ -20,11 +20,11 @@ public class GoogleSheetsAgentTool {
     private final GoogleSheetsService googleSheetsService;
     private final ToolCallBudget      toolCallBudget;
 
-    private static final ThreadLocal<String> CURRENT_EMAIL  = new ThreadLocal<>();
-    private static final ThreadLocal<String> CURRENT_ORG_ID = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_USER_UUID = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_ORG_ID    = new ThreadLocal<>();
 
-    public void setCurrentEmail(String email) { CURRENT_EMAIL.set(email != null ? email : ""); }
-    public void clearCurrentEmail()           { CURRENT_EMAIL.remove(); }
+    public void setCurrentUserUuid(String uuid) { CURRENT_USER_UUID.set(uuid != null ? uuid : ""); }
+    public void clearCurrentUserUuid()          { CURRENT_USER_UUID.remove(); }
 
     public void setCurrentOrgId(String orgId)  { CURRENT_ORG_ID.set(orgId); }
     public void clearCurrentOrgId()            { CURRENT_ORG_ID.remove(); }
@@ -46,10 +46,10 @@ public class GoogleSheetsAgentTool {
             """)
     public String writeToGoogleSheets(String title, String content) {
         if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
-        String email = CURRENT_EMAIL.get();
-        log.info("[GoogleSheetsAgentTool] Creating sheet '{}' for '{}'", title, email);
+        String uuid = CURRENT_USER_UUID.get();
+        log.info("[GoogleSheetsAgentTool] Creating sheet '{}' for '{}'", title, uuid);
         try {
-            String url = googleSheetsService.createSpreadsheet(title, content, email, CURRENT_ORG_ID.get());
+            String url = googleSheetsService.createSpreadsheet(title, content, uuid, CURRENT_ORG_ID.get());
             return "Spreadsheet created successfully. Open it here: " + url;
         } catch (IllegalStateException e) {
             return "Could not write to Google Sheets: " + e.getMessage();
@@ -64,10 +64,10 @@ public class GoogleSheetsAgentTool {
             """)
     public String readGoogleSheet(String sheetUrl) {
         if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;
-        String email = CURRENT_EMAIL.get();
-        log.info("[GoogleSheetsAgentTool] Reading sheet '{}' for '{}'", sheetUrl, email);
+        String uuid = CURRENT_USER_UUID.get();
+        log.info("[GoogleSheetsAgentTool] Reading sheet '{}' for '{}'", sheetUrl, uuid);
         try {
-            String content = googleSheetsService.readSpreadsheet(sheetUrl, email, CURRENT_ORG_ID.get());
+            String content = googleSheetsService.readSpreadsheet(sheetUrl, uuid, CURRENT_ORG_ID.get());
             return content.isBlank() ? "The spreadsheet appears to be empty." : content;
         } catch (IllegalStateException e) {
             return "Could not read Google Sheet: " + e.getMessage();

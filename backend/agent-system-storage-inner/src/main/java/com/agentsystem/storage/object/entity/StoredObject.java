@@ -25,8 +25,8 @@ public class StoredObject {
     @Column(name = "object_key", nullable = false, length = 512)
     private String objectKey;
 
-    @Column(name = "owner_email", nullable = false)
-    private String ownerEmail;
+    @Column(name = "owner_uuid", nullable = false, length = 36)
+    private String ownerUuid;
 
     @Column(name = "entity_type", nullable = false, length = 64)
     private String entityType;

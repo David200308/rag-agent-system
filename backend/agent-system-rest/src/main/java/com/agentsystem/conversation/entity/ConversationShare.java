@@ -28,8 +28,8 @@ public class ConversationShare {
     @Column(nullable = false, length = 36)
     private String token;
 
-    @Column(name = "owner_email", nullable = false)
-    private String ownerEmail;
+    @Column(name = "owner_uuid", nullable = false, length = 36)
+    private String ownerUuid;
 
     /** Null means the link never expires. */
     @Column(name = "expires_at")
@@ -43,23 +43,24 @@ public class ConversationShare {
     @Column(name = "access_type", nullable = false, length = 20)
     private String accessType = "EVERYONE";
 
+    /** Share-target uuids — only registered users can be resolved onto this list. */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
         name = "conversation_share_whitelist",
         joinColumns = @JoinColumn(name = "share_id")
     )
-    @Column(name = "email")
+    @Column(name = "uuid")
     private List<String> whitelist = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
     public ConversationShare(String conversationId, String token,
-                             String ownerEmail, Instant expiresAt,
+                             String ownerUuid, Instant expiresAt,
                              String shareMode, String accessType) {
         this.conversationId = conversationId;
         this.token          = token;
-        this.ownerEmail     = ownerEmail;
+        this.ownerUuid      = ownerUuid;
         this.expiresAt      = expiresAt;
         this.shareMode      = shareMode  != null ? shareMode  : "READ_ONLY";
         this.accessType     = accessType != null ? accessType : "EVERYONE";

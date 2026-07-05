@@ -38,8 +38,8 @@ class FinancialControllerTest {
     @Mock HttpServletRequest    request;
     @InjectMocks FinancialController controller;
 
-    private void stubEmail(String email) {
-        when(request.getAttribute("authenticatedEmail")).thenReturn(email);
+    private void stubUuid(String uuid) {
+        when(request.getAttribute("authenticatedUserUuid")).thenReturn(uuid);
     }
 
     private UserPreference prefWith(String currency) {
@@ -52,7 +52,7 @@ class FinancialControllerTest {
 
     @Test
     void listDeposits_returnsOk() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(prefService.getOrDefault("user@test.com")).thenReturn(prefWith("USD"));
         when(service.listDeposits("user@test.com", "USD")).thenReturn(List.of());
 
@@ -63,7 +63,7 @@ class FinancialControllerTest {
 
     @Test
     void listDeposits_defaultCurrencyFallsBackToUsd() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         UserPreference pref = new UserPreference(); // defaultCurrency is null
         when(prefService.getOrDefault("user@test.com")).thenReturn(pref);
         when(service.listDeposits("user@test.com", "USD")).thenReturn(List.of());
@@ -75,7 +75,7 @@ class FinancialControllerTest {
 
     @Test
     void createDeposit_returns201() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(service.createDeposit(eq("user@test.com"), any())).thenReturn(new CashDeposit());
 
         ResponseEntity<CashDeposit> resp = controller.createDeposit(Map.of("amount", 100), request);
@@ -85,7 +85,7 @@ class FinancialControllerTest {
 
     @Test
     void updateDeposit_success_returns200() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(service.updateDeposit(eq("dep-1"), eq("user@test.com"), any())).thenReturn(new CashDeposit());
 
         ResponseEntity<CashDeposit> resp = controller.updateDeposit("dep-1", Map.of(), request);
@@ -95,7 +95,7 @@ class FinancialControllerTest {
 
     @Test
     void updateDeposit_securityException_returns403() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(service.updateDeposit(anyString(), anyString(), any()))
                 .thenThrow(new SecurityException("not owner"));
 
@@ -106,7 +106,7 @@ class FinancialControllerTest {
 
     @Test
     void deleteDeposit_success_returns204() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         doNothing().when(service).deleteDeposit("dep-1", "user@test.com");
 
         ResponseEntity<Void> resp = controller.deleteDeposit("dep-1", request);
@@ -116,7 +116,7 @@ class FinancialControllerTest {
 
     @Test
     void deleteDeposit_securityException_returns403() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         doThrow(new SecurityException("not owner")).when(service).deleteDeposit(anyString(), anyString());
 
         ResponseEntity<Void> resp = controller.deleteDeposit("dep-1", request);
@@ -128,7 +128,7 @@ class FinancialControllerTest {
 
     @Test
     void listStocks_returnsOk() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(prefService.getOrDefault("user@test.com")).thenReturn(prefWith("HKD"));
         when(service.listStocks("user@test.com", "HKD")).thenReturn(List.of());
 
@@ -139,7 +139,7 @@ class FinancialControllerTest {
 
     @Test
     void createStock_returns201() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(service.createStock(eq("user@test.com"), any())).thenReturn(new StockInvestment());
 
         ResponseEntity<StockInvestment> resp = controller.createStock(Map.of("symbol", "AAPL"), request);
@@ -149,7 +149,7 @@ class FinancialControllerTest {
 
     @Test
     void updateStock_success_returns200() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(service.updateStock(eq("stk-1"), eq("user@test.com"), any())).thenReturn(new StockInvestment());
 
         ResponseEntity<StockInvestment> resp = controller.updateStock("stk-1", Map.of(), request);
@@ -159,7 +159,7 @@ class FinancialControllerTest {
 
     @Test
     void updateStock_securityException_returns403() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(service.updateStock(anyString(), anyString(), any()))
                 .thenThrow(new SecurityException("not owner"));
 
@@ -170,7 +170,7 @@ class FinancialControllerTest {
 
     @Test
     void deleteStock_success_returns204() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
 
         ResponseEntity<Void> resp = controller.deleteStock("stk-1", request);
 
@@ -179,7 +179,7 @@ class FinancialControllerTest {
 
     @Test
     void deleteStock_securityException_returns403() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         doThrow(new SecurityException("not owner")).when(service).deleteStock(anyString(), anyString());
 
         ResponseEntity<Void> resp = controller.deleteStock("stk-1", request);
@@ -191,7 +191,7 @@ class FinancialControllerTest {
 
     @Test
     void listCrypto_returnsOk() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(prefService.getOrDefault("user@test.com")).thenReturn(prefWith("USD"));
         when(service.listCrypto("user@test.com", "USD")).thenReturn(List.of());
 
@@ -202,7 +202,7 @@ class FinancialControllerTest {
 
     @Test
     void createCrypto_returns201() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(service.createCrypto(eq("user@test.com"), any())).thenReturn(new CryptoInvestment());
 
         ResponseEntity<CryptoInvestment> resp = controller.createCrypto(Map.of("symbol", "BTC"), request);
@@ -212,7 +212,7 @@ class FinancialControllerTest {
 
     @Test
     void updateCrypto_success_returns200() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(service.updateCrypto(eq("cry-1"), eq("user@test.com"), any())).thenReturn(new CryptoInvestment());
 
         ResponseEntity<CryptoInvestment> resp = controller.updateCrypto("cry-1", Map.of(), request);
@@ -222,7 +222,7 @@ class FinancialControllerTest {
 
     @Test
     void updateCrypto_securityException_returns403() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(service.updateCrypto(anyString(), anyString(), any()))
                 .thenThrow(new SecurityException("not owner"));
 
@@ -233,7 +233,7 @@ class FinancialControllerTest {
 
     @Test
     void deleteCrypto_success_returns204() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
 
         ResponseEntity<Void> resp = controller.deleteCrypto("cry-1", request);
 
@@ -242,7 +242,7 @@ class FinancialControllerTest {
 
     @Test
     void deleteCrypto_securityException_returns403() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         doThrow(new SecurityException("not owner")).when(service).deleteCrypto(anyString(), anyString());
 
         ResponseEntity<Void> resp = controller.deleteCrypto("cry-1", request);
@@ -254,7 +254,7 @@ class FinancialControllerTest {
 
     @Test
     void listCards_returnsOk() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(service.listCards("user@test.com")).thenReturn(List.of());
 
         ResponseEntity<List<CardDto>> resp = controller.listCards(request);
@@ -264,7 +264,7 @@ class FinancialControllerTest {
 
     @Test
     void createCard_returns201() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(service.createCard(eq("user@test.com"), any())).thenReturn(new Card());
 
         ResponseEntity<Card> resp = controller.createCard(Map.of("name", "Visa"), request);
@@ -274,7 +274,7 @@ class FinancialControllerTest {
 
     @Test
     void updateCard_success_returns200() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(service.updateCard(eq("card-1"), eq("user@test.com"), any())).thenReturn(new Card());
 
         ResponseEntity<Card> resp = controller.updateCard("card-1", Map.of(), request);
@@ -284,7 +284,7 @@ class FinancialControllerTest {
 
     @Test
     void updateCard_securityException_returns403() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         when(service.updateCard(anyString(), anyString(), any()))
                 .thenThrow(new SecurityException("not owner"));
 
@@ -295,7 +295,7 @@ class FinancialControllerTest {
 
     @Test
     void deleteCard_success_returns204() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
 
         ResponseEntity<Void> resp = controller.deleteCard("card-1", request);
 
@@ -304,7 +304,7 @@ class FinancialControllerTest {
 
     @Test
     void deleteCard_securityException_returns403() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         doThrow(new SecurityException("not owner")).when(service).deleteCard(anyString(), anyString());
 
         ResponseEntity<Void> resp = controller.deleteCard("card-1", request);
@@ -316,7 +316,7 @@ class FinancialControllerTest {
 
     @Test
     void listSalary_returnsOk() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         SalaryUsageRecordDto dto = new SalaryUsageRecordDto(
                 "s-1", "user@test.com", 2025, 6, "HK", "HKD",
                 null, null, null, null, null, null, null, null, null, null, null);
@@ -330,10 +330,10 @@ class FinancialControllerTest {
 
     @Test
     void createSalary_returns201() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         SalaryUsageRecord record = new SalaryUsageRecord();
         record.setId("s-2");
-        record.setOwnerEmail("user@test.com");
+        record.setOwnerUuid("user@test.com");
         when(service.createSalary(eq("user@test.com"), any())).thenReturn(record);
 
         ResponseEntity<SalaryUsageRecord> resp = controller.createSalary(Map.of("year", 2025), request);
@@ -344,7 +344,7 @@ class FinancialControllerTest {
 
     @Test
     void updateSalary_ownerMatch_returns200() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         SalaryUsageRecord updated = new SalaryUsageRecord();
         updated.setId("s-1");
         when(service.updateSalary(eq("s-1"), eq("user@test.com"), any())).thenReturn(updated);
@@ -356,7 +356,7 @@ class FinancialControllerTest {
 
     @Test
     void updateSalary_wrongOwner_returns403() {
-        stubEmail("other@test.com");
+        stubUuid("other@test.com");
         when(service.updateSalary(eq("s-1"), eq("other@test.com"), any()))
                 .thenThrow(new SecurityException("not owner"));
 
@@ -367,7 +367,7 @@ class FinancialControllerTest {
 
     @Test
     void deleteSalary_ownerMatch_returns204() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
 
         ResponseEntity<Void> resp = controller.deleteSalary("s-1", request);
 
@@ -377,7 +377,7 @@ class FinancialControllerTest {
 
     @Test
     void deleteSalary_wrongOwner_returns403() {
-        stubEmail("other@test.com");
+        stubUuid("other@test.com");
         doThrow(new SecurityException("not owner")).when(service).deleteSalary("s-1", "other@test.com");
 
         ResponseEntity<Void> resp = controller.deleteSalary("s-1", request);
@@ -389,7 +389,7 @@ class FinancialControllerTest {
 
     @Test
     void refreshPrices_returnsOkWithStatus() {
-        stubEmail("user@test.com");
+        stubUuid("user@test.com");
         doNothing().when(service).refreshPrices("user@test.com");
 
         ResponseEntity<Map<String, String>> resp = controller.refreshPrices(request);
@@ -399,8 +399,8 @@ class FinancialControllerTest {
     }
 
     @Test
-    void email_noAttribute_usesAnonymous() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn(null);
+    void ownerUuid_noAttribute_usesAnonymous() {
+        when(request.getAttribute("authenticatedUserUuid")).thenReturn(null);
         when(prefService.getOrDefault("anonymous")).thenReturn(prefWith("USD"));
         when(service.listDeposits("anonymous", "USD")).thenReturn(List.of());
 

@@ -50,28 +50,28 @@ public class FinancialServiceImpl implements FinancialService {
 
     @Transactional(readOnly = true)
     @Override
-    public List<CashDepositDto> listDeposits(String ownerEmail, String defaultCurrency) {
-        return depositRepo.findByOwnerEmailOrderByCreatedAtDesc(ownerEmail).stream()
+    public List<CashDepositDto> listDeposits(String ownerUuid, String defaultCurrency) {
+        return depositRepo.findByOwnerUuidOrderByCreatedAtDesc(ownerUuid).stream()
                 .map(d -> toDto(d, defaultCurrency))
                 .collect(Collectors.toList());
     }
 
     @Override
     @Transactional
-    public CashDeposit createDeposit(String ownerEmail, Map<String, Object> body) {
+    public CashDeposit createDeposit(String ownerUuid, Map<String, Object> body) {
         CashDeposit d = new CashDeposit();
         d.setId(UUID.randomUUID().toString());
-        d.setOwnerEmail(ownerEmail);
+        d.setOwnerUuid(ownerUuid);
         applyDepositFields(d, body);
         return depositRepo.save(d);
     }
 
     @Override
     @Transactional
-    public CashDeposit updateDeposit(String id, String ownerEmail, Map<String, Object> body) {
+    public CashDeposit updateDeposit(String id, String ownerUuid, Map<String, Object> body) {
         CashDeposit d = depositRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Not found"));
-        checkOwner(d.getOwnerEmail(), ownerEmail);
+        checkOwner(d.getOwnerUuid(), ownerUuid);
         applyDepositFields(d, body);
         d.setUpdatedAt(Instant.now());
         return depositRepo.save(d);
@@ -79,9 +79,9 @@ public class FinancialServiceImpl implements FinancialService {
 
     @Override
     @Transactional
-    public void deleteDeposit(String id, String ownerEmail) {
+    public void deleteDeposit(String id, String ownerUuid) {
         depositRepo.findById(id).ifPresent(d -> {
-            checkOwner(d.getOwnerEmail(), ownerEmail);
+            checkOwner(d.getOwnerUuid(), ownerUuid);
             depositRepo.delete(d);
         });
     }
@@ -98,7 +98,7 @@ public class FinancialServiceImpl implements FinancialService {
     private CashDepositDto toDto(CashDeposit d, String toCurrency) {
         double converted = fxService.convert(d.getAmount().doubleValue(), d.getCurrency(), toCurrency);
         return new CashDepositDto(
-                d.getId(), d.getOwnerEmail(), d.getPlatform(), d.getPlatformType(),
+                d.getId(), d.getOwnerUuid(), d.getPlatform(), d.getPlatformType(),
                 d.getCountryRegion(), d.getDepositType(), d.getCurrency(), d.getAmount(),
                 bd(converted), toCurrency, d.getCreatedAt(), d.getUpdatedAt()
         );
@@ -108,8 +108,8 @@ public class FinancialServiceImpl implements FinancialService {
 
     @Transactional(readOnly = true)
     @Override
-    public List<StockInvestmentDto> listStocks(String ownerEmail, String defaultCurrency) {
-        List<StockInvestment> stocks = stockRepo.findByOwnerEmailOrderByCreatedAtDesc(ownerEmail);
+    public List<StockInvestmentDto> listStocks(String ownerUuid, String defaultCurrency) {
+        List<StockInvestment> stocks = stockRepo.findByOwnerUuidOrderByCreatedAtDesc(ownerUuid);
 
         // Auto-refresh prices if stale
         if (!stocks.isEmpty() && priceService.isStockStale()) {
@@ -123,20 +123,20 @@ public class FinancialServiceImpl implements FinancialService {
 
     @Override
     @Transactional
-    public StockInvestment createStock(String ownerEmail, Map<String, Object> body) {
+    public StockInvestment createStock(String ownerUuid, Map<String, Object> body) {
         StockInvestment s = new StockInvestment();
         s.setId(UUID.randomUUID().toString());
-        s.setOwnerEmail(ownerEmail);
+        s.setOwnerUuid(ownerUuid);
         applyStockFields(s, body);
         return stockRepo.save(s);
     }
 
     @Override
     @Transactional
-    public StockInvestment updateStock(String id, String ownerEmail, Map<String, Object> body) {
+    public StockInvestment updateStock(String id, String ownerUuid, Map<String, Object> body) {
         StockInvestment s = stockRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Not found"));
-        checkOwner(s.getOwnerEmail(), ownerEmail);
+        checkOwner(s.getOwnerUuid(), ownerUuid);
         applyStockFields(s, body);
         s.setUpdatedAt(Instant.now());
         return stockRepo.save(s);
@@ -144,9 +144,9 @@ public class FinancialServiceImpl implements FinancialService {
 
     @Override
     @Transactional
-    public void deleteStock(String id, String ownerEmail) {
+    public void deleteStock(String id, String ownerUuid) {
         stockRepo.findById(id).ifPresent(s -> {
-            checkOwner(s.getOwnerEmail(), ownerEmail);
+            checkOwner(s.getOwnerUuid(), ownerUuid);
             stockRepo.delete(s);
         });
     }
@@ -185,7 +185,7 @@ public class FinancialServiceImpl implements FinancialService {
         }
 
         return new StockInvestmentDto(
-                s.getId(), s.getOwnerEmail(), s.getBroker(), s.getStockType(),
+                s.getId(), s.getOwnerUuid(), s.getBroker(), s.getStockType(),
                 s.getSymbol(), s.getName(), s.getStockAmount(), s.getInvestAmount(),
                 s.getCurrency(), s.getFee(),
                 currentPrice, priceCurrency, currentValue,
@@ -198,8 +198,8 @@ public class FinancialServiceImpl implements FinancialService {
 
     @Transactional(readOnly = true)
     @Override
-    public List<CryptoInvestmentDto> listCrypto(String ownerEmail, String defaultCurrency) {
-        List<CryptoInvestment> list = cryptoRepo.findByOwnerEmailOrderByCreatedAtDesc(ownerEmail);
+    public List<CryptoInvestmentDto> listCrypto(String ownerUuid, String defaultCurrency) {
+        List<CryptoInvestment> list = cryptoRepo.findByOwnerUuidOrderByCreatedAtDesc(ownerUuid);
 
         if (!list.isEmpty() && priceService.isCryptoStale()) {
             List<String> symbols = list.stream()
@@ -212,20 +212,20 @@ public class FinancialServiceImpl implements FinancialService {
 
     @Override
     @Transactional
-    public CryptoInvestment createCrypto(String ownerEmail, Map<String, Object> body) {
+    public CryptoInvestment createCrypto(String ownerUuid, Map<String, Object> body) {
         CryptoInvestment c = new CryptoInvestment();
         c.setId(UUID.randomUUID().toString());
-        c.setOwnerEmail(ownerEmail);
+        c.setOwnerUuid(ownerUuid);
         applyCryptoFields(c, body);
         return cryptoRepo.save(c);
     }
 
     @Override
     @Transactional
-    public CryptoInvestment updateCrypto(String id, String ownerEmail, Map<String, Object> body) {
+    public CryptoInvestment updateCrypto(String id, String ownerUuid, Map<String, Object> body) {
         CryptoInvestment c = cryptoRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Not found"));
-        checkOwner(c.getOwnerEmail(), ownerEmail);
+        checkOwner(c.getOwnerUuid(), ownerUuid);
         applyCryptoFields(c, body);
         c.setUpdatedAt(Instant.now());
         return cryptoRepo.save(c);
@@ -233,9 +233,9 @@ public class FinancialServiceImpl implements FinancialService {
 
     @Override
     @Transactional
-    public void deleteCrypto(String id, String ownerEmail) {
+    public void deleteCrypto(String id, String ownerUuid) {
         cryptoRepo.findById(id).ifPresent(c -> {
-            checkOwner(c.getOwnerEmail(), ownerEmail);
+            checkOwner(c.getOwnerUuid(), ownerUuid);
             cryptoRepo.delete(c);
         });
     }
@@ -270,7 +270,7 @@ public class FinancialServiceImpl implements FinancialService {
         }
 
         return new CryptoInvestmentDto(
-                c.getId(), c.getOwnerEmail(), c.getName(), c.getSymbol(),
+                c.getId(), c.getOwnerUuid(), c.getName(), c.getSymbol(),
                 c.getAmount(), c.getInvestAmount(), c.getCurrency(),
                 currentPrice, currentValue,
                 bd(convertedInvest), convertedCurrentValue, toCurrency,
@@ -282,27 +282,27 @@ public class FinancialServiceImpl implements FinancialService {
 
     @Transactional(readOnly = true)
     @Override
-    public List<CardDto> listCards(String ownerEmail) {
-        return cardRepo.findByOwnerEmailOrderByCreatedAtDesc(ownerEmail)
+    public List<CardDto> listCards(String ownerUuid) {
+        return cardRepo.findByOwnerUuidOrderByCreatedAtDesc(ownerUuid)
                 .stream().map(this::toDto).collect(Collectors.toList());
     }
 
     @Override
     @Transactional
-    public Card createCard(String ownerEmail, Map<String, Object> body) {
+    public Card createCard(String ownerUuid, Map<String, Object> body) {
         Card c = new Card();
         c.setId(UUID.randomUUID().toString());
-        c.setOwnerEmail(ownerEmail);
+        c.setOwnerUuid(ownerUuid);
         applyCardFields(c, body);
         return cardRepo.save(c);
     }
 
     @Override
     @Transactional
-    public Card updateCard(String id, String ownerEmail, Map<String, Object> body) {
+    public Card updateCard(String id, String ownerUuid, Map<String, Object> body) {
         Card c = cardRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Not found"));
-        checkOwner(c.getOwnerEmail(), ownerEmail);
+        checkOwner(c.getOwnerUuid(), ownerUuid);
         applyCardFields(c, body);
         c.setUpdatedAt(Instant.now());
         return cardRepo.save(c);
@@ -310,9 +310,9 @@ public class FinancialServiceImpl implements FinancialService {
 
     @Override
     @Transactional
-    public void deleteCard(String id, String ownerEmail) {
+    public void deleteCard(String id, String ownerUuid) {
         cardRepo.findById(id).ifPresent(c -> {
-            checkOwner(c.getOwnerEmail(), ownerEmail);
+            checkOwner(c.getOwnerUuid(), ownerUuid);
             cardRepo.delete(c);
         });
     }
@@ -344,7 +344,7 @@ public class FinancialServiceImpl implements FinancialService {
                 ? List.of()
                 : Arrays.asList(c.getTypes().split(","));
         return new CardDto(
-                c.getId(), c.getOwnerEmail(), c.getBank(), c.getCountryRegion(), types,
+                c.getId(), c.getOwnerUuid(), c.getBank(), c.getCountryRegion(), types,
                 c.getCardName(), c.getNetwork(), c.getExpireDate(),
                 c.getCreditLimit(), c.getCreditLimitCurrency(), c.getSharedCredit(),
                 c.getCreatedAt(), c.getUpdatedAt()
@@ -355,27 +355,27 @@ public class FinancialServiceImpl implements FinancialService {
 
     @Transactional(readOnly = true)
     @Override
-    public List<SalaryUsageRecordDto> listSalary(String ownerEmail) {
-        return salaryRepo.findByOwnerEmailOrderByYearDescMonthDesc(ownerEmail)
+    public List<SalaryUsageRecordDto> listSalary(String ownerUuid) {
+        return salaryRepo.findByOwnerUuidOrderByYearDescMonthDesc(ownerUuid)
                 .stream().map(this::toDto).collect(Collectors.toList());
     }
 
     @Override
     @Transactional
-    public SalaryUsageRecord createSalary(String ownerEmail, Map<String, Object> body) {
+    public SalaryUsageRecord createSalary(String ownerUuid, Map<String, Object> body) {
         SalaryUsageRecord r = new SalaryUsageRecord();
         r.setId(UUID.randomUUID().toString());
-        r.setOwnerEmail(ownerEmail);
+        r.setOwnerUuid(ownerUuid);
         applySalaryFields(r, body);
         return salaryRepo.save(r);
     }
 
     @Override
     @Transactional
-    public SalaryUsageRecord updateSalary(String id, String ownerEmail, Map<String, Object> body) {
+    public SalaryUsageRecord updateSalary(String id, String ownerUuid, Map<String, Object> body) {
         SalaryUsageRecord r = salaryRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Not found"));
-        checkOwner(r.getOwnerEmail(), ownerEmail);
+        checkOwner(r.getOwnerUuid(), ownerUuid);
         applySalaryFields(r, body);
         r.setUpdatedAt(Instant.now());
         return salaryRepo.save(r);
@@ -383,9 +383,9 @@ public class FinancialServiceImpl implements FinancialService {
 
     @Override
     @Transactional
-    public void deleteSalary(String id, String ownerEmail) {
+    public void deleteSalary(String id, String ownerUuid) {
         salaryRepo.findById(id).ifPresent(r -> {
-            checkOwner(r.getOwnerEmail(), ownerEmail);
+            checkOwner(r.getOwnerUuid(), ownerUuid);
             salaryRepo.delete(r);
         });
     }
@@ -408,7 +408,7 @@ public class FinancialServiceImpl implements FinancialService {
 
     private SalaryUsageRecordDto toDto(SalaryUsageRecord r) {
         return new SalaryUsageRecordDto(
-                r.getId(), r.getOwnerEmail(), r.getYear(), r.getMonth(),
+                r.getId(), r.getOwnerUuid(), r.getYear(), r.getMonth(),
                 r.getRegion(), r.getCurrency(), r.getSalary(), r.getBonus(),
                 r.getRetirementSavingEmployee(), r.getRetirementSavingEmployer(), r.getTax(),
                 r.getHouseRent(), r.getLivingExpense(), r.getOtherExpense(), r.getTotalExpense(),
@@ -419,10 +419,10 @@ public class FinancialServiceImpl implements FinancialService {
     // ── Price refresh (on-demand) ─────────────────────────────────────────────
 
     @Override
-    public void refreshPrices(String ownerEmail) {
-        List<String> stockSymbols = stockRepo.findByOwnerEmailOrderByCreatedAtDesc(ownerEmail)
+    public void refreshPrices(String ownerUuid) {
+        List<String> stockSymbols = stockRepo.findByOwnerUuidOrderByCreatedAtDesc(ownerUuid)
                 .stream().map(StockInvestment::getSymbol).distinct().collect(Collectors.toList());
-        List<String> cryptoSymbols = cryptoRepo.findByOwnerEmailOrderByCreatedAtDesc(ownerEmail)
+        List<String> cryptoSymbols = cryptoRepo.findByOwnerUuidOrderByCreatedAtDesc(ownerUuid)
                 .stream().map(CryptoInvestment::getSymbol).distinct().collect(Collectors.toList());
 
         if (!stockSymbols.isEmpty())  priceService.refreshStockPrices(stockSymbols);
@@ -443,9 +443,9 @@ public class FinancialServiceImpl implements FinancialService {
         return Integer.parseInt(v.toString());
     }
 
-    private void checkOwner(String recordEmail, String callerEmail) {
-        if (recordEmail != null && callerEmail != null
-                && !recordEmail.equalsIgnoreCase(callerEmail)) {
+    private void checkOwner(String recordUuid, String callerUuid) {
+        if (recordUuid != null && callerUuid != null
+                && !recordUuid.equals(callerUuid)) {
             throw new SecurityException("Only the owner can modify this record.");
         }
     }

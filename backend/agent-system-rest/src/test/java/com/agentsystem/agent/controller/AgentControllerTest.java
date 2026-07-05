@@ -63,7 +63,7 @@ class AgentControllerTest {
 
     @Test
     void listConversations_withEmail_returnsConversations() {
-        stubRequest("user@example.com");
+        stubRequest("test-uuid");
         Conversation conv = new Conversation();
         when(conversationService.listConversations(any(OrgContext.class))).thenReturn(List.of(conv));
 
@@ -76,7 +76,7 @@ class AgentControllerTest {
     @Test
     void listConversations_noEmail_returns401() {
         when(request.getAttribute("authenticatedEmail")).thenReturn(null);
-        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
+        when(request.getAttribute("authenticatedUserUuid")).thenReturn(null);
 
         ResponseEntity<List<Conversation>> resp = controller.listConversations(request);
 
@@ -88,7 +88,7 @@ class AgentControllerTest {
     @Test
     void listArchivedConversations_noEmail_returns401() {
         when(request.getAttribute("authenticatedEmail")).thenReturn(null);
-        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
+        when(request.getAttribute("authenticatedUserUuid")).thenReturn(null);
 
         ResponseEntity<List<Conversation>> resp = controller.listArchivedConversations(request);
 
@@ -97,7 +97,7 @@ class AgentControllerTest {
 
     @Test
     void listArchivedConversations_withEmail_returns200() {
-        stubRequest("user@example.com");
+        stubRequest("test-uuid");
         when(conversationService.listArchivedConversations(any(OrgContext.class))).thenReturn(List.of());
 
         ResponseEntity<List<Conversation>> resp = controller.listArchivedConversations(request);
@@ -130,12 +130,12 @@ class AgentControllerTest {
 
     @Test
     void setConversationModel_success_returns200() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("owner@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         Conversation conv = new Conversation();
         conv.setId("conv-1");
         conv.setSelectedModel("gpt-4");
-        when(conversationService.setConversationModel("conv-1", "owner@example.com", "gpt-4"))
+        when(conversationService.setConversationModel("conv-1", "test-uuid", "gpt-4"))
                 .thenReturn(conv);
 
         var resp = controller.setConversationModel("conv-1", Map.of("selectedModel", "gpt-4"), request);
@@ -146,7 +146,7 @@ class AgentControllerTest {
 
     @Test
     void setConversationModel_notOwner_returns403() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("other@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(conversationService.setConversationModel(anyString(), anyString(), any()))
                 .thenThrow(new SecurityException("not owner"));
@@ -158,7 +158,7 @@ class AgentControllerTest {
 
     @Test
     void setConversationModel_notFound_returns404() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(conversationService.setConversationModel(anyString(), anyString(), any()))
                 .thenThrow(new IllegalArgumentException("not found"));
@@ -172,7 +172,7 @@ class AgentControllerTest {
 
     @Test
     void archiveConversation_success_returns204() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("owner@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
 
         ResponseEntity<Void> resp = controller.archiveConversation("conv-1", request);
@@ -182,10 +182,10 @@ class AgentControllerTest {
 
     @Test
     void archiveConversation_notOwner_returns403() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("other@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         doThrow(new SecurityException("not owner"))
-                .when(conversationService).setArchived("conv-1", "other@example.com", true);
+                .when(conversationService).setArchived("conv-1", "test-uuid", true);
 
         ResponseEntity<Void> resp = controller.archiveConversation("conv-1", request);
 
@@ -194,7 +194,7 @@ class AgentControllerTest {
 
     @Test
     void archiveConversation_notFound_returns404() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         doThrow(new IllegalArgumentException("not found"))
                 .when(conversationService).setArchived(anyString(), anyString(), anyBoolean());
@@ -208,7 +208,7 @@ class AgentControllerTest {
 
     @Test
     void unarchiveConversation_success_returns204() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("owner@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
 
         ResponseEntity<Void> resp = controller.unarchiveConversation("conv-1", request);
@@ -218,10 +218,10 @@ class AgentControllerTest {
 
     @Test
     void unarchiveConversation_notOwner_returns403() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("other@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         doThrow(new SecurityException("not owner"))
-                .when(conversationService).setArchived("conv-1", "other@example.com", false);
+                .when(conversationService).setArchived("conv-1", "test-uuid", false);
 
         ResponseEntity<Void> resp = controller.unarchiveConversation("conv-1", request);
 
@@ -232,7 +232,7 @@ class AgentControllerTest {
 
     @Test
     void deleteConversation_success_returns204() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("owner@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
 
         ResponseEntity<Void> resp = controller.deleteConversation("conv-1", request);
@@ -242,10 +242,10 @@ class AgentControllerTest {
 
     @Test
     void deleteConversation_notOwner_returns403() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("other@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         doThrow(new SecurityException("not owner"))
-                .when(conversationService).deleteConversation("conv-1", "other@example.com");
+                .when(conversationService).deleteConversation("conv-1", "test-uuid");
 
         ResponseEntity<Void> resp = controller.deleteConversation("conv-1", request);
 
@@ -256,10 +256,10 @@ class AgentControllerTest {
 
     @Test
     void createShare_success_returns200() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("owner@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         ConversationShare share = new ConversationShare("conv-1", "tok-abc",
-                "owner@example.com", null, "READ_ONLY", "EVERYONE");
+                "test-uuid", null, "READ_ONLY", "EVERYONE");
         when(conversationService.createShare(anyString(), anyString(), any(), anyString(), anyString(), any()))
                 .thenReturn(share);
 
@@ -271,7 +271,7 @@ class AgentControllerTest {
 
     @Test
     void createShare_notOwner_returns403() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("other@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(conversationService.createShare(anyString(), anyString(), any(), anyString(), anyString(), any()))
                 .thenThrow(new SecurityException("not owner"));
@@ -283,7 +283,7 @@ class AgentControllerTest {
 
     @Test
     void createShare_badRequest_returns400() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("owner@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(conversationService.createShare(anyString(), anyString(), any(), anyString(), anyString(), any()))
                 .thenThrow(new IllegalArgumentException("bad whitelist"));
@@ -297,11 +297,11 @@ class AgentControllerTest {
 
     @Test
     void getShare_found_returns200() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("owner@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         ConversationShare share = new ConversationShare("conv-1", "tok-abc",
-                "owner@example.com", null, "READ_ONLY", "EVERYONE");
-        when(conversationService.getShare("conv-1", "owner@example.com")).thenReturn(share);
+                "test-uuid", null, "READ_ONLY", "EVERYONE");
+        when(conversationService.getShare("conv-1", "test-uuid")).thenReturn(share);
 
         var resp = controller.getShare("conv-1", request);
 
@@ -310,7 +310,7 @@ class AgentControllerTest {
 
     @Test
     void getShare_notFound_returns404() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         when(conversationService.getShare(anyString(), anyString()))
                 .thenThrow(new IllegalArgumentException("no share"));
@@ -324,7 +324,7 @@ class AgentControllerTest {
 
     @Test
     void revokeShare_success_returns204() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("owner@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
 
         ResponseEntity<Void> resp = controller.revokeShare("conv-1", request);
@@ -334,10 +334,10 @@ class AgentControllerTest {
 
     @Test
     void revokeShare_notOwner_returns403() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("other@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         doThrow(new SecurityException("not owner"))
-                .when(conversationService).revokeShare("conv-1", "other@example.com");
+                .when(conversationService).revokeShare("conv-1", "test-uuid");
 
         ResponseEntity<Void> resp = controller.revokeShare("conv-1", request);
 
@@ -346,7 +346,7 @@ class AgentControllerTest {
 
     @Test
     void revokeShare_notFound_returns404() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
+        lenient().when(request.getAttribute("authenticatedEmail")).thenReturn("test-uuid");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         doThrow(new IllegalArgumentException("no share"))
                 .when(conversationService).revokeShare(anyString(), anyString());
@@ -431,10 +431,9 @@ class AgentControllerTest {
 
     @Test
     void shareKnowledge_success_returns200() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("owner@example.com");
-        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
+        stubRequest("owner@example.com");
         KnowledgeSource ks = new KnowledgeSource("doc.pdf", "doc.pdf", null, 10, "owner@example.com");
-        when(knowledgeSourceService.updateSharing(anyString(), any(), anyString())).thenReturn(ks);
+        when(knowledgeSourceService.updateSharing(anyString(), any(), any(OrgContext.class))).thenReturn(ks);
 
         var resp = controller.shareKnowledge(
                 Map.of("source", "doc.pdf", "emails", List.of("friend@example.com")), request);
@@ -445,9 +444,8 @@ class AgentControllerTest {
 
     @Test
     void shareKnowledge_notOwner_returns403() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("other@example.com");
-        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
-        when(knowledgeSourceService.updateSharing(anyString(), any(), anyString()))
+        stubRequest("other@example.com");
+        when(knowledgeSourceService.updateSharing(anyString(), any(), any(OrgContext.class)))
                 .thenThrow(new SecurityException("not owner"));
 
         var resp = controller.shareKnowledge(Map.of("source", "doc.pdf"), request);
@@ -555,7 +553,7 @@ class AgentControllerTest {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
         lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
         UrlIngestionResult result = new UrlIngestionResult("ingested", "https://example.com", "Example", 3);
-        when(mcpConnectorService.fetchAndIngest(anyString(), any(), anyString())).thenReturn(result);
+        when(mcpConnectorService.fetchAndIngest(anyString(), any(), any(OrgContext.class))).thenReturn(result);
 
         var resp = controller.ingestUrl(Map.of("url", "https://example.com"), request);
 
@@ -709,7 +707,7 @@ class AgentControllerTest {
                 controller.ingest(file, null, null, false, request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
-        verify(knowledgeSourceService).upsert(eq("document.pdf"), eq("document.pdf"), isNull(), eq(3), any(), any());
+        verify(knowledgeSourceService).upsert(eq("document.pdf"), eq("document.pdf"), isNull(), eq(3), any(OrgContext.class));
     }
 
     // ── ingestText ────────────────────────────────────────────────────────────
@@ -745,7 +743,7 @@ class AgentControllerTest {
     void ingestUrl_validUrl_returns200() {
         stubRequest("user@test.com");
         UrlIngestionResult result = new UrlIngestionResult("ok", "https://example.com", "Example Title", 5);
-        when(mcpConnectorService.fetchAndIngest("https://example.com", null, "user@test.com")).thenReturn(result);
+        when(mcpConnectorService.fetchAndIngest(eq("https://example.com"), isNull(), any(OrgContext.class))).thenReturn(result);
 
         ResponseEntity<UrlIngestionResult> resp = controller.ingestUrl(
                 Map.of("url", "https://example.com"), request);

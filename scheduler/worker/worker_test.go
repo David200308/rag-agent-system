@@ -11,7 +11,7 @@ import (
 func TestNewTriggerTask_TypeAndPayload(t *testing.T) {
 	p := TriggerPayload{
 		ScheduleID:       "sched-1",
-		UserEmail:        "user@test.com",
+		UserUuid:        "user-uuid-1",
 		ConversationID:   "conv-1",
 		Message:          "daily report",
 		TopK:             5,
@@ -35,8 +35,8 @@ func TestNewTriggerTask_TypeAndPayload(t *testing.T) {
 	if decoded.ScheduleID != p.ScheduleID {
 		t.Errorf("ScheduleID = %q, want %q", decoded.ScheduleID, p.ScheduleID)
 	}
-	if decoded.UserEmail != p.UserEmail {
-		t.Errorf("UserEmail = %q, want %q", decoded.UserEmail, p.UserEmail)
+	if decoded.UserUuid != p.UserUuid {
+		t.Errorf("UserUuid = %q, want %q", decoded.UserUuid, p.UserUuid)
 	}
 	if decoded.TopK != p.TopK {
 		t.Errorf("TopK = %d, want %d", decoded.TopK, p.TopK)
@@ -49,7 +49,7 @@ func TestNewTriggerTask_TypeAndPayload(t *testing.T) {
 func TestNewTriggerTask_WorkflowPayload(t *testing.T) {
 	p := TriggerPayload{
 		ScheduleID:    "sched-2",
-		UserEmail:     "user@test.com",
+		UserUuid:     "user-uuid-1",
 		WorkflowID:    "wf-42",
 		WorkflowInput: `{"key":"value"}`,
 	}
@@ -80,7 +80,7 @@ func TestCallChatBackend_SendsIdempotencyKeyHeader(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := TriggerPayload{ScheduleID: "sched-1", UserEmail: "user@test.com", Message: "hi"}
+	p := TriggerPayload{ScheduleID: "sched-1", UserUuid: "user-uuid-1", Message: "hi"}
 	if err := callChatBackend(context.Background(), server.URL, "service-key", "run-abc-123", p); err != nil {
 		t.Fatalf("callChatBackend error: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestCallWorkflowBackend_SendsIdempotencyKeyHeader(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := TriggerPayload{ScheduleID: "sched-2", UserEmail: "user@test.com", WorkflowID: "wf-1"}
+	p := TriggerPayload{ScheduleID: "sched-2", UserUuid: "user-uuid-1", WorkflowID: "wf-1"}
 	if err := callWorkflowBackend(context.Background(), server.URL, "service-key", "run-xyz-789", p); err != nil {
 		t.Fatalf("callWorkflowBackend error: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestCallChatBackend_DifferentRunIDsProduceDifferentHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := TriggerPayload{ScheduleID: "sched-1", UserEmail: "user@test.com", Message: "hi"}
+	p := TriggerPayload{ScheduleID: "sched-1", UserUuid: "user-uuid-1", Message: "hi"}
 	_ = callChatBackend(context.Background(), server.URL, "key", "run-1", p)
 	_ = callChatBackend(context.Background(), server.URL, "key", "run-2", p)
 

@@ -19,8 +19,8 @@ public class CryptoInvestment {
     @Column(length = 36)
     private String id;
 
-    @Column(name = "owner_email", length = 255)
-    private String ownerEmail;
+    @Column(name = "owner_uuid", length = 36)
+    private String ownerUuid;
 
     @Column(nullable = false, length = 255)
     private String name;

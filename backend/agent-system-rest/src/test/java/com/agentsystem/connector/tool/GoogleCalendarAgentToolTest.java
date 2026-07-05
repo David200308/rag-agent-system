@@ -32,7 +32,7 @@ class GoogleCalendarAgentToolTest {
 
     @AfterEach
     void tearDown() {
-        tool.clearCurrentEmail();
+        tool.clearCurrentUserUuid();
         tool.clearCurrentOrgId();
     }
 
@@ -49,8 +49,8 @@ class GoogleCalendarAgentToolTest {
     // ── ThreadLocal management ────────────────────────────────────────────────
 
     @Test
-    void setCurrentEmail_null_setsEmptyString() {
-        tool.setCurrentEmail(null);
+    void setCurrentUserUuid_null_setsEmptyString() {
+        tool.setCurrentUserUuid(null);
         when(calendarService.listEvents(eq(""), isNull(), anyInt()))
                 .thenReturn("No events");
 
@@ -61,7 +61,7 @@ class GoogleCalendarAgentToolTest {
 
     @Test
     void setCurrentOrgId_isUsedInServiceCall() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         tool.setCurrentOrgId("org-123");
         when(calendarService.listEvents("user@example.com", "org-123", 5))
                 .thenReturn("org events");
@@ -76,7 +76,7 @@ class GoogleCalendarAgentToolTest {
 
     @Test
     void listUpcomingEvents_success_returnsEvents() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(calendarService.listEvents("user@example.com", null, 10))
                 .thenReturn("Upcoming events:\n- Meeting at 14:00");
 
@@ -87,7 +87,7 @@ class GoogleCalendarAgentToolTest {
 
     @Test
     void listUpcomingEvents_serviceThrows_returnsErrorMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(calendarService.listEvents(anyString(), any(), anyInt()))
                 .thenThrow(new IllegalStateException("Google account not connected. Visit /mcp to connect."));
 
@@ -99,7 +99,7 @@ class GoogleCalendarAgentToolTest {
 
     @Test
     void listUpcomingEvents_maxResultsClamped_doesNotExceed25() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(calendarService.listEvents("user@example.com", null, 25))
                 .thenReturn("events");
 
@@ -110,7 +110,7 @@ class GoogleCalendarAgentToolTest {
 
     @Test
     void listUpcomingEvents_maxResultsBelowMin_clampedTo1() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(calendarService.listEvents("user@example.com", null, 1))
                 .thenReturn("events");
 
@@ -123,7 +123,7 @@ class GoogleCalendarAgentToolTest {
 
     @Test
     void createCalendarEvent_success_returnsConfirmation() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(calendarService.createEvent("user@example.com", null,
                 "Team Meeting", "2025-06-10T14:00:00Z", "2025-06-10T15:00:00Z", "Agenda", "Office"))
                 .thenReturn("Event created: Team Meeting. View it at: https://calendar.google.com/event");
@@ -137,7 +137,7 @@ class GoogleCalendarAgentToolTest {
 
     @Test
     void createCalendarEvent_serviceThrows_returnsErrorMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(calendarService.createEvent(anyString(), any(), anyString(), anyString(), anyString(), any(), any()))
                 .thenThrow(new IllegalStateException("Not connected to Google Calendar"));
 

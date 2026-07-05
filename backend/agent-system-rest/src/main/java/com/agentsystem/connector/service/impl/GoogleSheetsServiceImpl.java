@@ -54,13 +54,13 @@ public class GoogleSheetsServiceImpl implements GoogleSheetsService {
      *
      * @param title      spreadsheet title
      * @param content    plain text — rows separated by {@code \n}, columns by tab or comma
-     * @param ownerEmail user whose token to use
+     * @param ownerUuid user whose token to use
      * @return the spreadsheet's browser URL
      */
     @Override
-    public String createSpreadsheet(String title, String content, String ownerEmail, String orgId) {
-        String email = ownerEmail != null ? ownerEmail : "";
-        String token = resolveAccessToken(email, orgId);
+    public String createSpreadsheet(String title, String content, String ownerUuid, String orgId) {
+        String uuid = ownerUuid != null ? ownerUuid : "";
+        String token = resolveAccessToken(uuid, orgId);
 
         // ── Step 1: create spreadsheet ───────────────────────────────────────
         CreateSheetResponse created = restClientBuilder.build()
@@ -79,7 +79,7 @@ public class GoogleSheetsServiceImpl implements GoogleSheetsService {
             throw new IllegalStateException("Sheets API returned no spreadsheetId");
         }
         String sheetId = created.spreadsheetId();
-        log.info("[GoogleSheetsService] Created sheet {} for {}", sheetId, email);
+        log.info("[GoogleSheetsService] Created sheet {} for {}", sheetId, uuid);
 
         // ── Step 2: write rows ────────────────────────────────────────────────
         if (content != null && !content.isBlank()) {
@@ -108,13 +108,13 @@ public class GoogleSheetsServiceImpl implements GoogleSheetsService {
      * Read the contents of an existing Google Sheet.
      *
      * @param sheetUrl   the browser URL or spreadsheet ID
-     * @param ownerEmail user whose token to use
+     * @param ownerUuid user whose token to use
      * @return all cell values formatted as a tab-separated table
      */
     @Override
-    public String readSpreadsheet(String sheetUrl, String ownerEmail, String orgId) {
-        String email   = ownerEmail != null ? ownerEmail : "";
-        String token   = resolveAccessToken(email, orgId);
+    public String readSpreadsheet(String sheetUrl, String ownerUuid, String orgId) {
+        String uuid   = ownerUuid != null ? ownerUuid : "";
+        String token   = resolveAccessToken(uuid, orgId);
         String sheetId = extractSheetId(sheetUrl);
 
         // Fetch sheet metadata to discover sheet names
@@ -167,9 +167,9 @@ public class GoogleSheetsServiceImpl implements GoogleSheetsService {
     }
 
     @Override
-    public boolean isConnected(String ownerEmail, String orgId) {
-        String email = ownerEmail != null ? ownerEmail : "";
-        return findToken(email, orgId).isPresent();
+    public boolean isConnected(String ownerUuid, String orgId) {
+        String uuid = ownerUuid != null ? ownerUuid : "";
+        return findToken(uuid, orgId).isPresent();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -187,18 +187,18 @@ public class GoogleSheetsServiceImpl implements GoogleSheetsService {
 
     // ── Token management (mirrors GoogleDocsService) ──────────────────────────
 
-    private String resolveAccessToken(String email, String orgId) {
-        ConnectorToken ct = findToken(email, orgId)
+    private String resolveAccessToken(String uuid, String orgId) {
+        ConnectorToken ct = findToken(uuid, orgId)
                 .orElseThrow(() -> new IllegalStateException(
                         "Google account not connected. Visit /mcp to connect."));
         if (isExpiringSoon(ct)) ct = refreshToken(ct);
         return ct.getAccessToken();
     }
 
-    private java.util.Optional<ConnectorToken> findToken(String email, String orgId) {
+    private java.util.Optional<ConnectorToken> findToken(String uuid, String orgId) {
         return orgId != null
-                ? tokenRepo.findByOwnerEmailAndProviderAndOrgId(email, "google", orgId)
-                : tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull(email, "google");
+                ? tokenRepo.findByOwnerUuidAndProviderAndOrgId(uuid, "google", orgId)
+                : tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull(uuid, "google");
     }
 
     private boolean isExpiringSoon(ConnectorToken ct) {
@@ -208,7 +208,7 @@ public class GoogleSheetsServiceImpl implements GoogleSheetsService {
 
     private ConnectorToken refreshToken(ConnectorToken ct) {
         if (ct.getRefreshToken() == null) return ct;
-        log.info("[GoogleSheetsService] Refreshing token for {}", ct.getOwnerEmail());
+        log.info("[GoogleSheetsService] Refreshing token for {}", ct.getOwnerUuid());
 
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("client_id",     props.google().clientId());

@@ -15,13 +15,13 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS conversations (
     id             VARCHAR(36)  PRIMARY KEY,          -- UUID
-    user_email     VARCHAR(255),                       -- nullable; populated when auth is enabled
+    user_uuid      VARCHAR(36),                        -- nullable; populated when auth is enabled
     archived       BOOLEAN      NOT NULL DEFAULT FALSE,
     selected_model VARCHAR(100),
     org_id         VARCHAR(100),                        -- NULL = personal mode; non-null = org-scoped (team mode)
     created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_conv_email (user_email)
+    INDEX idx_conv_user_uuid (user_uuid)
 );
 
 -- ── Knowledge source index ────────────────────────────────────────────────────
@@ -33,21 +33,21 @@ CREATE TABLE IF NOT EXISTS knowledge_sources (
     label       VARCHAR(512),                   -- human-friendly name (filename / URL title)
     category    VARCHAR(128),
     chunk_count INT          NOT NULL DEFAULT 0,
-    owner_email VARCHAR(255),                   -- uploader; NULL when auth is disabled
+    owner_uuid  VARCHAR(36),                    -- uploader; NULL when auth is disabled
     org_id      VARCHAR(100),                   -- NULL = personal mode; non-null = org-scoped (team mode)
     status      VARCHAR(20)  NOT NULL DEFAULT 'APPROVED',  -- PENDING | APPROVED | REJECTED
     ingested_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_ks_source (source),
-    INDEX idx_ks_owner  (owner_email)
+    INDEX idx_ks_owner  (owner_uuid)
 );
 
 -- Tracks which additional users a knowledge source has been shared with.
 CREATE TABLE IF NOT EXISTS knowledge_source_shares (
     id           BIGINT AUTO_INCREMENT PRIMARY KEY,
     source_id    BIGINT       NOT NULL,
-    shared_email VARCHAR(255) NOT NULL,
+    shared_uuid  VARCHAR(36)  NOT NULL,          -- only registered users can be resolved onto this list
     created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_source_email (source_id, shared_email),
+    UNIQUE KEY uq_source_uuid (source_id, shared_uuid),
     CONSTRAINT fk_kss_source FOREIGN KEY (source_id)
         REFERENCES knowledge_sources(id) ON DELETE CASCADE
 );
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS conversation_shares (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
     conversation_id VARCHAR(36)  NOT NULL,
     token           VARCHAR(36)  NOT NULL,
-    owner_email     VARCHAR(255) NOT NULL,
+    owner_uuid      VARCHAR(36)  NOT NULL,
     share_mode      VARCHAR(20)  NOT NULL DEFAULT 'READ_ONLY',  -- READ_ONLY | INTERACTIVE
     access_type     VARCHAR(20)  NOT NULL DEFAULT 'EVERYONE',   -- EVERYONE | WHITELIST
     expires_at      DATETIME,                          -- NULL = never expires
@@ -68,12 +68,12 @@ CREATE TABLE IF NOT EXISTS conversation_shares (
         REFERENCES conversations(id) ON DELETE CASCADE
 );
 
--- Whitelist of allowed emails when access_type = WHITELIST
+-- Whitelist of allowed uuids when access_type = WHITELIST
 CREATE TABLE IF NOT EXISTS conversation_share_whitelist (
     id       BIGINT AUTO_INCREMENT PRIMARY KEY,
     share_id BIGINT       NOT NULL,
-    email    VARCHAR(255) NOT NULL,
-    UNIQUE KEY uq_csw_share_email (share_id, email),
+    uuid     VARCHAR(36)  NOT NULL,            -- only registered users can be resolved onto this list
+    UNIQUE KEY uq_csw_share_uuid (share_id, uuid),
     CONSTRAINT fk_csw_share FOREIGN KEY (share_id)
         REFERENCES conversation_shares(id) ON DELETE CASCADE
 );
@@ -81,21 +81,21 @@ CREATE TABLE IF NOT EXISTS conversation_share_whitelist (
 -- ── Web-fetch domain whitelist ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS user_preferences (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
-    email            VARCHAR(255) NOT NULL,
+    user_uuid        VARCHAR(36)  NOT NULL,
     timezone         VARCHAR(64)  NOT NULL DEFAULT 'UTC',
     selected_model   VARCHAR(100),
     default_currency VARCHAR(10)  NOT NULL DEFAULT 'USD',
     updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_up_email (email)
+    UNIQUE KEY uq_up_user_uuid (user_uuid)
 );
 
 CREATE TABLE IF NOT EXISTS web_fetch_whitelist (
-    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
-    domain     VARCHAR(253) NOT NULL,
-    added_by   VARCHAR(255),
-    org_id     VARCHAR(100),                   -- NULL = personal mode; non-null = org-scoped (team mode)
-    created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_wfw_domain_user (domain, added_by)
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    domain        VARCHAR(253) NOT NULL,
+    added_by_uuid VARCHAR(36),                  -- nullable when auth is disabled
+    org_id        VARCHAR(100),                   -- NULL = personal mode; non-null = org-scoped (team mode)
+    created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_wfw_domain_user (domain, added_by_uuid)
 );
 
 CREATE TABLE IF NOT EXISTS conversation_messages (
@@ -116,14 +116,14 @@ CREATE TABLE IF NOT EXISTS workflows (
     id             VARCHAR(36)   PRIMARY KEY,
     name           VARCHAR(255)  NOT NULL,
     description    VARCHAR(1000),
-    owner_email    VARCHAR(255),
+    owner_uuid     VARCHAR(36),               -- nullable when auth is disabled
     agent_pattern  VARCHAR(20)   NOT NULL,   -- ORCHESTRATOR | TEAM
     team_exec_mode VARCHAR(20),               -- PARALLEL | SEQUENTIAL (TEAM only)
     selected_model VARCHAR(100),
     org_id         VARCHAR(100),              -- NULL = personal mode; non-null = org-scoped (team mode)
     created_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_wf_owner (owner_email)
+    INDEX idx_wf_owner (owner_uuid)
 );
 
 CREATE TABLE IF NOT EXISTS workflow_agents (
@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS workflow_agents (
 CREATE TABLE IF NOT EXISTS workflow_runs (
     id                VARCHAR(36)  PRIMARY KEY,
     workflow_id       VARCHAR(36)  NOT NULL,
-    owner_email       VARCHAR(255),
+    owner_uuid        VARCHAR(36),                          -- nullable when auth is disabled
     org_id            VARCHAR(100),                          -- NULL = personal mode; non-null = org-scoped (team mode)
     user_input        TEXT         NOT NULL,
     status            VARCHAR(20)  NOT NULL DEFAULT 'PENDING',  -- PENDING | RUNNING | DONE | FAILED
@@ -177,11 +177,11 @@ CREATE TABLE IF NOT EXISTS workflow_run_logs (
 -- in skill_versions (content lives in object storage).
 CREATE TABLE IF NOT EXISTS skills (
     id          VARCHAR(36)   PRIMARY KEY,
-    owner_email VARCHAR(255),
+    owner_uuid  VARCHAR(36),                    -- nullable when auth is disabled
     name        VARCHAR(255)  NOT NULL,
     org_id      VARCHAR(100),                   -- NULL = personal mode; non-null = org-scoped (team mode)
     created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_skill_owner (owner_email)
+    INDEX idx_skill_owner (owner_uuid)
 );
 
 -- Every upload (create or replace) is a new immutable version. "Latest" =
@@ -197,7 +197,7 @@ CREATE TABLE IF NOT EXISTS skill_versions (
     file_type        VARCHAR(16),
     size_bytes       BIGINT       NOT NULL DEFAULT 0,
     status           VARCHAR(20)  NOT NULL DEFAULT 'APPROVED',  -- PENDING | APPROVED | REJECTED
-    created_by_email VARCHAR(255),
+    created_by_uuid  VARCHAR(36),                                -- nullable when auth is disabled
     created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_skill_versions_skill (skill_id, version_number),
     CONSTRAINT fk_skill_versions_skill FOREIGN KEY (skill_id)
@@ -208,20 +208,20 @@ CREATE TABLE IF NOT EXISTS skill_versions (
 
 CREATE TABLE IF NOT EXISTS passkey_credentials (
     id             BIGINT AUTO_INCREMENT PRIMARY KEY,
-    email          VARCHAR(255) NOT NULL,
+    user_uuid      VARCHAR(36)  NOT NULL,
     credential_id  VARCHAR(512) NOT NULL UNIQUE,
     public_key_cose TEXT        NOT NULL,
     sign_count     BIGINT       NOT NULL DEFAULT 0,
     user_handle    VARCHAR(512) NOT NULL,
     created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_pk_email       (email),
+    INDEX idx_pk_user_uuid   (user_uuid),
     INDEX idx_pk_user_handle (user_handle)
 );
 
 -- ── External connector OAuth tokens ─────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS connector_tokens (
     id            BIGINT AUTO_INCREMENT PRIMARY KEY,
-    owner_email   VARCHAR(255) NOT NULL,
+    owner_uuid    VARCHAR(36)  NOT NULL,
     provider      VARCHAR(50)  NOT NULL,
     org_id        VARCHAR(100),                   -- NULL = personal mode; non-null = org-scoped (team mode)
     access_token  TEXT         NOT NULL,
@@ -231,13 +231,13 @@ CREATE TABLE IF NOT EXISTS connector_tokens (
     expires_at    DATETIME,
     created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_ct_email_provider (owner_email, provider)
+    UNIQUE KEY uq_ct_uuid_provider (owner_uuid, provider)
 );
 
 CREATE TABLE IF NOT EXISTS connector_oauth_states (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
     state       VARCHAR(64)  NOT NULL,
-    owner_email VARCHAR(255),
+    owner_uuid  VARCHAR(36),                    -- nullable when auth is disabled
     provider    VARCHAR(50)  NOT NULL,
     org_id      VARCHAR(100),                   -- NULL = personal mode; non-null = org-scoped (team mode)
     expires_at  DATETIME     NOT NULL,
@@ -270,10 +270,11 @@ CREATE TABLE IF NOT EXISTS organizations (
 
 CREATE TABLE IF NOT EXISTS org_members (
     org_id    VARCHAR(100) NOT NULL,
-    email     VARCHAR(255) NOT NULL,
+    user_uuid VARCHAR(36)  NOT NULL,
+    email     VARCHAR(255),                    -- denormalized display copy; not part of the key
     role      VARCHAR(20)  NOT NULL DEFAULT 'MEMBER',  -- OWNER | MEMBER
     joined_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (org_id, email),
+    PRIMARY KEY (org_id, user_uuid),
     CONSTRAINT fk_om_org FOREIGN KEY (org_id) REFERENCES organizations(org_id) ON DELETE CASCADE,
     INDEX idx_om_email (email)
 );
@@ -283,7 +284,8 @@ CREATE TABLE IF NOT EXISTS org_members (
 -- Used by CliSignatureFilter to verify X-Cli-Signature on every CLI request.
 CREATE TABLE IF NOT EXISTS cli_public_keys (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_email       VARCHAR(255) NOT NULL UNIQUE,
+    user_uuid        VARCHAR(36)  NOT NULL UNIQUE,
+    user_email       VARCHAR(255),                    -- denormalized display copy; not part of the key
     public_key_base64 VARCHAR(64) NOT NULL,           -- Base64-encoded raw Ed25519 public key (44 chars)
     fingerprint      VARCHAR(8)   NOT NULL,            -- first 8 chars of Base64, shown in `auth status`
     registered_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -295,7 +297,8 @@ CREATE TABLE IF NOT EXISTS cli_public_keys (
 
 CREATE TABLE IF NOT EXISTS financial_cash_deposits (
     id              VARCHAR(36)    PRIMARY KEY,
-    owner_email     VARCHAR(255)   NOT NULL,
+    owner_uuid      VARCHAR(36)    NOT NULL,
+    owner_email     VARCHAR(255),                  -- denormalized display copy; not part of the key
     platform        VARCHAR(255)   NOT NULL,
     platform_type   VARCHAR(100)   NOT NULL,
     country_region  VARCHAR(100),
@@ -304,12 +307,13 @@ CREATE TABLE IF NOT EXISTS financial_cash_deposits (
     amount          DECIMAL(19,4)  NOT NULL,
     created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_fin_dep_owner (owner_email)
+    INDEX idx_fin_dep_owner (owner_uuid)
 );
 
 CREATE TABLE IF NOT EXISTS financial_stocks (
     id              VARCHAR(36)    PRIMARY KEY,
-    owner_email     VARCHAR(255)   NOT NULL,
+    owner_uuid      VARCHAR(36)    NOT NULL,
+    owner_email     VARCHAR(255),                  -- denormalized display copy; not part of the key
     broker          VARCHAR(255)   NOT NULL,
     stock_type      VARCHAR(20)    NOT NULL,   -- US_STOCK | HK_STOCK | CN_STOCK | SG_STOCK | OTHER
     symbol          VARCHAR(20)    NOT NULL,
@@ -320,12 +324,13 @@ CREATE TABLE IF NOT EXISTS financial_stocks (
     fee             DECIMAL(19,4)  NOT NULL DEFAULT 0,
     created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_fin_stk_owner (owner_email)
+    INDEX idx_fin_stk_owner (owner_uuid)
 );
 
 CREATE TABLE IF NOT EXISTS financial_crypto (
     id              VARCHAR(36)    PRIMARY KEY,
-    owner_email     VARCHAR(255)   NOT NULL,
+    owner_uuid      VARCHAR(36)    NOT NULL,
+    owner_email     VARCHAR(255),                  -- denormalized display copy; not part of the key
     name            VARCHAR(255)   NOT NULL,
     symbol          VARCHAR(30)    NOT NULL,
     amount          DECIMAL(28,8)  NOT NULL,
@@ -333,12 +338,13 @@ CREATE TABLE IF NOT EXISTS financial_crypto (
     currency        VARCHAR(10)    NOT NULL,
     created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_fin_cry_owner (owner_email)
+    INDEX idx_fin_cry_owner (owner_uuid)
 );
 
 CREATE TABLE IF NOT EXISTS financial_cards (
     id              VARCHAR(36)    PRIMARY KEY,
-    owner_email     VARCHAR(255)   NOT NULL,
+    owner_uuid      VARCHAR(36)    NOT NULL,
+    owner_email     VARCHAR(255),                  -- denormalized display copy; not part of the key
     bank            VARCHAR(255)   NOT NULL,
     country_region  VARCHAR(100),
     types           VARCHAR(50)    NOT NULL,   -- comma-separated: Credit,Debit,ATM
@@ -350,12 +356,13 @@ CREATE TABLE IF NOT EXISTS financial_cards (
     shared_credit            TINYINT(1),    -- NULL=unknown, 1=shared pool, 0=dedicated
     created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_fin_card_owner (owner_email)
+    INDEX idx_fin_card_owner (owner_uuid)
 );
 
 CREATE TABLE IF NOT EXISTS salary_usage_records (
     id                           VARCHAR(36)   PRIMARY KEY,
-    owner_email                  VARCHAR(255)  NOT NULL,
+    owner_uuid                   VARCHAR(36)   NOT NULL,
+    owner_email                  VARCHAR(255),               -- denormalized display copy; not part of the key
     year                         INT           NOT NULL,
     month                        INT           NOT NULL,
     region                       VARCHAR(100)  NOT NULL,
@@ -371,15 +378,16 @@ CREATE TABLE IF NOT EXISTS salary_usage_records (
     total_expense                DECIMAL(19,2) NOT NULL DEFAULT 0,
     created_at                   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at                   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_sal_owner (owner_email),
-    UNIQUE KEY uq_sal_owner_ym (owner_email, year, month)
+    INDEX idx_sal_owner (owner_uuid),
+    UNIQUE KEY uq_sal_owner_ym (owner_uuid, year, month)
 );
 
 -- ── Travel records ────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS travel_records (
     id            VARCHAR(36)   PRIMARY KEY,
-    owner_email   VARCHAR(255)  NOT NULL,
+    owner_uuid    VARCHAR(36)   NOT NULL,
+    owner_email   VARCHAR(255),               -- denormalized display copy; not part of the key
     title         VARCHAR(255)  NOT NULL,
     start_date    VARCHAR(10)   NOT NULL,   -- YYYY-MM-DD
     end_date      VARCHAR(10)   NOT NULL,   -- YYYY-MM-DD
@@ -388,7 +396,7 @@ CREATE TABLE IF NOT EXISTS travel_records (
     notes         TEXT,
     created_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_travel_owner (owner_email)
+    INDEX idx_travel_owner (owner_uuid)
 );
 
 -- ── Scheduled messages (managed by Go scheduler service via Asynq + Redis) ────
@@ -397,7 +405,8 @@ CREATE TABLE IF NOT EXISTS scheduled_messages (
     conversation_id    VARCHAR(36)  NULL,                  -- NULL when workflow_id is set instead
     workflow_id        VARCHAR(36)  NULL,
     workflow_input     TEXT         NULL,
-    owner_email        VARCHAR(255) NOT NULL,
+    owner_uuid         VARCHAR(36)  NOT NULL,
+    owner_email        VARCHAR(255),                       -- denormalized display copy; not part of the key
     message            TEXT         NOT NULL,
     cron_expr          VARCHAR(100) NOT NULL,              -- e.g. "0 8 * * 1"
     timezone           VARCHAR(100) NOT NULL DEFAULT 'UTC',
@@ -408,7 +417,7 @@ CREATE TABLE IF NOT EXISTS scheduled_messages (
     created_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_sched_conv     (conversation_id),
-    INDEX idx_sched_email    (owner_email),
+    INDEX idx_sched_owner    (owner_uuid),
     INDEX idx_sched_workflow (workflow_id),
     CONSTRAINT fk_sched_conv FOREIGN KEY (conversation_id)
         REFERENCES conversations(id) ON DELETE CASCADE

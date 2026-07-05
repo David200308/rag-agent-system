@@ -46,7 +46,7 @@ class GoogleSheetsServiceTest {
 
     @Test
     void isConnected_tokenPresent_returnsTrue() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.of(ConnectorToken.builder().build()));
 
         assertThat(service.isConnected("user@test.com", null)).isTrue();
@@ -54,7 +54,7 @@ class GoogleSheetsServiceTest {
 
     @Test
     void isConnected_noToken_returnsFalse() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
         assertThat(service.isConnected("user@test.com", null)).isFalse();
@@ -62,7 +62,7 @@ class GoogleSheetsServiceTest {
 
     @Test
     void isConnected_nullEmail_checksEmptyStringInRepo() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("", "google"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("", "google"))
                 .thenReturn(Optional.empty());
 
         assertThat(service.isConnected(null, null)).isFalse();
@@ -72,7 +72,7 @@ class GoogleSheetsServiceTest {
 
     @Test
     void createSpreadsheet_noToken_throwsIllegalState() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
@@ -85,7 +85,7 @@ class GoogleSheetsServiceTest {
 
     @Test
     void readSpreadsheet_noToken_throwsIllegalState() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
@@ -99,12 +99,12 @@ class GoogleSheetsServiceTest {
     @Test
     void createSpreadsheet_nonExpiringToken_passesThroughToHttp() {
         ConnectorToken token = ConnectorToken.builder()
-                .ownerEmail("user@test.com")
+                .ownerUuid("user@test.com")
                 .provider("google")
                 .accessToken("valid-token")
                 .expiresAt(LocalDateTime.now().plusHours(1))
                 .build();
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.of(token));
 
         assertThatThrownBy(() -> service.createSpreadsheet("Title", "a,b", "user@test.com", null))
@@ -115,7 +115,7 @@ class GoogleSheetsServiceTest {
 
     @Test
     void isConnected_withOrgId_usesOrgScopedRepo() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgId("user@test.com", "google", "org-1"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgId("user@test.com", "google", "org-1"))
                 .thenReturn(Optional.of(ConnectorToken.builder().build()));
 
         assertThat(service.isConnected("user@test.com", "org-1")).isTrue();
@@ -123,7 +123,7 @@ class GoogleSheetsServiceTest {
 
     @Test
     void isConnected_withOrgId_noToken_returnsFalse() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgId("user@test.com", "google", "org-1"))
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgId("user@test.com", "google", "org-1"))
                 .thenReturn(Optional.empty());
 
         assertThat(service.isConnected("user@test.com", "org-1")).isFalse();

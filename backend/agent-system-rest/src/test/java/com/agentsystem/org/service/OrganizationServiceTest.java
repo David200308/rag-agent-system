@@ -8,6 +8,9 @@ import com.agentsystem.org.entity.OrgMemberId;
 import com.agentsystem.org.entity.Organization;
 import com.agentsystem.org.repository.OrgMemberRepository;
 import com.agentsystem.org.repository.OrganizationRepository;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.entity.UserStatus;
+import com.agentsystem.user.service.UserAccountService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,12 +31,20 @@ class OrganizationServiceTest {
 
     @Mock OrganizationRepository orgRepo;
     @Mock OrgMemberRepository    memberRepo;
+    @Mock UserAccountService     userAccountService;
 
     OrganizationServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new OrganizationServiceImpl(orgRepo, memberRepo, new AdminProperties(List.of("admin@test.com")));
+        service = new OrganizationServiceImpl(orgRepo, memberRepo,
+                new AdminProperties(List.of("admin@test.com")), userAccountService);
+    }
+
+    /** resolveUuid() bridges email -> uuid; reuse the email string as the uuid for test simplicity. */
+    private void stubUuid(String email) {
+        lenient().when(userAccountService.findByEmail(email))
+                .thenReturn(Optional.of(new User(email, email, UserStatus.USER, true)));
     }
 
     // ── create ────────────────────────────────────────────────────────────────
@@ -76,13 +87,15 @@ class OrganizationServiceTest {
 
     @Test
     void addMember_newEmail_savesMember() {
+        stubUuid("alice@test.com");
         when(orgRepo.existsById("skyproton")).thenReturn(true);
-        when(memberRepo.existsByOrgIdAndEmail("skyproton", "alice@test.com")).thenReturn(false);
+        when(memberRepo.existsByOrgIdAndUserUuid("skyproton", "alice@test.com")).thenReturn(false);
         when(memberRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         OrgMember m = service.addMember("skyproton", "alice@test.com", OrgMember.Role.MEMBER);
 
         assertThat(m.getOrgId()).isEqualTo("skyproton");
+        assertThat(m.getUserUuid()).isEqualTo("alice@test.com");
         assertThat(m.getEmail()).isEqualTo("alice@test.com");
         assertThat(m.getRole()).isEqualTo(OrgMember.Role.MEMBER);
     }
@@ -97,9 +110,19 @@ class OrganizationServiceTest {
     }
 
     @Test
-    void addMember_alreadyMember_throwsIllegalArgument() {
+    void addMember_unregisteredEmail_throwsIllegalArgument() {
         when(orgRepo.existsById("skyproton")).thenReturn(true);
-        when(memberRepo.existsByOrgIdAndEmail("skyproton", "alice@test.com")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.addMember("skyproton", "ghost@test.com", OrgMember.Role.MEMBER))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not a registered user");
+    }
+
+    @Test
+    void addMember_alreadyMember_throwsIllegalArgument() {
+        stubUuid("alice@test.com");
+        when(orgRepo.existsById("skyproton")).thenReturn(true);
+        when(memberRepo.existsByOrgIdAndUserUuid("skyproton", "alice@test.com")).thenReturn(true);
 
         assertThatThrownBy(() -> service.addMember("skyproton", "alice@test.com", OrgMember.Role.MEMBER))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -110,16 +133,25 @@ class OrganizationServiceTest {
 
     @Test
     void removeMember_delegatesToRepository() {
+        stubUuid("bob@test.com");
+
         service.removeMember("skyproton", "bob@test.com");
 
         verify(memberRepo).deleteById(new OrgMemberId("skyproton", "bob@test.com"));
+    }
+
+    @Test
+    void removeMember_unregisteredEmail_throwsIllegalArgument() {
+        assertThatThrownBy(() -> service.removeMember("skyproton", "ghost@test.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not a registered user");
     }
 
     // ── listMembers ───────────────────────────────────────────────────────────
 
     @Test
     void listMembers_returnsAllOrgMembers() {
-        OrgMember m = new OrgMember("skyproton", "alice@test.com", OrgMember.Role.OWNER);
+        OrgMember m = new OrgMember("skyproton", "alice@test.com", "alice@test.com", OrgMember.Role.OWNER);
         when(memberRepo.findByOrgId("skyproton")).thenReturn(List.of(m));
 
         assertThat(service.listMembers("skyproton")).containsExactly(m);
@@ -129,8 +161,9 @@ class OrganizationServiceTest {
 
     @Test
     void isMember_orgExistsAndEmailIsMember_returnsTrue() {
+        stubUuid("alice@test.com");
         when(orgRepo.existsById("skyproton")).thenReturn(true);
-        when(memberRepo.existsByOrgIdAndEmail("skyproton", "alice@test.com")).thenReturn(true);
+        when(memberRepo.existsByOrgIdAndUserUuid("skyproton", "alice@test.com")).thenReturn(true);
 
         assertThat(service.isMember("skyproton", "alice@test.com")).isTrue();
     }
@@ -140,23 +173,32 @@ class OrganizationServiceTest {
         when(orgRepo.existsById("ghost")).thenReturn(false);
 
         assertThat(service.isMember("ghost", "alice@test.com")).isFalse();
-        verify(memberRepo, never()).existsByOrgIdAndEmail(any(), any());
+        verify(memberRepo, never()).existsByOrgIdAndUserUuid(any(), any());
     }
 
     @Test
     void isMember_orgExistsButEmailNotMember_returnsFalse() {
+        stubUuid("stranger@test.com");
         when(orgRepo.existsById("skyproton")).thenReturn(true);
-        when(memberRepo.existsByOrgIdAndEmail("skyproton", "stranger@test.com")).thenReturn(false);
+        when(memberRepo.existsByOrgIdAndUserUuid("skyproton", "stranger@test.com")).thenReturn(false);
 
         assertThat(service.isMember("skyproton", "stranger@test.com")).isFalse();
+    }
+
+    @Test
+    void isMember_orgExistsButEmailUnregistered_returnsFalse() {
+        when(orgRepo.existsById("skyproton")).thenReturn(true);
+
+        assertThat(service.isMember("skyproton", "ghost@test.com")).isFalse();
     }
 
     // ── requireOwner ──────────────────────────────────────────────────────────
 
     @Test
     void requireOwner_ownerRole_doesNotThrow() {
-        OrgMember owner = new OrgMember("skyproton", "owner@test.com", OrgMember.Role.OWNER);
-        when(memberRepo.findByOrgIdAndEmail("skyproton", "owner@test.com"))
+        stubUuid("owner@test.com");
+        OrgMember owner = new OrgMember("skyproton", "owner@test.com", "owner@test.com", OrgMember.Role.OWNER);
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "owner@test.com"))
                 .thenReturn(Optional.of(owner));
 
         // should not throw
@@ -165,8 +207,9 @@ class OrganizationServiceTest {
 
     @Test
     void requireOwner_memberRole_throwsSecurityException() {
-        OrgMember member = new OrgMember("skyproton", "member@test.com", OrgMember.Role.MEMBER);
-        when(memberRepo.findByOrgIdAndEmail("skyproton", "member@test.com"))
+        stubUuid("member@test.com");
+        OrgMember member = new OrgMember("skyproton", "member@test.com", "member@test.com", OrgMember.Role.MEMBER);
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "member@test.com"))
                 .thenReturn(Optional.of(member));
 
         assertThatThrownBy(() -> service.requireOwner("skyproton", "member@test.com"))
@@ -176,10 +219,17 @@ class OrganizationServiceTest {
 
     @Test
     void requireOwner_notAMember_throwsSecurityException() {
-        when(memberRepo.findByOrgIdAndEmail("skyproton", "outsider@test.com"))
+        stubUuid("outsider@test.com");
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "outsider@test.com"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.requireOwner("skyproton", "outsider@test.com"))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test
+    void requireOwner_unregisteredEmail_throwsSecurityException() {
+        assertThatThrownBy(() -> service.requireOwner("skyproton", "ghost@test.com"))
                 .isInstanceOf(SecurityException.class);
     }
 
@@ -187,12 +237,14 @@ class OrganizationServiceTest {
 
     @Test
     void transferOwner_swapsRolesAtomically() {
-        OrgMember currentOwner = new OrgMember("skyproton", "owner@test.com", OrgMember.Role.OWNER);
-        OrgMember newOwner     = new OrgMember("skyproton", "new@test.com",   OrgMember.Role.MEMBER);
+        stubUuid("owner@test.com");
+        stubUuid("new@test.com");
+        OrgMember currentOwner = new OrgMember("skyproton", "owner@test.com", "owner@test.com", OrgMember.Role.OWNER);
+        OrgMember newOwner     = new OrgMember("skyproton", "new@test.com",   "new@test.com",   OrgMember.Role.MEMBER);
 
-        when(memberRepo.findByOrgIdAndEmail("skyproton", "owner@test.com"))
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "owner@test.com"))
                 .thenReturn(Optional.of(currentOwner));
-        when(memberRepo.findByOrgIdAndEmail("skyproton", "new@test.com"))
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "new@test.com"))
                 .thenReturn(Optional.of(newOwner));
         when(memberRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -205,10 +257,12 @@ class OrganizationServiceTest {
 
     @Test
     void transferOwner_newOwnerNotMember_throwsIllegalArgument() {
-        OrgMember currentOwner = new OrgMember("skyproton", "owner@test.com", OrgMember.Role.OWNER);
-        when(memberRepo.findByOrgIdAndEmail("skyproton", "owner@test.com"))
+        stubUuid("owner@test.com");
+        stubUuid("ghost@test.com");
+        OrgMember currentOwner = new OrgMember("skyproton", "owner@test.com", "owner@test.com", OrgMember.Role.OWNER);
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "owner@test.com"))
                 .thenReturn(Optional.of(currentOwner));
-        when(memberRepo.findByOrgIdAndEmail("skyproton", "ghost@test.com"))
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "ghost@test.com"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
@@ -219,8 +273,9 @@ class OrganizationServiceTest {
 
     @Test
     void transferOwner_callerNotOwner_throwsSecurityException() {
-        OrgMember member = new OrgMember("skyproton", "member@test.com", OrgMember.Role.MEMBER);
-        when(memberRepo.findByOrgIdAndEmail("skyproton", "member@test.com"))
+        stubUuid("member@test.com");
+        OrgMember member = new OrgMember("skyproton", "member@test.com", "member@test.com", OrgMember.Role.MEMBER);
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "member@test.com"))
                 .thenReturn(Optional.of(member));
 
         assertThatThrownBy(() ->

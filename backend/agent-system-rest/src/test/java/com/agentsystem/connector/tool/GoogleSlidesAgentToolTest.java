@@ -30,7 +30,7 @@ class GoogleSlidesAgentToolTest {
 
     @AfterEach
     void tearDown() {
-        tool.clearCurrentEmail();
+        tool.clearCurrentUserUuid();
     }
 
     @Test
@@ -46,8 +46,8 @@ class GoogleSlidesAgentToolTest {
     // ── ThreadLocal email management ──────────────────────────────────────────
 
     @Test
-    void setCurrentEmail_null_setsEmptyString() {
-        tool.setCurrentEmail(null);
+    void setCurrentUserUuid_null_setsEmptyString() {
+        tool.setCurrentUserUuid(null);
         when(googleSlidesService.createPresentation(anyString(), anyString(), eq(""), isNull()))
                 .thenReturn("https://docs.google.com/presentation/d/abc");
 
@@ -57,9 +57,9 @@ class GoogleSlidesAgentToolTest {
     }
 
     @Test
-    void clearCurrentEmail_removesFromThreadLocal() {
-        tool.setCurrentEmail("user@example.com");
-        tool.clearCurrentEmail();
+    void clearCurrentUserUuid_removesFromThreadLocal() {
+        tool.setCurrentUserUuid("user@example.com");
+        tool.clearCurrentUserUuid();
 
         when(googleSlidesService.createPresentation(anyString(), anyString(), isNull(), isNull()))
                 .thenReturn("https://docs.google.com/presentation/d/abc");
@@ -73,7 +73,7 @@ class GoogleSlidesAgentToolTest {
 
     @Test
     void writeToGoogleSlides_success_returnsUrlMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleSlidesService.createPresentation("My Deck", "Slide 1\nbody", "user@example.com", null))
                 .thenReturn("https://docs.google.com/presentation/d/xyz");
 
@@ -85,7 +85,7 @@ class GoogleSlidesAgentToolTest {
 
     @Test
     void writeToGoogleSlides_notConnected_returnsErrorMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleSlidesService.createPresentation(anyString(), anyString(), anyString(), any()))
                 .thenThrow(new IllegalStateException("Google Slides not connected"));
 
@@ -97,7 +97,7 @@ class GoogleSlidesAgentToolTest {
 
     @Test
     void writeToGoogleSlides_usesCurrentEmailFromThreadLocal() {
-        tool.setCurrentEmail("presenter@example.com");
+        tool.setCurrentUserUuid("presenter@example.com");
         when(googleSlidesService.createPresentation(anyString(), anyString(), eq("presenter@example.com"), isNull()))
                 .thenReturn("https://docs.google.com/presentation/d/new");
 
@@ -111,7 +111,7 @@ class GoogleSlidesAgentToolTest {
 
     @Test
     void readGoogleSlide_success_returnsContent() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleSlidesService.readPresentation(
                 "https://docs.google.com/presentation/d/abc", "user@example.com", null))
                 .thenReturn("[Slide 1] Title\nBody text");
@@ -123,7 +123,7 @@ class GoogleSlidesAgentToolTest {
 
     @Test
     void readGoogleSlide_emptyPresentation_returnsEmptyMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleSlidesService.readPresentation(anyString(), anyString(), any())).thenReturn("");
 
         String result = tool.readGoogleSlide("https://docs.google.com/presentation/d/abc");
@@ -133,7 +133,7 @@ class GoogleSlidesAgentToolTest {
 
     @Test
     void readGoogleSlide_blankContent_returnsEmptyMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleSlidesService.readPresentation(anyString(), anyString(), any())).thenReturn("  ");
 
         String result = tool.readGoogleSlide("https://docs.google.com/presentation/d/abc");
@@ -143,7 +143,7 @@ class GoogleSlidesAgentToolTest {
 
     @Test
     void readGoogleSlide_notConnected_returnsErrorMessage() {
-        tool.setCurrentEmail("user@example.com");
+        tool.setCurrentUserUuid("user@example.com");
         when(googleSlidesService.readPresentation(anyString(), anyString(), any()))
                 .thenThrow(new IllegalStateException("Google Slides not connected"));
 
@@ -155,7 +155,7 @@ class GoogleSlidesAgentToolTest {
 
     @Test
     void readGoogleSlide_usesCurrentEmailFromThreadLocal() {
-        tool.setCurrentEmail("viewer@example.com");
+        tool.setCurrentUserUuid("viewer@example.com");
         when(googleSlidesService.readPresentation(anyString(), eq("viewer@example.com"), isNull()))
                 .thenReturn("slide content");
 

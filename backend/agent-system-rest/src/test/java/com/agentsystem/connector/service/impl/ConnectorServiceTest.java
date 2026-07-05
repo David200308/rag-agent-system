@@ -53,7 +53,7 @@ class ConnectorServiceTest {
 
     @Test
     void getStatus_noTokens_returnsFalseForAll() {
-        when(tokenRepo.findByOwnerEmailAndOrgIdIsNull("user@test.com")).thenReturn(List.of());
+        when(tokenRepo.findByOwnerUuidAndOrgIdIsNull("user@test.com")).thenReturn(List.of());
         when(telegramService.isConnected("user@test.com", null)).thenReturn(false);
 
         Map<String, Boolean> status = service.getStatus("user@test.com", null);
@@ -66,8 +66,8 @@ class ConnectorServiceTest {
     @Test
     void getStatus_googleConnected_returnsGoogleTrue() {
         ConnectorToken token = ConnectorToken.builder()
-                .ownerEmail("user@test.com").provider("google").accessToken("tok").build();
-        when(tokenRepo.findByOwnerEmailAndOrgIdIsNull("user@test.com")).thenReturn(List.of(token));
+                .ownerUuid("user@test.com").provider("google").accessToken("tok").build();
+        when(tokenRepo.findByOwnerUuidAndOrgIdIsNull("user@test.com")).thenReturn(List.of(token));
         when(telegramService.isConnected("user@test.com", null)).thenReturn(false);
 
         Map<String, Boolean> status = service.getStatus("user@test.com", null);
@@ -79,7 +79,7 @@ class ConnectorServiceTest {
 
     @Test
     void getStatus_telegramConnected_returnsTelegramTrue() {
-        when(tokenRepo.findByOwnerEmailAndOrgIdIsNull("user@test.com")).thenReturn(List.of());
+        when(tokenRepo.findByOwnerUuidAndOrgIdIsNull("user@test.com")).thenReturn(List.of());
         when(telegramService.isConnected("user@test.com", null)).thenReturn(true);
 
         Map<String, Boolean> status = service.getStatus("user@test.com", null);
@@ -90,12 +90,12 @@ class ConnectorServiceTest {
 
     @Test
     void getStatus_nullEmail_normalizedToEmptyString() {
-        when(tokenRepo.findByOwnerEmailAndOrgIdIsNull("")).thenReturn(List.of());
+        when(tokenRepo.findByOwnerUuidAndOrgIdIsNull("")).thenReturn(List.of());
         when(telegramService.isConnected("", null)).thenReturn(false);
 
         service.getStatus(null, null);
 
-        verify(tokenRepo).findByOwnerEmailAndOrgIdIsNull("");
+        verify(tokenRepo).findByOwnerUuidAndOrgIdIsNull("");
     }
 
     // ── getToken ──────────────────────────────────────────────────────────────
@@ -103,8 +103,8 @@ class ConnectorServiceTest {
     @Test
     void getToken_delegatesToRepo() {
         ConnectorToken token = ConnectorToken.builder()
-                .ownerEmail("user@test.com").provider("google").build();
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google"))
+                .ownerUuid("user@test.com").provider("google").build();
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "google"))
                 .thenReturn(Optional.of(token));
 
         assertThat(service.getToken("google", "user@test.com", null)).contains(token);
@@ -112,11 +112,11 @@ class ConnectorServiceTest {
 
     @Test
     void getToken_nullEmail_normalizedToEmptyString() {
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgIdIsNull("", "figma")).thenReturn(Optional.empty());
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgIdIsNull("", "figma")).thenReturn(Optional.empty());
 
         assertThat(service.getToken("figma", null, null)).isEmpty();
 
-        verify(tokenRepo).findByOwnerEmailAndProviderAndOrgIdIsNull("", "figma");
+        verify(tokenRepo).findByOwnerUuidAndProviderAndOrgIdIsNull("", "figma");
     }
 
     // ── disconnect ────────────────────────────────────────────────────────────
@@ -125,16 +125,16 @@ class ConnectorServiceTest {
     void disconnect_nonEmptyEmail_deletesUserAndAnonymousTokens() {
         service.disconnect("google", "user@test.com", null);
 
-        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "google");
-        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgIdIsNull("", "google");
+        verify(tokenRepo).deleteByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "google");
+        verify(tokenRepo).deleteByOwnerUuidAndProviderAndOrgIdIsNull("", "google");
     }
 
     @Test
     void disconnect_nullEmail_onlyDeletesEmptyEmailRecord() {
         service.disconnect("figma", null, null);
 
-        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgIdIsNull("", "figma");
-        verify(tokenRepo, never()).deleteByOwnerEmailAndProviderAndOrgIdIsNull(argThat(e -> !e.isEmpty()), any());
+        verify(tokenRepo).deleteByOwnerUuidAndProviderAndOrgIdIsNull("", "figma");
+        verify(tokenRepo, never()).deleteByOwnerUuidAndProviderAndOrgIdIsNull(argThat(e -> !e.isEmpty()), any());
     }
 
     @Test
@@ -142,7 +142,7 @@ class ConnectorServiceTest {
         service.disconnect("telegram", "user@test.com", null);
 
         verify(telegramService).disconnect("user@test.com", null);
-        verify(tokenRepo, never()).deleteByOwnerEmailAndProviderAndOrgIdIsNull(any(), any());
+        verify(tokenRepo, never()).deleteByOwnerUuidAndProviderAndOrgIdIsNull(any(), any());
     }
 
     @Test
@@ -187,7 +187,7 @@ class ConnectorServiceTest {
 
         verify(stateRepo).save(captor.capture());
         ConnectorOAuthState saved = captor.getValue();
-        assertThat(saved.getOwnerEmail()).isEqualTo("user@test.com");
+        assertThat(saved.getOwnerUuid()).isEqualTo("user@test.com");
         assertThat(saved.getProvider()).isEqualTo("google");
         assertThat(saved.getState()).isNotBlank();
         assertThat(saved.getExpiresAt()).isAfter(LocalDateTime.now());
@@ -222,7 +222,7 @@ class ConnectorServiceTest {
     void exchangeCode_expiredState_throwsIllegalArgument() {
         ConnectorOAuthState expired = ConnectorOAuthState.builder()
                 .state("s1")
-                .ownerEmail("user@test.com")
+                .ownerUuid("user@test.com")
                 .provider("google")
                 .expiresAt(LocalDateTime.now().minusMinutes(1))
                 .build();
@@ -237,7 +237,7 @@ class ConnectorServiceTest {
     void exchangeCode_providerMismatch_throwsIllegalArgument() {
         ConnectorOAuthState state = ConnectorOAuthState.builder()
                 .state("s2")
-                .ownerEmail("user@test.com")
+                .ownerUuid("user@test.com")
                 .provider("figma")
                 .expiresAt(LocalDateTime.now().plusMinutes(5))
                 .build();
@@ -253,8 +253,8 @@ class ConnectorServiceTest {
     @Test
     void getStatus_figmaConnected_returnsFigmaTrue() {
         ConnectorToken token = ConnectorToken.builder()
-                .ownerEmail("user@test.com").provider("figma").accessToken("tok").build();
-        when(tokenRepo.findByOwnerEmailAndOrgIdIsNull("user@test.com")).thenReturn(List.of(token));
+                .ownerUuid("user@test.com").provider("figma").accessToken("tok").build();
+        when(tokenRepo.findByOwnerUuidAndOrgIdIsNull("user@test.com")).thenReturn(List.of(token));
         when(telegramService.isConnected("user@test.com", null)).thenReturn(false);
 
         Map<String, Boolean> status = service.getStatus("user@test.com", null);
@@ -267,10 +267,10 @@ class ConnectorServiceTest {
     @Test
     void getStatus_allConnected_returnsAllTrue() {
         ConnectorToken google = ConnectorToken.builder()
-                .ownerEmail("user@test.com").provider("google").accessToken("g-tok").build();
+                .ownerUuid("user@test.com").provider("google").accessToken("g-tok").build();
         ConnectorToken figma = ConnectorToken.builder()
-                .ownerEmail("user@test.com").provider("figma").accessToken("f-tok").build();
-        when(tokenRepo.findByOwnerEmailAndOrgIdIsNull("user@test.com")).thenReturn(List.of(google, figma));
+                .ownerUuid("user@test.com").provider("figma").accessToken("f-tok").build();
+        when(tokenRepo.findByOwnerUuidAndOrgIdIsNull("user@test.com")).thenReturn(List.of(google, figma));
         when(telegramService.isConnected("user@test.com", null)).thenReturn(true);
 
         Map<String, Boolean> status = service.getStatus("user@test.com", null);
@@ -286,8 +286,8 @@ class ConnectorServiceTest {
     void disconnect_figma_deletesUserAndAnonymousTokens() {
         service.disconnect("figma", "user@test.com", null);
 
-        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgIdIsNull("user@test.com", "figma");
-        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgIdIsNull("", "figma");
+        verify(tokenRepo).deleteByOwnerUuidAndProviderAndOrgIdIsNull("user@test.com", "figma");
+        verify(tokenRepo).deleteByOwnerUuidAndProviderAndOrgIdIsNull("", "figma");
     }
 
     // ── getAuthUrl — scope / prompt params ────────────────────────────────────
@@ -326,7 +326,7 @@ class ConnectorServiceTest {
     void exchangeCode_expiredState_deletesStateBeforeThrowingException() {
         ConnectorOAuthState expired = ConnectorOAuthState.builder()
                 .state("exp-state")
-                .ownerEmail("user@test.com")
+                .ownerUuid("user@test.com")
                 .provider("google")
                 .expiresAt(LocalDateTime.now().minusMinutes(5))
                 .build();
@@ -344,15 +344,15 @@ class ConnectorServiceTest {
     @Test
     void getStatus_withOrgId_usesOrgScopedRepo() {
         ConnectorToken token = ConnectorToken.builder()
-                .ownerEmail("user@test.com").provider("google").accessToken("tok").build();
-        when(tokenRepo.findByOwnerEmailAndOrgId("user@test.com", "org-1")).thenReturn(List.of(token));
+                .ownerUuid("user@test.com").provider("google").accessToken("tok").build();
+        when(tokenRepo.findByOwnerUuidAndOrgId("user@test.com", "org-1")).thenReturn(List.of(token));
         when(telegramService.isConnected("user@test.com", "org-1")).thenReturn(false);
 
         Map<String, Boolean> status = service.getStatus("user@test.com", "org-1");
 
         assertThat(status.get("google")).isTrue();
-        verify(tokenRepo).findByOwnerEmailAndOrgId("user@test.com", "org-1");
-        verify(tokenRepo, never()).findByOwnerEmailAndOrgIdIsNull(anyString());
+        verify(tokenRepo).findByOwnerUuidAndOrgId("user@test.com", "org-1");
+        verify(tokenRepo, never()).findByOwnerUuidAndOrgIdIsNull(anyString());
     }
 
     // ── getToken with orgId ───────────────────────────────────────────────────
@@ -360,12 +360,12 @@ class ConnectorServiceTest {
     @Test
     void getToken_withOrgId_usesOrgScopedRepo() {
         ConnectorToken token = ConnectorToken.builder()
-                .ownerEmail("user@test.com").provider("google").orgId("org-1").build();
-        when(tokenRepo.findByOwnerEmailAndProviderAndOrgId("user@test.com", "google", "org-1"))
+                .ownerUuid("user@test.com").provider("google").orgId("org-1").build();
+        when(tokenRepo.findByOwnerUuidAndProviderAndOrgId("user@test.com", "google", "org-1"))
                 .thenReturn(Optional.of(token));
 
         assertThat(service.getToken("google", "user@test.com", "org-1")).contains(token);
-        verify(tokenRepo).findByOwnerEmailAndProviderAndOrgId("user@test.com", "google", "org-1");
+        verify(tokenRepo).findByOwnerUuidAndProviderAndOrgId("user@test.com", "google", "org-1");
     }
 
     // ── disconnect with orgId ─────────────────────────────────────────────────
@@ -374,8 +374,8 @@ class ConnectorServiceTest {
     void disconnect_withOrgId_callsOrgScopedDelete() {
         service.disconnect("google", "user@test.com", "org-1");
 
-        verify(tokenRepo).deleteByOwnerEmailAndProviderAndOrgId("user@test.com", "google", "org-1");
-        verify(tokenRepo, never()).deleteByOwnerEmailAndProviderAndOrgIdIsNull(anyString(), anyString());
+        verify(tokenRepo).deleteByOwnerUuidAndProviderAndOrgId("user@test.com", "google", "org-1");
+        verify(tokenRepo, never()).deleteByOwnerUuidAndProviderAndOrgIdIsNull(anyString(), anyString());
     }
 
     @Test
@@ -383,7 +383,7 @@ class ConnectorServiceTest {
         service.disconnect("telegram", "user@test.com", "org-1");
 
         verify(telegramService).disconnect("user@test.com", "org-1");
-        verify(tokenRepo, never()).deleteByOwnerEmailAndProviderAndOrgId(any(), any(), any());
+        verify(tokenRepo, never()).deleteByOwnerUuidAndProviderAndOrgId(any(), any(), any());
     }
 
     // ── getAuthUrl with orgId ─────────────────────────────────────────────────

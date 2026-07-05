@@ -139,7 +139,7 @@ class RagMcpServiceTest {
 
     @Test
     void ingestUrl_returnsFormattedMessage() {
-        when(mcpConnectorService.fetchAndIngest("https://example.com", "docs", null))
+        when(mcpConnectorService.fetchAndIngest("https://example.com", "docs", (String) null))
                 .thenReturn(new UrlIngestionResult("ingested", "https://example.com", "Example Page", 5));
 
         String result = service.ingestUrl("https://example.com", "docs");
@@ -152,7 +152,7 @@ class RagMcpServiceTest {
 
     @Test
     void ingestUrl_noCategory_passes() {
-        when(mcpConnectorService.fetchAndIngest("https://example.com", null, null))
+        when(mcpConnectorService.fetchAndIngest("https://example.com", null, (String) null))
                 .thenReturn(new UrlIngestionResult("ingested", "https://example.com", "Title", 3));
 
         String result = service.ingestUrl("https://example.com", null);

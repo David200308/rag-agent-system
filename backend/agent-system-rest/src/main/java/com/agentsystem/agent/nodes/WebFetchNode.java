@@ -2,6 +2,7 @@ package com.agentsystem.agent.nodes;
 
 import com.agentsystem.agent.state.AgentState;
 import com.agentsystem.config.WebFetchProperties;
+import com.agentsystem.org.OrgContext;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.DocumentResult;
 import com.agentsystem.webfetch.service.WebFetchService;
@@ -55,7 +56,8 @@ public class WebFetchNode {
 
     public Map<String, Object> process(AgentState state) {
         AgentRequest request = state.request().orElseThrow();
-        String userEmail = state.userEmail().orElse(null);
+        String userUuid = state.userUuid().orElse(null);
+        OrgContext ctx = new OrgContext(userUuid, null, "PERSONAL", null);
 
         Map<String, Object> updates = new java.util.HashMap<>();
 
@@ -63,13 +65,13 @@ public class WebFetchNode {
         boolean webFetchEnabled = props.enabled() && request.isWebFetchEnabled();
 
         // Merge explicit fetchUrls + URLs auto-extracted from the query text
-        List<String> urls = resolveUrls(request, userEmail);
+        List<String> urls = resolveUrls(request, ctx);
 
         if (webFetchEnabled && !urls.isEmpty()) {
             List<DocumentResult> fetched = new ArrayList<>();
             for (String url : urls) {
                 try {
-                    fetched.add(webFetchService.fetch(url, userEmail));
+                    fetched.add(webFetchService.fetch(url, ctx));
                 } catch (Exception e) {
                     log.warn("[WebFetchNode] Skipping URL '{}': {}", url, e.getMessage());
                 }
@@ -100,7 +102,7 @@ public class WebFetchNode {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private List<String> resolveUrls(AgentRequest request, String userEmail) {
+    private List<String> resolveUrls(AgentRequest request, OrgContext ctx) {
         LinkedHashSet<String> seen = new LinkedHashSet<>();
 
         if (request.fetchUrls() != null) {
@@ -119,7 +121,7 @@ public class WebFetchNode {
                 log.debug("[WebFetchNode] Skipping Google Workspace URL '{}': handled by agent tools", url);
                 continue;
             }
-            if (webFetchService.isUrlAllowed(url, userEmail)) {
+            if (webFetchService.isUrlAllowed(url, ctx)) {
                 allowed.add(url);
                 if (allowed.size() == MAX_URLS) break;
             } else {
