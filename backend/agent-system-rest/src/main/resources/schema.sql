@@ -285,12 +285,10 @@ CREATE TABLE IF NOT EXISTS org_members (
 CREATE TABLE IF NOT EXISTS cli_public_keys (
     id               BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_uuid        VARCHAR(36)  NOT NULL UNIQUE,
-    user_email       VARCHAR(255),                    -- denormalized display copy; not part of the key
     public_key_base64 VARCHAR(64) NOT NULL,           -- Base64-encoded raw Ed25519 public key (44 chars)
     fingerprint      VARCHAR(8)   NOT NULL,            -- first 8 chars of Base64, shown in `auth status`
     registered_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_seen_at     TIMESTAMP    NULL,
-    INDEX idx_cpk_email (user_email)
+    last_seen_at     TIMESTAMP    NULL
 );
 
 -- ── Financial portfolio tables ────────────────────────────────────────────────
@@ -298,7 +296,6 @@ CREATE TABLE IF NOT EXISTS cli_public_keys (
 CREATE TABLE IF NOT EXISTS financial_cash_deposits (
     id              VARCHAR(36)    PRIMARY KEY,
     owner_uuid      VARCHAR(36)    NOT NULL,
-    owner_email     VARCHAR(255),                  -- denormalized display copy; not part of the key
     platform        VARCHAR(255)   NOT NULL,
     platform_type   VARCHAR(100)   NOT NULL,
     country_region  VARCHAR(100),
@@ -313,7 +310,6 @@ CREATE TABLE IF NOT EXISTS financial_cash_deposits (
 CREATE TABLE IF NOT EXISTS financial_stocks (
     id              VARCHAR(36)    PRIMARY KEY,
     owner_uuid      VARCHAR(36)    NOT NULL,
-    owner_email     VARCHAR(255),                  -- denormalized display copy; not part of the key
     broker          VARCHAR(255)   NOT NULL,
     stock_type      VARCHAR(20)    NOT NULL,   -- US_STOCK | HK_STOCK | CN_STOCK | SG_STOCK | OTHER
     symbol          VARCHAR(20)    NOT NULL,
@@ -330,7 +326,6 @@ CREATE TABLE IF NOT EXISTS financial_stocks (
 CREATE TABLE IF NOT EXISTS financial_crypto (
     id              VARCHAR(36)    PRIMARY KEY,
     owner_uuid      VARCHAR(36)    NOT NULL,
-    owner_email     VARCHAR(255),                  -- denormalized display copy; not part of the key
     name            VARCHAR(255)   NOT NULL,
     symbol          VARCHAR(30)    NOT NULL,
     amount          DECIMAL(28,8)  NOT NULL,
@@ -344,7 +339,6 @@ CREATE TABLE IF NOT EXISTS financial_crypto (
 CREATE TABLE IF NOT EXISTS financial_cards (
     id              VARCHAR(36)    PRIMARY KEY,
     owner_uuid      VARCHAR(36)    NOT NULL,
-    owner_email     VARCHAR(255),                  -- denormalized display copy; not part of the key
     bank            VARCHAR(255)   NOT NULL,
     country_region  VARCHAR(100),
     types           VARCHAR(50)    NOT NULL,   -- comma-separated: Credit,Debit,ATM
@@ -362,7 +356,6 @@ CREATE TABLE IF NOT EXISTS financial_cards (
 CREATE TABLE IF NOT EXISTS salary_usage_records (
     id                           VARCHAR(36)   PRIMARY KEY,
     owner_uuid                   VARCHAR(36)   NOT NULL,
-    owner_email                  VARCHAR(255),               -- denormalized display copy; not part of the key
     year                         INT           NOT NULL,
     month                        INT           NOT NULL,
     region                       VARCHAR(100)  NOT NULL,
@@ -387,7 +380,6 @@ CREATE TABLE IF NOT EXISTS salary_usage_records (
 CREATE TABLE IF NOT EXISTS travel_records (
     id            VARCHAR(36)   PRIMARY KEY,
     owner_uuid    VARCHAR(36)   NOT NULL,
-    owner_email   VARCHAR(255),               -- denormalized display copy; not part of the key
     title         VARCHAR(255)  NOT NULL,
     start_date    VARCHAR(10)   NOT NULL,   -- YYYY-MM-DD
     end_date      VARCHAR(10)   NOT NULL,   -- YYYY-MM-DD
@@ -406,7 +398,6 @@ CREATE TABLE IF NOT EXISTS scheduled_messages (
     workflow_id        VARCHAR(36)  NULL,
     workflow_input     TEXT         NULL,
     owner_uuid         VARCHAR(36)  NOT NULL,
-    owner_email        VARCHAR(255),                       -- denormalized display copy; not part of the key
     message            TEXT         NOT NULL,
     cron_expr          VARCHAR(100) NOT NULL,              -- e.g. "0 8 * * 1"
     timezone           VARCHAR(100) NOT NULL DEFAULT 'UTC',
