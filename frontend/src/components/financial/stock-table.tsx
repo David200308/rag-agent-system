@@ -2,7 +2,8 @@ import { ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { STOCK_TYPE_LABELS, formatAmount, formatPrice, type StockInvestment } from "@/types/financial";
 import { PnlBadge } from "./shared-ui";
-import { type StockGroup, formatPercentOfTotal } from "./utils";
+import { SymbolHoverChart } from "./symbol-hover-chart";
+import { type StockGroup, formatPercentOfTotal, toTradingViewSymbol } from "./utils";
 
 function StockDataCells({ row, defaultCurrency, total, hideAmounts }: {
   row: {
@@ -33,7 +34,9 @@ function StockDataCells({ row, defaultCurrency, total, hideAmounts }: {
       </td>
       <td className="px-4 py-3 text-right tabular-nums text-[--color-muted]">{maskAmount(formatAmount(convertedValue, defaultCurrency))}</td>
       <td className="px-4 py-3 text-right tabular-nums">
-        {row.pnlPercent != null ? <PnlBadge percent={row.pnlPercent} /> : <span className="text-[--color-muted]">—</span>}
+        {row.pnlPercent != null
+          ? <PnlBadge percent={row.pnlPercent} amount={convertedValue - row.convertedInvestAmount} currency={defaultCurrency} hide={hideAmounts} />
+          : <span className="text-[--color-muted]">—</span>}
       </td>
       <td className="px-4 py-3 text-right tabular-nums text-xs text-[--color-muted]">{formatPercentOfTotal(convertedValue, total)}</td>
     </>
@@ -50,7 +53,9 @@ export function StockGroupRows({ group, expanded, onToggle, defaultCurrency, tot
     return (
       <tr className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
         <td className="px-4 py-3">
-          <span className="font-semibold">{s.symbol}</span>
+          <SymbolHoverChart tvSymbol={toTradingViewSymbol(s.symbol, "stock", s.stockType)}>
+            <span className="font-semibold">{s.symbol}</span>
+          </SymbolHoverChart>
           <span className="ml-1.5 text-[11px] text-[--color-muted]">{s.broker}</span>
         </td>
         <td className="px-4 py-3">{s.name}</td>
@@ -76,7 +81,9 @@ export function StockGroupRows({ group, expanded, onToggle, defaultCurrency, tot
         <td className="px-4 py-3 font-semibold">
           <span className="inline-flex items-center gap-1">
             {expanded ? <ChevronDown className="h-3.5 w-3.5 text-[--color-muted]" /> : <ChevronRight className="h-3.5 w-3.5 text-[--color-muted]" />}
-            {group.symbol}
+            <SymbolHoverChart tvSymbol={toTradingViewSymbol(group.symbol, "stock", group.stockType)}>
+              {group.symbol}
+            </SymbolHoverChart>
             <span className="text-[10px] font-normal text-[--color-muted]">· {group.rows.length} brokers</span>
           </span>
         </td>

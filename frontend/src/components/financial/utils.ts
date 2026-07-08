@@ -157,6 +157,21 @@ export function formatExpiry(dateStr: string): string {
   return `${month}/${year}`;
 }
 
+// ── TradingView symbol mapping (best-effort; we don't store exchange data) ────
+
+export function toTradingViewSymbol(symbol: string, kind: "crypto" | "stock", stockType?: StockType): string {
+  const sym = symbol.trim().toUpperCase();
+  if (kind === "crypto") {
+    return sym.endsWith("USDT") || sym.endsWith("USD") ? `BINANCE:${sym}` : `BINANCE:${sym}USDT`;
+  }
+  switch (stockType) {
+    case "HK_STOCK": return `HKEX:${sym.replace(/^0+/, "").padStart(4, "0")}`;
+    case "SG_STOCK": return `SGX:${sym}`;
+    case "CN_STOCK": return `SSE:${sym}`;
+    default:         return sym; // US_STOCK / OTHER: let TradingView resolve the primary listing
+  }
+}
+
 export const NETWORK_COLORS: Record<CardNetwork, string> = {
   Visa:      "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
   Mastercard:"bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",

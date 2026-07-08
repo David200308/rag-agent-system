@@ -97,19 +97,26 @@ export function Field({ label, children }: { label: string; children: React.Reac
 
 // ── P&L badge ─────────────────────────────────────────────────────────────────
 
-export function PnlBadge({ percent }: { percent: number }) {
+export function PnlBadge({ percent, amount, currency, hide }: {
+  percent: number; amount?: number | null; currency?: string; hide?: boolean;
+}) {
   const isPositive = percent >= 0;
   return (
     <span className={`text-xs font-medium ${isPositive ? "text-green-500" : "text-red-500"}`}>
       {isPositive ? "+" : ""}{percent.toFixed(2)}%
+      {amount != null && currency && (
+        <span className="ml-1 opacity-80">
+          ({hide ? "***" : `${isPositive ? "+" : ""}${formatAmount(amount, currency)}`})
+        </span>
+      )}
     </span>
   );
 }
 
 // ── Summary card ──────────────────────────────────────────────────────────────
 
-export function SummaryCard({ label, value, currency, pnlPercent, share, usdValue, hide }: {
-  label: string; value: number; currency: string; pnlPercent?: number | null; share?: number; usdValue?: number | null; hide?: boolean;
+export function SummaryCard({ label, value, currency, pnlPercent, pnlAmount, share, usdValue, hide }: {
+  label: string; value: number; currency: string; pnlPercent?: number | null; pnlAmount?: number | null; share?: number; usdValue?: number | null; hide?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4 min-w-0">
@@ -124,7 +131,7 @@ export function SummaryCard({ label, value, currency, pnlPercent, share, usdValu
         <p className="mt-0.5 text-xs text-[--color-muted] tabular-nums">{hide ? "***" : formatAmount(usdValue, "USD")}</p>
       )}
       {pnlPercent != null && (
-        <p className="mt-0.5"><PnlBadge percent={pnlPercent} /></p>
+        <p className="mt-0.5"><PnlBadge percent={pnlPercent} amount={pnlAmount} currency={currency} hide={hide} /></p>
       )}
     </div>
   );

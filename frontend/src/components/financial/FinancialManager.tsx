@@ -19,9 +19,10 @@ import {
   apiFetch, apiCreate, apiUpdate, apiDelete, apiRefreshPrices,
   fetchExchangeRates, fetchUserCurrency, saveUserCurrency,
   sortData, groupStocksBySymbol, useSort, unique,
-  formatPercentOfTotal, NETWORK_COLORS, TYPE_COLORS, formatExpiry,
+  formatPercentOfTotal, NETWORK_COLORS, TYPE_COLORS, formatExpiry, toTradingViewSymbol,
 } from "./utils";
 import { Th, Modal, PnlBadge, SummaryCard } from "./shared-ui";
+import { SymbolHoverChart } from "./symbol-hover-chart";
 import {
   type DepositFields, type StockFields, type CryptoFields, type CardFields, type SalaryFields,
   emptyDeposit, emptyStock, emptyCrypto, emptyCard, emptySalary,
@@ -158,9 +159,9 @@ export function FinancialManager() {
   };
 
   const summaryItems = [
-    { label: "Cash Deposits",      value: totalDeposits, pnlPercent: null,         share: grandTotal > 0 ? totalDeposits / grandTotal * 100 : 0, usdValue: null as number | null },
-    { label: "Stock Investments",  value: totalStocks,   pnlPercent: stocksPnlPct, share: grandTotal > 0 ? totalStocks  / grandTotal * 100 : 0, usdValue: toUSD(totalStocks) },
-    { label: "Crypto Investments", value: totalCrypto,   pnlPercent: cryptoPnlPct, share: grandTotal > 0 ? totalCrypto  / grandTotal * 100 : 0, usdValue: toUSD(totalCrypto) },
+    { label: "Cash Deposits",      value: totalDeposits, pnlPercent: null,         pnlAmount: null as number | null,                             share: grandTotal > 0 ? totalDeposits / grandTotal * 100 : 0, usdValue: null as number | null },
+    { label: "Stock Investments",  value: totalStocks,   pnlPercent: stocksPnlPct, pnlAmount: stocksPnlPct != null ? totalStocks - stocksInvested : null, share: grandTotal > 0 ? totalStocks  / grandTotal * 100 : 0, usdValue: toUSD(totalStocks) },
+    { label: "Crypto Investments", value: totalCrypto,   pnlPercent: cryptoPnlPct, pnlAmount: cryptoPnlPct != null ? totalCrypto - cryptoInvested : null, share: grandTotal > 0 ? totalCrypto  / grandTotal * 100 : 0, usdValue: toUSD(totalCrypto) },
   ] as const;
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
@@ -346,7 +347,7 @@ export function FinancialManager() {
         <div className="mt-4 hidden sm:grid sm:grid-cols-3 sm:gap-3">
           {summaryItems.map((item) => (
             <SummaryCard key={item.label} label={item.label} value={item.value}
-              currency={defaultCurrency} pnlPercent={item.pnlPercent} share={item.share} usdValue={item.usdValue} hide={hideAmounts} />
+              currency={defaultCurrency} pnlPercent={item.pnlPercent} pnlAmount={item.pnlAmount} share={item.share} usdValue={item.usdValue} hide={hideAmounts} />
           ))}
         </div>
         {/* Mobile: swipeable snap carousel */}
@@ -357,7 +358,7 @@ export function FinancialManager() {
               style={{ scrollSnapAlign: "start", width: "78vw",
                 marginRight: i === summaryItems.length - 1 ? "8vw" : undefined }}>
               <SummaryCard label={item.label} value={item.value}
-                currency={defaultCurrency} pnlPercent={item.pnlPercent} share={item.share} usdValue={item.usdValue} hide={hideAmounts} />
+                currency={defaultCurrency} pnlPercent={item.pnlPercent} pnlAmount={item.pnlAmount} share={item.share} usdValue={item.usdValue} hide={hideAmounts} />
             </div>
           ))}
         </div>
@@ -523,7 +524,11 @@ export function FinancialManager() {
                   <tbody>
                     {filteredCrypto.map((c) => (
                       <tr key={c.id} className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
-                        <td className="px-4 py-3 font-semibold">{c.symbol}</td>
+                        <td className="px-4 py-3 font-semibold">
+                          <SymbolHoverChart tvSymbol={toTradingViewSymbol(c.symbol, "crypto")}>
+                            {c.symbol}
+                          </SymbolHoverChart>
+                        </td>
                         <td className="px-4 py-3">{c.name}</td>
                         <td className="px-4 py-3 text-right tabular-nums">{maskAmount(String(c.amount))}</td>
                         <td className="px-4 py-3 text-right tabular-nums">{maskAmount(formatAmount(c.investAmount, c.currency))}</td>
@@ -544,7 +549,9 @@ export function FinancialManager() {
                             : maskAmount(formatAmount(c.convertedInvestAmount, defaultCurrency))}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
-                          {c.pnlPercent != null ? <PnlBadge percent={c.pnlPercent} /> : <span className="text-[--color-muted]">—</span>}
+                          {c.pnlPercent != null
+                            ? <PnlBadge percent={c.pnlPercent} amount={(c.convertedCurrentValue ?? c.convertedInvestAmount) - c.convertedInvestAmount} currency={defaultCurrency} hide={hideAmounts} />
+                            : <span className="text-[--color-muted]">—</span>}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-xs text-[--color-muted]">
                           {formatPercentOfTotal((c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0), totalCrypto)}

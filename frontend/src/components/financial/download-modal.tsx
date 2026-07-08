@@ -70,7 +70,10 @@ function buildMarkdown(
     lines.push("|---|---|---:|---:|---:|---:|---:|---:|---:|");
     for (const s of stocks) {
       const val = s.convertedCurrentValue ?? s.convertedInvestAmount ?? 0;
-      lines.push(`| ${s.symbol} | ${s.name} | ${s.stockAmount} | ${formatAmount(s.investAmount, s.currency)} | ${s.currentPrice != null ? formatPrice(s.currentPrice) : "—"} | ${s.currentValue != null ? formatAmount(s.currentValue, s.priceCurrency ?? s.currency) : "—"} | ${formatAmount(val, currency)} | ${s.pnlPercent != null ? (s.pnlPercent >= 0 ? "+" : "") + s.pnlPercent.toFixed(2) + "%" : "—"} | ${formatPercentOfTotal(val, totalStk)} |`);
+      const pnlStr = s.pnlPercent != null
+        ? `${s.pnlPercent >= 0 ? "+" : ""}${s.pnlPercent.toFixed(2)}% (${s.pnlPercent >= 0 ? "+" : ""}${formatAmount(val - s.convertedInvestAmount, currency)})`
+        : "—";
+      lines.push(`| ${s.symbol} | ${s.name} | ${s.stockAmount} | ${formatAmount(s.investAmount, s.currency)} | ${s.currentPrice != null ? formatPrice(s.currentPrice) : "—"} | ${s.currentValue != null ? formatAmount(s.currentValue, s.priceCurrency ?? s.currency) : "—"} | ${formatAmount(val, currency)} | ${pnlStr} | ${formatPercentOfTotal(val, totalStk)} |`);
     }
     lines.push("");
   }
@@ -81,7 +84,10 @@ function buildMarkdown(
     lines.push("|---|---|---:|---:|---:|---:|---:|---:|---:|");
     for (const c of crypto) {
       const val = c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0;
-      lines.push(`| ${c.symbol} | ${c.name} | ${c.amount} | ${formatAmount(c.investAmount, c.currency)} | ${c.currentPrice != null ? formatAmount(c.currentPrice, "USD") : "—"} | ${c.currentValue != null ? formatAmount(c.currentValue, "USD") : "—"} | ${formatAmount(val, currency)} | ${c.pnlPercent != null ? (c.pnlPercent >= 0 ? "+" : "") + c.pnlPercent.toFixed(2) + "%" : "—"} | ${formatPercentOfTotal(val, totalCry)} |`);
+      const pnlStr = c.pnlPercent != null
+        ? `${c.pnlPercent >= 0 ? "+" : ""}${c.pnlPercent.toFixed(2)}% (${c.pnlPercent >= 0 ? "+" : ""}${formatAmount(val - c.convertedInvestAmount, currency)})`
+        : "—";
+      lines.push(`| ${c.symbol} | ${c.name} | ${c.amount} | ${formatAmount(c.investAmount, c.currency)} | ${c.currentPrice != null ? formatAmount(c.currentPrice, "USD") : "—"} | ${c.currentValue != null ? formatAmount(c.currentValue, "USD") : "—"} | ${formatAmount(val, currency)} | ${pnlStr} | ${formatPercentOfTotal(val, totalCry)} |`);
     }
     lines.push("");
   }
@@ -168,25 +174,31 @@ function exportPdf(
 
   const stkRows = has("stocks") ? stocks.map(s => {
     const val = s.convertedCurrentValue ?? s.convertedInvestAmount ?? 0;
+    const pnlStr = s.pnlPercent != null
+      ? `${s.pnlPercent >= 0 ? "+" : ""}${s.pnlPercent.toFixed(2)}% (${s.pnlPercent >= 0 ? "+" : ""}${formatAmount(val - s.convertedInvestAmount, currency)})`
+      : "—";
     return `<tr>
     <td style="${td}">${s.symbol}</td><td style="${td}">${s.name}</td>
     <td style="${tdR}">${s.stockAmount}</td><td style="${tdR}">${formatAmount(s.investAmount, s.currency)}</td>
     <td style="${tdR}">${s.currentPrice != null ? formatPrice(s.currentPrice) : "—"}</td>
     <td style="${tdR}">${s.currentValue != null ? formatAmount(s.currentValue, s.priceCurrency ?? s.currency) : "—"}</td>
     <td style="${tdR}">${formatAmount(val, currency)}</td>
-    <td style="${tdR}">${s.pnlPercent != null ? (s.pnlPercent >= 0 ? "+" : "") + s.pnlPercent.toFixed(2) + "%" : "—"}</td>
+    <td style="${tdR}">${pnlStr}</td>
     <td style="${tdR}">${formatPercentOfTotal(val, tStk)}</td></tr>`;
   }).join("") : "";
 
   const cryRows = has("crypto") ? crypto.map(c => {
     const val = c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0;
+    const pnlStr = c.pnlPercent != null
+      ? `${c.pnlPercent >= 0 ? "+" : ""}${c.pnlPercent.toFixed(2)}% (${c.pnlPercent >= 0 ? "+" : ""}${formatAmount(val - c.convertedInvestAmount, currency)})`
+      : "—";
     return `<tr>
     <td style="${td}">${c.symbol}</td><td style="${td}">${c.name}</td>
     <td style="${tdR}">${c.amount}</td><td style="${tdR}">${formatAmount(c.investAmount, c.currency)}</td>
     <td style="${tdR}">${c.currentPrice != null ? formatAmount(c.currentPrice, "USD") : "—"}</td>
     <td style="${tdR}">${c.currentValue != null ? formatAmount(c.currentValue, "USD") : "—"}</td>
     <td style="${tdR}">${formatAmount(val, currency)}</td>
-    <td style="${tdR}">${c.pnlPercent != null ? (c.pnlPercent >= 0 ? "+" : "") + c.pnlPercent.toFixed(2) + "%" : "—"}</td>
+    <td style="${tdR}">${pnlStr}</td>
     <td style="${tdR}">${formatPercentOfTotal(val, tCry)}</td></tr>`;
   }).join("") : "";
 
