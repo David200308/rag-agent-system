@@ -162,8 +162,9 @@ export function formatExpiry(dateStr: string): string {
 export function toTradingViewSymbol(symbol: string, kind: "crypto" | "stock", stockType?: StockType): string {
   const sym = symbol.trim().toUpperCase();
   if (kind === "crypto") {
-    // Matches our backend's price source (Hyperliquid perps), quoted by bare base asset (e.g. "BTC", "ETH").
-    return `HYPERLIQUID:${sym.replace(/(USDT|USDC|USD)$/, "")}`;
+    // Matches our backend's price source (Hyperliquid perps), quoted in USD (e.g. "HYPERLIQUID:BTCUSD").
+    const base = sym.replace(/(USDT|USDC|USD)$/, "");
+    return `HYPERLIQUID:${base}USD`;
   }
   switch (stockType) {
     case "HK_STOCK": return `HKEX:${sym.replace(/^0+/, "").padStart(4, "0")}`;
