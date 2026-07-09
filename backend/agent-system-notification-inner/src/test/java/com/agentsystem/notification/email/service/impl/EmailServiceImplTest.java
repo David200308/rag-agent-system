@@ -32,7 +32,7 @@ class EmailServiceImplTest {
     @BeforeEach
     void setUp() {
         // EmailServiceImpl builds its own Resend client internally — swap it for a mock via reflection
-        service = new EmailServiceImpl("test-api-key", "noreply@test.com");
+        service = new EmailServiceImpl("test-api-key", "noreply@test.com", "https://example.com/logo.svg");
         ReflectionTestUtils.setField(service, "resend", resend);
         lenient().when(resend.emails()).thenReturn(emails);
     }

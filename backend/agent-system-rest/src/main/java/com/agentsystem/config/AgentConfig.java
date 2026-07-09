@@ -1,8 +1,5 @@
 package com.agentsystem.config;
 
-import com.agentsystem.config.WebFetchProperties;
-import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Info;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
@@ -11,6 +8,9 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
 
 /**
  * Spring AI + OpenAPI configuration.
@@ -42,10 +42,10 @@ public class AgentConfig {
     @Bean
     public OpenAPI openAPI(LlmProperties props) {
         return new OpenAPI().info(new Info()
-                .title("RAG Agent System")
+                .title("SkyProton Agent System")
                 .version("1.0.0")
                 .description("""
-                        Spring AI + LangGraph4j + Weaviate RAG agent.
+                        Spring AI + LangGraph4j + Weaviate agent system.
                         Active LLM provider: **%s**
                         Structured-output validation via BeanOutputConverter (Java's Pydantic).
                         Fallback chain: cache → direct LLM → static message (Resilience4j).

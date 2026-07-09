@@ -14,9 +14,12 @@ resend:
   api-key: ${RESEND_API_KEY:}
   from-email: ${RESEND_FROM_EMAIL:noreply@example.com}
 
-# ── Shared secret expected on X-Notification-Key from agent-system-rest ──────
+# ── Shared secret expected on X-Notification-Key from agent-system-rest;
+#    logo-url is the branding image used in the email template header ───────
 notification:
   service-key: ${NOTIFICATION_SERVICE_KEY:notification-secret-key}
+  email:
+    logo-url: ${NOTIFICATION_EMAIL_LOGO_URL:https://www.skyproton.com/_next/static/media/logo-black-front-no-background.0acya-sxbgd9s.svg}
 
 management:
   endpoints:

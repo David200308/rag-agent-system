@@ -1,22 +1,23 @@
 package com.agentsystem.controller;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
- * Human-readable metrics endpoint for the RAG agent pipeline.
+ * Human-readable metrics endpoint for the Agent System pipeline.
  *
  * GET /api/v1/metrics  — returns current counter and latency values as JSON.
  *
@@ -26,13 +27,13 @@ import java.util.concurrent.TimeUnit;
 @RestController
 @RequestMapping("/api/v1/metrics")
 @RequiredArgsConstructor
-@Tag(name = "Metrics", description = "RAG agent pipeline metrics")
+@Tag(name = "Metrics", description = "Agent System pipeline metrics")
 public class MetricsController {
 
     private final MeterRegistry registry;
 
     @GetMapping
-    @Operation(summary = "Current RAG agent pipeline metrics (counts + latency percentiles)")
+    @Operation(summary = "Current Agent System pipeline metrics (counts + latency percentiles)")
     public ResponseEntity<Map<String, Object>> metrics() {
         Map<String, Object> result = new LinkedHashMap<>();
 

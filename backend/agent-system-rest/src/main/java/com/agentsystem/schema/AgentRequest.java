@@ -1,18 +1,19 @@
 package com.agentsystem.schema;
 
-import com.fasterxml.jackson.annotation.JsonClassDescription;
-import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-
 import java.io.Serial;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonClassDescription;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 /**
- * Pydantic-equivalent input schema for the RAG agent.
+ * Pydantic-equivalent input schema for the Agent System.
  *
  * In Java/Spring AI, "Pydantic" is implemented via:
  *   - Bean Validation (JSR-380) annotations  → field constraints
@@ -23,8 +24,8 @@ import java.util.Map;
  * All three layers are applied here so the class is usable both as an HTTP
  * request body and as a structured-output target for an LLM call.
  */
-@Schema(description = "Request payload for the RAG agent")
-@JsonClassDescription("Input for the RAG agent pipeline")
+@Schema(description = "Request payload for the Agent System")
+@JsonClassDescription("Input for the Agent System pipeline")
 public record AgentRequest(
 
         @Schema(description = "Natural-language query", example = "What are the main risks of transformer models?")

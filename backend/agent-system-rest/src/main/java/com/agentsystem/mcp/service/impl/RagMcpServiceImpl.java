@@ -1,25 +1,26 @@
 package com.agentsystem.mcp.service.impl;
 
-import com.agentsystem.mcp.service.RagMcpService;
-import com.agentsystem.mcp.service.McpConnectorService;
-
-import com.agentsystem.config.McpProperties;
-import com.agentsystem.knowledge.service.KnowledgeSourceService;
-import com.agentsystem.knowledge.entity.KnowledgeSource;
-import com.agentsystem.rag.service.RetrievalService;
-import com.agentsystem.schema.DocumentResult;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.stereotype.Service;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.stereotype.Service;
+
+import com.agentsystem.config.McpProperties;
+import com.agentsystem.knowledge.entity.KnowledgeSource;
+import com.agentsystem.knowledge.service.KnowledgeSourceService;
+import com.agentsystem.mcp.service.McpConnectorService;
+import com.agentsystem.mcp.service.RagMcpService;
+import com.agentsystem.rag.service.RetrievalService;
+import com.agentsystem.schema.DocumentResult;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 /**
- * MCP-exposed tools for the RAG agent system.
+ * MCP-exposed tools for the Agent System system.
  *
  * Registered as a ToolCallbackProvider via {@link McpConfig}.
  * MCP clients (Claude Desktop, Claude Code, etc.) can connect to:

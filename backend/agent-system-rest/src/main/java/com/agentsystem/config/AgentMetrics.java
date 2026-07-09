@@ -1,14 +1,15 @@
 package com.agentsystem.config;
 
+import java.util.concurrent.TimeUnit;
+
+import org.springframework.stereotype.Component;
+
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import org.springframework.stereotype.Component;
-
-import java.util.concurrent.TimeUnit;
 
 /**
- * Central Micrometer meters for the RAG agent pipeline.
+ * Central Micrometer meters for the Agent System pipeline.
  * Exposed at /actuator/prometheus for Prometheus scraping.
  *
  * Prometheus names (Micrometer appends _total to counters, _seconds to timers):
@@ -32,7 +33,7 @@ public class AgentMetrics {
     public AgentMetrics(MeterRegistry registry) {
         // NOTE: do NOT add a ".total" suffix — Prometheus appends _total automatically.
         this.query = Counter.builder("agent.system.query")
-                .description("Total RAG agent queries")
+                .description("Total Agent System queries")
                 .register(registry);
         this.queryFallback = Counter.builder("agent.system.query.fallback")
                 .description("Queries that activated the fallback path")

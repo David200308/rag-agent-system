@@ -1,44 +1,55 @@
 package com.agentsystem.agent.controller;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.bsc.langgraph4j.RunnableConfig;
+import org.springframework.core.io.Resource;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
 import com.agentsystem.agent.AgentSystemGraph;
 import com.agentsystem.agent.state.AgentState;
 import com.agentsystem.config.AgentMetrics;
 import com.agentsystem.config.LlmProperties;
-import com.agentsystem.conversation.service.ConversationService;
 import com.agentsystem.conversation.entity.ConversationMessage;
-import com.agentsystem.knowledge.service.KnowledgeSourceService;
+import com.agentsystem.conversation.service.ConversationService;
 import com.agentsystem.knowledge.entity.KnowledgeSource;
+import com.agentsystem.knowledge.service.KnowledgeSourceService;
 import com.agentsystem.mcp.service.McpConnectorService;
-import com.agentsystem.rag.service.DocumentIngestionService;
 import com.agentsystem.org.OrgContext;
+import com.agentsystem.rag.service.DocumentIngestionService;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.AgentResponse;
 import com.agentsystem.schema.UrlIngestionResult;
 import com.agentsystem.user.service.UserPreferenceService;
-import com.agentsystem.webfetch.service.WebFetchService;
 import com.agentsystem.webfetch.entity.WebFetchWhitelist;
+import com.agentsystem.webfetch.service.WebFetchService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.bsc.langgraph4j.RunnableConfig;
-import org.springframework.core.io.Resource;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 /**
- * REST API for the RAG agent system.
+ * REST API for the Agent System system.
  *
- * POST /api/v1/agent/query                — run the full RAG agent pipeline
+ * POST /api/v1/agent/query                — run the full Agent System pipeline
  * GET  /api/v1/agent/conversations/{id}   — fetch conversation history
  * POST /api/v1/agent/ingest               — ingest a document into Weaviate
  * POST /api/v1/agent/ingest/text          — ingest plain text into Weaviate
@@ -47,7 +58,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/agent")
 @RequiredArgsConstructor
-@Tag(name = "RAG Agent", description = "LangGraph4j-powered RAG agent endpoints")
+@Tag(name = "Agent System", description = "LangGraph4j-powered Agent System endpoints")
 public class AgentController {
 
     private final AgentSystemGraph            agentGraph;
@@ -64,7 +75,7 @@ public class AgentController {
 
     @PostMapping(value = "/query", consumes = MediaType.APPLICATION_JSON_VALUE,
                                    produces = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "Run a query through the RAG agent pipeline")
+    @Operation(summary = "Run a query through the Agent System pipeline")
     public ResponseEntity<AgentResponse> query(@RequestBody @Valid AgentRequest request,
                                                HttpServletRequest httpRequest) {
 

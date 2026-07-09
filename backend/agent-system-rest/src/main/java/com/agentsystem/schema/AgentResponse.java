@@ -1,19 +1,20 @@
 package com.agentsystem.schema;
 
-import com.fasterxml.jackson.annotation.JsonClassDescription;
-import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import io.swagger.v3.oas.annotations.media.Schema;
-
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonClassDescription;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Pydantic-equivalent structured output schema returned to callers.
  */
-@Schema(description = "Response from the RAG agent pipeline")
-@JsonClassDescription("Structured response produced by the RAG agent")
+@Schema(description = "Response from the Agent System pipeline")
+@JsonClassDescription("Structured response produced by the Agent System")
 public record AgentResponse(
 
         @Schema(description = "Generated answer")
