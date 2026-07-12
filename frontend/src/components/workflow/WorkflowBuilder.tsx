@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ReactFlow,
   Background,
@@ -214,7 +215,9 @@ export function WorkflowBuilder({ workflow }: Props) {
   const graphEdgesRef  = useRef<WorkflowEdgeDto[]>([]);
   graphEdgesRef.current = graphEdges;
   const [showAddMenu,  setShowAddMenu]  = useState(false);
-  const addMenuRef = useRef<HTMLDivElement>(null);
+  const [addMenuPos,   setAddMenuPos]   = useState<{ top: number; left: number } | null>(null);
+  const addMenuButtonRef = useRef<HTMLDivElement>(null);
+  const addMenuPopupRef  = useRef<HTMLDivElement>(null);
   const [selectedId,   setSelectedId]   = useState<number | null>(null);
   const [pattern,      setPattern]      = useState<AgentPattern>(workflow.agentPattern);
   const [teamExecMode, setTeamExecMode] = useState<TeamExecMode | null>(workflow.teamExecMode);
@@ -358,16 +361,29 @@ export function WorkflowBuilder({ workflow }: Props) {
     [agents, selectedId],
   );
 
-  // Close the "Add Component" dropdown on outside click
+  // Position the "Add Component" dropdown (portaled to <body> so the toolbar's
+  // overflow-x-auto — which implicitly clips overflow-y too — can't cut it off),
+  // close it on outside click, and close it on scroll/resize since its position is fixed.
   useEffect(() => {
     if (!showAddMenu) return;
+    const rect = addMenuButtonRef.current?.getBoundingClientRect();
+    if (rect) setAddMenuPos({ top: rect.bottom + 4, left: rect.left });
+
     const onClick = (e: MouseEvent) => {
-      if (addMenuRef.current && !addMenuRef.current.contains(e.target as globalThis.Node)) {
-        setShowAddMenu(false);
-      }
+      const target = e.target as globalThis.Node;
+      if (addMenuButtonRef.current?.contains(target)) return;
+      if (addMenuPopupRef.current?.contains(target)) return;
+      setShowAddMenu(false);
     };
+    const onDismiss = () => setShowAddMenu(false);
     document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    window.addEventListener("scroll", onDismiss, true);
+    window.addEventListener("resize", onDismiss);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      window.removeEventListener("scroll", onDismiss, true);
+      window.removeEventListener("resize", onDismiss);
+    };
   }, [showAddMenu]);
 
   // ── Runs panel resize ─────────────────────────────────────────────────────
@@ -788,7 +804,7 @@ export function WorkflowBuilder({ workflow }: Props) {
             onChange={handlePatternChange}
           />
           <div className="ml-auto flex items-center gap-2 pl-2">
-            <div className="relative" ref={addMenuRef}>
+            <div ref={addMenuButtonRef}>
               <Button
                 size="sm"
                 variant="ghost"
@@ -796,29 +812,34 @@ export function WorkflowBuilder({ workflow }: Props) {
               >
                 <Plus className="h-3.5 w-3.5 mr-1" /> {pattern === "GRAPH" ? "Add Component" : "Add Agent"}
               </Button>
-              {showAddMenu && pattern === "GRAPH" && (
-                <div className="absolute left-0 top-full z-50 mt-1 w-40 overflow-hidden rounded-md border border-[--color-border] bg-white dark:bg-zinc-900 shadow-lg py-1">
-                  <button
-                    onClick={() => { addComponent("AGENT"); setShowAddMenu(false); }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[--color-border]/30"
-                  >
-                    <Bot className="h-3.5 w-3.5" /> Agent
-                  </button>
-                  <button
-                    onClick={() => { addComponent("CONDITION"); setShowAddMenu(false); }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[--color-border]/30"
-                  >
-                    <GitBranch className="h-3.5 w-3.5" /> Condition
-                  </button>
-                  <button
-                    onClick={() => { addComponent("END"); setShowAddMenu(false); }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[--color-border]/30"
-                  >
-                    <FlagOff className="h-3.5 w-3.5" /> End
-                  </button>
-                </div>
-              )}
             </div>
+            {showAddMenu && pattern === "GRAPH" && addMenuPos && typeof document !== "undefined" && createPortal(
+              <div
+                ref={addMenuPopupRef}
+                style={{ top: addMenuPos.top, left: addMenuPos.left }}
+                className="fixed z-50 w-40 overflow-hidden rounded-md border border-[--color-border] bg-white dark:bg-zinc-900 shadow-lg py-1"
+              >
+                <button
+                  onClick={() => { addComponent("AGENT"); setShowAddMenu(false); }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[--color-border]/30"
+                >
+                  <Bot className="h-3.5 w-3.5" /> Agent
+                </button>
+                <button
+                  onClick={() => { addComponent("CONDITION"); setShowAddMenu(false); }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[--color-border]/30"
+                >
+                  <GitBranch className="h-3.5 w-3.5" /> Condition
+                </button>
+                <button
+                  onClick={() => { addComponent("END"); setShowAddMenu(false); }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-[--color-border]/30"
+                >
+                  <FlagOff className="h-3.5 w-3.5" /> End
+                </button>
+              </div>,
+              document.body,
+            )}
             <Button size="sm" variant="ghost" onClick={handleSavePositions} disabled={saving}>
               <Save className="h-3.5 w-3.5 mr-1" /> {saving ? "Saving…" : "Save Layout"}
             </Button>

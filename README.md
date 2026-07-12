@@ -227,14 +227,35 @@ When Google or Telegram is connected, the following tools are available inside t
 
 ## Workflow Engine
 
-Workflows compose multiple AI agents into pipelines with two patterns:
+Workflows compose multiple AI agents into pipelines with three patterns:
 
 | Pattern          | Description                                                 |
 | ---------------- | ----------------------------------------------------------- |
 | `ORCHESTRATOR` | One orchestrator agent routes tasks to specialist agents    |
 | `TEAM`         | Multiple agents run in `PARALLEL` or `SEQUENTIAL` order |
+| `GRAPH`        | Explicit node graph — agents, conditions, and an end node wired together by hand |
 
 Each workflow run executes inside an ephemeral Docker sandbox (`SandboxService`) with CPU/memory resource limits and a watchdog that terminates runaway containers. Agents can load user-uploaded **Skills** (code files) to extend their capabilities.
+
+### GRAPH Pattern
+
+The workflow builder's "+ Add Component" menu (GRAPH pattern only) places three node kinds on the canvas:
+
+| Node kind    | Behavior                                                                 |
+| ------------ | ------------------------------------------------------------------------- |
+| `AGENT`    | Runs its ReAct loop, then hands its output to the single outgoing edge's target |
+| `CONDITION`| Asks the LLM to pick one of its outgoing edges' branch labels based on a user-written condition description, then follows that edge |
+| `END`      | Terminates the run and returns whatever output flowed into it            |
+
+Edges are drawn by hand and persisted (`workflow_edges` table); an edge leaving a `CONDITION` node carries a `branchLabel` (e.g. `"yes"` / `"no"`) that the classifier matches against. The run starts at whichever node has no incoming edge.
+
+### Output Schema Validation
+
+Any agent node (in any pattern) can declare an optional **Output Schema** — a JSON Schema subset (`type`, `properties`, `required`, `enum`, `items`) — in its config panel. After the agent's ReAct loop produces a final answer, the run engine validates it against the schema; on failure it retries once with the validation errors fed back into the conversation before falling back to the raw answer.
+
+### Workflow Versions
+
+The builder's "Versions" panel snapshots a workflow's full pattern/agents/edges as a labeled, numbered version on demand. Each run records which version was active when it started (shown as a `vN` tag in the Runs panel). Restoring an older version replaces the current agents/edges and — rather than deleting history — records the restore itself as a new version, so nothing is lost.
 
 ### Available Tools
 
