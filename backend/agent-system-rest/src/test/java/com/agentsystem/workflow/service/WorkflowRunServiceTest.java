@@ -21,6 +21,7 @@ import com.agentsystem.workflow.entity.Workflow;
 import com.agentsystem.workflow.entity.WorkflowRun;
 import com.agentsystem.workflow.entity.WorkflowRunLog;
 import com.agentsystem.workflow.repository.WorkflowAgentRepository;
+import com.agentsystem.workflow.repository.WorkflowEdgeRepository;
 import com.agentsystem.workflow.repository.WorkflowRunLogRepository;
 import com.agentsystem.workflow.repository.WorkflowRunRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,6 +54,7 @@ class WorkflowRunServiceTest {
     @Mock WorkflowRunRepository    runRepo;
     @Mock WorkflowRunLogRepository logRepo;
     @Mock WorkflowAgentRepository  agentRepo;
+    @Mock WorkflowEdgeRepository   edgeRepo;
     @Mock WorkflowService          workflowService;
     @Mock SandboxService           sandboxService;
     @Mock WebFetchService          webFetchService;
@@ -74,7 +76,7 @@ class WorkflowRunServiceTest {
     @BeforeEach
     void setUp() {
         service = new WorkflowRunServiceImpl(
-                runRepo, logRepo, agentRepo, workflowService, sandboxService,
+                runRepo, logRepo, agentRepo, edgeRepo, workflowService, sandboxService,
                 webFetchService, skillService, chatClient, chatModelFactory,
                 modelConfigService, llmProperties, notificationClient,
                 workflowScheduleClient,

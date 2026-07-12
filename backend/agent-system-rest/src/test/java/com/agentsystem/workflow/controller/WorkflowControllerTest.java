@@ -281,7 +281,7 @@ class WorkflowControllerTest {
         when(workflowService.upsertAgent(
                 eq("wf-1"), isNull(), eq("Research Agent"),
                 any(WorkflowAgent.AgentRole.class), any(), any(), any(),
-                anyInt(), anyDouble(), anyDouble()))
+                anyInt(), anyDouble(), anyDouble(), any(), any(), any()))
                 .thenReturn(saved);
 
         Map<String, Object> body = Map.of(
@@ -301,7 +301,7 @@ class WorkflowControllerTest {
         WorkflowAgent saved = new WorkflowAgent();
         when(workflowService.upsertAgent(
                 eq("wf-1"), eq(42L), any(), any(), any(), any(), any(),
-                anyInt(), anyDouble(), anyDouble()))
+                anyInt(), anyDouble(), anyDouble(), any(), any(), any()))
                 .thenReturn(saved);
 
         Map<String, Object> body = new java.util.HashMap<>();
@@ -313,7 +313,7 @@ class WorkflowControllerTest {
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         verify(workflowService).upsertAgent(eq("wf-1"), eq(42L), any(), any(), any(), any(), any(),
-                anyInt(), anyDouble(), anyDouble());
+                anyInt(), anyDouble(), anyDouble(), any(), any(), any());
     }
 
     @Test
@@ -322,7 +322,7 @@ class WorkflowControllerTest {
         when(workflowService.upsertAgent(
                 eq("wf-1"), any(), any(), any(), any(),
                 eq(List.of("BASH", "CURL")), eq(List.of("skill-1")),
-                anyInt(), anyDouble(), anyDouble()))
+                anyInt(), anyDouble(), anyDouble(), any(), any(), any()))
                 .thenReturn(saved);
 
         Map<String, Object> body = new java.util.HashMap<>();
@@ -335,7 +335,7 @@ class WorkflowControllerTest {
         verify(workflowService).upsertAgent(
                 eq("wf-1"), any(), any(), any(), any(),
                 eq(List.of("BASH", "CURL")), eq(List.of("skill-1")),
-                anyInt(), anyDouble(), anyDouble());
+                anyInt(), anyDouble(), anyDouble(), any(), any(), any());
     }
 
     @Test
@@ -343,7 +343,7 @@ class WorkflowControllerTest {
         WorkflowAgent saved = new WorkflowAgent();
         when(workflowService.upsertAgent(
                 eq("wf-1"), any(), any(), any(), any(), any(), any(),
-                eq(2), eq(100.0), eq(200.0)))
+                eq(2), eq(100.0), eq(200.0), any(), any(), any()))
                 .thenReturn(saved);
 
         Map<String, Object> body = new java.util.HashMap<>();
@@ -356,7 +356,7 @@ class WorkflowControllerTest {
 
         verify(workflowService).upsertAgent(
                 eq("wf-1"), any(), any(), any(), any(), any(), any(),
-                eq(2), eq(100.0), eq(200.0));
+                eq(2), eq(100.0), eq(200.0), any(), any(), any());
     }
 
     // ── createWorkflow — TEAM pattern ──────────────────────────────────────────

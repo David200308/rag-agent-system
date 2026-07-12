@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS workflows (
     name           VARCHAR(255)  NOT NULL,
     description    VARCHAR(1000),
     owner_uuid     VARCHAR(36),               -- nullable when auth is disabled
-    agent_pattern  VARCHAR(20)   NOT NULL,   -- ORCHESTRATOR | TEAM
+    agent_pattern  VARCHAR(20)   NOT NULL,   -- ORCHESTRATOR | TEAM | GRAPH
     team_exec_mode VARCHAR(20),               -- PARALLEL | SEQUENTIAL (TEAM only)
     selected_model VARCHAR(100),
     org_id         VARCHAR(100),              -- NULL = personal mode; non-null = org-scoped (team mode)
@@ -127,20 +127,43 @@ CREATE TABLE IF NOT EXISTS workflows (
 );
 
 CREATE TABLE IF NOT EXISTS workflow_agents (
-    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
-    workflow_id   VARCHAR(36)   NOT NULL,
-    role          VARCHAR(20)   NOT NULL,   -- MAIN | SUB | PEER
-    name          VARCHAR(255)  NOT NULL,
-    system_prompt TEXT,
-    tools_json    TEXT,                     -- JSON array of enabled tool names
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workflow_id    VARCHAR(36)   NOT NULL,
+    role           VARCHAR(20)   NOT NULL,   -- MAIN | SUB | PEER
+    node_kind      VARCHAR(20)   NOT NULL DEFAULT 'AGENT',  -- AGENT | CONDITION | END (GRAPH pattern only)
+    condition_expr TEXT,                     -- branch-selection instructions, CONDITION nodes only
+    output_schema_json TEXT,                 -- optional JSON Schema (subset) the agent's final answer must satisfy
+    name           VARCHAR(255)  NOT NULL,
+    system_prompt  TEXT,
+    tools_json     TEXT,                     -- JSON array of enabled tool names
     skill_ids_json TEXT,                    -- JSON array of attached skill IDs
-    order_index   INT           NOT NULL DEFAULT 0,
-    pos_x         DOUBLE        NOT NULL DEFAULT 0,
-    pos_y         DOUBLE        NOT NULL DEFAULT 0,
-    created_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    order_index    INT           NOT NULL DEFAULT 0,
+    pos_x          DOUBLE        NOT NULL DEFAULT 0,
+    pos_y          DOUBLE        NOT NULL DEFAULT 0,
+    created_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_wa_workflow (workflow_id),
     CONSTRAINT fk_wa_workflow FOREIGN KEY (workflow_id)
         REFERENCES workflows(id) ON DELETE CASCADE
+);
+
+-- Explicit node-to-node connections for the GRAPH pattern. branch_label is set
+-- only on edges leaving a CONDITION node (matches the label the run engine's
+-- classifier is asked to choose between); NULL on plain agent → agent edges.
+CREATE TABLE IF NOT EXISTS workflow_edges (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workflow_id     VARCHAR(36)   NOT NULL,
+    source_node_id  BIGINT        NOT NULL,
+    target_node_id  BIGINT        NOT NULL,
+    branch_label    VARCHAR(100),
+    created_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_we_workflow (workflow_id),
+    INDEX idx_we_source (source_node_id),
+    CONSTRAINT fk_we_workflow FOREIGN KEY (workflow_id)
+        REFERENCES workflows(id) ON DELETE CASCADE,
+    CONSTRAINT fk_we_source FOREIGN KEY (source_node_id)
+        REFERENCES workflow_agents(id) ON DELETE CASCADE,
+    CONSTRAINT fk_we_target FOREIGN KEY (target_node_id)
+        REFERENCES workflow_agents(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS workflow_runs (
@@ -152,10 +175,27 @@ CREATE TABLE IF NOT EXISTS workflow_runs (
     status            VARCHAR(20)  NOT NULL DEFAULT 'PENDING',  -- PENDING | RUNNING | DONE | FAILED
     sandbox_container VARCHAR(128),
     final_output      LONGTEXT,
+    workflow_version  INT,                                   -- workflow_versions.version_number active at run start; NULL if never saved
     started_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     finished_at       TIMESTAMP,
     INDEX idx_wr_workflow (workflow_id),
     CONSTRAINT fk_wr_workflow FOREIGN KEY (workflow_id)
+        REFERENCES workflows(id) ON DELETE CASCADE
+);
+
+-- Named snapshots of a workflow's full config (pattern + agents + edges), saved
+-- explicitly by the user. Restoring an old version creates a new version on top
+-- rather than deleting history.
+CREATE TABLE IF NOT EXISTS workflow_versions (
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workflow_id    VARCHAR(36)  NOT NULL,
+    version_number INT          NOT NULL,
+    label          VARCHAR(255),
+    snapshot_json  LONGTEXT     NOT NULL,
+    created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_wv_workflow (workflow_id),
+    UNIQUE KEY uq_wv_workflow_version (workflow_id, version_number),
+    CONSTRAINT fk_wv_workflow FOREIGN KEY (workflow_id)
         REFERENCES workflows(id) ON DELETE CASCADE
 );
 
@@ -423,4 +463,42 @@ CREATE TABLE IF NOT EXISTS schedule_runs (
     INDEX idx_run_sched (schedule_id),
     CONSTRAINT fk_run_sched FOREIGN KEY (schedule_id)
         REFERENCES scheduled_messages(id) ON DELETE CASCADE
+);
+
+-- ── GRAPH pattern: condition/end nodes + explicit node edges ─────────────────
+-- Run once against an existing dev DB (fresh installs already get these via
+-- the CREATE TABLE statements above).
+ALTER TABLE workflow_agents ADD COLUMN node_kind          VARCHAR(20) NOT NULL DEFAULT 'AGENT';
+ALTER TABLE workflow_agents ADD COLUMN condition_expr      TEXT;
+ALTER TABLE workflow_agents ADD COLUMN output_schema_json  TEXT;
+ALTER TABLE workflow_runs   ADD COLUMN workflow_version    INT;
+
+CREATE TABLE IF NOT EXISTS workflow_versions (
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workflow_id    VARCHAR(36)  NOT NULL,
+    version_number INT          NOT NULL,
+    label          VARCHAR(255),
+    snapshot_json  LONGTEXT     NOT NULL,
+    created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_wv_workflow (workflow_id),
+    UNIQUE KEY uq_wv_workflow_version (workflow_id, version_number),
+    CONSTRAINT fk_wv_workflow FOREIGN KEY (workflow_id)
+        REFERENCES workflows(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS workflow_edges (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workflow_id     VARCHAR(36)   NOT NULL,
+    source_node_id  BIGINT        NOT NULL,
+    target_node_id  BIGINT        NOT NULL,
+    branch_label    VARCHAR(100),
+    created_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_we_workflow (workflow_id),
+    INDEX idx_we_source (source_node_id),
+    CONSTRAINT fk_we_workflow FOREIGN KEY (workflow_id)
+        REFERENCES workflows(id) ON DELETE CASCADE,
+    CONSTRAINT fk_we_source FOREIGN KEY (source_node_id)
+        REFERENCES workflow_agents(id) ON DELETE CASCADE,
+    CONSTRAINT fk_we_target FOREIGN KEY (target_node_id)
+        REFERENCES workflow_agents(id) ON DELETE CASCADE
 );

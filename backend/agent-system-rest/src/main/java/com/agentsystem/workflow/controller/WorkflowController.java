@@ -6,8 +6,10 @@ import com.agentsystem.workflow.service.WorkflowRunService;
 import com.agentsystem.workflow.service.WorkflowService;
 import com.agentsystem.workflow.entity.Workflow;
 import com.agentsystem.workflow.entity.WorkflowAgent;
+import com.agentsystem.workflow.entity.WorkflowEdge;
 import com.agentsystem.workflow.entity.WorkflowRun;
 import com.agentsystem.workflow.entity.WorkflowRunLog;
+import com.agentsystem.workflow.entity.WorkflowVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -131,8 +133,14 @@ public class WorkflowController {
         double posX    = body.get("posX") instanceof Number n ? n.doubleValue() : 0;
         double posY    = body.get("posY") instanceof Number n ? n.doubleValue() : 0;
 
+        WorkflowAgent.NodeKind nodeKind = WorkflowAgent.NodeKind.valueOf(
+                (String) body.getOrDefault("nodeKind", "AGENT"));
+        String conditionExpr   = (String) body.get("conditionExpr");
+        String outputSchemaJson = (String) body.get("outputSchemaJson");
+
         WorkflowAgent saved = workflowService.upsertAgent(
-                workflowId, agentId, name, role, systemPrompt, tools, skillIds, orderIndex, posX, posY);
+                workflowId, agentId, name, role, systemPrompt, tools, skillIds, orderIndex, posX, posY,
+                nodeKind, conditionExpr, outputSchemaJson);
         return ResponseEntity.ok(saved);
     }
 
@@ -143,6 +151,70 @@ public class WorkflowController {
             @PathVariable Long agentId) {
         workflowService.deleteAgent(agentId);
         return ResponseEntity.noContent().build();
+    }
+
+    // ── Edge CRUD (GRAPH pattern) ─────────────────────────────────────────────
+
+    @GetMapping("/{workflowId}/edges")
+    @Operation(summary = "List explicit node edges for a GRAPH-pattern workflow")
+    public ResponseEntity<List<WorkflowEdge>> listEdges(@PathVariable String workflowId) {
+        return ResponseEntity.ok(workflowService.listEdges(workflowId));
+    }
+
+    @PostMapping("/{workflowId}/edges")
+    @Operation(summary = "Create an edge between two nodes")
+    public ResponseEntity<WorkflowEdge> createEdge(
+            @PathVariable String workflowId,
+            @RequestBody Map<String, Object> body) {
+
+        Long sourceNodeId = body.get("sourceNodeId") instanceof Number n ? n.longValue() : null;
+        Long targetNodeId = body.get("targetNodeId") instanceof Number n ? n.longValue() : null;
+        String branchLabel = (String) body.get("branchLabel");
+
+        if (sourceNodeId == null || targetNodeId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        WorkflowEdge saved = workflowService.upsertEdge(workflowId, sourceNodeId, targetNodeId, branchLabel);
+        return ResponseEntity.ok(saved);
+    }
+
+    @DeleteMapping("/{workflowId}/edges/{edgeId}")
+    @Operation(summary = "Delete an edge")
+    public ResponseEntity<Void> deleteEdge(
+            @PathVariable String workflowId,
+            @PathVariable Long edgeId) {
+        workflowService.deleteEdge(edgeId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ── Versions ──────────────────────────────────────────────────────────────
+
+    @GetMapping("/{workflowId}/versions")
+    @Operation(summary = "List saved versions of a workflow, newest first")
+    public ResponseEntity<List<WorkflowVersion>> listVersions(@PathVariable String workflowId) {
+        return ResponseEntity.ok(workflowService.listVersions(workflowId));
+    }
+
+    @PostMapping("/{workflowId}/versions")
+    @Operation(summary = "Snapshot the workflow's current pattern/agents/edges as a new version")
+    public ResponseEntity<WorkflowVersion> createVersion(
+            @PathVariable String workflowId,
+            @RequestBody Map<String, Object> body) {
+        String label = (String) body.get("label");
+        return ResponseEntity.ok(workflowService.createVersion(workflowId, label));
+    }
+
+    @PostMapping("/{workflowId}/versions/{versionNumber}/restore")
+    @Operation(summary = "Restore a saved version — replaces current agents/edges and records the restore as a new version")
+    public ResponseEntity<WorkflowVersion> restoreVersion(
+            @PathVariable String workflowId,
+            @PathVariable int versionNumber) {
+        try {
+            return ResponseEntity.ok(workflowService.restoreVersion(workflowId, versionNumber));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     // ── Run endpoints ─────────────────────────────────────────────────────────

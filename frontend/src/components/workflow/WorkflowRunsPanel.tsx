@@ -130,6 +130,11 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
               <span className="text-[11px] font-semibold capitalize text-[--color-fg]">
                 {run.status.toLowerCase()}
               </span>
+              {run.workflowVersion != null && (
+                <span className="rounded-full border border-[--color-border] px-1.5 py-0 text-[9px] font-medium text-[--color-muted]">
+                  v{run.workflowVersion}
+                </span>
+              )}
               {duration(run) && (
                 <span className="ml-auto text-[10px] text-[--color-muted]">{duration(run)}</span>
               )}

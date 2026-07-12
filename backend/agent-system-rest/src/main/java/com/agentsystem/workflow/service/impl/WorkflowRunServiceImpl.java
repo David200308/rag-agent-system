@@ -20,11 +20,14 @@ import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.webfetch.service.WebFetchService;
 import com.agentsystem.workflow.entity.Workflow;
 import com.agentsystem.workflow.entity.WorkflowAgent;
+import com.agentsystem.workflow.entity.WorkflowEdge;
 import com.agentsystem.workflow.entity.WorkflowRun;
 import com.agentsystem.workflow.entity.WorkflowRunLog;
 import com.agentsystem.workflow.repository.WorkflowAgentRepository;
+import com.agentsystem.workflow.repository.WorkflowEdgeRepository;
 import com.agentsystem.workflow.repository.WorkflowRunLogRepository;
 import com.agentsystem.workflow.repository.WorkflowRunRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -37,8 +40,10 @@ import org.springframework.data.domain.PageRequest;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -46,6 +51,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Executes workflow runs in two modes:
@@ -76,6 +82,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
     private final WorkflowRunRepository    runRepo;
     private final WorkflowRunLogRepository logRepo;
     private final WorkflowAgentRepository  agentRepo;
+    private final WorkflowEdgeRepository   edgeRepo;
     private final WorkflowService          workflowService;
     private final SandboxService           sandboxService;
     private final WebFetchService          webFetchService;
@@ -121,6 +128,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
     public String startRunByUuid(String workflowId, String userInput, String ownerUuid, boolean emailNotify) {
         WorkflowRun run = new WorkflowRun(UUID.randomUUID().toString(), workflowId, ownerUuid, userInput);
         run.setStatus(WorkflowRun.RunStatus.PENDING);
+        run.setWorkflowVersion(workflowService.latestVersionNumber(workflowId).orElse(null));
         runRepo.save(run);
         if (emailNotify && ownerUuid != null) {
             emailNotifyRuns.put(run.getId(), true);
@@ -234,6 +242,8 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
             String output = switch (workflow.getAgentPattern()) {
                 case ORCHESTRATOR -> executeOrchestrator(run, agents, containerId, effectiveClient);
                 case TEAM         -> executeTeam(run, workflow, agents, containerId, effectiveClient);
+                case GRAPH        -> executeGraph(run, agents, edgeRepo.findByWorkflowId(run.getWorkflowId()),
+                                                   containerId, effectiveClient);
             };
 
             run.setFinalOutput(output);
@@ -323,6 +333,8 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
             sb.append(buildToolSection(tools));
         }
 
+        sb.append(buildOutputSchemaSection(main.getOutputSchemaJson()));
+
         if (!subs.isEmpty()) {
             sb.append("""
 
@@ -372,7 +384,8 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                         () -> {
                             String sysPrompt = (agent.getSystemPrompt() != null ? agent.getSystemPrompt() : "")
                                     + buildSkillSection(workflowService.parseSkillIds(agent))
-                                    + buildToolSection(workflowService.parseTools(agent));
+                                    + buildToolSection(workflowService.parseTools(agent))
+                                    + buildOutputSchemaSection(agent.getOutputSchemaJson());
                             return runReActLoop(run, agent, sysPrompt, run.getUserInput(), containerId, List.of(), effectiveClient);
                         }, asyncPool))
                 .toList();
@@ -397,7 +410,8 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
             WorkflowAgent agent = peers.get(i);
             String sysPrompt = (agent.getSystemPrompt() != null ? agent.getSystemPrompt() : "")
                     + buildSkillSection(workflowService.parseSkillIds(agent))
-                    + buildToolSection(workflowService.parseTools(agent));
+                    + buildToolSection(workflowService.parseTools(agent))
+                    + buildOutputSchemaSection(agent.getOutputSchemaJson());
             currentInput = runReActLoop(run, agent, sysPrompt, currentInput, containerId, List.of(), effectiveClient);
             if (i < peers.size() - 1) {
                 sandboxService.recycleSandbox(containerId);  // clean between sequential steps
@@ -405,6 +419,112 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         }
         return currentInput;
     }
+
+    // ── Graph pattern ────────────────────────────────────────────────────────
+
+    /**
+     * Walks an explicit node graph built by the user in the workflow builder:
+     * AGENT nodes run a ReAct loop and hand their output to the single outgoing edge's
+     * target; CONDITION nodes ask the LLM to pick one of their outgoing edges' branch
+     * labels; END nodes terminate the run.
+     */
+    private String executeGraph(WorkflowRun run, List<WorkflowAgent> agents, List<WorkflowEdge> edges,
+                                String containerId, ChatClient effectiveClient) {
+        if (agents.isEmpty()) throw new RuntimeException("No nodes defined for graph workflow");
+
+        Map<Long, WorkflowAgent> nodesById = agents.stream()
+                .collect(Collectors.toMap(WorkflowAgent::getId, a -> a));
+
+        Set<Long> hasIncoming = edges.stream().map(WorkflowEdge::getTargetNodeId).collect(Collectors.toSet());
+        List<WorkflowAgent> startCandidates = agents.stream()
+                .filter(a -> !hasIncoming.contains(a.getId()))
+                .sorted(Comparator.comparingInt(WorkflowAgent::getOrderIndex))
+                .toList();
+        if (startCandidates.isEmpty()) {
+            throw new RuntimeException("Graph workflow has no start node — every node has an incoming edge (check for a cycle)");
+        }
+
+        WorkflowAgent current = startCandidates.get(0);
+        String currentInput = run.getUserInput();
+        int maxSteps = agents.size() * 3 + 10;
+
+        for (int step = 0; step < maxSteps; step++) {
+            final WorkflowAgent node = current;
+            switch (node.getNodeKind()) {
+                case END -> {
+                    emit(run.getId(), node.getId(), node.getName(), WorkflowRunLog.LogType.SYSTEM,
+                            "Reached END node [" + node.getName() + "]");
+                    return currentInput;
+                }
+                case CONDITION -> {
+                    List<WorkflowEdge> outgoing = edges.stream()
+                            .filter(e -> e.getSourceNodeId().equals(node.getId()))
+                            .toList();
+                    if (outgoing.isEmpty()) {
+                        throw new RuntimeException("Condition node [" + node.getName() + "] has no outgoing edges");
+                    }
+                    String branch = classifyBranch(run, node, currentInput, outgoing, effectiveClient);
+                    WorkflowEdge chosen = outgoing.stream()
+                            .filter(e -> branch.equalsIgnoreCase(nullToEmpty(e.getBranchLabel())))
+                            .findFirst()
+                            .orElse(outgoing.get(0));
+                    emit(run.getId(), node.getId(), node.getName(), WorkflowRunLog.LogType.DELEGATION,
+                            "→ Branch [" + branch + "] selected");
+                    current = requireNode(nodesById, chosen.getTargetNodeId());
+                }
+                case AGENT -> {
+                    String sysPrompt = buildGraphAgentPrompt(node);
+                    currentInput = runReActLoop(run, node, sysPrompt, currentInput, containerId, List.of(), effectiveClient);
+                    List<WorkflowEdge> outgoing = edges.stream()
+                            .filter(e -> e.getSourceNodeId().equals(node.getId()))
+                            .toList();
+                    if (outgoing.isEmpty()) {
+                        return currentInput; // no outgoing edge — implicit end of graph
+                    }
+                    sandboxService.recycleSandbox(containerId);
+                    current = requireNode(nodesById, outgoing.get(0).getTargetNodeId());
+                }
+            }
+        }
+        throw new RuntimeException("Graph workflow exceeded " + maxSteps + " steps — check for a cycle");
+    }
+
+    private WorkflowAgent requireNode(Map<Long, WorkflowAgent> nodesById, Long id) {
+        WorkflowAgent node = nodesById.get(id);
+        if (node == null) throw new RuntimeException("Edge targets unknown node id " + id);
+        return node;
+    }
+
+    private String buildGraphAgentPrompt(WorkflowAgent agent) {
+        return (agent.getSystemPrompt() != null ? agent.getSystemPrompt() : "")
+                + buildSkillSection(workflowService.parseSkillIds(agent))
+                + buildToolSection(workflowService.parseTools(agent))
+                + buildOutputSchemaSection(agent.getOutputSchemaJson());
+    }
+
+    /** Asks the LLM to pick one of a condition node's outgoing branch labels for the given input. */
+    private String classifyBranch(WorkflowRun run, WorkflowAgent conditionNode, String input,
+                                  List<WorkflowEdge> outgoing, ChatClient effectiveClient) {
+        List<String> labels = outgoing.stream().map(e -> nullToEmpty(e.getBranchLabel())).toList();
+
+        String prompt = "You are a routing classifier for a workflow condition node.\n"
+                + "Condition: " + (conditionNode.getConditionExpr() != null && !conditionNode.getConditionExpr().isBlank()
+                        ? conditionNode.getConditionExpr() : "(no description provided — use your best judgement)") + "\n\n"
+                + "Respond with EXACTLY one of these labels and nothing else: " + labels + "\n\n"
+                + "Input to classify:\n" + input;
+
+        String response = effectiveClient.prompt().user(prompt).call().content().strip();
+        emit(run.getId(), conditionNode.getId(), conditionNode.getName(), WorkflowRunLog.LogType.LLM_RESPONSE, response);
+
+        for (String label : labels) {
+            if (label.equalsIgnoreCase(response) || response.toLowerCase().contains(label.toLowerCase())) {
+                return label;
+            }
+        }
+        return labels.get(0); // no confident match — fall back to the first outgoing edge
+    }
+
+    private String nullToEmpty(String s) { return s != null ? s : ""; }
 
     // ── ReAct loop ────────────────────────────────────────────────────────────
 
@@ -455,7 +575,8 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                 if (subAgent != null) {
                     String subPrompt = (subAgent.getSystemPrompt() != null ? subAgent.getSystemPrompt() : "")
                             + buildSkillSection(workflowService.parseSkillIds(subAgent))
-                            + buildToolSection(workflowService.parseTools(subAgent));
+                            + buildToolSection(workflowService.parseTools(subAgent))
+                            + buildOutputSchemaSection(subAgent.getOutputSchemaJson());
                     subResult = runReActLoop(run, subAgent, subPrompt, delegatedTask, containerId, List.of(), effectiveClient);
                     sandboxService.recycleSandbox(containerId);  // clean workspace between delegations
                 } else {
@@ -505,8 +626,25 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                 continue;
             }
 
-            // No tool calls and no delegation → final answer
-            return llmResponse;
+            // No tool calls and no delegation → final answer, unless a schema demands a retry
+            if (agent.getOutputSchemaJson() == null || agent.getOutputSchemaJson().isBlank()) {
+                return llmResponse;
+            }
+            List<String> schemaErrors = validateOutputSchema(agent.getOutputSchemaJson(), llmResponse);
+            if (schemaErrors.isEmpty()) {
+                return llmResponse;
+            }
+            emit(run.getId(), agent.getId(), agent.getName(), WorkflowRunLog.LogType.ERROR,
+                    "Output failed schema validation: " + String.join("; ", schemaErrors));
+            if (iter == MAX_REACT_ITERATIONS - 1) {
+                return llmResponse; // out of retries — return best effort, failure already logged
+            }
+            messages.add(Map.of("role", "assistant", "content", llmResponse));
+            messages.add(Map.of("role", "user", "content",
+                    "Your previous answer did not match the required output schema:\n"
+                    + String.join("\n", schemaErrors)
+                    + "\n\nRespond again with ONLY valid JSON matching the schema — no markdown fences, no extra text."));
+            continue;
         }
 
         // Max iterations reached — return last LLM response
@@ -692,6 +830,32 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
 
         sb.append("\nWhen you have a final answer, respond normally without any XML tags.");
         return sb.toString();
+    }
+
+    private String buildOutputSchemaSection(String outputSchemaJson) {
+        if (outputSchemaJson == null || outputSchemaJson.isBlank()) return "";
+        return "\n\n## Required Output Format\n"
+                + "Your final answer (once you are done using tools) MUST be valid JSON matching this schema:\n"
+                + outputSchemaJson
+                + "\nRespond with ONLY the JSON — no markdown code fences, no explanation text.\n";
+    }
+
+    /** Returns human-readable errors, or an empty list if the output satisfies the schema (or the schema itself is unparsable, which is not the agent's fault). */
+    private List<String> validateOutputSchema(String schemaJson, String rawOutput) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            JsonNode schema = mapper.readTree(schemaJson);
+            JsonNode data;
+            try {
+                data = OutputSchemaValidator.parseLenient(mapper, rawOutput);
+            } catch (Exception e) {
+                return List.of("Output is not valid JSON: " + e.getMessage());
+            }
+            return OutputSchemaValidator.validate(schema, data);
+        } catch (Exception e) {
+            log.warn("[WorkflowRun] Skipping output schema validation — schema itself is invalid: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     private String buildSkillSection(List<String> skillIds) {

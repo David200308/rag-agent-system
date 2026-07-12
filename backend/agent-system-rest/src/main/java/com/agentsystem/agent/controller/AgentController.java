@@ -27,6 +27,7 @@ import com.agentsystem.config.AgentMetrics;
 import com.agentsystem.config.LlmProperties;
 import com.agentsystem.conversation.entity.ConversationMessage;
 import com.agentsystem.conversation.service.ConversationService;
+import com.agentsystem.knowledge.dto.KnowledgeSourceView;
 import com.agentsystem.knowledge.entity.KnowledgeSource;
 import com.agentsystem.knowledge.service.KnowledgeSourceService;
 import com.agentsystem.mcp.service.McpConnectorService;
@@ -35,6 +36,7 @@ import com.agentsystem.rag.service.DocumentIngestionService;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.AgentResponse;
 import com.agentsystem.schema.UrlIngestionResult;
+import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.user.service.UserPreferenceService;
 import com.agentsystem.webfetch.entity.WebFetchWhitelist;
 import com.agentsystem.webfetch.service.WebFetchService;
@@ -68,6 +70,7 @@ public class AgentController {
     private final KnowledgeSourceService   knowledgeSourceService;
     private final WebFetchService          webFetchService;
     private final UserPreferenceService    userPreferenceService;
+    private final UserAccountService       userAccountService;
     private final LlmProperties            llmProperties;
     private final AgentMetrics             agentMetrics;
 
@@ -407,8 +410,9 @@ public class AgentController {
 
     @GetMapping("/knowledge")
     @Operation(summary = "List knowledge sources accessible to the authenticated user")
-    public ResponseEntity<List<KnowledgeSource>> listKnowledge(HttpServletRequest httpRequest) {
-        return ResponseEntity.ok(knowledgeSourceService.listAccessible(OrgContext.from(httpRequest)));
+    public ResponseEntity<List<KnowledgeSourceView>> listKnowledge(HttpServletRequest httpRequest) {
+        return ResponseEntity.ok(knowledgeSourceService.listAccessible(OrgContext.from(httpRequest))
+                .stream().map(this::toView).toList());
     }
 
     @DeleteMapping("/knowledge")
@@ -426,7 +430,7 @@ public class AgentController {
 
     @PatchMapping("/knowledge")
     @Operation(summary = "Update label / category for a knowledge source (owner only)")
-    public ResponseEntity<KnowledgeSource> updateKnowledge(
+    public ResponseEntity<KnowledgeSourceView> updateKnowledge(
             @RequestBody Map<String, Object> body,
             HttpServletRequest httpRequest) {
         String source   = (String) body.get("source");
@@ -438,12 +442,23 @@ public class AgentController {
         try {
             KnowledgeSource updated = knowledgeSourceService.updateMetadata(
                     source, label, category, OrgContext.from(httpRequest));
-            return ResponseEntity.ok(updated);
+            return ResponseEntity.ok(toView(updated));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
+    }
+
+    /** Resolves owner/share uuids to emails — the frontend Knowledge Manage UI is email-based. */
+    private KnowledgeSourceView toView(KnowledgeSource ks) {
+        String ownerEmail = ks.getOwnerUuid() != null ? userAccountService.getEmailByUuid(ks.getOwnerUuid()) : null;
+        List<KnowledgeSourceView.ShareView> shares = ks.getShares().stream()
+                .map(s -> new KnowledgeSourceView.ShareView(s.getId(), userAccountService.getEmailByUuid(s.getSharedUuid())))
+                .toList();
+        return new KnowledgeSourceView(
+                ks.getId(), ks.getSource(), ks.getLabel(), ks.getCategory(), ks.getChunkCount(),
+                ownerEmail, ks.getIngestedAt(), shares);
     }
 
     @PutMapping("/knowledge/share")

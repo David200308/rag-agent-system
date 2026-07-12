@@ -11,8 +11,8 @@
  */
 import { queryOptions, type MutationOptions } from "@tanstack/react-query";
 import type {
-  AgentPattern, AgentRole, TeamExecMode,
-  Workflow, WorkflowAgent, WorkflowRun, WorkflowRunLog,
+  AgentPattern, AgentRole, NodeKind, TeamExecMode,
+  Workflow, WorkflowAgent, WorkflowEdgeDto, WorkflowRun, WorkflowRunLog, WorkflowVersion,
   AgentRequest,
   AgentResponse,
   AccessType,
@@ -365,12 +365,49 @@ export async function upsertWorkflowAgent(workflowId: string, agent: {
   orderIndex?: number;
   posX?: number;
   posY?: number;
+  nodeKind?: NodeKind;
+  conditionExpr?: string | null;
+  outputSchemaJson?: string | null;
 }): Promise<WorkflowAgent> {
   return postJson<WorkflowAgent>(`/api/workflow/${workflowId}/agents`, agent);
 }
 
 export async function deleteWorkflowAgent(workflowId: string, agentId: number): Promise<void> {
   await fetch(`/api/workflow/${workflowId}/agents/${agentId}`, { method: "DELETE" });
+}
+
+// Edges (GRAPH pattern)
+export async function fetchWorkflowEdges(workflowId: string): Promise<WorkflowEdgeDto[]> {
+  const res = await fetch(`/api/workflow/${workflowId}/edges`);
+  if (!res.ok) return [];
+  return res.json() as Promise<WorkflowEdgeDto[]>;
+}
+
+export async function upsertWorkflowEdge(workflowId: string, edge: {
+  sourceNodeId: number;
+  targetNodeId: number;
+  branchLabel?: string | null;
+}): Promise<WorkflowEdgeDto> {
+  return postJson<WorkflowEdgeDto>(`/api/workflow/${workflowId}/edges`, edge);
+}
+
+export async function deleteWorkflowEdge(workflowId: string, edgeId: number): Promise<void> {
+  await fetch(`/api/workflow/${workflowId}/edges/${edgeId}`, { method: "DELETE" });
+}
+
+// Versions
+export async function fetchWorkflowVersions(workflowId: string): Promise<WorkflowVersion[]> {
+  const res = await fetch(`/api/workflow/${workflowId}/versions`);
+  if (!res.ok) return [];
+  return res.json() as Promise<WorkflowVersion[]>;
+}
+
+export async function saveWorkflowVersion(workflowId: string, label?: string): Promise<WorkflowVersion> {
+  return postJson<WorkflowVersion>(`/api/workflow/${workflowId}/versions`, { label: label ?? null });
+}
+
+export async function restoreWorkflowVersion(workflowId: string, versionNumber: number): Promise<WorkflowVersion> {
+  return postJson<WorkflowVersion>(`/api/workflow/${workflowId}/versions/${versionNumber}/restore`, {});
 }
 
 // Runs

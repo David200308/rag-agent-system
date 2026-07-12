@@ -16,6 +16,9 @@ public class WorkflowAgent {
 
     public enum AgentRole { MAIN, SUB, PEER }
 
+    /** Only meaningful for the GRAPH pattern; other patterns implicitly treat every node as AGENT. */
+    public enum NodeKind { AGENT, CONDITION, END }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -26,6 +29,18 @@ public class WorkflowAgent {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private AgentRole role;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "node_kind", nullable = false, length = 20)
+    private NodeKind nodeKind = NodeKind.AGENT;
+
+    /** Branch-selection instructions for CONDITION nodes; the run engine asks the LLM to pick an outgoing edge's label based on this. */
+    @Column(name = "condition_expr", columnDefinition = "TEXT")
+    private String conditionExpr;
+
+    /** Optional JSON Schema (subset — type/properties/required/enum/items) the agent's final answer must satisfy. */
+    @Column(name = "output_schema_json", columnDefinition = "TEXT")
+    private String outputSchemaJson;
 
     @Column(nullable = false)
     private String name;

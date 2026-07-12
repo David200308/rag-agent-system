@@ -14,7 +14,7 @@ import java.time.Instant;
 @NoArgsConstructor
 public class Workflow {
 
-    public enum AgentPattern { ORCHESTRATOR, TEAM }
+    public enum AgentPattern { ORCHESTRATOR, TEAM, GRAPH }
     public enum TeamExecMode  { PARALLEL, SEQUENTIAL }
 
     @Id

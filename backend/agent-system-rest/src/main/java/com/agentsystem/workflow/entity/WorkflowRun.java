@@ -43,6 +43,10 @@ public class WorkflowRun {
     @Column(name = "final_output", columnDefinition = "LONGTEXT")
     private String finalOutput;
 
+    /** Version number of the workflow (from workflow_versions) active when this run started; null if no version has ever been saved. */
+    @Column(name = "workflow_version")
+    private Integer workflowVersion;
+
     @Column(name = "started_at", nullable = false, updatable = false)
     private Instant startedAt = Instant.now();
 

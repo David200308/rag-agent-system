@@ -8,8 +8,10 @@ import com.agentsystem.conversation.service.ConversationService;
 import com.agentsystem.conversation.entity.Conversation;
 import com.agentsystem.conversation.entity.ConversationMessage;
 import com.agentsystem.conversation.entity.ConversationShare;
+import com.agentsystem.knowledge.dto.KnowledgeSourceView;
 import com.agentsystem.knowledge.service.KnowledgeSourceService;
 import com.agentsystem.knowledge.entity.KnowledgeSource;
+import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.mcp.service.McpConnectorService;
 import com.agentsystem.rag.service.DocumentIngestionService;
 import com.agentsystem.schema.AgentRequest;
@@ -47,6 +49,7 @@ class AgentControllerTest {
     @Mock KnowledgeSourceService knowledgeSourceService;
     @Mock WebFetchService        webFetchService;
     @Mock UserPreferenceService  userPreferenceService;
+    @Mock UserAccountService     userAccountService;
     @Mock LlmProperties          llmProperties;
     @Mock AgentMetrics           agentMetrics;
     @Mock HttpServletRequest     request;
@@ -364,7 +367,7 @@ class AgentControllerTest {
         KnowledgeSource ks = new KnowledgeSource("doc.pdf", "doc.pdf", null, 10, "user@example.com");
         when(knowledgeSourceService.listAccessible(any(OrgContext.class))).thenReturn(List.of(ks));
 
-        ResponseEntity<List<KnowledgeSource>> resp = controller.listKnowledge(request);
+        ResponseEntity<List<KnowledgeSourceView>> resp = controller.listKnowledge(request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).hasSize(1);

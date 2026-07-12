@@ -10,7 +10,9 @@ import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.workflow.entity.Workflow;
 import com.agentsystem.workflow.entity.WorkflowAgent;
 import com.agentsystem.workflow.repository.WorkflowAgentRepository;
+import com.agentsystem.workflow.repository.WorkflowEdgeRepository;
 import com.agentsystem.workflow.repository.WorkflowRepository;
+import com.agentsystem.workflow.repository.WorkflowVersionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,15 +32,17 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class WorkflowServiceTest {
 
-    @Mock WorkflowRepository      workflowRepo;
-    @Mock WorkflowAgentRepository agentRepo;
-    @Mock UserAccountService      userAccountService;
+    @Mock WorkflowRepository        workflowRepo;
+    @Mock WorkflowAgentRepository   agentRepo;
+    @Mock WorkflowEdgeRepository    edgeRepo;
+    @Mock WorkflowVersionRepository versionRepo;
+    @Mock UserAccountService        userAccountService;
 
     WorkflowServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new WorkflowServiceImpl(workflowRepo, agentRepo, new ObjectMapper(), userAccountService);
+        service = new WorkflowServiceImpl(workflowRepo, agentRepo, edgeRepo, versionRepo, new ObjectMapper(), userAccountService);
         // Resolve every email used across this file to a uuid equal to itself, for simplicity.
         // lenient() since not every test triggers every resolution.
         for (String email : List.of("owner@test.com", "other@test.com", "intruder@test.com",
@@ -224,7 +228,8 @@ class WorkflowServiceTest {
         ArgumentCaptor<WorkflowAgent> captor = ArgumentCaptor.forClass(WorkflowAgent.class);
 
         service.upsertAgent("w1", null, "Researcher", WorkflowAgent.AgentRole.MAIN,
-                "You are a researcher", List.of("web_search"), List.of("skill-1"), 0, 100.0, 200.0);
+                "You are a researcher", List.of("web_search"), List.of("skill-1"), 0, 100.0, 200.0,
+                WorkflowAgent.NodeKind.AGENT, null, null);
 
         verify(agentRepo).save(captor.capture());
         WorkflowAgent saved = captor.getValue();
@@ -241,7 +246,8 @@ class WorkflowServiceTest {
         when(agentRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         service.upsertAgent("w1", 99L, "New Name", WorkflowAgent.AgentRole.SUB,
-                null, List.of(), null, 1, 0.0, 0.0);
+                null, List.of(), null, 1, 0.0, 0.0,
+                WorkflowAgent.NodeKind.AGENT, null, null);
 
         assertThat(existing.getName()).isEqualTo("New Name");
     }
@@ -381,7 +387,8 @@ class WorkflowServiceTest {
         ArgumentCaptor<WorkflowAgent> captor = ArgumentCaptor.forClass(WorkflowAgent.class);
 
         service.upsertAgent("w1", 999L, "Ghost Agent", WorkflowAgent.AgentRole.PEER,
-                "Ghost prompt", List.of("BASH"), List.of(), 2, 50.0, 100.0);
+                "Ghost prompt", List.of("BASH"), List.of(), 2, 50.0, 100.0,
+                WorkflowAgent.NodeKind.AGENT, null, null);
 
         verify(agentRepo).save(captor.capture());
         assertThat(captor.getValue().getName()).isEqualTo("Ghost Agent");
@@ -394,7 +401,8 @@ class WorkflowServiceTest {
         ArgumentCaptor<WorkflowAgent> captor = ArgumentCaptor.forClass(WorkflowAgent.class);
 
         service.upsertAgent("w1", null, "Agent", WorkflowAgent.AgentRole.PEER,
-                "prompt", List.of(), null, 0, 0.0, 0.0);
+                "prompt", List.of(), null, 0, 0.0, 0.0,
+                WorkflowAgent.NodeKind.AGENT, null, null);
 
         verify(agentRepo).save(captor.capture());
         assertThat(captor.getValue().getSkillIdsJson()).isEqualTo("[]");

@@ -1,6 +1,6 @@
 "use client";
 
-import { Users, Network } from "lucide-react";
+import { Users, Network, GitBranch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AgentPattern, TeamExecMode } from "@/types/agent";
 
@@ -30,6 +30,14 @@ export function PatternSelector({ pattern, teamExecMode, onChange, disabled }: P
           label="Agent Team"
           desc="Peer agents work together"
           onClick={() => onChange("TEAM", teamExecMode ?? "PARALLEL")}
+          disabled={disabled}
+        />
+        <PatternCard
+          active={pattern === "GRAPH"}
+          icon={<GitBranch className="h-4 w-4" />}
+          label="Graph"
+          desc="Wire agents, conditions & end nodes"
+          onClick={() => onChange("GRAPH", null)}
           disabled={disabled}
         />
       </div>
