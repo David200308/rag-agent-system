@@ -11,6 +11,7 @@ import com.agentsystem.conversation.entity.ConversationShare;
 import com.agentsystem.knowledge.dto.KnowledgeSourceView;
 import com.agentsystem.knowledge.service.KnowledgeSourceService;
 import com.agentsystem.knowledge.entity.KnowledgeSource;
+import com.agentsystem.knowledge.entity.KnowledgeSourceShare;
 import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.mcp.service.McpConnectorService;
 import com.agentsystem.rag.service.DocumentIngestionService;
@@ -373,6 +374,35 @@ class AgentControllerTest {
         assertThat(resp.getBody()).hasSize(1);
     }
 
+    @Test
+    void listKnowledge_resolvesOwnerAndShareUuidsToEmails() {
+        stubRequest("user@example.com");
+        KnowledgeSource ks = new KnowledgeSource("doc.pdf", "doc.pdf", null, 10, "owner-uuid-1");
+        ks.getShares().add(new KnowledgeSourceShare(ks, "shared-uuid-1"));
+        when(knowledgeSourceService.listAccessible(any(OrgContext.class))).thenReturn(List.of(ks));
+        when(userAccountService.getEmailByUuid("owner-uuid-1")).thenReturn("owner@example.com");
+        when(userAccountService.getEmailByUuid("shared-uuid-1")).thenReturn("shared@example.com");
+
+        ResponseEntity<List<KnowledgeSourceView>> resp = controller.listKnowledge(request);
+
+        KnowledgeSourceView view = resp.getBody().get(0);
+        assertThat(view.ownerEmail()).isEqualTo("owner@example.com");
+        assertThat(view.shares()).hasSize(1);
+        assertThat(view.shares().get(0).sharedEmail()).isEqualTo("shared@example.com");
+    }
+
+    @Test
+    void listKnowledge_nullOwnerUuid_ownerEmailIsNull() {
+        stubRequest("user@example.com");
+        KnowledgeSource ks = new KnowledgeSource("doc.pdf", "doc.pdf", null, 10, null);
+        when(knowledgeSourceService.listAccessible(any(OrgContext.class))).thenReturn(List.of(ks));
+
+        ResponseEntity<List<KnowledgeSourceView>> resp = controller.listKnowledge(request);
+
+        assertThat(resp.getBody().get(0).ownerEmail()).isNull();
+        verify(userAccountService, never()).getEmailByUuid(any());
+    }
+
     // ── deleteKnowledge ────────────────────────────────────────────────────────
 
     @Test
@@ -409,14 +439,16 @@ class AgentControllerTest {
     @Test
     void updateKnowledge_success_returns200() {
         stubRequest("owner@example.com");
-        KnowledgeSource updated = new KnowledgeSource("doc.pdf", "New Label", "category", 10, "owner@example.com");
+        KnowledgeSource updated = new KnowledgeSource("doc.pdf", "New Label", "category", 10, "owner-uuid-1");
         when(knowledgeSourceService.updateMetadata(eq("doc.pdf"), eq("New Label"), eq("category"), any(OrgContext.class)))
                 .thenReturn(updated);
+        when(userAccountService.getEmailByUuid("owner-uuid-1")).thenReturn("owner@example.com");
 
-        var resp = controller.updateKnowledge(
+        ResponseEntity<KnowledgeSourceView> resp = controller.updateKnowledge(
                 Map.of("source", "doc.pdf", "label", "New Label", "category", "category"), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody().ownerEmail()).isEqualTo("owner@example.com");
     }
 
     @Test
