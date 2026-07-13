@@ -32,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import org.springframework.data.domain.Page;
@@ -197,6 +198,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                 workflowId, PageRequest.of(page, Math.min(size, 50)));
     }
 
+    @Transactional
     @Override
     public void cancelRun(String runId, String callerUuid) {
         WorkflowRun run = runRepo.findById(runId)
@@ -225,6 +227,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         pushDoneEvent(runId, "CANCELLED", run.getFinalOutput());
     }
 
+    @Transactional
     @Override
     public void deleteRun(String runId, String callerUuid) {
         WorkflowRun run = runRepo.findById(runId).orElse(null);
