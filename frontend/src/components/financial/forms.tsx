@@ -20,7 +20,7 @@ import { Field, ComboInput } from "./shared-ui";
 import { inputCls, selectCls } from "./utils";
 
 export type DepositFields = Omit<CashDeposit, "id"|"ownerEmail"|"convertedAmount"|"convertedCurrency"|"createdAt"|"updatedAt">;
-export type StockFields   = Omit<StockInvestment, "id"|"ownerEmail"|"currentPrice"|"priceCurrency"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"createdAt"|"updatedAt">;
+export type StockFields   = Omit<StockInvestment, "id"|"ownerEmail"|"currentPrice"|"priceCurrency"|"logoUrl"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"createdAt"|"updatedAt">;
 export type CryptoFields  = Omit<CryptoInvestment, "id"|"ownerEmail"|"currentPrice"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"createdAt"|"updatedAt">;
 export type CardFields    = Omit<Card, "id"|"ownerEmail"|"createdAt"|"updatedAt">;
 export type SalaryFields  = Omit<SalaryUsageRecord, "id"|"ownerEmail"|"totalExpense"|"createdAt"|"updatedAt">;

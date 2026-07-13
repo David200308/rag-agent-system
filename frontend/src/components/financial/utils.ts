@@ -104,7 +104,7 @@ export function useSort(initial?: SortConfig) {
 // ── Stock grouping (same symbol across multiple brokers) ──────────────────────
 
 export interface StockGroup {
-  symbol: string; name: string; stockType: StockType;
+  symbol: string; name: string; stockType: StockType; logoUrl: string | null;
   rows: StockInvestment[];
   stockAmount: number; investAmount: number; fee: number; currency: string;
   avgPrice: number | null;
@@ -130,7 +130,7 @@ export function groupStocksBySymbol(rows: StockInvestment[]): StockGroup[] {
       ? Math.round((convertedCurrentValue - convertedInvestAmount) / convertedInvestAmount * 10000) / 100
       : null;
     return {
-      symbol: first.symbol, name: first.name, stockType: first.stockType, rows: group,
+      symbol: first.symbol, name: first.name, stockType: first.stockType, logoUrl: first.logoUrl, rows: group,
       stockAmount, investAmount, fee, currency: first.currency,
       avgPrice: stockAmount > 0 ? (investAmount + fee) / stockAmount : null,
       currentPrice: first.currentPrice, priceCurrency: first.priceCurrency, currentValue,

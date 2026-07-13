@@ -18,6 +18,8 @@ public record StockInvestmentDto(
         Double     currentPrice,
         /** Currency of the live price (e.g. USD, HKD). */
         String     priceCurrency,
+        /** Company logo image URL from Finnhub; null if unavailable. */
+        String     logoUrl,
         /** currentPrice × stockAmount; null if price unavailable. */
         BigDecimal currentValue,
         BigDecimal convertedInvestAmount,

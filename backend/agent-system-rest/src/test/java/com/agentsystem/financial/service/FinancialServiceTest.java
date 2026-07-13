@@ -201,6 +201,38 @@ class FinancialServiceTest {
     }
 
     @Test
+    void listStocks_withLogoAvailable_includesLogoUrl() {
+        StockInvestment s = stock("s-1", "user@test.com", "AAPL");
+
+        when(stockRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(s));
+        when(priceService.isStockStale()).thenReturn(false);
+        when(priceService.getStockPrice("AAPL")).thenReturn(Optional.empty());
+        when(priceService.getStockCurrency("AAPL")).thenReturn(Optional.empty());
+        when(priceService.getStockLogo("AAPL")).thenReturn(Optional.of("https://static.finnhub.io/logo/aapl.png"));
+        when(fxService.convert(anyDouble(), any(), any())).thenReturn(0.0);
+
+        var result = service.listStocks("user@test.com", "USD");
+
+        assertThat(result.get(0).logoUrl()).isEqualTo("https://static.finnhub.io/logo/aapl.png");
+    }
+
+    @Test
+    void listStocks_noLogoAvailable_nullLogoUrl() {
+        StockInvestment s = stock("s-1", "user@test.com", "AAPL");
+
+        when(stockRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(s));
+        when(priceService.isStockStale()).thenReturn(false);
+        when(priceService.getStockPrice("AAPL")).thenReturn(Optional.empty());
+        when(priceService.getStockCurrency("AAPL")).thenReturn(Optional.empty());
+        when(priceService.getStockLogo("AAPL")).thenReturn(Optional.empty());
+        when(fxService.convert(anyDouble(), any(), any())).thenReturn(0.0);
+
+        var result = service.listStocks("user@test.com", "USD");
+
+        assertThat(result.get(0).logoUrl()).isNull();
+    }
+
+    @Test
     void createStock_savesWithOwnerUuid() {
         when(stockRepo.save(any())).thenAnswer(i -> i.getArgument(0));
         ArgumentCaptor<StockInvestment> cap = ArgumentCaptor.forClass(StockInvestment.class);

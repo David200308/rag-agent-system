@@ -167,6 +167,7 @@ public class FinancialServiceImpl implements FinancialService {
 
         Double  currentPrice   = priceService.getStockPrice(sym).orElse(null);
         String  priceCurrency  = priceService.getStockCurrency(sym).orElse(s.getCurrency());
+        String  logoUrl        = priceService.getStockLogo(sym).orElse(null);
 
         BigDecimal currentValue             = null;
         BigDecimal convertedCurrentValue    = null;
@@ -188,7 +189,7 @@ public class FinancialServiceImpl implements FinancialService {
                 s.getId(), s.getOwnerUuid(), s.getBroker(), s.getStockType(),
                 s.getSymbol(), s.getName(), s.getStockAmount(), s.getInvestAmount(),
                 s.getCurrency(), s.getFee(),
-                currentPrice, priceCurrency, currentValue,
+                currentPrice, priceCurrency, logoUrl, currentValue,
                 bd(convertedInvest), convertedCurrentValue, toCurrency,
                 pnlPercent, s.getCreatedAt(), s.getUpdatedAt()
         );

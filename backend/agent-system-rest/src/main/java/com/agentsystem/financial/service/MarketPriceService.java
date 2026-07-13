@@ -10,6 +10,8 @@ public interface MarketPriceService {
 
     Optional<String> getStockCurrency(String symbol);
 
+    Optional<String> getStockLogo(String symbol);
+
     Optional<Double> getCryptoPrice(String symbol);
 
     Instant getStockLastFetched();

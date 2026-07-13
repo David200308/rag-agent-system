@@ -65,6 +65,11 @@ class MarketPriceServiceTest {
     }
 
     @Test
+    void getStockLogo_notCached_returnsEmpty() {
+        assertThat(service.getStockLogo("AAPL")).isEmpty();
+    }
+
+    @Test
     void getStockPrice_seeded_returnsValue() {
         Map<String, Double> prices = new ConcurrentHashMap<>(Map.of("AAPL", 195.0, "TSLA", 250.0));
         ReflectionTestUtils.setField(service, "stockPrices", prices);
@@ -107,6 +112,30 @@ class MarketPriceServiceTest {
         assertThat(service.getStockCurrency("BHP.AX")).hasValue("AUD");
         assertThat(service.getStockCurrency("RY.TO")).hasValue("CAD");
         assertThat(service.getStockCurrency("AAPL")).hasValue("USD");
+    }
+
+    // ── Logo cache ────────────────────────────────────────────────────────────
+
+    @Test
+    void getStockLogo_seeded_returnsValue() {
+        Map<String, String> logos = new ConcurrentHashMap<>(Map.of(
+                "AAPL", "https://static.finnhub.io/logo/aapl.png"
+        ));
+        ReflectionTestUtils.setField(service, "stockLogos", logos);
+
+        assertThat(service.getStockLogo("AAPL")).hasValue("https://static.finnhub.io/logo/aapl.png");
+        assertThat(service.getStockLogo("MSFT")).isEmpty();
+    }
+
+    @Test
+    void getStockLogo_caseInsensitive_returnsValue() {
+        Map<String, String> logos = new ConcurrentHashMap<>(Map.of(
+                "AAPL", "https://static.finnhub.io/logo/aapl.png"
+        ));
+        ReflectionTestUtils.setField(service, "stockLogos", logos);
+
+        assertThat(service.getStockLogo("aapl")).hasValue("https://static.finnhub.io/logo/aapl.png");
+        assertThat(service.getStockLogo("Aapl")).hasValue("https://static.finnhub.io/logo/aapl.png");
     }
 
     // ── Timestamps ───────────────────────────────────────────────────────────

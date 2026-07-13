@@ -52,6 +52,9 @@ public class MarketPriceServiceImpl implements MarketPriceService {
     private final Map<String, Double> stockPrices      = new ConcurrentHashMap<>();
     // symbol -> currency code inferred from exchange suffix (USD, HKD, …)
     private final Map<String, String> stockCurrencies  = new ConcurrentHashMap<>();
+    // symbol -> company logo URL (from Finnhub company profile); logos rarely change so
+    // once fetched a symbol is never re-fetched (unlike prices, which refresh hourly).
+    private final Map<String, String> stockLogos       = new ConcurrentHashMap<>();
 
     // crypto base symbol (e.g. "BTC", "ETH") -> USDT price
     private final Map<String, Double> cryptoPrices     = new ConcurrentHashMap<>();
@@ -69,6 +72,11 @@ public class MarketPriceServiceImpl implements MarketPriceService {
     @Override
     public Optional<String> getStockCurrency(String symbol) {
         return Optional.ofNullable(stockCurrencies.get(symbol.toUpperCase()));
+    }
+
+    @Override
+    public Optional<String> getStockLogo(String symbol) {
+        return Optional.ofNullable(stockLogos.get(symbol.toUpperCase()));
     }
 
     @Override
@@ -116,12 +124,44 @@ public class MarketPriceServiceImpl implements MarketPriceService {
                 } else {
                     log.warn("[MarketPriceService] Finnhub returned no price for {} (price=0 or missing)", sym);
                 }
+
+                if (!stockLogos.containsKey(sym)) {
+                    fetchStockLogo(sym);
+                }
             } catch (Exception e) {
                 log.error("[MarketPriceService] Stock price fetch failed for {}: {}", sym, e.getMessage());
             }
         }
         stockLastFetched = Instant.now();
         log.info("[MarketPriceService] Stock prices refreshed via Finnhub: {}/{} symbols", updated, distinct.size());
+    }
+
+    /**
+     * Fetches a stock's company logo via Finnhub's company profile endpoint.
+     *
+     * Endpoint: GET https://finnhub.io/api/v1/stock/profile2?symbol=AAPL&token=KEY
+     * Response includes a "logo" field with a direct image URL (empty string if unavailable).
+     * Cached indefinitely once fetched — logos don't change like prices do.
+     */
+    private void fetchStockLogo(String sym) {
+        try {
+            String url = "https://finnhub.io/api/v1/stock/profile2?symbol=" + sym + "&token=" + finnhubApiKey;
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(15))
+                    .header("Accept", "application/json")
+                    .GET()
+                    .build();
+
+            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+            JsonNode root = objectMapper.readTree(resp.body());
+            String logo = root.path("logo").asText("");
+            if (!logo.isBlank()) {
+                stockLogos.put(sym, logo);
+            }
+        } catch (Exception e) {
+            log.warn("[MarketPriceService] Stock logo fetch failed for {}: {}", sym, e.getMessage());
+        }
     }
 
     /** Infer the native currency of a stock symbol from its exchange suffix. */

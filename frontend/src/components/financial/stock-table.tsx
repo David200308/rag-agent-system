@@ -1,9 +1,30 @@
 import { ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { STOCK_TYPE_LABELS, formatAmount, formatPrice, type StockInvestment } from "@/types/financial";
 import { PnlBadge } from "./shared-ui";
 import { SymbolHoverChart } from "./symbol-hover-chart";
 import { type StockGroup, formatPercentOfTotal, toTradingViewSymbol } from "./utils";
+
+function StockIcon({ logoUrl, symbol }: { logoUrl: string | null; symbol: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!logoUrl || failed) {
+    return (
+      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[--color-border]/40 text-[9px] font-semibold text-[--color-muted]">
+        {symbol.slice(0, 1)}
+      </span>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={logoUrl}
+      alt=""
+      className="h-5 w-5 shrink-0 rounded-full bg-white object-contain"
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 function StockDataCells({ row, defaultCurrency, total, hideAmounts }: {
   row: {
@@ -53,9 +74,12 @@ export function StockGroupRows({ group, expanded, onToggle, defaultCurrency, tot
     return (
       <tr className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
         <td className="px-4 py-3">
-          <SymbolHoverChart tvSymbol={toTradingViewSymbol(s.symbol, "stock", s.stockType)}>
-            <span className="font-semibold">{s.symbol}</span>
-          </SymbolHoverChart>
+          <span className="inline-flex items-center gap-1.5">
+            <StockIcon logoUrl={s.logoUrl} symbol={s.symbol} />
+            <SymbolHoverChart tvSymbol={toTradingViewSymbol(s.symbol, "stock", s.stockType)}>
+              <span className="font-semibold">{s.symbol}</span>
+            </SymbolHoverChart>
+          </span>
           <span className="ml-1.5 text-[11px] text-[--color-muted]">{s.broker}</span>
         </td>
         <td className="px-4 py-3">{s.name}</td>
@@ -81,6 +105,7 @@ export function StockGroupRows({ group, expanded, onToggle, defaultCurrency, tot
         <td className="px-4 py-3 font-semibold">
           <span className="inline-flex items-center gap-1">
             {expanded ? <ChevronDown className="h-3.5 w-3.5 text-[--color-muted]" /> : <ChevronRight className="h-3.5 w-3.5 text-[--color-muted]" />}
+            <StockIcon logoUrl={group.logoUrl} symbol={group.symbol} />
             <SymbolHoverChart tvSymbol={toTradingViewSymbol(group.symbol, "stock", group.stockType)}>
               {group.symbol}
             </SymbolHoverChart>

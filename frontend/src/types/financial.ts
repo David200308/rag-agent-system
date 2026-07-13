@@ -70,6 +70,8 @@ export interface StockInvestment {
   /** Live price from Yahoo Finance in priceCurrency; null if unavailable */
   currentPrice: number | null;
   priceCurrency: string | null;
+  /** Company logo image URL from Finnhub; null if unavailable */
+  logoUrl: string | null;
   /** currentPrice × stockAmount; null if price unavailable */
   currentValue: number | null;
   convertedInvestAmount: number;
