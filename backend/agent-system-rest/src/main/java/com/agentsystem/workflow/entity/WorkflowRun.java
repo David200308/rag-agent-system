@@ -14,7 +14,7 @@ import java.time.Instant;
 @NoArgsConstructor
 public class WorkflowRun {
 
-    public enum RunStatus { PENDING, RUNNING, DONE, FAILED }
+    public enum RunStatus { PENDING, RUNNING, DONE, FAILED, CANCELLED }
 
     @Id
     @Column(length = 36)

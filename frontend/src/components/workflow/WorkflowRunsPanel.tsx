@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { X, RefreshCw, CheckCircle2, XCircle, CircleDot, Clock, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, RefreshCw, CheckCircle2, XCircle, CircleDot, Clock, Ban, Square, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { WorkflowRunViewer } from "./WorkflowRunViewer";
-import { fetchWorkflowRuns } from "@/lib/api";
+import { fetchWorkflowRuns, stopWorkflowRun, deleteWorkflowRun } from "@/lib/api";
 import type { WorkflowRun } from "@/types/agent";
 import { cn } from "@/lib/utils";
 
@@ -16,10 +16,11 @@ interface Props {
 }
 
 function statusIcon(status: WorkflowRun["status"]) {
-  if (status === "DONE")    return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />;
-  if (status === "FAILED")  return <XCircle      className="h-3.5 w-3.5 text-red-500 shrink-0" />;
-  if (status === "RUNNING") return <CircleDot    className="h-3.5 w-3.5 text-blue-500 animate-pulse shrink-0" />;
-  return                           <Clock        className="h-3.5 w-3.5 text-[--color-muted] shrink-0" />;
+  if (status === "DONE")      return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />;
+  if (status === "FAILED")    return <XCircle      className="h-3.5 w-3.5 text-red-500 shrink-0" />;
+  if (status === "CANCELLED") return <Ban          className="h-3.5 w-3.5 text-[--color-muted] shrink-0" />;
+  if (status === "RUNNING")   return <CircleDot    className="h-3.5 w-3.5 text-blue-500 animate-pulse shrink-0" />;
+  return                             <Clock        className="h-3.5 w-3.5 text-[--color-muted] shrink-0" />;
 }
 
 function duration(run: WorkflowRun) {
@@ -84,6 +85,24 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
     onRunComplete?.(output, status);
   }
 
+  async function handleStop(e: React.MouseEvent, runId: string) {
+    e.stopPropagation();
+    setRuns(prev => prev.map(r => r.id === runId ? { ...r, status: "CANCELLED" } : r));
+    try {
+      await stopWorkflowRun(runId);
+    } finally {
+      load(page, pageSize);
+    }
+  }
+
+  function handleDelete(e: React.MouseEvent, runId: string) {
+    e.stopPropagation();
+    setRuns(prev => prev.filter(r => r.id !== runId));
+    setTotal(t => Math.max(0, t - 1));
+    if (selectedId === runId) setSelectedId(null);
+    deleteWorkflowRun(runId).catch(() => {});
+  }
+
   return (
     <div
       className="flex h-full flex-col border-[--color-border] bg-[--color-surface]"
@@ -117,11 +136,19 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
           <p className="px-4 py-6 text-center text-xs text-[--color-muted]">No runs yet</p>
         )}
         {runs.map(run => (
-          <button
+          <div
             key={run.id}
+            role="button"
+            tabIndex={0}
             onClick={() => setSelectedId(run.id === selectedId ? null : run.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setSelectedId(run.id === selectedId ? null : run.id);
+              }
+            }}
             className={cn(
-              "flex flex-col gap-1 px-4 py-3 text-left border-b border-[--color-border] hover:bg-[--color-surface-raised] transition-colors",
+              "group flex cursor-pointer flex-col gap-1 px-4 py-3 text-left border-b border-[--color-border] hover:bg-[--color-surface-raised] transition-colors",
               selectedId === run.id && "bg-[--color-surface-raised]",
             )}
           >
@@ -135,9 +162,27 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
                   v{run.workflowVersion}
                 </span>
               )}
-              {duration(run) && (
-                <span className="ml-auto text-[10px] text-[--color-muted]">{duration(run)}</span>
-              )}
+              <div className="ml-auto flex items-center gap-1.5">
+                {run.status === "RUNNING" && (
+                  <button
+                    onClick={(e) => handleStop(e, run.id)}
+                    className="rounded p-1 text-red-500 hover:bg-red-500/10"
+                    title="Stop"
+                  >
+                    <Square className="h-3 w-3" fill="currentColor" />
+                  </button>
+                )}
+                {duration(run) && (
+                  <span className="text-[10px] text-[--color-muted]">{duration(run)}</span>
+                )}
+                <button
+                  onClick={(e) => handleDelete(e, run.id)}
+                  className="rounded p-1 text-[--color-muted] hover:bg-red-500/10 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100"
+                  title="Delete"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
             </div>
             <p className="text-[11px] text-[--color-muted] line-clamp-2 pl-5">
               {run.userInput}
@@ -145,7 +190,7 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
             <p className="text-[10px] text-[--color-muted]/70 pl-5">
               {timeAgo(run.startedAt)}
             </p>
-          </button>
+          </div>
         ))}
       </div>
 

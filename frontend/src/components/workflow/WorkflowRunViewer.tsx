@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, CircleDot, CheckCircle2, XCircle } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleDot, CheckCircle2, XCircle, Ban } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import type { LogType, RunStatus, WorkflowRunLog } from "@/types/agent";
@@ -57,7 +57,7 @@ export function WorkflowRunViewer({ runId, onDone, initialStatus, fill }: Props)
     setLogs([]);
     // Only default to RUNNING if we don't already know the status.
     // Completed runs receive their status via initialStatus, so we avoid the flash.
-    setStatus(s => s === "DONE" || s === "FAILED" ? s : "RUNNING");
+    setStatus(s => s === "DONE" || s === "FAILED" || s === "CANCELLED" ? s : "RUNNING");
     setOutput(null);
 
     const es = new EventSource(`/api/workflow/runs/${runId}/stream`);
@@ -96,7 +96,11 @@ export function WorkflowRunViewer({ runId, onDone, initialStatus, fill }: Props)
       <div className="flex items-center gap-2 px-4 py-2 shrink-0">
         <StatusIcon status={status} />
         <span className="text-xs font-medium">
-          {status === "RUNNING" ? "Running…" : status === "DONE" ? "Done" : status === "FAILED" ? "Failed" : "Pending"}
+          {status === "RUNNING" ? "Running…"
+            : status === "DONE" ? "Done"
+            : status === "FAILED" ? "Failed"
+            : status === "CANCELLED" ? "Cancelled"
+            : "Pending"}
         </span>
         <span className="text-[10px] text-[--color-muted]">{logs.length} events</span>
         {!fill && (
@@ -172,8 +176,9 @@ function LogEntry({ log }: { log: WorkflowRunLog }) {
 }
 
 function StatusIcon({ status }: { status: RunStatus | null }) {
-  if (status === "DONE")    return <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />;
-  if (status === "FAILED")  return <XCircle      className="h-3.5 w-3.5 text-red-500" />;
-  if (status === "RUNNING") return <CircleDot    className="h-3.5 w-3.5 text-blue-500 animate-pulse" />;
+  if (status === "DONE")      return <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />;
+  if (status === "FAILED")    return <XCircle      className="h-3.5 w-3.5 text-red-500" />;
+  if (status === "CANCELLED") return <Ban          className="h-3.5 w-3.5 text-[--color-muted]" />;
+  if (status === "RUNNING")   return <CircleDot    className="h-3.5 w-3.5 text-blue-500 animate-pulse" />;
   return <CircleDot className="h-3.5 w-3.5 text-[--color-muted]" />;
 }

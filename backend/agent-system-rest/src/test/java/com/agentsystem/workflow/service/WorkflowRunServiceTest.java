@@ -181,6 +181,227 @@ class WorkflowRunServiceTest {
         assertThat(service.getLogs("r-none")).isEmpty();
     }
 
+    // ── cancelRun ─────────────────────────────────────────────────────────────
+
+    @Test
+    void cancelRun_runningRun_destroysSandboxAndMarksCancelled() {
+        WorkflowRun run = new WorkflowRun("run-1", "wf-1", "owner-1", "input");
+        run.setStatus(WorkflowRun.RunStatus.RUNNING);
+        run.setSandboxContainer("container-1");
+        when(runRepo.findById("run-1")).thenReturn(Optional.of(run));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        service.cancelRun("run-1", "owner-1");
+
+        verify(sandboxService).destroySandbox("container-1");
+        ArgumentCaptor<WorkflowRun> captor = ArgumentCaptor.forClass(WorkflowRun.class);
+        verify(runRepo).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(WorkflowRun.RunStatus.CANCELLED);
+        assertThat(captor.getValue().getFinishedAt()).isNotNull();
+    }
+
+    @Test
+    void cancelRun_pendingRun_alsoCancellable() {
+        WorkflowRun run = new WorkflowRun("run-2", "wf-1", "owner-1", "input");
+        run.setStatus(WorkflowRun.RunStatus.PENDING);
+        when(runRepo.findById("run-2")).thenReturn(Optional.of(run));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        service.cancelRun("run-2", "owner-1");
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.CANCELLED);
+    }
+
+    @Test
+    void cancelRun_alreadyDoneRun_isNoOp() {
+        WorkflowRun run = new WorkflowRun("run-3", "wf-1", "owner-1", "input");
+        run.setStatus(WorkflowRun.RunStatus.DONE);
+        when(runRepo.findById("run-3")).thenReturn(Optional.of(run));
+
+        service.cancelRun("run-3", "owner-1");
+
+        verify(runRepo, never()).save(any());
+        verify(sandboxService, never()).destroySandbox(any());
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.DONE);
+    }
+
+    @Test
+    void cancelRun_alreadyCancelledRun_isNoOp() {
+        WorkflowRun run = new WorkflowRun("run-3b", "wf-1", "owner-1", "input");
+        run.setStatus(WorkflowRun.RunStatus.CANCELLED);
+        when(runRepo.findById("run-3b")).thenReturn(Optional.of(run));
+
+        service.cancelRun("run-3b", "owner-1");
+
+        verify(runRepo, never()).save(any());
+        verify(sandboxService, never()).destroySandbox(any());
+    }
+
+    @Test
+    void cancelRun_wrongOwner_throwsSecurityExceptionAndDoesNotCancel() {
+        WorkflowRun run = new WorkflowRun("run-4", "wf-1", "owner-1", "input");
+        run.setStatus(WorkflowRun.RunStatus.RUNNING);
+        when(runRepo.findById("run-4")).thenReturn(Optional.of(run));
+
+        assertThatThrownBy(() -> service.cancelRun("run-4", "someone-else"))
+                .isInstanceOf(SecurityException.class);
+
+        verify(runRepo, never()).save(any());
+        verify(sandboxService, never()).destroySandbox(any());
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.RUNNING);
+    }
+
+    @Test
+    void cancelRun_nullCallerUuid_bypassesOwnershipCheck() {
+        WorkflowRun run = new WorkflowRun("run-5", "wf-1", "owner-1", "input");
+        run.setStatus(WorkflowRun.RunStatus.RUNNING);
+        when(runRepo.findById("run-5")).thenReturn(Optional.of(run));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        service.cancelRun("run-5", null);
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.CANCELLED);
+    }
+
+    @Test
+    void cancelRun_runNotFound_throwsIllegalArgumentException() {
+        when(runRepo.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cancelRun("missing", "owner-1"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ── deleteRun ─────────────────────────────────────────────────────────────
+
+    @Test
+    void deleteRun_doneRun_deletesLogsAndRunWithoutCancelling() {
+        WorkflowRun run = new WorkflowRun("run-d1", "wf-1", "owner-1", "input");
+        run.setStatus(WorkflowRun.RunStatus.DONE);
+        when(runRepo.findById("run-d1")).thenReturn(Optional.of(run));
+
+        service.deleteRun("run-d1", "owner-1");
+
+        verify(sandboxService, never()).destroySandbox(any());
+        verify(logRepo).deleteByRunId("run-d1");
+        verify(runRepo).deleteById("run-d1");
+    }
+
+    @Test
+    void deleteRun_runningRun_cancelsFirstThenDeletes() {
+        WorkflowRun run = new WorkflowRun("run-d2", "wf-1", "owner-1", "input");
+        run.setStatus(WorkflowRun.RunStatus.RUNNING);
+        run.setSandboxContainer("container-d2");
+        when(runRepo.findById("run-d2")).thenReturn(Optional.of(run));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        service.deleteRun("run-d2", "owner-1");
+
+        verify(sandboxService).destroySandbox("container-d2");
+        verify(logRepo).deleteByRunId("run-d2");
+        verify(runRepo).deleteById("run-d2");
+    }
+
+    @Test
+    void deleteRun_wrongOwner_throwsSecurityExceptionAndDoesNotDelete() {
+        WorkflowRun run = new WorkflowRun("run-d3", "wf-1", "owner-1", "input");
+        run.setStatus(WorkflowRun.RunStatus.DONE);
+        when(runRepo.findById("run-d3")).thenReturn(Optional.of(run));
+
+        assertThatThrownBy(() -> service.deleteRun("run-d3", "someone-else"))
+                .isInstanceOf(SecurityException.class);
+
+        verify(logRepo, never()).deleteByRunId(any());
+        verify(runRepo, never()).deleteById(anyString());
+    }
+
+    @Test
+    void deleteRun_runNotFound_isNoOp() {
+        when(runRepo.findById("missing")).thenReturn(Optional.empty());
+
+        service.deleteRun("missing", "owner-1");
+
+        verify(logRepo, never()).deleteByRunId(any());
+        verify(runRepo, never()).deleteById(anyString());
+    }
+
+    // ── executeRun × cancellation race ───────────────────────────────────────
+
+    @Test
+    void executeRun_cancelledJustBeforeCompletion_marksCancelledNotDone() throws Exception {
+        Workflow workflow = new Workflow();
+        workflow.setId("wf-cancel");
+        workflow.setName("Cancel Workflow");
+        workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
+        workflow.setSelectedModel(null);
+
+        com.agentsystem.workflow.entity.WorkflowAgent mainAgent = new com.agentsystem.workflow.entity.WorkflowAgent();
+        mainAgent.setId(1L);
+        mainAgent.setName("Main");
+        mainAgent.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+        mainAgent.setSystemPrompt("You are helpful.");
+
+        when(workflowService.findById("wf-cancel")).thenReturn(java.util.Optional.of(workflow));
+        when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-cancel")).thenReturn(List.of(mainAgent));
+        when(workflowService.parseTools(any())).thenReturn(List.of());
+        when(workflowService.parseSkillIds(any())).thenReturn(List.of());
+        when(sandboxService.createSandbox(any(), any())).thenReturn(null);
+        when(llmProperties.getDefaultModel()).thenReturn(null);
+        when(logRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        ChatClient.ChatClientRequestSpec promptSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.system(anyString())).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callSpec);
+        when(callSpec.content()).thenReturn("Final answer.");
+
+        WorkflowRun run = new WorkflowRun("run-cancel", "wf-cancel", "owner-1", "Do the task");
+        run.setStatus(WorkflowRun.RunStatus.RUNNING);
+        // Simulate a stop request that raced the run to completion: the same repo row cancelRun
+        // would fetch is the same instance executeRun operates on in this test.
+        when(runRepo.findById("run-cancel")).thenReturn(Optional.of(run));
+        service.cancelRun("run-cancel", "owner-1");
+
+        executeRunDirectly(run);
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.CANCELLED);
+    }
+
+    @Test
+    void executeRun_cancelledThenSandboxStartupFails_staysCancelledNotFailed() throws Exception {
+        Workflow workflow = new Workflow();
+        workflow.setId("wf-cancel2");
+        workflow.setName("Cancel Then Fail Workflow");
+        workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
+        workflow.setSelectedModel(null);
+
+        com.agentsystem.workflow.entity.WorkflowAgent mainAgent = new com.agentsystem.workflow.entity.WorkflowAgent();
+        mainAgent.setId(1L);
+        mainAgent.setName("Main");
+        mainAgent.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+
+        when(workflowService.findById("wf-cancel2")).thenReturn(java.util.Optional.of(workflow));
+        when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-cancel2")).thenReturn(List.of(mainAgent));
+        when(workflowService.parseTools(any())).thenReturn(List.of());
+        when(logRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        WorkflowRun run = new WorkflowRun("run-cancel2", "wf-cancel2", "owner-1", "task");
+        run.setStatus(WorkflowRun.RunStatus.RUNNING);
+        when(runRepo.findById("run-cancel2")).thenReturn(Optional.of(run));
+        service.cancelRun("run-cancel2", "owner-1");
+
+        // Sandbox creation fails after the stop request already landed.
+        when(sandboxService.createSandbox(any(), any()))
+                .thenThrow(new SandboxService.SandboxStartupException("docker failed"));
+
+        executeRunDirectly(run);
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.CANCELLED);
+    }
+
     // ── validateNetworkCommand ────────────────────────────────────────────────
 
     @Test

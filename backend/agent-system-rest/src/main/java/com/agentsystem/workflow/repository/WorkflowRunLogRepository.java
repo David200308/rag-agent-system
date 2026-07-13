@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface WorkflowRunLogRepository extends JpaRepository<WorkflowRunLog, Long> {
     List<WorkflowRunLog> findByRunIdOrderByCreatedAt(String runId);
+
+    void deleteByRunId(String runId);
 }

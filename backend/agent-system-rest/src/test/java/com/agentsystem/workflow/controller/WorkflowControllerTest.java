@@ -259,6 +259,60 @@ class WorkflowControllerTest {
         assertThat(resp.getBody()).hasSize(1);
     }
 
+    // ── stopRun ────────────────────────────────────────────────────────────────
+
+    @Test
+    void stopRun_success_returns204() {
+        setupRequest("owner@example.com");
+
+        ResponseEntity<Void> resp = controller.stopRun("run-1", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(204);
+        verify(runService).cancelRun("run-1", "test-uuid");
+    }
+
+    @Test
+    void stopRun_notOwner_returns403() {
+        setupRequest("other@example.com");
+        doThrow(new SecurityException("not owner")).when(runService).cancelRun(anyString(), anyString());
+
+        ResponseEntity<Void> resp = controller.stopRun("run-1", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+    }
+
+    @Test
+    void stopRun_notFound_returns404() {
+        setupRequest("owner@example.com");
+        doThrow(new IllegalArgumentException("not found")).when(runService).cancelRun(anyString(), anyString());
+
+        ResponseEntity<Void> resp = controller.stopRun("run-missing", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(404);
+    }
+
+    // ── deleteRun ──────────────────────────────────────────────────────────────
+
+    @Test
+    void deleteRun_success_returns204() {
+        setupRequest("owner@example.com");
+
+        ResponseEntity<Void> resp = controller.deleteRun("run-1", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(204);
+        verify(runService).deleteRun("run-1", "test-uuid");
+    }
+
+    @Test
+    void deleteRun_notOwner_returns403() {
+        setupRequest("other@example.com");
+        doThrow(new SecurityException("not owner")).when(runService).deleteRun(anyString(), anyString());
+
+        ResponseEntity<Void> resp = controller.deleteRun("run-1", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+    }
+
     // ── sandboxStatus ──────────────────────────────────────────────────────────
 
     @Test

@@ -449,6 +449,14 @@ export async function fetchRunLogs(runId: string): Promise<WorkflowRunLog[]> {
   return res.json() as Promise<WorkflowRunLog[]>;
 }
 
+export async function stopWorkflowRun(runId: string): Promise<void> {
+  await fetch(`/api/workflow/runs/${runId}/stop`, { method: "POST" });
+}
+
+export async function deleteWorkflowRun(runId: string): Promise<void> {
+  await fetch(`/api/workflow/runs/${runId}`, { method: "DELETE" });
+}
+
 // ── Skills API ────────────────────────────────────────────────────────────────
 
 export async function fetchSkills(): Promise<Skill[]> {

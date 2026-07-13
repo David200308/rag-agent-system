@@ -49,6 +49,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -112,6 +113,12 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
     /** Runs that requested an email notification on completion. */
     private final ConcurrentHashMap<String, Boolean> emailNotifyRuns = new ConcurrentHashMap<>();
 
+    /** In-flight run futures keyed by runId, so a stop request can interrupt the worker thread. */
+    private final ConcurrentHashMap<String, Future<?>> runningFutures = new ConcurrentHashMap<>();
+
+    /** RunIds that received a stop request while still executing — checked when the run settles. */
+    private final ConcurrentHashMap<String, Boolean> cancelledRuns = new ConcurrentHashMap<>();
+
     private final ExecutorService asyncPool = Executors.newVirtualThreadPerTaskExecutor();
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -135,7 +142,8 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         }
         log.info("[WorkflowRun] Starting run {} for workflow {} (emailNotify={})", run.getId(), workflowId, emailNotify);
 
-        asyncPool.submit(() -> executeRun(run));
+        Future<?> future = asyncPool.submit(() -> executeRun(run));
+        runningFutures.put(run.getId(), future);
         return run.getId();
     }
 
@@ -187,6 +195,49 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
     public Page<WorkflowRun> getRuns(String workflowId, int page, int size) {
         return runRepo.findByWorkflowIdOrderByStartedAtDesc(
                 workflowId, PageRequest.of(page, Math.min(size, 50)));
+    }
+
+    @Override
+    public void cancelRun(String runId, String callerUuid) {
+        WorkflowRun run = runRepo.findById(runId)
+                .orElseThrow(() -> new IllegalArgumentException("Run not found: " + runId));
+        if (callerUuid != null && run.getOwnerUuid() != null && !callerUuid.equals(run.getOwnerUuid())) {
+            throw new SecurityException("Only the owner can stop this run.");
+        }
+        if (run.getStatus() != WorkflowRun.RunStatus.RUNNING && run.getStatus() != WorkflowRun.RunStatus.PENDING) {
+            return; // already terminal — nothing to do
+        }
+
+        cancelledRuns.put(runId, true);
+        log.info("[WorkflowRun] Cancel requested for run {}", runId);
+
+        Future<?> future = runningFutures.get(runId);
+        if (future != null) future.cancel(true);
+
+        // Killing the sandbox now breaks any in-flight `sandboxService.exec` call, which lets
+        // the executeRun worker thread unwind through its catch/finally blocks promptly.
+        sandboxService.destroySandbox(run.getSandboxContainer());
+
+        run.setStatus(WorkflowRun.RunStatus.CANCELLED);
+        run.setFinishedAt(Instant.now());
+        runRepo.save(run);
+        emit(runId, null, null, WorkflowRunLog.LogType.SYSTEM, "Run cancelled by user.");
+        pushDoneEvent(runId, "CANCELLED", run.getFinalOutput());
+    }
+
+    @Override
+    public void deleteRun(String runId, String callerUuid) {
+        WorkflowRun run = runRepo.findById(runId).orElse(null);
+        if (run == null) return;
+        if (callerUuid != null && run.getOwnerUuid() != null && !callerUuid.equals(run.getOwnerUuid())) {
+            throw new SecurityException("Only the owner can delete this run.");
+        }
+        if (run.getStatus() == WorkflowRun.RunStatus.RUNNING || run.getStatus() == WorkflowRun.RunStatus.PENDING) {
+            cancelRun(runId, callerUuid);
+        }
+        logRepo.deleteByRunId(runId);
+        runRepo.deleteById(runId);
+        log.info("[WorkflowRun] Deleted run {} by {}", runId, callerUuid);
     }
 
     // ── Execution engine ──────────────────────────────────────────────────────
@@ -246,54 +297,71 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                                                    containerId, effectiveClient);
             };
 
-            run.setFinalOutput(output);
-            run.setStatus(WorkflowRun.RunStatus.DONE);
-            run.setFinishedAt(Instant.now());
-            runRepo.save(run);
+            // A stop request may have arrived after the last cancellable checkpoint (e.g. the
+            // final LLM call was already in flight) — honor it instead of reporting success.
+            if (cancelledRuns.remove(run.getId()) != null) {
+                run.setStatus(WorkflowRun.RunStatus.CANCELLED);
+                run.setFinishedAt(Instant.now());
+                runRepo.save(run);
+                emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "Run cancelled by user.");
+                pushDoneEvent(run.getId(), "CANCELLED", output);
+            } else {
+                run.setFinalOutput(output);
+                run.setStatus(WorkflowRun.RunStatus.DONE);
+                run.setFinishedAt(Instant.now());
+                runRepo.save(run);
 
-            emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "Workflow completed.");
-            pushDoneEvent(run.getId(), "DONE", output);
+                emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "Workflow completed.");
+                pushDoneEvent(run.getId(), "DONE", output);
+            }
 
         } catch (SandboxService.SandboxStartupException ex) {
             log.error("[WorkflowRun] Run {} — sandbox failed to start: {}", run.getId(), ex.getMessage());
-            run.setStatus(WorkflowRun.RunStatus.FAILED);
-            run.setFinishedAt(Instant.now());
-            runRepo.save(run);
-            emit(run.getId(), null, null, WorkflowRunLog.LogType.ERROR,
-                    "Sandbox failed to start — " + ex.getMessage()
-                    + ". Ensure the Docker socket is mounted and ragagent/sandbox:latest exists on the host.");
-            pushDoneEvent(run.getId(), "FAILED", ex.getMessage());
+            finalizeFailure(run, "Sandbox failed to start — " + ex.getMessage()
+                    + ". Ensure the Docker socket is mounted and ragagent/sandbox:latest exists on the host.",
+                    ex.getMessage());
 
         } catch (SandboxService.SandboxKilledException ex) {
             log.warn("[WorkflowRun] Run {} killed by sandbox watchdog: {}", run.getId(), ex.getMessage());
-            run.setStatus(WorkflowRun.RunStatus.FAILED);
-            run.setFinishedAt(Instant.now());
-            runRepo.save(run);
-            emit(run.getId(), null, null, WorkflowRunLog.LogType.ERROR,
-                    "Task killed: " + ex.getMessage());
-            pushDoneEvent(run.getId(), "FAILED", ex.getMessage());
+            finalizeFailure(run, "Task killed: " + ex.getMessage(), ex.getMessage());
 
         } catch (SandboxService.SandboxQueueFullException | SandboxService.SandboxResourceException ex) {
             log.warn("[WorkflowRun] Run {} rejected — sandbox capacity: {}", run.getId(), ex.getMessage());
-            run.setStatus(WorkflowRun.RunStatus.FAILED);
-            run.setFinishedAt(Instant.now());
-            runRepo.save(run);
-            emit(run.getId(), null, null, WorkflowRunLog.LogType.ERROR,
-                    "Sandbox capacity limit reached: " + ex.getMessage() + ". Please retry in a moment.");
-            pushDoneEvent(run.getId(), "FAILED", ex.getMessage());
+            finalizeFailure(run, "Sandbox capacity limit reached: " + ex.getMessage() + ". Please retry in a moment.",
+                    ex.getMessage());
 
         } catch (Exception ex) {
             log.error("[WorkflowRun] Run {} failed: {}", run.getId(), ex.getMessage(), ex);
-            run.setStatus(WorkflowRun.RunStatus.FAILED);
-            run.setFinishedAt(Instant.now());
-            runRepo.save(run);
-            emit(run.getId(), null, null, WorkflowRunLog.LogType.ERROR, ex.getMessage());
-            pushDoneEvent(run.getId(), "FAILED", ex.getMessage());
+            finalizeFailure(run, ex.getMessage(), ex.getMessage());
 
         } finally {
+            runningFutures.remove(run.getId());
             sandboxService.destroySandbox(containerId);
             maybeSendCompletionEmail(run, workflow.getName());
         }
+    }
+
+    /**
+     * Persists the terminal state for a failed run — unless a stop request raced it, in which
+     * case CANCELLED wins over FAILED. The status is re-asserted here (not just left to
+     * {@link #cancelRun}'s own save) because this thread's in-memory `run` object is a separate
+     * instance that already overwrote status to RUNNING at the top of executeRun and would
+     * otherwise clobber cancelRun's write when it saves below.
+     */
+    private void finalizeFailure(WorkflowRun run, String logDetail, String outputSummary) {
+        if (cancelledRuns.remove(run.getId()) != null) {
+            run.setStatus(WorkflowRun.RunStatus.CANCELLED);
+            run.setFinishedAt(Instant.now());
+            runRepo.save(run);
+            emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "Run cancelled by user.");
+            pushDoneEvent(run.getId(), "CANCELLED", outputSummary);
+            return;
+        }
+        run.setStatus(WorkflowRun.RunStatus.FAILED);
+        run.setFinishedAt(Instant.now());
+        runRepo.save(run);
+        emit(run.getId(), null, null, WorkflowRunLog.LogType.ERROR, logDetail);
+        pushDoneEvent(run.getId(), "FAILED", outputSummary);
     }
 
     private void maybeSendCompletionEmail(WorkflowRun run, String workflowName) {

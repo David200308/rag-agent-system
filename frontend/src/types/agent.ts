@@ -229,7 +229,7 @@ export type AgentPattern = "ORCHESTRATOR" | "TEAM" | "GRAPH";
 export type TeamExecMode = "PARALLEL" | "SEQUENTIAL";
 export type AgentRole    = "MAIN" | "SUB" | "PEER";
 export type NodeKind     = "AGENT" | "CONDITION" | "END";
-export type RunStatus    = "PENDING" | "RUNNING" | "DONE" | "FAILED";
+export type RunStatus    = "PENDING" | "RUNNING" | "DONE" | "FAILED" | "CANCELLED";
 export type LogType      = "TOOL_CALL" | "TOOL_RESULT" | "LLM_RESPONSE" | "DELEGATION" | "ERROR" | "SYSTEM";
 
 export const SANDBOX_TOOLS = ["BASH", "CURL", "GIT", "GREP", "PYTHON", "NODE", "SCHEDULE"] as const;

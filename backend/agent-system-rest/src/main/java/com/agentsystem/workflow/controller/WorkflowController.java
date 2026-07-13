@@ -257,6 +257,30 @@ public class WorkflowController {
         return ResponseEntity.ok(runService.getLogs(runId));
     }
 
+    @PostMapping("/runs/{runId}/stop")
+    @Operation(summary = "Stop a running (or pending) workflow run")
+    public ResponseEntity<Void> stopRun(@PathVariable String runId, HttpServletRequest req) {
+        try {
+            runService.cancelRun(runId, OrgContext.from(req).userUuid());
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @DeleteMapping("/runs/{runId}")
+    @Operation(summary = "Delete a run and its logs (stops it first if still active)")
+    public ResponseEntity<Void> deleteRun(@PathVariable String runId, HttpServletRequest req) {
+        try {
+            runService.deleteRun(runId, OrgContext.from(req).userUuid());
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        }
+    }
+
     // ── Sandbox status ────────────────────────────────────────────────────────
 
     @GetMapping("/sandbox/status")
