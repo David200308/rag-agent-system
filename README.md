@@ -1,7 +1,7 @@
 # SkyProton Agent System
 
-| Chat Mode                | Workflow Mode                    |
-| ------------------------ | -------------------------------- |
+| Chat Mode                  | Workflow Mode                      |
+| -------------------------- | ---------------------------------- |
 | ![chat](./images/chat.png) | ![workflow](./images/workflow.png) |
 
 ## Tech Stack
@@ -12,29 +12,29 @@
 | -------- | ------------------------------------------------------------------ |
 | Runtime  | Go 1.22                                                            |
 | CLI      | Cobra                                                              |
-| Auth     | OTP email + JWT (stored in `~/.agent-cli/config.json`)             |
-| Identity | Ed25519 key pair — CLI signs requests after login                  |
+| Auth     | OTP email + JWT (stored in`~/.agent-cli/config.json`)            |
+| Identity | Ed25519 key pair — CLI signs requests after login                 |
 | Release  | GitHub Actions cross-compile (linux/darwin/windows × amd64/arm64) |
 
 ### Backend
 
-| Layer            | Technology                                         |
-| ---------------- | -------------------------------------------------- |
-| Runtime          | Java 21 (virtual threads)                          |
-| Framework        | Spring Boot 3.4.5                                  |
-| AI orchestration | Spring AI 1.1                                      |
-| Agent graph      | LangGraph4j 1.7                                    |
-| LLM providers    | OpenAI / OpenRouter / Anthropic / DeepSeek / Local |
-| Vector store     | Weaviate                                           |
-| Embeddings       | Spring AI embedding abstraction                    |
-| Document parsing | Apache Tika (PDF, text, HTML)                      |
-| HTML scraping    | Jsoup                                              |
-| Circuit breaker  | Resilience4j 2.2                                   |
-| Auth             | OTP email (Resend) + Passkey (WebAuthn) + JJWT     |
-| Persistence      | MySQL 8 + Spring Data JPA                          |
+| Layer            | Technology                                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Runtime          | Java 21 (virtual threads)                                                                                                |
+| Framework        | Spring Boot 3.4.5                                                                                                        |
+| AI orchestration | Spring AI 1.1                                                                                                            |
+| Agent graph      | LangGraph4j 1.7                                                                                                          |
+| LLM providers    | OpenAI / OpenRouter / Anthropic / DeepSeek / Local                                                                       |
+| Vector store     | Weaviate                                                                                                                 |
+| Embeddings       | Spring AI embedding abstraction                                                                                          |
+| Document parsing | Apache Tika (PDF, text, HTML)                                                                                            |
+| HTML scraping    | Jsoup                                                                                                                    |
+| Circuit breaker  | Resilience4j 2.2                                                                                                         |
+| Auth             | OTP email (Resend) + Passkey (WebAuthn) + JJWT                                                                           |
+| Persistence      | MySQL 8 + Spring Data JPA                                                                                                |
 | Redis            | Lettuce (Bucket4j rate limits, fallback cache) + Redisson (sandbox semaphore) — shared with the scheduler's Asynq queue |
-| MCP server       | Spring AI MCP WebMVC SSE transport                 |
-| API docs         | SpringDoc OpenAPI (Swagger UI)                     |
+| MCP server       | Spring AI MCP WebMVC SSE transport                                                                                       |
+| API docs         | SpringDoc OpenAPI (Swagger UI)                                                                                           |
 
 ### Scheduler
 
@@ -57,16 +57,16 @@
 
 ### Infrastructure
 
-| Component        | Technology                                    |
-| ---------------- | --------------------------------------------- |
-| Vector DB        | Weaviate (Docker)                             |
-| Relational DB    | MySQL (Docker) — app + schedule data         |
-| Redis            | Redis 7 (Docker) — shared by the scheduler's Asynq queue and the backend's rate limits, sandbox tracking, and fallback cache |
-| Scheduler        | Go microservice backed by Asynq (`:8082`)    |
-| Storage service  | `agent-system-storage-inner` — Garage (S3-compatible) object storage (`:8083`) |
-| Notification service | `agent-system-notification-inner` — Resend email delivery (`:8084`) |
-| Observability    | Prometheus + Grafana + Loki + Promtail        |
-| Containerization | Docker Compose                                |
+| Component            | Technology                                                                                                                    |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Vector DB            | Weaviate (Docker)                                                                                                             |
+| Relational DB        | MySQL (Docker) — app + schedule data                                                                                         |
+| Redis                | Redis 7 (Docker) — shared by the scheduler's Asynq queue and the backend's rate limits, sandbox tracking, and fallback cache |
+| Scheduler            | Go microservice backed by Asynq (`:8082`)                                                                                   |
+| Storage service      | `agent-system-storage-inner` — Garage (S3-compatible) object storage (`:8083`)                                           |
+| Notification service | `agent-system-notification-inner` — Resend email delivery (`:8084`)                                                      |
+| Observability        | Prometheus + Grafana + Loki + Promtail                                                                                        |
+| Containerization     | Docker Compose                                                                                                                |
 
 ---
 
@@ -154,15 +154,15 @@ Users can register a passkey (Face ID, Touch ID, or hardware key) from the Setti
 
 Each JWT is scoped to a mode. The backend enforces isolation at every data layer.
 
-| Resource             | Personal mode     | Team mode                        |
-| -------------------- | ----------------- | -------------------------------- |
-| Conversations        | Per-user          | Per-user, scoped to org          |
-| Knowledge base       | Per-user          | Shared across org                |
-| Workflows            | Per-user          | Shared across org                |
-| Skills               | Per-user          | Shared across org                |
-| Web-fetch whitelist  | Per-user          | Shared across org                |
-| Connector tokens     | Per-user          | Per-user, scoped to org          |
-| Financial portfolio  | Per-user          | Hidden in team mode              |
+| Resource            | Personal mode | Team mode               |
+| ------------------- | ------------- | ----------------------- |
+| Conversations       | Per-user      | Per-user, scoped to org |
+| Knowledge base      | Per-user      | Shared across org       |
+| Workflows           | Per-user      | Shared across org       |
+| Skills              | Per-user      | Shared across org       |
+| Web-fetch whitelist | Per-user      | Shared across org       |
+| Connector tokens    | Per-user      | Per-user, scoped to org |
+| Financial portfolio | Per-user      | Hidden in team mode     |
 
 ### Organizations
 
@@ -170,11 +170,11 @@ Organizations are pre-created by an admin (`POST /api/v1/admin/organizations`). 
 
 **Team member management** (`/team` page — visible only in team mode):
 
-| Action               | Who can perform |
-| -------------------- | --------------- |
-| View member list     | All members     |
-| Add / remove member  | Owner only      |
-| Transfer ownership   | Owner only      |
+| Action              | Who can perform |
+| ------------------- | --------------- |
+| View member list    | All members     |
+| Add / remove member | Owner only      |
+| Transfer ownership  | Owner only      |
 
 ---
 
@@ -195,33 +195,14 @@ The LangGraph4j graph determines the execution path per query:
 
 External services are connected via OAuth (Google, Figma) or the Telegram Login Widget. Connector tokens are **org-scoped**: connecting Google in personal mode and in team mode produces two separate, isolated tokens.
 
-| Connector        | Provider key | Features                                              |
-| ---------------- | ------------ | ----------------------------------------------------- |
-| Google Docs      | `google`     | Read documents, write new docs                        |
-| Google Sheets    | `google`     | Read spreadsheets, write new sheets                   |
-| Google Slides    | `google`     | Read presentations, write new slides                  |
-| Google Calendar  | `google`     | List upcoming events, create new events               |
-| Figma            | `figma`      | OAuth token for Figma file access                     |
-| Telegram         | `telegram`   | Send messages to the user's linked Telegram chat      |
-
-All four Google services share a single OAuth token (one `provider="google"` entry per user per org). The OAuth consent includes the Calendar scope alongside Docs/Sheets/Slides/Drive.
-
-### Agent tools
-
-When Google or Telegram is connected, the following tools are available inside the chat agent:
-
-| Tool                    | Trigger examples                                              |
-| ----------------------- | ------------------------------------------------------------- |
-| `readGoogleDoc`         | User pastes a `docs.google.com/document` URL                 |
-| `readGoogleSheet`       | User pastes a `docs.google.com/spreadsheets` URL             |
-| `readGoogleSlide`       | User pastes a `docs.google.com/presentation` URL             |
-| `writeToGoogleDocs`     | "Save this to Google Docs", "Export as a document"           |
-| `writeToGoogleSheets`   | "Save this table to Sheets", "Export as a spreadsheet"       |
-| `writeToGoogleSlides`   | "Create a presentation from this", "Make slides"             |
-| `listUpcomingEvents`    | "What's on my calendar?", "What do I have this week?"        |
-| `createCalendarEvent`   | "Schedule a meeting", "Add to my calendar"                   |
-| `sendTelegramMessage`   | "Send this to my Telegram", "Notify me via Telegram"         |
-| `createTelegramGroupSession` | "Notify both of us on Telegram" (shared conversations) |
+| Connector       | Provider key | Features                                         |
+| --------------- | ------------ | ------------------------------------------------ |
+| Google Docs     | `google`   | Read documents, write new docs                   |
+| Google Sheets   | `google`   | Read spreadsheets, write new sheets              |
+| Google Slides   | `google`   | Read presentations, write new slides             |
+| Google Calendar | `google`   | List upcoming events, create new events          |
+| Figma           | `figma`    | OAuth token for Figma file access                |
+| Telegram        | `telegram` | Send messages to the user's linked Telegram chat |
 
 ---
 
@@ -229,82 +210,13 @@ When Google or Telegram is connected, the following tools are available inside t
 
 Workflows compose multiple AI agents into pipelines with three patterns:
 
-| Pattern          | Description                                                 |
-| ---------------- | ----------------------------------------------------------- |
-| `ORCHESTRATOR` | One orchestrator agent routes tasks to specialist agents    |
-| `TEAM`         | Multiple agents run in `PARALLEL` or `SEQUENTIAL` order |
+| Pattern          | Description                                                                       |
+| ---------------- | --------------------------------------------------------------------------------- |
+| `ORCHESTRATOR` | One orchestrator agent routes tasks to specialist agents                          |
+| `TEAM`         | Multiple agents run in`PARALLEL` or `SEQUENTIAL` order                        |
 | `GRAPH`        | Explicit node graph — agents, conditions, and an end node wired together by hand |
 
 Each workflow run executes inside an ephemeral Docker sandbox (`SandboxService`) with CPU/memory resource limits and a watchdog that terminates runaway containers. Agents can load user-uploaded **Skills** (code files) to extend their capabilities.
-
-### GRAPH Pattern
-
-The workflow builder's "+ Add Component" menu (GRAPH pattern only) places three node kinds on the canvas:
-
-| Node kind    | Behavior                                                                 |
-| ------------ | ------------------------------------------------------------------------- |
-| `AGENT`    | Runs its ReAct loop, then hands its output to the single outgoing edge's target |
-| `CONDITION`| Asks the LLM to pick one of its outgoing edges' branch labels based on a user-written condition description, then follows that edge |
-| `END`      | Terminates the run and returns whatever output flowed into it            |
-
-Edges are drawn by hand and persisted (`workflow_edges` table); an edge leaving a `CONDITION` node carries a `branchLabel` (e.g. `"yes"` / `"no"`) that the classifier matches against. The run starts at whichever node has no incoming edge.
-
-### Output Schema Validation
-
-Any agent node (in any pattern) can declare an optional **Output Schema** — a JSON Schema subset (`type`, `properties`, `required`, `enum`, `items`) — in its config panel. After the agent's ReAct loop produces a final answer, the run engine validates it against the schema; on failure it retries once with the validation errors fed back into the conversation before falling back to the raw answer.
-
-### Workflow Versions
-
-The builder's "Versions" panel snapshots a workflow's full pattern/agents/edges as a labeled, numbered version on demand. Each run records which version was active when it started (shown as a `vN` tag in the Runs panel). Restoring an older version replaces the current agents/edges and — rather than deleting history — records the restore itself as a new version, so nothing is lost.
-
-### Available Tools
-
-| Tool              | Description                                                        |
-| ----------------- | ------------------------------------------------------------------ |
-| `BASH`          | Execute shell commands in the sandbox                              |
-| `CURL`          | HTTP requests from the sandbox                                     |
-| `GIT`           | Git operations in the sandbox                                      |
-| `GREP`          | Text search in the sandbox                                         |
-| `PYTHON`        | Run Python scripts in the sandbox                                  |
-| `NODE`          | Run Node.js scripts in the sandbox                                 |
-| `SCHEDULE`      | Create, list, or delete scheduled RAG queries (calls Go scheduler) |
-| `GOOGLE_DOCS`   | Read and write Google Docs via connected OAuth token               |
-| `GOOGLE_SHEETS` | Read and write Google Sheets via connected OAuth token             |
-| `GOOGLE_SLIDES` | Read and write Google Slides via connected OAuth token             |
-| `GOOGLE_CALENDAR` | List and create Google Calendar events                           |
-| `TELEGRAM`      | Send messages to a connected Telegram chat                         |
-
-The `SCHEDULE` tool lets a workflow agent manage schedules on behalf of the user:
-
-```xml
-<!-- Create a scheduled query -->
-<use_tool name="SCHEDULE">
-{"action":"create","conversationId":"<id>","message":"Daily market summary","cron":"0 9 * * 1-5","timezone":"America/New_York","topK":5,"useKnowledgeBase":true,"useWebFetch":true}
-</use_tool>
-
-<!-- List existing schedules -->
-<use_tool name="SCHEDULE">
-{"action":"list","conversationId":"<id>"}
-</use_tool>
-
-<!-- Delete a schedule -->
-<use_tool name="SCHEDULE">
-{"action":"delete","scheduleId":"<schedule-id>"}
-</use_tool>
-```
-
----
-
-## Conversation Sharing
-
-Conversations can be shared via a link with configurable access controls.
-
-| Field          | Values                          | Description                                   |
-| -------------- | ------------------------------- | --------------------------------------------- |
-| `shareMode`  | `READ_ONLY` / `INTERACTIVE` | Viewer can read only, or also send messages   |
-| `accessType` | `EVERYONE` / `WHITELIST`    | Public link or restricted to specified emails |
-
-When `accessType` is `WHITELIST`, only listed emails may access the shared link. `INTERACTIVE` shares notify the conversation owner via Telegram (if connected) when a new participant joins.
 
 ---
 
@@ -315,18 +227,21 @@ A standalone Go binary that wraps the backend REST API for terminal use. Config 
 ### Install
 
 **macOS (Apple Silicon)**
+
 ```bash
 curl -L https://github.com/David200308/rag-agent-system/releases/latest/download/agent-cli_darwin_arm64 \
   -o agent-cli && chmod +x agent-cli && sudo mv agent-cli /usr/local/bin/
 ```
 
 **macOS (Intel)**
+
 ```bash
 curl -L https://github.com/David200308/rag-agent-system/releases/latest/download/agent-cli_darwin_amd64 \
   -o agent-cli && chmod +x agent-cli && sudo mv agent-cli /usr/local/bin/
 ```
 
 **Linux (amd64)**
+
 ```bash
 curl -L https://github.com/David200308/rag-agent-system/releases/latest/download/agent-cli_linux_amd64 \
   -o agent-cli && chmod +x agent-cli && sudo mv agent-cli /usr/local/bin/
@@ -343,13 +258,13 @@ agent-cli auth login
 
 ### Commands
 
-| Command | Subcommands | Description |
-| ------- | ----------- | ----------- |
-| `auth` | `login` `logout` `status` `config` | Authenticate via email OTP; manage server URL |
-| `chat` | *(interactive REPL)* `ask <question>` | Chat with the RAG agent; `-c <id>` continues a conversation |
-| `conversation` (alias `conv`) | `list` `get` `delete` `archive` `unarchive` | Manage conversations |
-| `workflow` (alias `wf`) | `list` `get` `delete` `runs` `logs` | View workflows, run history, and agent logs |
-| `financial` (alias `fin`) | `deposits` `stocks` `crypto` `cards` `prices` | Manage financial portfolio entries |
+| Command                           | Subcommands                                             | Description                                                  |
+| --------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------ |
+| `auth`                          | `login` `logout` `status` `config`              | Authenticate via email OTP; manage server URL                |
+| `chat`                          | *(interactive REPL)* `ask <question>`               | Chat with the RAG agent;`-c <id>` continues a conversation |
+| `conversation` (alias `conv`) | `list` `get` `delete` `archive` `unarchive`   | Manage conversations                                         |
+| `workflow` (alias `wf`)       | `list` `get` `delete` `runs` `logs`           | View workflows, run history, and agent logs                  |
+| `financial` (alias `fin`)     | `deposits` `stocks` `crypto` `cards` `prices` | Manage financial portfolio entries                           |
 
 #### Examples
 
@@ -402,9 +317,9 @@ On startup the scheduler reloads all active schedules from MySQL into the Asynq 
 
 Two backend capabilities are split out of `agent-system-rest` into private Maven modules, each with the `-inner` suffix. These have no public ingress — they're reachable only from `agent-system-rest` over the internal Docker network, authenticated with a shared-secret header instead of a user JWT.
 
-| Service                          | Port   | Backs                          | Auth header          |
-| --------------------------------- | ------ | ------------------------------- | --------------------- |
-| `agent-system-storage-inner`      | `:8083` | Garage (S3-compatible) object storage | `X-Storage-Key`       |
+| Service                             | Port      | Backs                                                 | Auth header            |
+| ----------------------------------- | --------- | ----------------------------------------------------- | ---------------------- |
+| `agent-system-storage-inner`      | `:8083` | Garage (S3-compatible) object storage                 | `X-Storage-Key`      |
 | `agent-system-notification-inner` | `:8084` | Resend email (OTP codes, workflow-completion notices) | `X-Notification-Key` |
 
 `agent-system-rest` talks to each over a typed HTTP client (`StorageClient`, `NotificationClient`). This keeps blob storage and outbound email isolated from the main app — and gives the notification service a single place to add more channels (e.g. push) later without touching `agent-system-rest`.

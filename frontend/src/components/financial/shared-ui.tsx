@@ -95,6 +95,28 @@ export function Field({ label, children }: { label: string; children: React.Reac
   );
 }
 
+// ── Symbol icon (stock/crypto logo with fallback initial) ──────────────────────
+
+export function SymbolIcon({ logoUrl, symbol }: { logoUrl: string | null; symbol: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!logoUrl || failed) {
+    return (
+      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[--color-border]/40 text-[9px] font-semibold text-[--color-muted]">
+        {symbol.slice(0, 1)}
+      </span>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={logoUrl}
+      alt=""
+      className="h-5 w-5 shrink-0 rounded-full bg-white object-contain"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 // ── P&L badge ─────────────────────────────────────────────────────────────────
 
 export function PnlBadge({ percent, amount, currency, hide }: {

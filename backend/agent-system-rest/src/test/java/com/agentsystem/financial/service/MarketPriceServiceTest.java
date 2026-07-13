@@ -70,6 +70,11 @@ class MarketPriceServiceTest {
     }
 
     @Test
+    void getCryptoLogo_notCached_returnsEmpty() {
+        assertThat(service.getCryptoLogo("BTC")).isEmpty();
+    }
+
+    @Test
     void getStockPrice_seeded_returnsValue() {
         Map<String, Double> prices = new ConcurrentHashMap<>(Map.of("AAPL", 195.0, "TSLA", 250.0));
         ReflectionTestUtils.setField(service, "stockPrices", prices);
@@ -136,6 +141,28 @@ class MarketPriceServiceTest {
 
         assertThat(service.getStockLogo("aapl")).hasValue("https://static.finnhub.io/logo/aapl.png");
         assertThat(service.getStockLogo("Aapl")).hasValue("https://static.finnhub.io/logo/aapl.png");
+    }
+
+    @Test
+    void getCryptoLogo_seeded_returnsValue() {
+        Map<String, String> logos = new ConcurrentHashMap<>(Map.of(
+                "BTC", "https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png"
+        ));
+        ReflectionTestUtils.setField(service, "cryptoLogos", logos);
+
+        assertThat(service.getCryptoLogo("BTC")).hasValue("https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png");
+        assertThat(service.getCryptoLogo("ETH")).isEmpty();
+    }
+
+    @Test
+    void getCryptoLogo_caseInsensitive_returnsValue() {
+        Map<String, String> logos = new ConcurrentHashMap<>(Map.of(
+                "BTC", "https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png"
+        ));
+        ReflectionTestUtils.setField(service, "cryptoLogos", logos);
+
+        assertThat(service.getCryptoLogo("btc")).hasValue("https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png");
+        assertThat(service.getCryptoLogo("Btc")).hasValue("https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png");
     }
 
     // ── Timestamps ───────────────────────────────────────────────────────────

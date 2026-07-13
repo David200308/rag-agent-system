@@ -21,7 +21,7 @@ import {
   sortData, groupStocksBySymbol, useSort, unique,
   formatPercentOfTotal, NETWORK_COLORS, TYPE_COLORS, formatExpiry, toTradingViewSymbol,
 } from "./utils";
-import { Th, Modal, PnlBadge, SummaryCard } from "./shared-ui";
+import { Th, Modal, PnlBadge, SummaryCard, SymbolIcon } from "./shared-ui";
 import { SymbolHoverChart } from "./symbol-hover-chart";
 import {
   type DepositFields, type StockFields, type CryptoFields, type CardFields, type SalaryFields,
@@ -525,9 +525,12 @@ export function FinancialManager() {
                     {filteredCrypto.map((c) => (
                       <tr key={c.id} className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
                         <td className="px-4 py-3 font-semibold">
-                          <SymbolHoverChart tvSymbol={toTradingViewSymbol(c.symbol, "crypto")}>
-                            {c.symbol}
-                          </SymbolHoverChart>
+                          <span className="inline-flex items-center gap-1.5">
+                            <SymbolIcon logoUrl={c.logoUrl} symbol={c.symbol} />
+                            <SymbolHoverChart tvSymbol={toTradingViewSymbol(c.symbol, "crypto")}>
+                              {c.symbol}
+                            </SymbolHoverChart>
+                          </span>
                         </td>
                         <td className="px-4 py-3">{c.name}</td>
                         <td className="px-4 py-3 text-right tabular-nums">{maskAmount(String(c.amount))}</td>

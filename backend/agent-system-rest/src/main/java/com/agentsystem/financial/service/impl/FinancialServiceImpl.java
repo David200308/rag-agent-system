@@ -253,6 +253,7 @@ public class FinancialServiceImpl implements FinancialService {
         String sym = c.getSymbol().toUpperCase();
 
         Double     currentPrice           = priceService.getCryptoPrice(sym).orElse(null);
+        String     logoUrl                = priceService.getCryptoLogo(sym).orElse(null);
         BigDecimal currentValue           = null;
         BigDecimal convertedCurrentValue  = null;
 
@@ -273,7 +274,7 @@ public class FinancialServiceImpl implements FinancialService {
         return new CryptoInvestmentDto(
                 c.getId(), c.getOwnerUuid(), c.getName(), c.getSymbol(),
                 c.getAmount(), c.getInvestAmount(), c.getCurrency(),
-                currentPrice, currentValue,
+                currentPrice, logoUrl, currentValue,
                 bd(convertedInvest), convertedCurrentValue, toCurrency,
                 pnlPercent, c.getCreatedAt(), c.getUpdatedAt()
         );

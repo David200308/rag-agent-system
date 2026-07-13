@@ -14,6 +14,8 @@ public interface MarketPriceService {
 
     Optional<Double> getCryptoPrice(String symbol);
 
+    Optional<String> getCryptoLogo(String symbol);
+
     Instant getStockLastFetched();
 
     Instant getCryptoLastFetched();

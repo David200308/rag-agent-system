@@ -305,6 +305,36 @@ class FinancialServiceTest {
     }
 
     @Test
+    void listCrypto_withLogoAvailable_includesLogoUrl() {
+        CryptoInvestment c = crypto("c-1", "user@test.com", "BTC");
+
+        when(cryptoRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(c));
+        when(priceService.isCryptoStale()).thenReturn(false);
+        when(priceService.getCryptoPrice("BTC")).thenReturn(Optional.empty());
+        when(priceService.getCryptoLogo("BTC")).thenReturn(Optional.of("https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png"));
+        when(fxService.convert(anyDouble(), any(), any())).thenReturn(0.0);
+
+        var result = service.listCrypto("user@test.com", "USD");
+
+        assertThat(result.get(0).logoUrl()).isEqualTo("https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png");
+    }
+
+    @Test
+    void listCrypto_noLogoAvailable_nullLogoUrl() {
+        CryptoInvestment c = crypto("c-1", "user@test.com", "BTC");
+
+        when(cryptoRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(c));
+        when(priceService.isCryptoStale()).thenReturn(false);
+        when(priceService.getCryptoPrice("BTC")).thenReturn(Optional.empty());
+        when(priceService.getCryptoLogo("BTC")).thenReturn(Optional.empty());
+        when(fxService.convert(anyDouble(), any(), any())).thenReturn(0.0);
+
+        var result = service.listCrypto("user@test.com", "USD");
+
+        assertThat(result.get(0).logoUrl()).isNull();
+    }
+
+    @Test
     void createCrypto_savesCorrectly() {
         when(cryptoRepo.save(any())).thenAnswer(i -> i.getArgument(0));
         ArgumentCaptor<CryptoInvestment> cap = ArgumentCaptor.forClass(CryptoInvestment.class);

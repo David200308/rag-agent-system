@@ -58,6 +58,8 @@ public class MarketPriceServiceImpl implements MarketPriceService {
 
     // crypto base symbol (e.g. "BTC", "ETH") -> USDT price
     private final Map<String, Double> cryptoPrices     = new ConcurrentHashMap<>();
+    // crypto base symbol -> coin logo URL (from CoinGecko); cached indefinitely like stockLogos.
+    private final Map<String, String> cryptoLogos      = new ConcurrentHashMap<>();
 
     private volatile Instant stockLastFetched  = Instant.EPOCH;
     private volatile Instant cryptoLastFetched = Instant.EPOCH;
@@ -82,6 +84,11 @@ public class MarketPriceServiceImpl implements MarketPriceService {
     @Override
     public Optional<Double> getCryptoPrice(String symbol) {
         return Optional.ofNullable(cryptoPrices.get(symbol.toUpperCase()));
+    }
+
+    @Override
+    public Optional<String> getCryptoLogo(String symbol) {
+        return Optional.ofNullable(cryptoLogos.get(symbol.toUpperCase()));
     }
 
     @Override
@@ -223,6 +230,57 @@ public class MarketPriceServiceImpl implements MarketPriceService {
             log.info("[MarketPriceService] Crypto prices refreshed via Hyperliquid: {} symbols", updated);
         } catch (Exception e) {
             log.error("[MarketPriceService] Crypto price fetch failed: {}", e.getMessage());
+        }
+
+        List<String> uncachedLogos = symbols.stream()
+                .map(String::toUpperCase).distinct()
+                .filter(sym -> !cryptoLogos.containsKey(sym))
+                .collect(Collectors.toList());
+        if (!uncachedLogos.isEmpty()) {
+            fetchCryptoLogos(uncachedLogos);
+        }
+    }
+
+    /**
+     * Fetches coin logos for the given symbols from CoinGecko's public markets endpoint
+     * in a single batched request (no API key required for the public tier).
+     *
+     * Endpoint: GET https://api.coingecko.com/api/v3/coins/markets
+     *                ?vs_currency=usd&symbols=btc,eth&per_page=250
+     * Response: [{ "symbol": "btc", "image": "https://...png", "market_cap_rank": 1, ... }, ...]
+     *
+     * Results are ordered by market cap descending by default, and a ticker symbol can be
+     * shared by multiple coins — we keep only the first (highest market-cap) match per symbol.
+     * Cached indefinitely once fetched — logos don't change like prices do.
+     */
+    private void fetchCryptoLogos(List<String> symbols) {
+        try {
+            String symbolParam = symbols.stream()
+                    .map(s -> s.toLowerCase(java.util.Locale.ROOT))
+                    .collect(Collectors.joining(","));
+            String url = "https://api.coingecko.com/api/v3/coins/markets"
+                    + "?vs_currency=usd&per_page=250&symbols=" + symbolParam;
+
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(15))
+                    .header("Accept", "application/json")
+                    .GET()
+                    .build();
+
+            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+            JsonNode root = objectMapper.readTree(resp.body());
+            if (!root.isArray()) return;
+
+            for (JsonNode coin : root) {
+                String sym = coin.path("symbol").asText("").toUpperCase();
+                String image = coin.path("image").asText("");
+                if (!sym.isBlank() && !image.isBlank()) {
+                    cryptoLogos.putIfAbsent(sym, image);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[MarketPriceService] Crypto logo fetch failed for {}: {}", symbols, e.getMessage());
         }
     }
 }

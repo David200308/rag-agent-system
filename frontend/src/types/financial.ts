@@ -94,6 +94,8 @@ export interface CryptoInvestment {
   currency: string;
   /** Live USDT price from Binance; null if unavailable */
   currentPrice: number | null;
+  /** Coin logo image URL from CoinGecko; null if unavailable */
+  logoUrl: string | null;
   /** currentPrice × amount (USDT); null if price unavailable */
   currentValue: number | null;
   convertedInvestAmount: number;

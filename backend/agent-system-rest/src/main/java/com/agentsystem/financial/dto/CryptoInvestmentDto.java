@@ -13,6 +13,8 @@ public record CryptoInvestmentDto(
         String     currency,
         /** Live price in USDT from Binance; null if unavailable. */
         Double     currentPrice,
+        /** Coin logo image URL from CoinGecko; null if unavailable. */
+        String     logoUrl,
         /** currentPrice × amount (in USDT); null if price unavailable. */
         BigDecimal currentValue,
         BigDecimal convertedInvestAmount,
