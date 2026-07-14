@@ -9,6 +9,8 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+
+	"agent-cli/internal/style"
 )
 
 var travelCmd = &cobra.Command{
@@ -31,12 +33,12 @@ var travelListCmd = &cobra.Command{
 			return nil
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tTITLE\tSTART\tEND\tSTOPS\tEXPENSES")
+		fmt.Fprintln(w, style.Header("ID\tTITLE\tSTART\tEND\tSTOPS\tEXPENSES"))
 		for _, r := range items {
 			stops, _ := r["stops"].([]any)
 			expenses, _ := r["expenses"].([]any)
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\n",
-				str(r, "id"), str(r, "title"), str(r, "startDate"), str(r, "endDate"),
+				str(r, "id"), style.Bold(str(r, "title")), str(r, "startDate"), str(r, "endDate"),
 				len(stops), expenseTotals(expenses))
 		}
 		w.Flush()
@@ -135,7 +137,7 @@ func travelDelete(basePath string) func(*cobra.Command, []string) error {
 		if err := c.JSON("DELETE", basePath+"/"+args[0], nil, nil); err != nil {
 			return err
 		}
-		fmt.Printf("Deleted %s.\n", args[0])
+		fmt.Println(style.OK(fmt.Sprintf("Deleted %s.", args[0])))
 		return nil
 	}
 }

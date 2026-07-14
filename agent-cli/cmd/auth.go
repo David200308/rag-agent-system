@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"agent-cli/internal/identity"
+	"agent-cli/internal/style"
 )
 
 var authCmd = &cobra.Command{
@@ -74,11 +75,11 @@ var authLoginCmd = &cobra.Command{
 				map[string]string{"publicKey": pubKey}, &keyResp); err != nil {
 				fmt.Fprintf(os.Stderr, "warning: key registration failed: %v\n", err)
 			} else {
-				fmt.Printf("CLI key registered (fingerprint: %s)\n", keyResp["fingerprint"])
+				fmt.Println(style.OK(fmt.Sprintf("CLI key registered (fingerprint: %s)", keyResp["fingerprint"])))
 			}
 		}
 
-		fmt.Printf("Logged in as %s\n", email)
+		fmt.Println(style.OK(fmt.Sprintf("Logged in as %s", style.Bold(email))))
 		return nil
 	},
 }
@@ -91,7 +92,7 @@ var authLogoutCmd = &cobra.Command{
 		if err := cfg.Save(); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
-		fmt.Println("Logged out.")
+		fmt.Println(style.OK("Logged out."))
 		return nil
 	},
 }
@@ -101,7 +102,7 @@ var authStatusCmd = &cobra.Command{
 	Short: "Check if the current token is valid",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if cfg.Token == "" {
-			fmt.Println("Not logged in.")
+			fmt.Println(style.Warn("Not logged in."))
 			return nil
 		}
 		c := newClient()
@@ -110,12 +111,12 @@ var authStatusCmd = &cobra.Command{
 			return err
 		}
 		if valid, _ := resp["valid"].(bool); valid {
-			fmt.Printf("Logged in as %s\n", resp["email"])
+			fmt.Println(style.OK(fmt.Sprintf("Logged in as %s", style.Bold(fmt.Sprintf("%v", resp["email"])))))
 			if fp, err := identity.PublicKeyBase64(); err == nil {
-				fmt.Printf("CLI key fingerprint: %s…\n", fp[:8])
+				fmt.Printf("%s %s…\n", style.Dim("CLI key fingerprint:"), fp[:8])
 			}
 		} else {
-			fmt.Println("Token is invalid or expired. Run: agent-cli auth login")
+			fmt.Println(style.Warn("Token is invalid or expired. Run: agent-cli auth login"))
 		}
 		return nil
 	},
