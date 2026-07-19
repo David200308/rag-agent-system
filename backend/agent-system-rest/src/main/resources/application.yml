@@ -43,6 +43,11 @@ spring:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        # Keys here must stay in sync with agent-system-notification-consumer's mapping —
+        # see that module's application.yml for why this exists (different FQCNs per side).
+        spring.json.type.mapping: otpRequested:com.agentsystem.notification.NotificationClient$OtpRequestedEvent,workflowCompleted:com.agentsystem.notification.NotificationClient$WorkflowCompletedEvent
+        max.block.ms: 5000
 
   sql:
     init:

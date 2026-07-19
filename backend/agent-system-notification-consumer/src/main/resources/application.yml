@@ -11,9 +11,20 @@ spring:
     consumer:
       group-id: notification-consumer
       auto-offset-reset: earliest
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      # Wraps JsonDeserializer so a malformed/untrusted record becomes a normal listener-level
+      # error (caught by kafkaErrorHandler's bounded retry) instead of killing the whole
+      # consumer thread — DefaultErrorHandler cannot act on a raw SerializationException,
+      # since that happens during poll(), before any record reaches the listener.
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
         spring.json.trusted.packages: com.agentsystem.notification.email.listener
+        # The producer (agent-system-rest) has its own NotificationClient.OtpRequestedEvent /
+        # WorkflowCompletedEvent classes — different FQCNs from this module's EmailEventListener
+        # ones. Type mapping resolves the __TypeId__ header to a logical name shared by both
+        # sides instead of the producer's class name, which this module doesn't have on its
+        # classpath. Keys here must stay in sync with the producer's mapping.
+        spring.json.type.mapping: otpRequested:com.agentsystem.notification.email.listener.EmailEventListener$OtpRequestedEvent,workflowCompleted:com.agentsystem.notification.email.listener.EmailEventListener$WorkflowCompletedEvent
 
 server:
   port: 8084
