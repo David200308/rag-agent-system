@@ -6,9 +6,9 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 @SpringBootApplication
 @ConfigurationPropertiesScan
-public class NotificationInnerApplication {
+public class NotificationConsumerApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(NotificationInnerApplication.class, args);
+        SpringApplication.run(NotificationConsumerApplication.class, args);
     }
 }

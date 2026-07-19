@@ -11,10 +11,10 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>agent-system-notification-inner</artifactId>
+    <artifactId>agent-system-notification-consumer</artifactId>
     <packaging>jar</packaging>
-    <name>agent-system-notification-inner</name>
-    <description>Internal notification microservice — email today (Resend), more channels later</description>
+    <name>agent-system-notification-consumer</name>
+    <description>Notification consumer — email today (Resend), more channels later</description>
 
     <dependencies>
         <dependency>
@@ -24,6 +24,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
         </dependency>
 
         <!-- Resend — transactional email -->

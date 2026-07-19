@@ -7,7 +7,7 @@ public interface AuthService {
     /**
      * Validates the email against the users table (must be status=USER and enabled),
      * generates a 6-digit OTP, stores it in Redis, and dispatches it via
-     * agent-system-notification-inner.
+     * agent-system-notification-consumer.
      *
      * @throws IllegalArgumentException if the email isn't an approved, enabled user
      */

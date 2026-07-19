@@ -62,9 +62,10 @@
 | Vector DB            | Weaviate (Docker)                                                                                                             |
 | Relational DB        | MySQL (Docker) — app + schedule data                                                                                         |
 | Redis                | Redis 7 (Docker) — shared by the scheduler's Asynq queue and the backend's rate limits, sandbox tracking, and fallback cache |
+| Kafka                | Apache Kafka, single-node KRaft mode (Docker) — carries notification events (`:9092`)                                        |
 | Scheduler            | Go microservice backed by Asynq (`:8082`)                                                                                   |
 | Storage service      | `agent-system-storage-inner` — Garage (S3-compatible) object storage (`:8083`)                                           |
-| Notification service | `agent-system-notification-inner` — Resend email delivery (`:8084`)                                                      |
+| Notification consumer | `agent-system-notification-consumer` — Resend email delivery via Kafka (`:8084`)                                        |
 | Observability        | Prometheus + Grafana + Loki + Promtail                                                                                        |
 | Containerization     | Docker Compose                                                                                                                |
 
@@ -123,14 +124,14 @@
           │                    │                   │                    │
   ┌───────▼──────┐   ┌────────▼────────┐  ┌───────▼─────────────┐ ┌────▼─────────────────────┐
   │  Weaviate    │   │     MySQL       │  │ Go Scheduler         │ │ Inner microservices       │
-  │  (vectors)   │   │  (auth, convos, │  │   (:8082)            │ │ (shared-secret header     │
-  │              │   │   workflows,    │  │                      │ │  auth, internal-only,     │
-  └──────────────┘   │   skills,       │  │ Asynq Scheduler      │ │  no public ingress)       │
-                     │   schedules,    │  │   └─ enqueues tasks  │ │                           │
-                     │   model_configs,│  │ Asynq Worker         │ │ Storage (:8083)           │
-                     │   orgs/members, │  │   └─ rag:trigger     │ │   └─ Garage S3 blobs      │
-                     │   connectors)   │  │      (MaxRetry=3)    │ │ Notification (:8084)      │
-                     └─────────────────┘  └──────────────────────┘ │   └─ Resend email         │
+  │  (vectors)   │   │  (auth, convos, │  │   (:8082)            │ │ Storage (:8083)           │
+  │              │   │   workflows,    │  │                      │ │   └─ shared-secret hdr,   │
+  └──────────────┘   │   skills,       │  │ Asynq Scheduler      │ │      Garage S3 blobs      │
+                     │   schedules,    │  │   └─ enqueues tasks  │ │ Notification (:8084)      │
+                     │   model_configs,│  │ Asynq Worker         │ │   └─ Kafka consumer,      │
+                     │   orgs/members, │  │   └─ rag:trigger     │ │      Resend email         │
+                     │   connectors)   │  │      (MaxRetry=3)    │ │ (Kafka: no auth —         │
+                     └─────────────────┘  └──────────────────────┘ │  see Kafka box below)     │
                                                                     └───────────────────────────┘
 ```
 
@@ -315,11 +316,12 @@ On startup the scheduler reloads all active schedules from MySQL into the Asynq 
 
 ## Internal Microservices
 
-Two backend capabilities are split out of `agent-system-rest` into private Maven modules, each with the `-inner` suffix. These have no public ingress — they're reachable only from `agent-system-rest` over the internal Docker network, authenticated with a shared-secret header instead of a user JWT.
+Two backend capabilities are split out of `agent-system-rest` into private Maven modules. Neither has public ingress.
 
-| Service                             | Port      | Backs                                                 | Auth header            |
-| ----------------------------------- | --------- | ----------------------------------------------------- | ---------------------- |
-| `agent-system-storage-inner`      | `:8083` | Garage (S3-compatible) object storage                 | `X-Storage-Key`      |
-| `agent-system-notification-inner` | `:8084` | Resend email (OTP codes, workflow-completion notices) | `X-Notification-Key` |
+`agent-system-storage-inner` (`:8083`, Garage S3-compatible object storage) is reachable only from `agent-system-rest` over the internal Docker network, authenticated with a shared-secret header (`X-Storage-Key`) instead of a user JWT. `agent-system-rest` talks to it via a typed HTTP client (`StorageClient`).
 
-`agent-system-rest` talks to each over a typed HTTP client (`StorageClient`, `NotificationClient`). This keeps blob storage and outbound email isolated from the main app — and gives the notification service a single place to add more channels (e.g. push) later without touching `agent-system-rest`.
+| Service                        | Port    | Backs                                  | Auth header      |
+| ------------------------------- | ------- | --------------------------------------- | ---------------- |
+| `agent-system-storage-inner` | `:8083` | Garage (S3-compatible) object storage   | `X-Storage-Key` |
+
+`agent-system-notification-consumer` (`:8084`) is decoupled further — instead of REST, `agent-system-rest`'s `NotificationClient` publishes events to Kafka topics (`notifications.otp`, `notifications.workflow-complete`), and the consumer's `EmailEventListener` delivers them via Resend. There's no shared-secret auth here; the Kafka broker itself is the trust boundary (internal-network-only, no public ingress). This decoupling means login/register succeeds once the OTP event reaches Kafka — actual email delivery happens asynchronously, with a bounded retry (2 attempts) in the consumer before a failing message is logged and dropped. Email is the only channel today; adding another (push, SMS, Telegram) is a new `@KafkaListener` method, not a rearchitecture.

@@ -10,9 +10,9 @@ on:
       - 'backend/agent-system-storage-inner/src/**'
       - 'backend/agent-system-storage-inner/pom.xml'
       - 'backend/agent-system-storage-inner/Dockerfile'
-      - 'backend/agent-system-notification-inner/src/**'
-      - 'backend/agent-system-notification-inner/pom.xml'
-      - 'backend/agent-system-notification-inner/Dockerfile'
+      - 'backend/agent-system-notification-consumer/src/**'
+      - 'backend/agent-system-notification-consumer/pom.xml'
+      - 'backend/agent-system-notification-consumer/Dockerfile'
       - 'backend/pom.xml'
       - 'backend/docker-entrypoint.sh'
       - '.github/workflows/backend-ci.yml'
@@ -25,9 +25,9 @@ on:
       - 'backend/agent-system-storage-inner/src/**'
       - 'backend/agent-system-storage-inner/pom.xml'
       - 'backend/agent-system-storage-inner/Dockerfile'
-      - 'backend/agent-system-notification-inner/src/**'
-      - 'backend/agent-system-notification-inner/pom.xml'
-      - 'backend/agent-system-notification-inner/Dockerfile'
+      - 'backend/agent-system-notification-consumer/src/**'
+      - 'backend/agent-system-notification-consumer/pom.xml'
+      - 'backend/agent-system-notification-consumer/Dockerfile'
       - 'backend/pom.xml'
       - 'backend/docker-entrypoint.sh'
   workflow_dispatch:
@@ -36,12 +36,12 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME_REST: ${{ github.repository }}/rag-agent-system-backend
   IMAGE_NAME_STORAGE: ${{ github.repository }}/rag-agent-system-storage-inner
-  IMAGE_NAME_NOTIFICATION: ${{ github.repository }}/rag-agent-system-notification-inner
+  IMAGE_NAME_NOTIFICATION: ${{ github.repository }}/rag-agent-system-notification-consumer
 
 jobs:
   # ── Test ────────────────────────────────────────────────────────────────────
   # Runs from the multi-module reactor root, so it builds/tests
-  # agent-system-rest, agent-system-storage-inner, and agent-system-notification-inner in one pass.
+  # agent-system-rest, agent-system-storage-inner, and agent-system-notification-consumer in one pass.
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
@@ -73,7 +73,7 @@ jobs:
           path: |
             backend/agent-system-rest/target/surefire-reports/
             backend/agent-system-storage-inner/target/surefire-reports/
-            backend/agent-system-notification-inner/target/surefire-reports/
+            backend/agent-system-notification-consumer/target/surefire-reports/
           retention-days: 7
 
       - name: Upload JaCoCo coverage report
@@ -236,7 +236,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./backend
-          file: ./backend/agent-system-notification-inner/Dockerfile
+          file: ./backend/agent-system-notification-consumer/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

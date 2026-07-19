@@ -38,6 +38,12 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
 
+  # ── Kafka (agent-system-notification-consumer, Resend-backed email) ──────────
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
   sql:
     init:
       mode: always                            # always run schema.sql on startup
@@ -344,10 +350,8 @@ storage:
   service-key: ${STORAGE_SERVICE_KEY:storage-secret-key}
   url: ${STORAGE_URL:http://localhost:8083}
 
-# ── agent-system-notification-inner microservice (Resend-backed email) ──────
-notification:
-  service-key: ${NOTIFICATION_SERVICE_KEY:notification-secret-key}
-  url: ${NOTIFICATION_URL:http://localhost:8084}
+# ── agent-system-notification-consumer microservice — see the top-level spring.kafka
+#    block above; the OTP/workflow-complete emails it sends are configured there. ──
 
 # ── Financial / Market Data ───────────────────────────────────────────────────
 financial:

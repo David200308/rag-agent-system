@@ -7,7 +7,7 @@ WORKDIR /app
 COPY pom.xml .
 COPY agent-system-rest/pom.xml agent-system-rest/pom.xml
 COPY agent-system-storage-inner/pom.xml agent-system-storage-inner/pom.xml
-COPY agent-system-notification-inner/pom.xml agent-system-notification-inner/pom.xml
+COPY agent-system-notification-consumer/pom.xml agent-system-notification-consumer/pom.xml
 RUN mvn -B -pl agent-system-rest -am dependency:resolve dependency:resolve-plugins \
     -Dmaven.wagon.http.retryHandler.count=3 \
     -Dmaven.wagon.http.retryHandler.requestSentEnabled=true

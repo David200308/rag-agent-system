@@ -1,48 +1,50 @@
 package com.agentsystem.notification;
 
-import com.agentsystem.config.NotificationProperties;
+import java.util.concurrent.TimeUnit;
+
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
 
 /**
- * Calls agent-system-notification-inner's internal REST API on behalf of authenticated users.
- * Uses X-Notification-Key authentication — no JWT needed (mirrors StorageClient).
+ * Publishes notification events consumed by agent-system-notification-consumer.
+ * Topic names must stay in sync with that consumer's @KafkaListener topics.
  */
 @Component
 public class NotificationClient {
 
-    private final RestClient restClient;
+    public static final String TOPIC_OTP = "notifications.otp";
+    public static final String TOPIC_WORKFLOW_COMPLETE = "notifications.workflow-complete";
 
-    public NotificationClient(NotificationProperties props) {
-        this.restClient = RestClient.builder()
-                .baseUrl(props.url())
-                .defaultHeader("X-Notification-Key", props.serviceKey())
-                .build();
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+
+    public NotificationClient(KafkaTemplate<String, Object> kafkaTemplate) {
+        this.kafkaTemplate = kafkaTemplate;
     }
 
-    private record OtpRequest(String to, String code, int expiryMinutes) {}
+    private record OtpRequestedEvent(String to, String code, int expiryMinutes) {}
 
-    private record WorkflowCompleteRequest(String to, String workflowName, String status, String output) {}
+    private record WorkflowCompletedEvent(String to, String workflowName, String status, String output) {}
 
     /**
      * Send a 6-digit login OTP to {@code to}.
+     * Blocks briefly on broker acknowledgment so the login/register request still fails
+     * fast if Kafka itself is unreachable; actual email delivery happens asynchronously
+     * in the consumer.
      */
     public void sendOtp(String to, String code, int expiryMinutes) {
-        restClient.post()
-                .uri("/internal/notifications/email/otp")
-                .body(new OtpRequest(to, code, expiryMinutes))
-                .retrieve()
-                .toBodilessEntity();
+        try {
+            kafkaTemplate.send(TOPIC_OTP, to, new OtpRequestedEvent(to, code, expiryMinutes))
+                    .get(5, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to send verification email. Please try again.", e);
+        }
     }
 
     /**
      * Notifies the workflow owner that their run has finished.
      */
     public void sendWorkflowComplete(String to, String workflowName, String status, String output) {
-        restClient.post()
-                .uri("/internal/notifications/email/workflow-complete")
-                .body(new WorkflowCompleteRequest(to, workflowName, status, output))
-                .retrieve()
-                .toBodilessEntity();
+        kafkaTemplate.send(TOPIC_WORKFLOW_COMPLETE, to,
+                new WorkflowCompletedEvent(to, workflowName, status, output));
     }
 }

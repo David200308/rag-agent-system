@@ -50,7 +50,7 @@ public class AuthServiceImpl implements AuthService {
 
     /**
      * Validates the email against the users table, generates a 6-digit OTP,
-     * stores it in Redis, and dispatches it via agent-system-notification-inner.
+     * stores it in Redis, and dispatches it via agent-system-notification-consumer.
      *
      * @throws IllegalArgumentException if the email isn't an approved, enabled user
      */

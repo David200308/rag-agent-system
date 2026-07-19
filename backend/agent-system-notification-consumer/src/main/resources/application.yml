@@ -1,10 +1,19 @@
 spring:
   application:
-    name: agent-system-notification-inner
+    name: agent-system-notification-consumer
 
   config:
     import:
       - optional:classpath:application.local.yml
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: notification-consumer
+      auto-offset-reset: earliest
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.agentsystem.notification.email.listener
 
 server:
   port: 8084
@@ -14,10 +23,8 @@ resend:
   api-key: ${RESEND_API_KEY:}
   from-email: ${RESEND_FROM_EMAIL:noreply@example.com}
 
-# ── Shared secret expected on X-Notification-Key from agent-system-rest;
-#    logo-url is the branding image used in the email template header ───────
+# ── logo-url is the branding image used in the email template header ─────────
 notification:
-  service-key: ${NOTIFICATION_SERVICE_KEY:notification-secret-key}
   email:
     logo-url: ${NOTIFICATION_EMAIL_LOGO_URL:https://www.skyproton.com/_next/static/media/logo-black-front-no-background.0acya-sxbgd9s.svg}
 

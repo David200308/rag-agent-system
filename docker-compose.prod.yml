@@ -11,7 +11,6 @@
 #      echo "$(openssl rand -base64 64)"   > secrets/auth_jwt_secret
 #      echo "$(openssl rand -base64 32)"   > secrets/scheduler_service_key
 #      echo "$(openssl rand -base64 32)"   > secrets/storage_service_key
-#      echo "$(openssl rand -base64 32)"   > secrets/notification_service_key
 #      echo "..."                          > secrets/garage_access_key   # pre-seeded via `garage key import`
 #      echo "..."                          > secrets/garage_secret_key
 #      # ... (see full list below)
@@ -52,8 +51,6 @@ secrets:
     file: ./secrets/scheduler_service_key
   storage_service_key:
     file: ./secrets/storage_service_key
-  notification_service_key:
-    file: ./secrets/notification_service_key
   garage_access_key:
     file: ./secrets/garage_access_key
   garage_secret_key:
@@ -122,6 +119,28 @@ services:
       retries: 10
       start_period: 30s
 
+  # ── Kafka (notification events: OTP + workflow-complete) ──────────────────────
+  kafka:
+    image: apache/kafka:3.9.2
+    container_name: agent-system-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+    restart: unless-stopped
+
   # ── Redis — shared by the Go scheduler (Asynq queue) and the Java backend
   #    (rate-limit buckets, sandbox container tracking, fallback answer cache) ──
   redis:
@@ -186,18 +205,23 @@ services:
       retries: 8
       start_period: 30s
 
-  # ── Notification microservice (agent-system-notification-inner module) ───────
-  # Email today (Resend); more channels (Telegram, push, etc.) land here later.
-  notification:
+  # ── Notification consumer (agent-system-notification-consumer module) ────────
+  # Email today (Resend), consumed from Kafka; more channels (Telegram, push, etc.)
+  # land here later as new @KafkaListener methods.
+  notification-consumer:
     build:
       context: ./backend
-      dockerfile: agent-system-notification-inner/Dockerfile
-    container_name: agent-system-notification
+      dockerfile: agent-system-notification-consumer/Dockerfile
+    container_name: agent-system-notification-consumer
     ports:
       - "8084:8084"
     restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     secrets:
-      - notification_service_key
       - resend_api_key
       - resend_from_email
     healthcheck:
@@ -304,7 +328,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      notification:
+      kafka:
         condition: service_healthy
     secrets:
       - mysql_password
@@ -316,7 +340,6 @@ services:
       - finnhub_api_key
       - scheduler_service_key
       - storage_service_key
-      - notification_service_key
       - google_client_id
       - google_client_secret
       - figma_client_id
@@ -337,8 +360,8 @@ services:
       REDIS_PORT: 6379
       # ── Image storage (agent-system-storage-inner, Garage-backed)
       STORAGE_URL: http://storage:8083
-      # ── Notifications (agent-system-notification-inner, Resend-backed email)
-      NOTIFICATION_URL: http://notification:8084
+      # ── Notifications (agent-system-notification-consumer, Resend-backed email via Kafka)
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       # ── LLM
       LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
       # Embeddings use Ollama (nomic-embed-text) running on the host.
