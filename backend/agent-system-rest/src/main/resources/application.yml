@@ -355,6 +355,12 @@ storage:
   service-key: ${STORAGE_SERVICE_KEY:storage-secret-key}
   url: ${STORAGE_URL:http://localhost:8083}
 
+# ── Go investment-alert-task microservice (crypto/stock price, DeFi, and ────
+#    prediction-market alerts) ────────────────────────────────────────────────
+alert:
+  service-key: ${ALERT_SERVICE_KEY:alert-secret-key}
+  url: ${ALERT_URL:http://localhost:8085}
+
 # ── agent-system-notification-consumer microservice — see the top-level spring.kafka
 #    block above; the OTP/workflow-complete emails it sends are configured there. ──
 

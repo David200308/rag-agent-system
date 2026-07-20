@@ -11,6 +11,7 @@
 #      echo "$(openssl rand -base64 64)"   > secrets/auth_jwt_secret
 #      echo "$(openssl rand -base64 32)"   > secrets/scheduler_service_key
 #      echo "$(openssl rand -base64 32)"   > secrets/storage_service_key
+#      echo "$(openssl rand -base64 32)"   > secrets/alert_service_key
 #      echo "..."                          > secrets/garage_access_key   # pre-seeded via `garage key import`
 #      echo "..."                          > secrets/garage_secret_key
 #      # ... (see full list below)
@@ -51,6 +52,8 @@ secrets:
     file: ./secrets/scheduler_service_key
   storage_service_key:
     file: ./secrets/storage_service_key
+  alert_service_key:
+    file: ./secrets/alert_service_key
   garage_access_key:
     file: ./secrets/garage_access_key
   garage_secret_key:
@@ -267,6 +270,44 @@ services:
       retries: 5
       start_period: 15s
 
+  # ── Go investment-alert-task microservice (crypto/stock price, DeFi, and ────
+  #    prediction-market alerts) ──────────────────────────────────────────────
+  investment-alert-task:
+    build:
+      context: ./investment-alert-task
+      dockerfile: Dockerfile
+    container_name: agent-system-investment-alert-task
+    ports:
+      - "8085:8085"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    secrets:
+      - alert_service_key
+      - mysql_password
+    environment:
+      PORT: 8085
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-ragagent}
+      MYSQL_USER: ${MYSQL_USER:-ragagent}
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
+      BACKEND_URL: http://backend:8081
+      ALERT_SERVICE_KEY_FILE: /run/secrets/alert_service_key
+      PYTH_API_URL: ${PYTH_API_URL:-https://hermes.pyth.network}
+      PYTH_API_KEY: ${PYTH_API_KEY:-}
+      CHECK_INTERVAL: ${ALERT_CHECK_INTERVAL:-60}
+      RULE_RELOAD_INTERVAL: ${ALERT_RULE_RELOAD_INTERVAL:-60}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8085/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   # ── Docker socket proxy ────────────────────────────────────────────────────────
   # Mediates the backend's access to the Docker API for SandboxService (spawns
   # ephemeral containers to run skill code). The backend never mounts the real
@@ -340,6 +381,7 @@ services:
       - finnhub_api_key
       - scheduler_service_key
       - storage_service_key
+      - alert_service_key
       - google_client_id
       - google_client_secret
       - figma_client_id
@@ -360,6 +402,8 @@ services:
       REDIS_PORT: 6379
       # ── Image storage (agent-system-storage-inner, Garage-backed)
       STORAGE_URL: http://storage:8083
+      # ── Investment alerts (crypto/stock price, DeFi, prediction-market)
+      ALERT_URL: http://investment-alert-task:8085
       # ── Notifications (agent-system-notification-consumer, Resend-backed email via Kafka)
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       # ── LLM

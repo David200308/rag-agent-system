@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Trash2, Bell } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { STOCK_TYPE_LABELS, formatAmount, formatPrice, type StockInvestment } from "@/types/financial";
 import { PnlBadge, SymbolIcon } from "./shared-ui";
@@ -43,10 +43,10 @@ function StockDataCells({ row, defaultCurrency, total, hideAmounts }: {
   );
 }
 
-export function StockGroupRows({ group, expanded, onToggle, defaultCurrency, total, hideAmounts, onEdit, onDelete }: {
+export function StockGroupRows({ group, expanded, onToggle, defaultCurrency, total, hideAmounts, onEdit, onDelete, onAlert }: {
   group: StockGroup; expanded: boolean; onToggle: () => void;
   defaultCurrency: string; total: number; hideAmounts: boolean;
-  onEdit: (s: StockInvestment) => void; onDelete: (id: string) => void;
+  onEdit: (s: StockInvestment) => void; onDelete: (id: string) => void; onAlert: (symbol: string) => void;
 }) {
   if (group.rows.length === 1) {
     const s = group.rows[0]!;
@@ -66,6 +66,9 @@ export function StockGroupRows({ group, expanded, onToggle, defaultCurrency, tot
         <StockDataCells row={{ ...s, avgPrice: group.avgPrice }} defaultCurrency={defaultCurrency} total={total} hideAmounts={hideAmounts} />
         <td className="px-4 py-3">
           <div className="flex justify-end gap-1">
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onAlert(s.symbol)}>
+              <Bell className="h-3.5 w-3.5 text-[--color-muted]" />
+            </Button>
             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(s)}>
               <Pencil className="h-3.5 w-3.5 text-[--color-muted]" />
             </Button>
@@ -94,7 +97,14 @@ export function StockGroupRows({ group, expanded, onToggle, defaultCurrency, tot
         <td className="px-4 py-3">{group.name}</td>
         <td className="px-4 py-3 text-xs text-[--color-muted]">{STOCK_TYPE_LABELS[group.stockType]}</td>
         <StockDataCells row={group} defaultCurrency={defaultCurrency} total={total} hideAmounts={hideAmounts} />
-        <td className="px-4 py-3" />
+        <td className="px-4 py-3">
+          <div className="flex justify-end">
+            <Button size="icon" variant="ghost" className="h-7 w-7"
+              onClick={(e) => { e.stopPropagation(); onAlert(group.symbol); }}>
+              <Bell className="h-3.5 w-3.5 text-[--color-muted]" />
+            </Button>
+          </div>
+        </td>
       </tr>
       {expanded && group.rows.map((s) => (
         <tr key={s.id} className="border-b border-[--color-border]/50 bg-[--color-border]/10 hover:bg-[--color-border]/20">

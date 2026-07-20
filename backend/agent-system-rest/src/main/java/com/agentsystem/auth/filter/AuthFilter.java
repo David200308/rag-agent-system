@@ -48,6 +48,7 @@ public class AuthFilter extends OncePerRequestFilter {
         return path.startsWith("/api/v1/auth/")
             || path.startsWith("/api/v1/share/")
             || path.startsWith("/api/v1/scheduler/")         // service-key auth, not JWT
+            || path.equals("/api/v1/alerts/trigger")         // service-key auth, not JWT (CRUD endpoints below stay JWT-protected)
             || path.matches(".*/connectors/[^/]+/exchange")  // server-to-server OAuth exchange
             || path.startsWith("/actuator/")
             || path.startsWith("/v3/api-docs")

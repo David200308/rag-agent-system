@@ -12,4 +12,10 @@ public interface EmailService {
      * The email is sent via Resend's transactional API.
      */
     void sendOtp(String to, String code, int expiryMinutes);
+
+    /**
+     * Notifies a user that one of their investment alert rules (price, DeFi, or
+     * prediction-market) has fired.
+     */
+    void sendAlertTriggered(String to, String ruleType, String symbolOrProtocol, String message);
 }

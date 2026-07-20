@@ -14,6 +14,7 @@ public class NotificationClient {
 
     public static final String TOPIC_OTP = "notifications.otp";
     public static final String TOPIC_WORKFLOW_COMPLETE = "notifications.workflow-complete";
+    public static final String TOPIC_ALERT_TRIGGERED = "notifications.alert-triggered";
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
@@ -24,6 +25,8 @@ public class NotificationClient {
     private record OtpRequestedEvent(String to, String code, int expiryMinutes) {}
 
     private record WorkflowCompletedEvent(String to, String workflowName, String status, String output) {}
+
+    private record AlertTriggeredEvent(String to, String ruleType, String symbolOrProtocol, String message) {}
 
     /**
      * Send a 6-digit login OTP to {@code to}.
@@ -46,5 +49,14 @@ public class NotificationClient {
     public void sendWorkflowComplete(String to, String workflowName, String status, String output) {
         kafkaTemplate.send(TOPIC_WORKFLOW_COMPLETE, to,
                 new WorkflowCompletedEvent(to, workflowName, status, output));
+    }
+
+    /**
+     * Notifies a user that one of their investment alert rules (price, DeFi, or
+     * prediction-market) has fired.
+     */
+    public void sendAlertTriggered(String to, String ruleType, String symbolOrProtocol, String message) {
+        kafkaTemplate.send(TOPIC_ALERT_TRIGGERED, to,
+                new AlertTriggeredEvent(to, ruleType, symbolOrProtocol, message));
     }
 }

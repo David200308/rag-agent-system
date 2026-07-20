@@ -100,6 +100,41 @@ public class EmailServiceImpl implements EmailService {
     }
 
     /**
+     * Notifies a user that one of their investment alert rules (price, DeFi, or
+     * prediction-market) has fired.
+     */
+    @Override
+    public void sendAlertTriggered(String to, String ruleType, String symbolOrProtocol, String message) {
+        String body = """
+                <h2 style="margin:0 0 12px;color:#111827;font-size:20px;font-weight:600">🚨 Alert triggered</h2>
+                <div style="margin:0 0 20px">
+                  <span style="display:inline-block;padding:3px 10px;border-radius:999px;background:#fef2f2;
+                               color:#dc2626;font-size:12px;font-weight:600;text-transform:uppercase;
+                               letter-spacing:.03em">%s</span>
+                </div>
+                <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:16px;
+                            margin:0 0 20px;font-size:14px;line-height:1.5;color:#334155">%s</div>
+                <p style="margin:0;color:#94a3b8;font-size:13px">
+                  Log in to Agent System to view or update this alert rule.
+                </p>
+                """.formatted(ruleType, message);
+
+        CreateEmailOptions options = CreateEmailOptions.builder()
+                .from(fromEmail)
+                .to(List.of(to))
+                .subject("Alert triggered: " + symbolOrProtocol)
+                .html(buildShell(body, "Agent System"))
+                .build();
+
+        try {
+            resend.emails().send(options);
+            log.info("[EmailService] Alert-triggered notification sent to {}", to);
+        } catch (ResendException e) {
+            log.warn("[EmailService] Failed to send alert-triggered notification to {}: {}", to, e.getMessage());
+        }
+    }
+
+    /**
      * Send a 6-digit login OTP to {@code to}.
      * The email is sent via Resend's transactional API.
      */

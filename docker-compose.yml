@@ -143,6 +143,9 @@ services:
       # ── Image storage (agent-system-storage-inner, Garage-backed)
       STORAGE_URL: http://storage:8083
       STORAGE_SERVICE_KEY: ${STORAGE_SERVICE_KEY:-storage-secret-key}
+      # ── Investment alerts (crypto/stock price, DeFi, prediction-market)
+      ALERT_URL: http://investment-alert-task:8085
+      ALERT_SERVICE_KEY: ${ALERT_SERVICE_KEY:-alert-secret-key}
       # ── Notifications (agent-system-notification-consumer, Resend-backed email via Kafka)
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot)
@@ -276,6 +279,39 @@ services:
       SCHEDULER_SERVICE_KEY: ${SCHEDULER_SERVICE_KEY:-scheduler-secret-key}
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8082/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Investment alert task (crypto/stock price, DeFi, and prediction-market alerts) ──
+  investment-alert-task:
+    build:
+      context: ./investment-alert-task
+      dockerfile: Dockerfile
+    container_name: agent-system-investment-alert-task
+    ports:
+      - "8085:8085"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    environment:
+      PORT: 8085
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-ragagent}
+      MYSQL_USER: ${MYSQL_USER:-ragagent}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ragagent}
+      BACKEND_URL: http://backend:8081
+      ALERT_SERVICE_KEY: ${ALERT_SERVICE_KEY:-alert-secret-key}
+      PYTH_API_URL: ${PYTH_API_URL:-https://hermes.pyth.network}
+      PYTH_API_KEY: ${PYTH_API_KEY:-}
+      CHECK_INTERVAL: ${ALERT_CHECK_INTERVAL:-60}
+      RULE_RELOAD_INTERVAL: ${ALERT_RULE_RELOAD_INTERVAL:-60}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8085/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

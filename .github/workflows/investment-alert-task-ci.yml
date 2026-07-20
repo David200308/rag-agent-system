@@ -1,0 +1,126 @@
+name: Investment Alert Task CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'investment-alert-task/**'
+      - '.github/workflows/investment-alert-task-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'investment-alert-task/**'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/rag-agent-system-investment-alert-task
+
+defaults:
+  run:
+    working-directory: investment-alert-task
+
+jobs:
+  # ── Lint ─────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: investment-alert-task/go.mod
+          cache-dependency-path: investment-alert-task/go.sum
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: gofmt check
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+  # ── Test ──────────────────────────────────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: investment-alert-task/go.mod
+          cache-dependency-path: investment-alert-task/go.sum
+
+      - name: Run tests
+        run: go test -v -race ./...
+
+  # ── Build & Push Docker image ─────────────────────────────────────────────────
+  docker:
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    # Run on push/dispatch to main only — skip on pull requests
+    if: |
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./investment-alert-task
+          file: ./investment-alert-task/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Disable OCI attestation manifests — GHCR rejects them when using
+          # GITHUB_TOKEN, causing the push to fail silently with no image produced.
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=investment-alert-task
+          cache-to: type=gha,mode=max,scope=investment-alert-task

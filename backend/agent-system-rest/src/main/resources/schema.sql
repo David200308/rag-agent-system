@@ -464,3 +464,58 @@ CREATE TABLE IF NOT EXISTS schedule_runs (
     CONSTRAINT fk_run_sched FOREIGN KEY (schedule_id)
         REFERENCES scheduled_messages(id) ON DELETE CASCADE
 );
+
+-- ── Investment alert rules (managed by Go investment-alert-task service) ──────
+-- Price/token alerts (crypto or stock) — fetched via Pyth Hermes (crypto and
+-- equity feed IDs share the same API shape, e.g. "BTC/USD" vs "Equity.US.QQQ/USD").
+CREATE TABLE IF NOT EXISTS alert_rule_token_config (
+    id               VARCHAR(36)  NOT NULL PRIMARY KEY,  -- UUID
+    owner_uuid       VARCHAR(36)  NOT NULL,
+    org_id           VARCHAR(36)  NULL,
+    symbol           VARCHAR(64)  NOT NULL,
+    price_feed_id    VARCHAR(128) NOT NULL,
+    asset_type       ENUM('CRYPTO','STOCK') NOT NULL DEFAULT 'CRYPTO',
+    threshold        DOUBLE       NOT NULL,
+    direction        VARCHAR(8)   NOT NULL,              -- >=, >, =, <=, <
+    enabled          BOOLEAN      NOT NULL DEFAULT TRUE,
+    frequency        JSON         NULL,                  -- {"number":..,"unit":"DAY|HOUR|ONCE|NEVER"}
+    created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_alert_token_owner (owner_uuid)
+);
+
+-- DeFi protocol alerts (Aave/Morpho/Kamino/Pendle/Hyperliquid TVL/APY/etc.)
+CREATE TABLE IF NOT EXISTS alert_rule_defi_config (
+    id               VARCHAR(36)  NOT NULL PRIMARY KEY,  -- UUID
+    owner_uuid       VARCHAR(36)  NOT NULL,
+    org_id           VARCHAR(36)  NULL,
+    protocol         VARCHAR(64)  NOT NULL,
+    version          VARCHAR(32)  NOT NULL,
+    chain_id         VARCHAR(32)  NOT NULL,
+    params           JSON         NULL,                  -- protocol-specific fields (see config.DeFiAlertRuleParams)
+    field            VARCHAR(64)  NOT NULL,               -- TVL, APY, UTILIZATION, LIQUIDITY
+    threshold        DOUBLE       NOT NULL,
+    direction        VARCHAR(8)   NOT NULL,
+    enabled          BOOLEAN      NOT NULL DEFAULT TRUE,
+    frequency        JSON         NULL,
+    created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_alert_defi_owner (owner_uuid)
+);
+
+-- Prediction market alerts (e.g. Polymarket CLOB midpoint)
+CREATE TABLE IF NOT EXISTS alert_rule_predict_market_config (
+    id               VARCHAR(36)  NOT NULL PRIMARY KEY,  -- UUID
+    owner_uuid       VARCHAR(36)  NOT NULL,
+    org_id           VARCHAR(36)  NULL,
+    predict_market   VARCHAR(64)  NOT NULL,
+    params           JSON         NULL,                  -- negRisk, question_id, condition_id, outcome, token_id
+    field            VARCHAR(64)  NOT NULL,               -- MIDPOINT
+    threshold        DOUBLE       NOT NULL,
+    direction        VARCHAR(8)   NOT NULL,
+    enabled          BOOLEAN      NOT NULL DEFAULT TRUE,
+    frequency        JSON         NULL,
+    created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_alert_predict_owner (owner_uuid)
+);

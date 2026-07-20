@@ -35,6 +35,12 @@ import type {
   WorkflowSchedule,
   CreateWorkflowScheduleRequest,
 } from "@/types/agent";
+import type {
+  AlertsResponse,
+  CreatePriceAlertRequest,
+  PriceAlert,
+  UpdateAlertRequest,
+} from "@/types/alerts";
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
 
@@ -266,6 +272,35 @@ export async function updateWorkflowSchedule(id: string, payload: UpdateSchedule
 
 export async function deleteWorkflowSchedule(id: string): Promise<void> {
   await fetch(`/api/scheduler/schedules/${id}`, { method: "DELETE" });
+}
+
+// ── Investment alerts (crypto/stock price) ────────────────────────────────────
+
+export async function fetchAlerts(): Promise<AlertsResponse> {
+  const res = await fetch("/api/alerts");
+  if (!res.ok) return { price: [], defi: [], predictMarket: [] };
+  return res.json() as Promise<AlertsResponse>;
+}
+
+export async function createPriceAlert(payload: CreatePriceAlertRequest): Promise<PriceAlert> {
+  return postJson<PriceAlert>("/api/alerts", payload);
+}
+
+export async function updateAlert(type: string, id: string, payload: UpdateAlertRequest): Promise<PriceAlert> {
+  const res = await fetch(`/api/alerts/${type}/${id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status}: ${text}`);
+  }
+  return res.json() as Promise<PriceAlert>;
+}
+
+export async function deleteAlert(type: string, id: string): Promise<void> {
+  await fetch(`/api/alerts/${type}/${id}`, { method: "DELETE" });
 }
 
 // ── Model config API ──────────────────────────────────────────────────────────
