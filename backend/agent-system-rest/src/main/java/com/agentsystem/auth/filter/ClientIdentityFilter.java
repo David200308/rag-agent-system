@@ -48,6 +48,7 @@ public class ClientIdentityFilter extends OncePerRequestFilter {
         return path.startsWith("/api/v1/auth/")
             || path.startsWith("/api/v1/share/")
             || path.startsWith("/api/v1/scheduler/")
+            || path.equals("/api/v1/alerts/trigger")
             || path.matches(".*/connectors/[^/]+/exchange")
             || path.startsWith("/actuator/")
             || path.startsWith("/v3/api-docs")

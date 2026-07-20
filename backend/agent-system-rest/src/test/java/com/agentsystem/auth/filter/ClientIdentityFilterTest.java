@@ -66,6 +66,14 @@ class ClientIdentityFilterTest {
         assertThat(filter.shouldNotFilter(request)).isTrue();
     }
 
+    @Test
+    void shouldNotFilter_alertsTriggerPath_returnsTrue() {
+        ClientIdentityFilter filter = makeFilter(true);
+        when(request.getRequestURI()).thenReturn("/api/v1/alerts/trigger");
+
+        assertThat(filter.shouldNotFilter(request)).isTrue();
+    }
+
     // ── CLI client ────────────────────────────────────────────────────────────
 
     @Test
