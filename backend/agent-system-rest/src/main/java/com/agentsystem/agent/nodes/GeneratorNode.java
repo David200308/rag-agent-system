@@ -3,7 +3,6 @@ package com.agentsystem.agent.nodes;
 import com.agentsystem.agent.service.GenerationService;
 import com.agentsystem.agent.ToolCallBudget;
 import com.agentsystem.agent.state.AgentState;
-import com.agentsystem.alert.tool.AlertAgentTool;
 import com.agentsystem.config.ChatModelFactory;
 import com.agentsystem.config.LlmProperties;
 import com.agentsystem.connector.tool.GoogleCalendarAgentTool;
@@ -52,11 +51,10 @@ public class GeneratorNode {
     private final GoogleSlidesAgentTool    googleSlidesTool;
     private final GoogleCalendarAgentTool  googleCalendarTool;
     private final TelegramAgentTool        telegramTool;
-    private final AlertAgentTool           alertTool;
 
     private static final String SYSTEM_PROMPT = """
-            You are a helpful, accurate AI assistant with access to Google Workspace, Google Calendar, Telegram, \
-            and investment alert tools.
+            You are a helpful, accurate AI assistant with access to Google Workspace, Google Calendar, and Telegram \
+            tools.
 
             GOOGLE WORKSPACE TOOLS — you have these tools available and MUST call them when relevant:
             - readGoogleDoc:       call when the user provides a docs.google.com/document URL
@@ -82,17 +80,9 @@ public class GeneratorNode {
             to "send to Telegram", "create a Telegram group", or "notify both of us on Telegram". \
             This sends the content to both the conversation owner and the current user's Telegram.
 
-            INVESTMENT ALERT TOOLS:
-            - createPriceAlert: call when the user asks to be alerted about a crypto or stock price, \
-            e.g. "alert me when BTC hits $100k" or "notify me if QQQ drops below $400". \
-            You must know the Pyth price feed ID for the symbol — if you don't, ask the user rather than guessing.
-            - createDeFiAlert: call only when the user gives enough technical detail (protocol, chain, \
-            and the on-chain market/vault contract address) to identify a specific Aave/Morpho/Kamino/Pendle/ \
-            Hyperliquid market or vault to monitor (TVL, APY, UTILIZATION, or LIQUIDITY).
-            - createPredictMarketAlert: call when the user wants to be alerted about a Polymarket \
-            prediction market's odds crossing a threshold. Requires the CLOB token ID.
-            - listMyAlerts: call when the user asks what alerts they have set up.
-            - deleteAlert: call when the user asks to remove or cancel an alert.
+            Investment price alerts (crypto/stock) are managed only from the Financial section of the \
+            app UI, not via chat — if the user asks to set up a price alert, tell them to use the \
+            bell/alert icon next to the symbol in the Financial section.
 
             CRITICAL RULES for Google Workspace requests:
             1. When the user provides any docs.google.com URL, you MUST call the matching read tool \
@@ -151,14 +141,12 @@ public class GeneratorNode {
         telegramTool.setCurrentUserUuid(userUuid);
         telegramTool.setCurrentOrgId(orgId);
         telegramTool.setShareOwnerEmail(shareOwnerEmail);
-        alertTool.setCurrentUserUuid(userUuid);
-        alertTool.setCurrentOrgId(orgId);
         toolCallBudget.reset();
         String answer;
         try {
             ToolCallbackProvider tools = MethodToolCallbackProvider.builder()
                     .toolObjects(googleDocsTool, googleSheetsTool, googleSlidesTool,
-                                 googleCalendarTool, telegramTool, alertTool)
+                                 googleCalendarTool, telegramTool)
                     .build();
 
             answer = generationService.generate(effectiveClient, SYSTEM_PROMPT, userPrompt, tools).join();
@@ -174,8 +162,6 @@ public class GeneratorNode {
             telegramTool.clearCurrentUserUuid();
             telegramTool.clearCurrentOrgId();
             telegramTool.clearShareOwnerEmail();
-            alertTool.clearCurrentUserUuid();
-            alertTool.clearCurrentOrgId();
             toolCallBudget.clear();
         }
 

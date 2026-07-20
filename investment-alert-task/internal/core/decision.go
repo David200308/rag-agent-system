@@ -258,16 +258,20 @@ func (e *DecisionEngine) ReplaceRules(price []*AlertRule, defi []*DeFiAlertRule,
 
 // shouldSuppress applies frequency-based alert suppression. Returns true if the
 // alert should be suppressed (not fired) given the rule's LastTriggered state.
-// Mutates rule.Enabled for ONCE semantics as a side effect, matching the
-// original crypto-alert behavior.
+// For ONCE, mutates rule.Enabled to false on the very evaluation that fires it, so the
+// caller can persist the disable immediately — waiting for a hypothetical repeat trigger
+// would leave the rule silently re-armed if the underlying condition doesn't hold on the
+// next poll. The lastTriggered!=nil branch below is a safety net only: a disabled rule is
+// already skipped before reaching here (DecisionEngine checks rule.Enabled first), so it
+// only matters if a store write failed and a reload raced in a stale enabled=true row.
 func shouldSuppress(enabled *bool, lastTriggered *time.Time, freq *Frequency) bool {
 	if freq != nil {
 		switch freq.Unit {
 		case FrequencyUnitOnce:
 			if lastTriggered != nil {
-				*enabled = false
 				return true
 			}
+			*enabled = false
 		case FrequencyUnitNever:
 			return true
 		case FrequencyUnitDay:

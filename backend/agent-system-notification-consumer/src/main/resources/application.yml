@@ -24,7 +24,10 @@ spring:
         # ones. Type mapping resolves the __TypeId__ header to a logical name shared by both
         # sides instead of the producer's class name, which this module doesn't have on its
         # classpath. Keys here must stay in sync with the producer's mapping.
-        spring.json.type.mapping: otpRequested:com.agentsystem.notification.email.listener.EmailEventListener$OtpRequestedEvent,workflowCompleted:com.agentsystem.notification.email.listener.EmailEventListener$WorkflowCompletedEvent
+        # alertTriggered is produced directly by the Go investment-alert-task service (not
+        # agent-system-rest) — see investment-alert-task/notify/client.go — but uses the same
+        # logical-name convention so it resolves to this module's own record.
+        spring.json.type.mapping: otpRequested:com.agentsystem.notification.email.listener.EmailEventListener$OtpRequestedEvent,workflowCompleted:com.agentsystem.notification.email.listener.EmailEventListener$WorkflowCompletedEvent,alertTriggered:com.agentsystem.notification.email.listener.EmailEventListener$AlertTriggeredEvent
 
 server:
   port: 8084

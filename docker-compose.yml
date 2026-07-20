@@ -295,7 +295,7 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-      backend:
+      kafka:
         condition: service_healthy
     environment:
       PORT: 8085
@@ -304,7 +304,7 @@ services:
       MYSQL_DB: ${MYSQL_DB:-ragagent}
       MYSQL_USER: ${MYSQL_USER:-ragagent}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ragagent}
-      BACKEND_URL: http://backend:8081
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       ALERT_SERVICE_KEY: ${ALERT_SERVICE_KEY:-alert-secret-key}
       PYTH_API_URL: ${PYTH_API_URL:-https://hermes.pyth.network}
       PYTH_API_KEY: ${PYTH_API_KEY:-}

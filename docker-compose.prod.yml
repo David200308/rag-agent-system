@@ -283,7 +283,7 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-      backend:
+      kafka:
         condition: service_healthy
     secrets:
       - alert_service_key
@@ -295,7 +295,7 @@ services:
       MYSQL_DB: ${MYSQL_DB:-ragagent}
       MYSQL_USER: ${MYSQL_USER:-ragagent}
       MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
-      BACKEND_URL: http://backend:8081
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       ALERT_SERVICE_KEY_FILE: /run/secrets/alert_service_key
       PYTH_API_URL: ${PYTH_API_URL:-https://hermes.pyth.network}
       PYTH_API_KEY: ${PYTH_API_KEY:-}

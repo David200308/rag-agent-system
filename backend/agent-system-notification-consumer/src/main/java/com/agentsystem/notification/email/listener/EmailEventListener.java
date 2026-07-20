@@ -7,8 +7,10 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Consumes notification events published by agent-system-rest's NotificationClient.
- * Topic names must stay in sync with that producer.
+ * Consumes notification events. OTP and workflow-complete events are published by
+ * agent-system-rest's NotificationClient; alert-triggered events are published directly
+ * by the Go investment-alert-task service (see investment-alert-task/notify/client.go).
+ * Topic names must stay in sync with those producers.
  */
 @Component
 @RequiredArgsConstructor

@@ -3,7 +3,6 @@ package com.agentsystem.agent.nodes;
 import com.agentsystem.agent.service.GenerationService;
 import com.agentsystem.agent.ToolCallBudget;
 import com.agentsystem.agent.state.AgentState;
-import com.agentsystem.alert.tool.AlertAgentTool;
 import com.agentsystem.config.ChatModelFactory;
 import com.agentsystem.config.LlmProperties;
 import com.agentsystem.connector.tool.GoogleCalendarAgentTool;
@@ -47,7 +46,6 @@ class GeneratorNodeTest {
     @Mock GoogleSlidesAgentTool    googleSlidesTool;
     @Mock GoogleCalendarAgentTool  googleCalendarTool;
     @Mock TelegramAgentTool        telegramTool;
-    @Mock AlertAgentTool           alertTool;
 
     GeneratorNode node;
 
@@ -55,7 +53,7 @@ class GeneratorNodeTest {
     void setUp() {
         node = new GeneratorNode(chatClient, llmProperties, modelConfigService, chatModelFactory,
                 generationService, toolCallBudget,
-                googleDocsTool, googleSheetsTool, googleSlidesTool, googleCalendarTool, telegramTool, alertTool);
+                googleDocsTool, googleSheetsTool, googleSlidesTool, googleCalendarTool, telegramTool);
     }
 
     private static AgentRequest request() {

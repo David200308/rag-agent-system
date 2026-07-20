@@ -28,7 +28,8 @@ func main() {
 
 	pythClient := price.NewPythClient(cfg.PythAPIURL, cfg.PythAPIKey)
 	engine := core.NewDecisionEngine()
-	notifier := notify.NewClient(cfg)
+	notifier := notify.NewClient(cfg, st)
+	defer notifier.Close()
 
 	// Load all enabled rules from MySQL at startup
 	priceRules, err := st.ListAllEnabledPriceRules()
@@ -61,9 +62,9 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	go monitor.Prices(ctx, pythClient, engine, notifier, cfg)
-	go monitor.DeFi(ctx, engine, notifier, cfg)
-	go monitor.PredictMarkets(ctx, engine, notifier, cfg)
+	go monitor.Prices(ctx, pythClient, engine, notifier, st, cfg)
+	go monitor.DeFi(ctx, engine, notifier, st, cfg)
+	go monitor.PredictMarkets(ctx, engine, notifier, st, cfg)
 	if cfg.RuleReloadInterval > 0 {
 		go monitor.ReloadRulesLoop(ctx, engine, st, cfg)
 	}

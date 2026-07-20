@@ -16,9 +16,11 @@ type Config struct {
 	// MySQL (shared with agent-system-rest)
 	DSN string
 
-	// Java backend callback (POST /api/v1/alerts/trigger)
-	BackendURL string
-	ServiceKey string // X-Alert-Key, shared secret with agent-system-rest
+	ServiceKey string // X-Alert-Key, shared secret with agent-system-rest (inbound CRUD auth)
+
+	// Kafka (shared with agent-system-rest / agent-system-notification-consumer) — fired
+	// alerts are published directly to notifications.alert-triggered, see notify.Client.
+	KafkaBootstrapServers string
 
 	// Pyth Oracle Configuration (crypto AND equity feeds share the same API shape)
 	PythAPIURL string
@@ -39,14 +41,14 @@ func Load() *Config {
 	)
 
 	return &Config{
-		Port:               getEnv("PORT", "8085"),
-		DSN:                dsn,
-		BackendURL:         getEnv("BACKEND_URL", "http://localhost:8081"),
-		ServiceKey:         getSecret("ALERT_SERVICE_KEY", "alert-secret-key"),
-		PythAPIURL:         getEnv("PYTH_API_URL", "https://hermes.pyth.network"),
-		PythAPIKey:         getSecret("PYTH_API_KEY", ""),
-		CheckInterval:      getEnvInt("CHECK_INTERVAL", 60),
-		RuleReloadInterval: getEnvInt("RULE_RELOAD_INTERVAL", 60),
+		Port:                  getEnv("PORT", "8085"),
+		DSN:                   dsn,
+		ServiceKey:            getSecret("ALERT_SERVICE_KEY", "alert-secret-key"),
+		KafkaBootstrapServers: getEnv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
+		PythAPIURL:            getEnv("PYTH_API_URL", "https://hermes.pyth.network"),
+		PythAPIKey:            getSecret("PYTH_API_KEY", ""),
+		CheckInterval:         getEnvInt("CHECK_INTERVAL", 60),
+		RuleReloadInterval:    getEnvInt("RULE_RELOAD_INTERVAL", 60),
 	}
 }
 

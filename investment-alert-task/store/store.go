@@ -64,6 +64,21 @@ func frequencyFromJSON(raw []byte) (*config.FrequencyConfig, error) {
 	return &fc, nil
 }
 
+// GetEmailByOwnerUUID resolves a rule owner's email address from the shared `users` table
+// (owned by agent-system-rest's schema) — used by notify.Client to address fired-alert
+// Kafka events without this service persisting contact info itself.
+func (s *Store) GetEmailByOwnerUUID(ownerUUID string) (string, error) {
+	var email string
+	err := s.db.QueryRow(`SELECT email FROM users WHERE uuid = ?`, ownerUUID).Scan(&email)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("query email for owner %s: %w", ownerUUID, err)
+	}
+	return email, nil
+}
+
 // ── Price (token) rules ─────────────────────────────────────────────────────
 
 func (s *Store) CreatePriceRule(rule *core.AlertRule) error {

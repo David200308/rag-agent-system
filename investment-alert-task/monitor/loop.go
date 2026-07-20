@@ -16,22 +16,22 @@ import (
 )
 
 // Prices continuously monitors crypto/stock prices via Pyth and fires alerts.
-func Prices(ctx context.Context, pythClient *price.PythClient, engine *core.DecisionEngine, notifier *notify.Client, cfg *config.Config) {
+func Prices(ctx context.Context, pythClient *price.PythClient, engine *core.DecisionEngine, notifier *notify.Client, st *store.Store, cfg *config.Config) {
 	ticker := time.NewTicker(time.Duration(cfg.CheckInterval) * time.Second)
 	defer ticker.Stop()
 
-	checkPrices(ctx, pythClient, engine, notifier)
+	checkPrices(ctx, pythClient, engine, notifier, st)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			checkPrices(ctx, pythClient, engine, notifier)
+			checkPrices(ctx, pythClient, engine, notifier, st)
 		}
 	}
 }
 
-func checkPrices(ctx context.Context, pythClient *price.PythClient, engine *core.DecisionEngine, notifier *notify.Client) {
+func checkPrices(ctx context.Context, pythClient *price.PythClient, engine *core.DecisionEngine, notifier *notify.Client, st *store.Store) {
 	rules := engine.GetRules()
 	symbolToFeedID := make(map[string]string)
 	for _, rule := range rules {
@@ -77,26 +77,33 @@ func checkPrices(ctx context.Context, pythClient *price.PythClient, engine *core
 		} else {
 			log.Printf("✅ Alert notified for %s (owner %s)", decision.CurrentPrice.Symbol, decision.Rule.OwnerUuid)
 		}
+		if !decision.Rule.Enabled {
+			if err := st.UpdatePriceRule(decision.Rule); err != nil {
+				log.Printf("⚠️  Failed to persist auto-disable for rule %s: %v", decision.Rule.ID, err)
+			} else {
+				log.Printf("🔕 Rule %s disabled after ONCE trigger", decision.Rule.ID)
+			}
+		}
 	}
 }
 
 // DeFi continuously monitors DeFi protocol values and fires alerts.
-func DeFi(ctx context.Context, engine *core.DecisionEngine, notifier *notify.Client, cfg *config.Config) {
+func DeFi(ctx context.Context, engine *core.DecisionEngine, notifier *notify.Client, st *store.Store, cfg *config.Config) {
 	ticker := time.NewTicker(time.Duration(cfg.CheckInterval) * time.Second)
 	defer ticker.Stop()
 
-	checkDeFi(ctx, engine, notifier)
+	checkDeFi(ctx, engine, notifier, st)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			checkDeFi(ctx, engine, notifier)
+			checkDeFi(ctx, engine, notifier, st)
 		}
 	}
 }
 
-func checkDeFi(ctx context.Context, engine *core.DecisionEngine, notifier *notify.Client) {
+func checkDeFi(ctx context.Context, engine *core.DecisionEngine, notifier *notify.Client, st *store.Store) {
 	defiRules := engine.GetDeFiRules()
 	if len(defiRules) == 0 {
 		return
@@ -141,27 +148,34 @@ func checkDeFi(ctx context.Context, engine *core.DecisionEngine, notifier *notif
 			} else {
 				log.Printf("✅ DeFi alert notified for %s %s (owner %s)", decision.Rule.Protocol, decision.Rule.Field, decision.Rule.OwnerUuid)
 			}
+			if !decision.Rule.Enabled {
+				if err := st.UpdateDeFiRule(decision.Rule); err != nil {
+					log.Printf("⚠️  Failed to persist auto-disable for rule %s: %v", decision.Rule.ID, err)
+				} else {
+					log.Printf("🔕 Rule %s disabled after ONCE trigger", decision.Rule.ID)
+				}
+			}
 		}
 	}
 }
 
 // PredictMarkets continuously monitors Polymarket midpoints and fires alerts.
-func PredictMarkets(ctx context.Context, engine *core.DecisionEngine, notifier *notify.Client, cfg *config.Config) {
+func PredictMarkets(ctx context.Context, engine *core.DecisionEngine, notifier *notify.Client, st *store.Store, cfg *config.Config) {
 	ticker := time.NewTicker(time.Duration(cfg.CheckInterval) * time.Second)
 	defer ticker.Stop()
 
-	checkPredictMarkets(ctx, engine, notifier)
+	checkPredictMarkets(ctx, engine, notifier, st)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			checkPredictMarkets(ctx, engine, notifier)
+			checkPredictMarkets(ctx, engine, notifier, st)
 		}
 	}
 }
 
-func checkPredictMarkets(ctx context.Context, engine *core.DecisionEngine, notifier *notify.Client) {
+func checkPredictMarkets(ctx context.Context, engine *core.DecisionEngine, notifier *notify.Client, st *store.Store) {
 	rules := engine.GetPredictMarketRules()
 	if len(rules) == 0 {
 		return
@@ -220,6 +234,13 @@ func checkPredictMarkets(ctx context.Context, engine *core.DecisionEngine, notif
 				log.Printf("❌ Failed to notify owner %s: %v", decision.Rule.OwnerUuid, err)
 			} else {
 				log.Printf("✅ Predict-market alert notified for %s (owner %s)", decision.Rule.Question, decision.Rule.OwnerUuid)
+			}
+			if !decision.Rule.Enabled {
+				if err := st.UpdatePredictMarketRule(decision.Rule); err != nil {
+					log.Printf("⚠️  Failed to persist auto-disable for rule %s: %v", decision.Rule.ID, err)
+				} else {
+					log.Printf("🔕 Rule %s disabled after ONCE trigger", decision.Rule.ID)
+				}
 			}
 		}
 	}

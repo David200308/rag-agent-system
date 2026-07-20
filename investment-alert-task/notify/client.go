@@ -1,21 +1,29 @@
 package notify
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"time"
+	"strings"
 
-	"github.com/google/uuid"
+	"github.com/segmentio/kafka-go"
+
 	"investment-alert-task/internal/config"
 )
 
-// TriggerPayload is POSTed to agent-system-rest when an alert rule fires.
-// The Java side resolves the owner's email (Resend, via Kafka) and Telegram
-// chat (already-connected per-user bot) from OwnerUuid/OrgId — this service
-// never stores or sends raw contact info.
+// TopicAlertTriggered must stay in sync with agent-system-notification-consumer's
+// EmailEventListener.TOPIC_ALERT_TRIGGERED.
+const TopicAlertTriggered = "notifications.alert-triggered"
+
+// typeIDAlertTriggered is written to the __TypeId__ header so Spring's JsonDeserializer
+// resolves it via spring.json.type.mapping on the consumer side (see that module's
+// application.yml) — mirrors the key agent-system-rest would have used had it produced
+// this event itself.
+const typeIDAlertTriggered = "alertTriggered"
+
+// TriggerPayload describes a fired alert rule. OwnerUuid is resolved to an email address
+// via EmailResolver before publishing — this service never receives raw contact info from
+// the DB rows it monitors.
 type TriggerPayload struct {
 	OwnerUuid string `json:"ownerUuid"`
 	OrgId     string `json:"orgId,omitempty"`
@@ -25,43 +33,75 @@ type TriggerPayload struct {
 	Message   string `json:"message"`
 }
 
+// alertTriggeredEvent mirrors agent-system-notification-consumer's
+// EmailEventListener.AlertTriggeredEvent record field-for-field (to, ruleType,
+// symbolOrProtocol, message).
+type alertTriggeredEvent struct {
+	To               string `json:"to"`
+	RuleType         string `json:"ruleType"`
+	SymbolOrProtocol string `json:"symbolOrProtocol"`
+	Message          string `json:"message"`
+}
+
+// EmailResolver resolves an owner's UUID to their email address.
+type EmailResolver interface {
+	GetEmailByOwnerUUID(ownerUUID string) (string, error)
+}
+
+// kafkaWriter is the subset of *kafka.Writer used here, so tests can substitute a fake.
+type kafkaWriter interface {
+	WriteMessages(ctx context.Context, msgs ...kafka.Message) error
+	Close() error
+}
+
 type Client struct {
-	backendURL string
-	serviceKey string
-	httpClient *http.Client
+	writer kafkaWriter
+	emails EmailResolver
 }
 
-func NewClient(cfg *config.Config) *Client {
+func NewClient(cfg *config.Config, emails EmailResolver) *Client {
 	return &Client{
-		backendURL: cfg.BackendURL,
-		serviceKey: cfg.ServiceKey,
-		httpClient: &http.Client{Timeout: 15 * time.Second},
+		writer: &kafka.Writer{
+			Addr:                   kafka.TCP(strings.Split(cfg.KafkaBootstrapServers, ",")...),
+			Topic:                  TopicAlertTriggered,
+			Balancer:               &kafka.LeastBytes{},
+			AllowAutoTopicCreation: true,
+		},
+		emails: emails,
 	}
 }
 
-// Notify POSTs a fired-alert trigger to agent-system-rest's internal callback endpoint.
+// Notify resolves the rule owner's email and publishes a fired-alert event directly to
+// Kafka for agent-system-notification-consumer to deliver.
 func (c *Client) Notify(ctx context.Context, p TriggerPayload) error {
-	body, err := json.Marshal(p)
+	email, err := c.emails.GetEmailByOwnerUUID(p.OwnerUuid)
 	if err != nil {
-		return fmt.Errorf("marshal trigger payload: %w", err)
+		return fmt.Errorf("resolve owner email: %w", err)
+	}
+	if email == "" {
+		return fmt.Errorf("no email found for owner %s", p.OwnerUuid)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.backendURL+"/api/v1/alerts/trigger", bytes.NewReader(body))
+	value, err := json.Marshal(alertTriggeredEvent{
+		To:               email,
+		RuleType:         p.RuleType,
+		SymbolOrProtocol: p.Symbol,
+		Message:          p.Message,
+	})
 	if err != nil {
-		return fmt.Errorf("build request: %w", err)
+		return fmt.Errorf("marshal event: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Alert-Key", c.serviceKey)
-	req.Header.Set("X-Idempotency-Key", fmt.Sprintf("%s-%s", p.RuleID, uuid.New().String()))
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("call backend: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("backend returned %d", resp.StatusCode)
-	}
-	return nil
+	return c.writer.WriteMessages(ctx, kafka.Message{
+		Key:   []byte(email),
+		Value: value,
+		Headers: []kafka.Header{
+			{Key: "__TypeId__", Value: []byte(typeIDAlertTriggered)},
+		},
+	})
+}
+
+// Close releases the underlying Kafka writer's connections.
+func (c *Client) Close() error {
+	return c.writer.Close()
 }

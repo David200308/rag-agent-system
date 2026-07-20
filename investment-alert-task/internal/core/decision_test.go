@@ -73,10 +73,11 @@ func TestEvaluate_SymbolMismatchIgnored(t *testing.T) {
 }
 
 func TestEvaluate_FrequencySuppression(t *testing.T) {
-	t.Run("ONCE fires once then disables on the next attempt", func(t *testing.T) {
-		// Matches crypto-alert's original semantics: the first trigger fires (LastTriggered
-		// was nil) and sets LastTriggered; only the *next* evaluation attempt — which would
-		// otherwise re-trigger — flips Enabled off and suppresses.
+	t.Run("ONCE fires once then disables immediately", func(t *testing.T) {
+		// The rule must come back disabled from the very evaluation that fires it — not a
+		// hypothetical repeat trigger — so the caller can persist enabled=false right away.
+		// Otherwise a rule whose condition doesn't hold on the next poll would never get
+		// disabled at all, in memory or in the DB.
 		engine := NewDecisionEngine()
 		rule := &AlertRule{
 			ID: "rule-1", OwnerUuid: "owner-1", Symbol: "BTC/USD",
@@ -89,21 +90,13 @@ func TestEvaluate_FrequencySuppression(t *testing.T) {
 		if len(first) != 1 {
 			t.Fatalf("expected 1 decision on first trigger, got %d", len(first))
 		}
-		if !rule.Enabled {
-			t.Error("expected rule to still be enabled immediately after its first ONCE trigger")
+		if rule.Enabled {
+			t.Error("expected rule to be disabled immediately after its ONCE trigger fires")
 		}
 
 		second := engine.Evaluate(&price.PriceData{Symbol: "BTC/USD", Price: 200, Timestamp: time.Now()})
 		if len(second) != 0 {
-			t.Errorf("expected no decision on the second attempt, got %d", len(second))
-		}
-		if rule.Enabled {
-			t.Error("expected rule to be disabled after its second ONCE evaluation attempt")
-		}
-
-		third := engine.Evaluate(&price.PriceData{Symbol: "BTC/USD", Price: 200, Timestamp: time.Now()})
-		if len(third) != 0 {
-			t.Errorf("expected no decisions once the rule is disabled, got %d", len(third))
+			t.Errorf("expected no decisions once the rule is disabled, got %d", len(second))
 		}
 	})
 

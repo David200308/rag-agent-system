@@ -36,4 +36,12 @@ class EmailEventListenerTest {
 
         verify(emailService).sendWorkflowComplete("user@test.com", "MyFlow", "DONE", "output");
     }
+
+    @Test
+    void onAlertTriggered_delegatesToEmailService() {
+        listener.onAlertTriggered(
+                new EmailEventListener.AlertTriggeredEvent("user@test.com", "price", "BTC/USD", "BTC crossed $100k"));
+
+        verify(emailService).sendAlertTriggered("user@test.com", "price", "BTC/USD", "BTC crossed $100k");
+    }
 }

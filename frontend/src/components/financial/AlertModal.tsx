@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { X, Plus, Trash2, Power, PowerOff, Bell } from "lucide-react";
+import { X, Plus, Trash2, Power, PowerOff, Bell, Pencil } from "lucide-react";
 import { fetchAlerts, createPriceAlert, updateAlert, deleteAlert } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
@@ -51,6 +51,7 @@ export function AlertModal({ symbol, assetType, onClose }: AlertModalProps) {
   const alerts = (data?.price ?? []).filter((a) => a.symbol === symbol);
 
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [threshold, setThreshold] = useState("");
   const [direction, setDirection] = useState<PriceAlert["direction"]>(">=");
   const [freqUnit, setFreqUnit] = useState<AlertFrequency["unit"]>("HOUR");
@@ -58,23 +59,46 @@ export function AlertModal({ symbol, assetType, onClose }: AlertModalProps) {
 
   const needsFreqNumber = freqUnit === "HOUR" || freqUnit === "DAY";
 
-  const createMutation = useMutation({
-    mutationFn: () => createPriceAlert({
-      symbol,
-      assetType,
-      direction,
-      threshold: Number(threshold),
-      frequency: needsFreqNumber
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setThreshold("");
+    setDirection(">=");
+    setFreqUnit("HOUR");
+    setFreqNumber("1");
+  };
+
+  const startCreate = () => {
+    setEditingId(null);
+    setThreshold("");
+    setDirection(">=");
+    setFreqUnit("HOUR");
+    setFreqNumber("1");
+    setShowForm(true);
+  };
+
+  const startEdit = (a: PriceAlert) => {
+    setEditingId(a.id);
+    setThreshold(String(a.threshold));
+    setDirection(a.direction);
+    setFreqUnit(a.frequency?.unit ?? "HOUR");
+    setFreqNumber(String(a.frequency?.number ?? 1));
+    setShowForm(true);
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      const frequency: AlertFrequency = needsFreqNumber
         ? { unit: freqUnit, number: Number(freqNumber) }
-        : { unit: freqUnit },
-    }),
+        : { unit: freqUnit };
+      if (editingId) {
+        return updateAlert("price", editingId, { threshold: Number(threshold), direction, frequency });
+      }
+      return createPriceAlert({ symbol, assetType, direction, threshold: Number(threshold), frequency });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["alerts"] });
-      setShowForm(false);
-      setThreshold("");
-      setDirection(">=");
-      setFreqUnit("HOUR");
-      setFreqNumber("1");
+      closeForm();
     },
   });
 
@@ -141,6 +165,13 @@ export function AlertModal({ symbol, assetType, onClose }: AlertModalProps) {
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
                       <button
+                        title="Edit"
+                        onClick={() => startEdit(a)}
+                        className="rounded p-1 text-[--color-muted] hover:bg-[--color-border]/50"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
                         title={a.enabled ? "Disable" : "Enable"}
                         onClick={() => toggleMutation.mutate({ id: a.id, enabled: !a.enabled })}
                         className="rounded p-1 text-[--color-muted] hover:bg-[--color-border]/50"
@@ -167,7 +198,7 @@ export function AlertModal({ symbol, assetType, onClose }: AlertModalProps) {
 
           {showForm && (
             <div className="rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-3 space-y-3">
-              <p className="text-xs font-medium text-[--color-muted]">New Alert</p>
+              <p className="text-xs font-medium text-[--color-muted]">{editingId ? "Edit Alert" : "New Alert"}</p>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -231,26 +262,28 @@ export function AlertModal({ symbol, assetType, onClose }: AlertModalProps) {
                 )}
               </div>
 
-              {createMutation.isError && (
+              {saveMutation.isError && (
                 <p className="text-xs text-red-500">
-                  {(createMutation.error as Error).message}
+                  {(saveMutation.error as Error).message}
                 </p>
               )}
 
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
+                <Button variant="ghost" size="sm" onClick={closeForm}>
                   Cancel
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => createMutation.mutate()}
+                  onClick={() => saveMutation.mutate()}
                   disabled={
                     !threshold.trim() ||
                     (needsFreqNumber && Number(freqNumber) <= 0) ||
-                    createMutation.isPending
+                    saveMutation.isPending
                   }
                 >
-                  {createMutation.isPending ? <Spinner className="h-3 w-3" /> : "Save Alert"}
+                  {saveMutation.isPending ? (
+                    <Spinner className="h-3 w-3" />
+                  ) : editingId ? "Update Alert" : "Save Alert"}
                 </Button>
               </div>
             </div>
@@ -260,7 +293,7 @@ export function AlertModal({ symbol, assetType, onClose }: AlertModalProps) {
         {/* Footer */}
         {!showForm && (
           <div className="border-t border-[--color-border] px-4 py-3">
-            <Button size="sm" className="w-full" onClick={() => setShowForm(true)}>
+            <Button size="sm" className="w-full" onClick={startCreate}>
               <Plus className="mr-1.5 h-3.5 w-3.5" />
               Add Alert
             </Button>
