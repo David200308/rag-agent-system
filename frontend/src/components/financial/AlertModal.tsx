@@ -7,7 +7,7 @@ import { fetchAlerts, createPriceAlert, updateAlert, deleteAlert } from "@/lib/a
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { cn } from "@/lib/utils";
-import type { PriceAlert } from "@/types/alerts";
+import type { AlertFrequency, PriceAlert } from "@/types/alerts";
 
 const DIRECTIONS: { value: PriceAlert["direction"]; label: string }[] = [
   { value: ">=", label: "≥ (at or above)" },
@@ -16,6 +16,24 @@ const DIRECTIONS: { value: PriceAlert["direction"]; label: string }[] = [
   { value: "<=", label: "≤ (at or below)" },
   { value: "<",  label: "< (below)" },
 ];
+
+const FREQUENCY_UNITS: { value: AlertFrequency["unit"]; label: string }[] = [
+  { value: "HOUR",  label: "Every N hours" },
+  { value: "DAY",   label: "Every N days" },
+  { value: "ONCE",  label: "Once, then disable" },
+  { value: "NEVER", label: "Never re-fire" },
+];
+
+function formatFrequency(freq?: AlertFrequency | null): string {
+  if (!freq) return "Default (at most once/hour)";
+  switch (freq.unit) {
+    case "ONCE": return "Once, then disabled";
+    case "NEVER": return "Never re-fires";
+    case "HOUR": return `Every ${freq.number ?? 1}h`;
+    case "DAY": return `Every ${freq.number ?? 1}d`;
+    default: return "";
+  }
+}
 
 interface AlertModalProps {
   symbol: string;
@@ -35,16 +53,28 @@ export function AlertModal({ symbol, assetType, onClose }: AlertModalProps) {
   const [showForm, setShowForm] = useState(false);
   const [threshold, setThreshold] = useState("");
   const [direction, setDirection] = useState<PriceAlert["direction"]>(">=");
+  const [freqUnit, setFreqUnit] = useState<AlertFrequency["unit"]>("HOUR");
+  const [freqNumber, setFreqNumber] = useState("1");
+
+  const needsFreqNumber = freqUnit === "HOUR" || freqUnit === "DAY";
 
   const createMutation = useMutation({
     mutationFn: () => createPriceAlert({
-      symbol, assetType, direction, threshold: Number(threshold),
+      symbol,
+      assetType,
+      direction,
+      threshold: Number(threshold),
+      frequency: needsFreqNumber
+        ? { unit: freqUnit, number: Number(freqNumber) }
+        : { unit: freqUnit },
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["alerts"] });
       setShowForm(false);
       setThreshold("");
       setDirection(">=");
+      setFreqUnit("HOUR");
+      setFreqNumber("1");
     },
   });
 
@@ -107,6 +137,7 @@ export function AlertModal({ symbol, assetType, onClose }: AlertModalProps) {
                       <p className="font-medium">
                         {symbol} {a.direction} {a.threshold}
                       </p>
+                      <p className="text-xs text-[--color-muted]">{formatFrequency(a.frequency)}</p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
                       <button
@@ -168,6 +199,38 @@ export function AlertModal({ symbol, assetType, onClose }: AlertModalProps) {
                 </div>
               </div>
 
+              <div className={cn("grid gap-2", needsFreqNumber ? "grid-cols-2" : "grid-cols-1")}>
+                <div>
+                  <label className="text-[10px] font-medium uppercase tracking-wider text-[--color-muted]">
+                    Frequency
+                  </label>
+                  <select
+                    value={freqUnit}
+                    onChange={(e) => setFreqUnit(e.target.value as AlertFrequency["unit"])}
+                    className="mt-1 w-full rounded border border-[--color-border] bg-[--color-surface] px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
+                  >
+                    {FREQUENCY_UNITS.map((f) => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                </div>
+                {needsFreqNumber && (
+                  <div>
+                    <label className="text-[10px] font-medium uppercase tracking-wider text-[--color-muted]">
+                      Every N {freqUnit === "HOUR" ? "hours" : "days"}
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={freqNumber}
+                      onChange={(e) => setFreqNumber(e.target.value)}
+                      className="mt-1 w-full rounded border border-[--color-border] bg-[--color-surface] px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
+                    />
+                  </div>
+                )}
+              </div>
+
               {createMutation.isError && (
                 <p className="text-xs text-red-500">
                   {(createMutation.error as Error).message}
@@ -181,7 +244,11 @@ export function AlertModal({ symbol, assetType, onClose }: AlertModalProps) {
                 <Button
                   size="sm"
                   onClick={() => createMutation.mutate()}
-                  disabled={!threshold.trim() || createMutation.isPending}
+                  disabled={
+                    !threshold.trim() ||
+                    (needsFreqNumber && Number(freqNumber) <= 0) ||
+                    createMutation.isPending
+                  }
                 >
                   {createMutation.isPending ? <Spinner className="h-3 w-3" /> : "Save Alert"}
                 </Button>
