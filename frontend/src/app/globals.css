@@ -15,6 +15,9 @@
   --color-surface-raised: #f8fafc;
   --color-border:         #e2e8f0;
   --color-muted:          #94a3b8;
+  --color-dot:            rgba(15, 23, 42, 0.14);
+  --color-glow-a:         rgba(99, 102, 241, 0.30);
+  --color-glow-b:         rgba(56, 189, 248, 0.24);
 
   /* Dark-mode overrides applied via [data-theme="dark"] */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -27,7 +30,64 @@
   --color-surface-raised: #111111;
   --color-border:         #2a2a2a;
   --color-muted:          #888888;
+  --color-dot:            rgba(255, 255, 255, 0.14);
+  --color-glow-a:         rgba(99, 102, 241, 0.32);
+  --color-glow-b:         rgba(56, 189, 248, 0.22);
   color-scheme: dark;
+}
+
+/* Hero mockup panel: smooth entrance on load */
+@keyframes hero-mockup-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.hero-mockup-in {
+  animation: hero-mockup-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-mockup-in {
+    animation: none;
+  }
+}
+
+/* Hero tab content: quick fade when switching preview tabs */
+@keyframes tab-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.tab-fade-in {
+  animation: tab-fade-in 0.25s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab-fade-in {
+    animation: none;
+  }
+}
+
+/* Small contained dot-grid canvas for the workflow graph card (no edge fade needed) */
+.workflow-dot-grid {
+  background-image: radial-gradient(var(--color-dot) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+/* Hero background texture: faint dot grid, faded toward the edges */
+.hero-dot-grid {
+  background-image: radial-gradient(var(--color-dot) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 40%, transparent 90%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 40%, transparent 90%);
 }
 
 html, body {

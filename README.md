@@ -57,82 +57,107 @@
 
 ### Infrastructure
 
-| Component            | Technology                                                                                                                    |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Vector DB            | Weaviate (Docker)                                                                                                             |
-| Relational DB        | MySQL (Docker) — app + schedule data                                                                                         |
-| Redis                | Redis 7 (Docker) — shared by the scheduler's Asynq queue and the backend's rate limits, sandbox tracking, and fallback cache |
-| Kafka                | Apache Kafka, single-node KRaft mode (Docker) — carries notification events (`:9092`)                                        |
-| Scheduler            | Go microservice backed by Asynq (`:8082`)                                                                                   |
-| Storage service      | `agent-system-storage-inner` — Garage (S3-compatible) object storage (`:8083`)                                           |
-| Notification consumer | `agent-system-notification-consumer` — Resend email delivery via Kafka (`:8084`)                                        |
-| Observability        | Prometheus + Grafana + Loki + Promtail                                                                                        |
-| Containerization     | Docker Compose                                                                                                                |
+| Component             | Technology                                                                                                                    |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Vector DB             | Weaviate (Docker)                                                                                                             |
+| Relational DB         | MySQL (Docker) — app + schedule data                                                                                         |
+| Redis                 | Redis 7 (Docker) — shared by the scheduler's Asynq queue and the backend's rate limits, sandbox tracking, and fallback cache |
+| Kafka                 | Apache Kafka, single-node KRaft mode (Docker) — carries notification events (`:9092`)                                      |
+| Scheduler             | Go microservice backed by Asynq (`:8082`)                                                                                   |
+| Storage service       | `agent-system-storage-inner` — Garage (S3-compatible) object storage (`:8083`)                                           |
+| Notification consumer | `agent-system-notification-consumer` — Resend email delivery via Kafka (`:8084`)                                         |
+| Observability         | Prometheus + Grafana + Loki + Promtail                                                                                        |
+| Containerization      | Docker Compose                                                                                                                |
 
 ---
 
 ## System Architecture
 
-```
-  ┌──────────────────────────┐   ┌──────────────────────────┐
-  │     Frontend (Next.js)   │   │     agent-cli (Go)        │
-  │  /  /upload  /workflow…  │   │  auth / chat / workflow   │
-  │  /settings  /team  /mcp  │   │  conversation / financial │
-  └────────────┬─────────────┘   └────────────┬──────────────┘
-               │ HTTP / SSE                   │ HTTP + JWT
-               └──────────────┬───────────────┘
-┌──────────────▼───────────────────────────────────────────────┐
-│                   Spring Boot Backend (:8081)                 │
-│                                                               │
-│  AuthFilter (JWT: email + mode + orgId)                       │
-│       │                                                       │
-│       ├──► AgentController ──► AgentSystemGraph (LangGraph4j) │
-│       │         │                    │                        │
-│       │         │          ┌─────────▼──────────┐            │
-│       │         │          │  analyzeQuery       │            │
-│       │         │          │  ├─[RETRIEVE]──►    │            │
-│       │         │          │  │   retrieve        │            │
-│       │         │          │  │   ├─[found]──► generate      │
-│       │         │          │  │   └─[empty]──► fallback      │
-│       │         │          │  ├─[DIRECT]──► generate         │
-│       │         │          │  └─[FALLBACK]──► fallback       │
-│       │         │          └─────────────────────┘           │
-│       │         │                                             │
-│       ├──► ConversationService  (org-scoped)                  │
-│       ├──► OrganizationController / TeamController            │
-│       ├──► ConnectorController  (org-scoped OAuth tokens)     │
-│       ├──► WorkflowController                                 │
-│       └──► AuthController  (OTP + Passkey / WebAuthn)        │
-│                                                               │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐  │
-│  │ Auth Module  │  │  MCP Server  │  │  Workflow Engine   │  │
-│  │ OTP + Passkey│  │  (SSE)       │  │  + Sandbox +       │  │
-│  │ PERSONAL /   │  │              │  │  SCHEDULE tool     │  │
-│  │ TEAM JWT     │  └──────────────┘  └────────────────────┘  │
-│  └──────────────┘                                             │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │  Connectors (org-scoped tokens)                          │ │
-│  │  Google Docs · Sheets · Slides · Calendar · Telegram     │ │
-│  └──────────────────────────────────────────────────────────┘ │
-│  ┌──────────────┐  ┌──────────────┐                           │
-│  │  Team / Org  │  │    Model     │                           │
-│  │  management  │  │  Selection   │                           │
-│  │  (OWNER /    │  │  (per-user   │                           │
-│  │   MEMBER)    │  │   + per-conv)│                           │
-│  └──────────────┘  └──────────────┘                           │
-└──────────────────────────────────────────────────────────────┘
-          │                    │                   │                    │
-  ┌───────▼──────┐   ┌────────▼────────┐  ┌───────▼─────────────┐ ┌────▼─────────────────────┐
-  │  Weaviate    │   │     MySQL       │  │ Go Scheduler         │ │ Inner microservices       │
-  │  (vectors)   │   │  (auth, convos, │  │   (:8082)            │ │ Storage (:8083)           │
-  │              │   │   workflows,    │  │                      │ │   └─ shared-secret hdr,   │
-  └──────────────┘   │   skills,       │  │ Asynq Scheduler      │ │      Garage S3 blobs      │
-                     │   schedules,    │  │   └─ enqueues tasks  │ │ Notification (:8084)      │
-                     │   model_configs,│  │ Asynq Worker         │ │   └─ Kafka consumer,      │
-                     │   orgs/members, │  │   └─ rag:trigger     │ │      Resend email         │
-                     │   connectors)   │  │      (MaxRetry=3)    │ │ (Kafka: no auth —         │
-                     └─────────────────┘  └──────────────────────┘ │  see Kafka box below)     │
-                                                                    └───────────────────────────┘
+```mermaid
+flowchart TB
+    FE["Frontend (Next.js)<br/>/ · /upload · /workflow<br/>/settings · /team · /mcp"]
+    CLI["agent-cli (Go)<br/>auth · chat · workflow<br/>conversation · financial"]
+
+    subgraph BACKEND["Spring Boot Backend — agent-system-rest (:8081)"]
+        direction TB
+        AUTHF["AuthFilter<br/>JWT: email + mode + orgId"]
+        AGC["AgentController"]
+        CONV["ConversationService (org-scoped)"]
+        ORG["OrganizationController / TeamController"]
+        CONN["ConnectorController (org-scoped OAuth)"]
+        WF["WorkflowController"]
+        AUTHC["AuthController (OTP + Passkey/WebAuthn)"]
+        ALERTC["AlertController / AlertAgentTool"]
+        SCHEDC["SchedulerTriggerController"]
+
+        AUTHF --> AGC & CONV & ORG & CONN & WF & AUTHC & ALERTC & SCHEDC
+
+        AGC --> GRAPH["AgentSystemGraph (LangGraph4j)"]
+
+        subgraph ROUTING["Graph routing"]
+            direction TB
+            AQ["analyzeQuery"]
+            RET["retrieve"]
+            GEN["generate"]
+            FALLBK["fallback"]
+            AQ -->|RETRIEVE| RET
+            RET -->|found| GEN
+            RET -->|empty| FALLBK
+            AQ -->|DIRECT| GEN
+            AQ -->|FALLBACK| FALLBK
+        end
+        GRAPH --> AQ
+        GEN -.->|agent tools| CONN
+        GEN -.->|agent tools| ALERTC
+
+        MODULES["Supporting modules<br/>─────────────<br/>Auth: OTP + Passkey, PERSONAL/TEAM JWT<br/>MCP Server (SSE)<br/>Workflow Engine + Sandbox + SCHEDULE tool<br/>Team/Org mgmt (OWNER/MEMBER)<br/>Model Selection (per-user + per-conv)<br/>Connectors: Google Docs/Sheets/Slides/Calendar/Telegram"]
+    end
+
+    FE -->|HTTP / SSE| AUTHF
+    CLI -->|HTTP + JWT| AUTHF
+
+    GRAPH --> WEAVIATE[("Weaviate<br/>vectors")]
+    GRAPH --> LLM["LLM Providers<br/>OpenAI/OpenRouter/Anthropic/DeepSeek/Local"]
+    CONN --> WORKSPACE["Google Workspace APIs<br/>Telegram Bot API"]
+
+    CONV --> MYSQL[("MySQL<br/>auth · convos · workflows · skills<br/>schedules · model_configs<br/>orgs/members · connectors · alert rules")]
+    ORG --> MYSQL
+    AUTHC --> MYSQL
+    WF --> MYSQL
+    ALERTC --> MYSQL
+
+    AUTHF --> REDIS[("Redis<br/>rate limits · fallback cache · sandbox semaphore")]
+
+    WF --> SCHED["Go Scheduler (:8082)<br/>Asynq Scheduler → enqueues tasks<br/>Asynq Worker → rag:trigger (MaxRetry=3)"]
+    SCHED --> MYSQL
+    SCHED --> REDIS
+    SCHEDC -.->|trigger callback| SCHED
+
+    ALERTC --> ALERTSVC["investment-alert-task (:8085)<br/>polling engine: crypto/stock/DeFi/prediction mkt"]
+    ALERTSVC --> MYSQL
+    ALERTSVC --> PYTH["Pyth Hermes API (price oracle)"]
+
+    CONN --> STORAGE["agent-system-storage-inner (:8083)<br/>X-Storage-Key shared secret"]
+    STORAGE --> GARAGE[("Garage<br/>S3-compatible object storage")]
+
+    AUTHC -->|publish OTP event| KAFKA{{"Kafka (:9092)"}}
+    WF -->|publish workflow-complete event| KAFKA
+    KAFKA --> NOTIF["agent-system-notification-consumer (:8084)<br/>EmailEventListener"]
+    NOTIF --> RESEND["Resend (email delivery)"]
+
+    subgraph OBS["Observability"]
+        direction LR
+        PROM["Prometheus"]
+        PROMTAIL["Promtail"]
+        LOKI["Loki"]
+        GRAF["Grafana"]
+        PROMTAIL --> LOKI
+        PROM --> GRAF
+        LOKI --> GRAF
+    end
+    AUTHF -.->|metrics| PROM
+    SCHED -.->|metrics| PROM
+    ALERTSVC -.->|metrics| PROM
 ```
 
 ---
@@ -320,8 +345,8 @@ Two backend capabilities are split out of `agent-system-rest` into private Maven
 
 `agent-system-storage-inner` (`:8083`, Garage S3-compatible object storage) is reachable only from `agent-system-rest` over the internal Docker network, authenticated with a shared-secret header (`X-Storage-Key`) instead of a user JWT. `agent-system-rest` talks to it via a typed HTTP client (`StorageClient`).
 
-| Service                        | Port    | Backs                                  | Auth header      |
-| ------------------------------- | ------- | --------------------------------------- | ---------------- |
-| `agent-system-storage-inner` | `:8083` | Garage (S3-compatible) object storage   | `X-Storage-Key` |
+| Service                        | Port      | Backs                                 | Auth header       |
+| ------------------------------ | --------- | ------------------------------------- | ----------------- |
+| `agent-system-storage-inner` | `:8083` | Garage (S3-compatible) object storage | `X-Storage-Key` |
 
 `agent-system-notification-consumer` (`:8084`) is decoupled further — instead of REST, `agent-system-rest`'s `NotificationClient` publishes events to Kafka topics (`notifications.otp`, `notifications.workflow-complete`), and the consumer's `EmailEventListener` delivers them via Resend. There's no shared-secret auth here; the Kafka broker itself is the trust boundary (internal-network-only, no public ingress). This decoupling means login/register succeeds once the OTP event reaches Kafka — actual email delivery happens asynchronously, with a bounded retry (2 attempts) in the consumer before a failing message is logged and dropped. Email is the only channel today; adding another (push, SMS, Telegram) is a new `@KafkaListener` method, not a rearchitecture.
