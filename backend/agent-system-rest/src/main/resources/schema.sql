@@ -432,9 +432,6 @@ CREATE TABLE IF NOT EXISTS travel_records (
     INDEX idx_travel_owner (owner_uuid)
 );
 
--- Retrofit for databases created before allow_chat existed (schema.sql re-runs on every boot)
-ALTER TABLE travel_records ADD COLUMN IF NOT EXISTS allow_chat BOOLEAN NOT NULL DEFAULT FALSE;
-
 -- ── Scheduled messages (managed by Go scheduler service via Asynq + Redis) ────
 CREATE TABLE IF NOT EXISTS scheduled_messages (
     id                 VARCHAR(36)  NOT NULL PRIMARY KEY,  -- UUID
