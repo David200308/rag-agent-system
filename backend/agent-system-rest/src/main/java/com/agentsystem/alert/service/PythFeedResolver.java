@@ -59,7 +59,7 @@ public class PythFeedResolver {
         String pythAssetType = "STOCK".equalsIgnoreCase(assetType) ? "equity" : "crypto";
         String cacheKey = pythAssetType + ":" + base;
 
-        String cached = feedIdCache.get(cacheKey);
+        String cached = feedIdCache.getIfPresent(cacheKey);
         if (cached != null) return Optional.of(cached);
 
         try {
