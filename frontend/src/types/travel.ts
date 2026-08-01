@@ -60,6 +60,7 @@ export interface TravelRecord {
   stops:      TravelStop[];
   expenses:   unknown[];  // stores [TripExpenseData] (v2) or legacy format
   notes?:     string;
+  allowChat:  boolean;    // opt-in, default false: expose this trip to the chat agent
   createdAt:  string;
   updatedAt:  string;
 }

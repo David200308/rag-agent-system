@@ -39,6 +39,9 @@ public class TravelRecord {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    @Column(name = "allow_chat", nullable = false)
+    private boolean allowChat = false;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 

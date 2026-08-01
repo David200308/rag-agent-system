@@ -13,6 +13,7 @@ public record TravelRecordDto(
         List<Map<String, Object>> stops,
         List<Map<String, Object>> expenses,
         String notes,
+        boolean allowChat,
         Instant createdAt,
         Instant updatedAt
 ) {}

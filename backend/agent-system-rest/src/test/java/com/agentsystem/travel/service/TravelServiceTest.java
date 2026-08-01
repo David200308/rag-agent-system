@@ -173,7 +173,40 @@ class TravelServiceTest {
         assertThat(result.getExpensesJson()).contains("Flight");
     }
 
+    // ── listChatVisible ──────────────────────────────────────────────────────
+
+    @Test
+    void listChatVisible_returnsOnlyChatEnabledRecords() {
+        TravelRecord r = makeRecord("id-7", "user@test.com");
+        r.setAllowChat(true);
+        when(repo.findByOwnerUuidAndAllowChatTrueOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+
+        List<TravelRecordDto> result = service.listChatVisible("user@test.com");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).allowChat()).isTrue();
+    }
+
+    @Test
+    void listChatVisible_noneEnabled_returnsEmpty() {
+        when(repo.findByOwnerUuidAndAllowChatTrueOrderByStartDateDesc("user@test.com")).thenReturn(List.of());
+
+        assertThat(service.listChatVisible("user@test.com")).isEmpty();
+    }
+
     // ── update ────────────────────────────────────────────────────────────────
+
+    @Test
+    void update_withAllowChat_togglesFlag() {
+        TravelRecord existing = makeRecord("rec-5", "user@test.com");
+        when(repo.findById("rec-5")).thenReturn(Optional.of(existing));
+        when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        TravelRecord result = service.update("rec-5", "user@test.com", Map.of("allowChat", true));
+
+        assertThat(result.isAllowChat()).isTrue();
+    }
+
 
     @Test
     void update_ownerMatch_updatesAndSaves() {

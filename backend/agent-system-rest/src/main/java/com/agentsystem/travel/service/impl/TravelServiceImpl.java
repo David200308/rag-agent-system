@@ -34,6 +34,14 @@ public class TravelServiceImpl implements TravelService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    @Override
+    public List<TravelRecordDto> listChatVisible(String ownerUuid) {
+        return repo.findByOwnerUuidAndAllowChatTrueOrderByStartDateDesc(ownerUuid).stream()
+                .map(this::toDto)
+                .toList();
+    }
+
     @Transactional
     @Override
     public TravelRecord create(String ownerUuid, Map<String, Object> body) {
@@ -69,6 +77,7 @@ public class TravelServiceImpl implements TravelService {
         if (body.containsKey("startDate")) r.setStartDate(str(body, "startDate"));
         if (body.containsKey("endDate"))   r.setEndDate(str(body, "endDate"));
         if (body.containsKey("notes"))     r.setNotes(str(body, "notes"));
+        if (body.containsKey("allowChat")) r.setAllowChat(Boolean.TRUE.equals(body.get("allowChat")));
         if (body.containsKey("stops")) {
             try {
                 Object raw = body.get("stops");
@@ -113,7 +122,7 @@ public class TravelServiceImpl implements TravelService {
         return new TravelRecordDto(
                 r.getId(), r.getOwnerUuid(), r.getTitle(),
                 r.getStartDate(), r.getEndDate(),
-                stops, expenses, r.getNotes(),
+                stops, expenses, r.getNotes(), r.isAllowChat(),
                 r.getCreatedAt(), r.getUpdatedAt()
         );
     }

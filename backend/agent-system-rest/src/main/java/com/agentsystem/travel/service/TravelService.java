@@ -10,6 +10,9 @@ public interface TravelService {
 
     List<TravelRecordDto> list(String ownerUuid);
 
+    /** Trips this owner has explicitly opted into being visible to the chat agent. */
+    List<TravelRecordDto> listChatVisible(String ownerUuid);
+
     TravelRecord create(String ownerUuid, Map<String, Object> body);
 
     TravelRecord update(String id, String ownerUuid, Map<String, Object> body);

@@ -1128,7 +1128,19 @@ function TravelDetailPanel({
   const [mounted, setMounted] = useState(false);
   const [tab, setTab] = useState<DetailTab>("detail");
   const [width, setWidth] = useState(PANEL_DEFAULT);
+  const [togglingChat, setTogglingChat] = useState(false);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
+
+  async function handleToggleAllowChat() {
+    if (togglingChat) return;
+    setTogglingChat(true);
+    try {
+      await apiUpdate(record.id, { allowChat: !record.allowChat });
+      onUpdate();
+    } finally {
+      setTogglingChat(false);
+    }
+  }
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { setTab("detail"); }, [record.id]);
@@ -1211,20 +1223,41 @@ function TravelDetailPanel({
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-[--color-border] px-2 overflow-x-auto">
-          {DETAIL_TABS.map((t) => (
+        <div className="flex items-center justify-between border-b border-[--color-border] px-2 overflow-x-auto">
+          <div className="flex">
+            {DETAIL_TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 -mb-px px-3 py-2.5 text-xs font-medium transition-colors ${
+                  tab === t.id
+                    ? "border-[--color-primary] text-[--color-primary]"
+                    : "border-transparent text-[--color-muted] hover:text-[--color-fg]"
+                }`}
+              >
+                <span>{t.icon}</span> {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0 pl-3 pr-1">
+            <span className="text-xs text-[--color-muted] whitespace-nowrap">Allow Chat?</span>
             <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 -mb-px px-3 py-2.5 text-xs font-medium transition-colors ${
-                tab === t.id
-                  ? "border-[--color-primary] text-[--color-primary]"
-                  : "border-transparent text-[--color-muted] hover:text-[--color-fg]"
+              role="switch"
+              aria-checked={record.allowChat}
+              disabled={togglingChat}
+              onClick={handleToggleAllowChat}
+              title="Let the AI chat agent read this trip's data"
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors disabled:cursor-wait disabled:opacity-60 ${
+                record.allowChat ? "bg-black dark:bg-white" : "bg-neutral-300 dark:bg-neutral-600"
               }`}
             >
-              <span>{t.icon}</span> {t.label}
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full shadow transition-transform duration-200 ${
+                  record.allowChat ? "translate-x-[18px] bg-white dark:bg-black" : "translate-x-0.5 bg-white"
+                }`}
+              />
             </button>
-          ))}
+          </div>
         </div>
 
         {/* Body */}

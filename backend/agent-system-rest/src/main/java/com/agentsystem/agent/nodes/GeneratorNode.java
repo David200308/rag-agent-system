@@ -10,6 +10,7 @@ import com.agentsystem.connector.tool.GoogleDocsAgentTool;
 import com.agentsystem.connector.tool.GoogleSheetsAgentTool;
 import com.agentsystem.connector.tool.GoogleSlidesAgentTool;
 import com.agentsystem.connector.tool.TelegramAgentTool;
+import com.agentsystem.connector.tool.TravelAgentTool;
 import com.agentsystem.model.entity.ModelConfig;
 import com.agentsystem.model.service.ModelConfigService;
 import com.agentsystem.schema.AgentRequest;
@@ -51,6 +52,7 @@ public class GeneratorNode {
     private final GoogleSlidesAgentTool    googleSlidesTool;
     private final GoogleCalendarAgentTool  googleCalendarTool;
     private final TelegramAgentTool        telegramTool;
+    private final TravelAgentTool          travelTool;
 
     private static final String SYSTEM_PROMPT = """
             You are a helpful, accurate AI assistant with access to Google Workspace, Google Calendar, and Telegram \
@@ -83,6 +85,14 @@ public class GeneratorNode {
             Investment price alerts (crypto/stock) are managed only from the Financial section of the \
             app UI, not via chat — if the user asks to set up a price alert, tell them to use the \
             bell/alert icon next to the symbol in the Financial section.
+
+            TRAVEL TOOLS:
+            - getTravelRecords: call when the user asks about their trips, travel history, \
+            itinerary, upcoming travel, or travel expenses/notes/route. Only returns trips the \
+            user has explicitly marked visible to chat via the "Allow Chat?" toggle in that \
+            trip's detail panel (off by default) — if it returns no trips, tell the user you \
+            don't have access to any of their travel data yet and that they can enable it \
+            per-trip from that toggle. Never claim knowledge of a trip this tool didn't return.
 
             CRITICAL RULES for Google Workspace requests:
             1. When the user provides any docs.google.com URL, you MUST call the matching read tool \
@@ -141,12 +151,13 @@ public class GeneratorNode {
         telegramTool.setCurrentUserUuid(userUuid);
         telegramTool.setCurrentOrgId(orgId);
         telegramTool.setShareOwnerEmail(shareOwnerEmail);
+        travelTool.setCurrentUserUuid(userUuid);
         toolCallBudget.reset();
         String answer;
         try {
             ToolCallbackProvider tools = MethodToolCallbackProvider.builder()
                     .toolObjects(googleDocsTool, googleSheetsTool, googleSlidesTool,
-                                 googleCalendarTool, telegramTool)
+                                 googleCalendarTool, telegramTool, travelTool)
                     .build();
 
             answer = generationService.generate(effectiveClient, SYSTEM_PROMPT, userPrompt, tools).join();
@@ -162,6 +173,7 @@ public class GeneratorNode {
             telegramTool.clearCurrentUserUuid();
             telegramTool.clearCurrentOrgId();
             telegramTool.clearShareOwnerEmail();
+            travelTool.clearCurrentUserUuid();
             toolCallBudget.clear();
         }
 

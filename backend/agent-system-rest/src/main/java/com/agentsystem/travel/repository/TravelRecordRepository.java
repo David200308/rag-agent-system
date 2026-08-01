@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface TravelRecordRepository extends JpaRepository<TravelRecord, String> {
     List<TravelRecord> findByOwnerUuidOrderByStartDateDesc(String ownerUuid);
+
+    List<TravelRecord> findByOwnerUuidAndAllowChatTrueOrderByStartDateDesc(String ownerUuid);
 }

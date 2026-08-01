@@ -426,10 +426,14 @@ CREATE TABLE IF NOT EXISTS travel_records (
     stops_json    TEXT,                     -- JSON array of stops
     expenses_json TEXT,                     -- JSON array of expenses
     notes         TEXT,
+    allow_chat    BOOLEAN       NOT NULL DEFAULT FALSE,  -- opt-in: expose this trip to the chat agent
     created_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_travel_owner (owner_uuid)
 );
+
+-- Retrofit for databases created before allow_chat existed (schema.sql re-runs on every boot)
+ALTER TABLE travel_records ADD COLUMN IF NOT EXISTS allow_chat BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- ── Scheduled messages (managed by Go scheduler service via Asynq + Redis) ────
 CREATE TABLE IF NOT EXISTS scheduled_messages (
