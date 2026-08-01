@@ -40,15 +40,11 @@ public class TravelAgentTool {
      * @return a text summary of each chat-visible trip, or a message saying none are visible
      */
     @Tool(description = """
-            Retrieve the user's travel trip records. Call this when the user asks about
-            their trips, travel history, itinerary, upcoming travel, or past travel
-            expenses/route/notes.
-            IMPORTANT: only trips where the user has turned on "Allow Chat" for that
-            specific trip (a per-trip toggle in the trip detail panel, off by default)
-            are returned — trips without it enabled are never visible here, even if
-            they exist for the user. If this returns no trips, tell the user you don't
-            have access to any of their travel data and that they can enable it per-trip
-            via the "Allow Chat?" toggle on the trip.
+            Retrieves the caller's own travel trip data (title, dates, route, notes,
+            expense summary). Call this immediately for any question about the user's
+            trips, travel history, itinerary, flights, or travel expenses — do not
+            answer such questions without calling it first, since only its actual
+            return value tells you which trips (if any) are currently accessible.
             """)
     public String getTravelRecords() {
         if (!toolCallBudget.tryConsume()) return ToolCallBudget.EXHAUSTED_MESSAGE;

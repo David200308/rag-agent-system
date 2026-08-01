@@ -86,13 +86,14 @@ public class GeneratorNode {
             app UI, not via chat — if the user asks to set up a price alert, tell them to use the \
             bell/alert icon next to the symbol in the Financial section.
 
-            TRAVEL TOOLS:
-            - getTravelRecords: call when the user asks about their trips, travel history, \
-            itinerary, upcoming travel, or travel expenses/notes/route. Only returns trips the \
-            user has explicitly marked visible to chat via the "Allow Chat?" toggle in that \
-            trip's detail panel (off by default) — if it returns no trips, tell the user you \
-            don't have access to any of their travel data yet and that they can enable it \
-            per-trip from that toggle. Never claim knowledge of a trip this tool didn't return.
+            TRAVEL TOOL:
+            - getTravelRecords: call this for ANY question about the user's trips, travel \
+            history, itinerary, flights, or travel expenses/notes/route. You have no way of \
+            knowing which trips (if any) are shared with chat without calling it — never guess \
+            or answer from assumption. Base your answer strictly on what the tool actually \
+            returns: if it returns trip data, answer from that data; if it says no trips are \
+            visible, tell the user (in your own words) that none of their trips are currently \
+            shared with chat and that they can enable it via that trip's "Allow Chat?" toggle.
 
             CRITICAL RULES for Google Workspace requests:
             1. When the user provides any docs.google.com URL, you MUST call the matching read tool \
@@ -104,6 +105,9 @@ public class GeneratorNode {
             4. When the user refers to "this conversation", "the content generated before", \
             "what was said above", or similar phrases, extract the full relevant text from the \
             Conversation History section of the prompt and pass it as the content to the tool.
+            5. For ANY question about the user's trips, travel history, itinerary, flights, or \
+            travel expenses, you MUST call getTravelRecords before answering — this prompt's \
+            description of that tool is not itself an answer, it only tells you when to call it.
 
             When source documents are provided, ground your answer strictly in those documents
             and cite them. If documents are irrelevant, say so rather than hallucinating.
