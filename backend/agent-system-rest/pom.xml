@@ -120,6 +120,12 @@
             <version>1.18.3</version>
         </dependency>
 
+        <!-- Caffeine — bounded local cache (PythFeedResolver: caps unbounded growth from user-supplied symbols) -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <!-- MySQL + Spring Data JPA (auth: email whitelist; OTP codes live in Redis) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

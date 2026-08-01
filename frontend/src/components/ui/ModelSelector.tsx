@@ -43,6 +43,7 @@ export function ModelSelector({ models, value, onChange, disabled, className }: 
         type="button"
         disabled={isDisabled}
         onClick={() => setOpen((o) => !o)}
+        title={label}
         className={cn(
           "flex max-w-[160px] items-center gap-1 rounded-md border border-[--color-border]",
           "bg-[--color-surface-raised] px-2 py-1 text-xs",
@@ -62,6 +63,7 @@ export function ModelSelector({ models, value, onChange, disabled, className }: 
               <button
                 key={opt.label}
                 type="button"
+                title={opt.label}
                 onClick={() => {
                   onChange(opt.value);
                   setOpen(false);

@@ -2,6 +2,8 @@ package com.agentsystem.alert.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -15,9 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.StreamSupport;
 
 /**
@@ -29,9 +29,9 @@ import java.util.stream.StreamSupport;
  * A symbol can match multiple feeds (deprecated feeds, pre/post-market variants, leveraged
  * ETFs like TQQQ/SQQQ alongside QQQ) — see {@link #pickBestMatch} for the matching rules.
  *
- * Resolved (symbol, assetType) -> feedId pairs are cached indefinitely; feed IDs don't change,
- * same caching philosophy as {@link com.agentsystem.financial.service.impl.MarketPriceServiceImpl}'s
- * logo caches.
+ * Resolved (symbol, assetType) -> feedId pairs are cached with no TTL (feed IDs don't change),
+ * bounded by a max size since {@code symbol} is user-supplied (via the "Set Alert" endpoint) and
+ * would otherwise let arbitrary/garbage symbols grow the cache without limit.
  */
 @Slf4j
 @Service
@@ -45,7 +45,9 @@ public class PythFeedResolver {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
-    private final Map<String, String> feedIdCache = new ConcurrentHashMap<>();
+    private final Cache<String, String> feedIdCache = Caffeine.newBuilder()
+            .maximumSize(2_000)
+            .build();
 
     /**
      * @param symbol    plain symbol, e.g. "BTC" or "QQQ" (case-insensitive)
