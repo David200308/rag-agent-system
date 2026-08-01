@@ -143,29 +143,24 @@ public class GeneratorNode {
         log.debug("[GeneratorNode] Generating answer (docs={} model={})", docs.size(),
                 selectedConfig != null ? selectedConfig.getDisplayName() : "default");
 
-        // Inject per-request user_uuid and orgId so tools know which token to use
-        googleDocsTool.setCurrentUserUuid(userUuid);
-        googleDocsTool.setCurrentOrgId(orgId);
-        googleSheetsTool.setCurrentUserUuid(userUuid);
-        googleSheetsTool.setCurrentOrgId(orgId);
-        googleSlidesTool.setCurrentUserUuid(userUuid);
-        googleSlidesTool.setCurrentOrgId(orgId);
-        googleCalendarTool.setCurrentUserUuid(userUuid);
-        googleCalendarTool.setCurrentOrgId(orgId);
-        telegramTool.setCurrentUserUuid(userUuid);
-        telegramTool.setCurrentOrgId(orgId);
-        telegramTool.setShareOwnerEmail(shareOwnerEmail);
-        travelTool.setCurrentUserUuid(userUuid);
-        toolCallBudget.reset();
-        String answer;
-        try {
-            ToolCallbackProvider tools = MethodToolCallbackProvider.builder()
-                    .toolObjects(googleDocsTool, googleSheetsTool, googleSlidesTool,
-                                 googleCalendarTool, telegramTool, travelTool)
-                    .build();
-
-            answer = generationService.generate(effectiveClient, SYSTEM_PROMPT, userPrompt, tools).join();
-        } finally {
+        // The LLM call (and any tool invocations it triggers) runs on GenerationServiceImpl's
+        // own worker thread, not this one — so the per-request user_uuid/orgId context must be
+        // set there too, not here, or the tools' ThreadLocals will be empty (see GenerationService).
+        Runnable primeToolContext = () -> {
+            googleDocsTool.setCurrentUserUuid(userUuid);
+            googleDocsTool.setCurrentOrgId(orgId);
+            googleSheetsTool.setCurrentUserUuid(userUuid);
+            googleSheetsTool.setCurrentOrgId(orgId);
+            googleSlidesTool.setCurrentUserUuid(userUuid);
+            googleSlidesTool.setCurrentOrgId(orgId);
+            googleCalendarTool.setCurrentUserUuid(userUuid);
+            googleCalendarTool.setCurrentOrgId(orgId);
+            telegramTool.setCurrentUserUuid(userUuid);
+            telegramTool.setCurrentOrgId(orgId);
+            telegramTool.setShareOwnerEmail(shareOwnerEmail);
+            travelTool.setCurrentUserUuid(userUuid);
+        };
+        Runnable clearToolContext = () -> {
             googleDocsTool.clearCurrentUserUuid();
             googleDocsTool.clearCurrentOrgId();
             googleSheetsTool.clearCurrentUserUuid();
@@ -178,6 +173,19 @@ public class GeneratorNode {
             telegramTool.clearCurrentOrgId();
             telegramTool.clearShareOwnerEmail();
             travelTool.clearCurrentUserUuid();
+        };
+
+        toolCallBudget.reset();
+        String answer;
+        try {
+            ToolCallbackProvider tools = MethodToolCallbackProvider.builder()
+                    .toolObjects(googleDocsTool, googleSheetsTool, googleSlidesTool,
+                                 googleCalendarTool, telegramTool, travelTool)
+                    .build();
+
+            answer = generationService.generate(effectiveClient, SYSTEM_PROMPT, userPrompt, tools,
+                    primeToolContext, clearToolContext).join();
+        } finally {
             toolCallBudget.clear();
         }
 

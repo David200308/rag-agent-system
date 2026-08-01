@@ -19,6 +19,7 @@ import com.agentsystem.schema.QueryAnalysis;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
@@ -72,7 +73,7 @@ class GeneratorNodeTest {
 
     @Test
     void process_generationSucceeds_returnsResponse() {
-        when(generationService.generate(any(), any(), any(), any()))
+        when(generationService.generate(any(), any(), any(), any(), any(), any()))
                 .thenReturn(CompletableFuture.completedFuture("The answer."));
         when(llmProperties.getProvider()).thenReturn("openai");
         LlmProperties.OpenAiProps openAiProps = new LlmProperties.OpenAiProps();
@@ -93,11 +94,68 @@ class GeneratorNodeTest {
         verify(toolCallBudget).clear();
     }
 
+    // ── process — tool context must be primed/cleared on the worker thread ────
+    //
+    // Regression test: the LLM call (and any tool invocations it triggers) runs
+    // inside GenerationService's own worker thread, not GeneratorNode's calling
+    // thread — so the per-request user uuid must be set via the Runnable passed
+    // to generate(), not via a ThreadLocal set beforehand on the calling thread
+    // (that value would be invisible on the worker thread and tools would see
+    // uuid == null, silently returning no data instead of the caller's data).
+
+    @Test
+    void process_success_primeToolContextRunnable_setsUserUuidOnAllTools() {
+        ArgumentCaptor<Runnable> setupCaptor = ArgumentCaptor.forClass(Runnable.class);
+        when(generationService.generate(any(), any(), any(), any(), setupCaptor.capture(), any()))
+                .thenReturn(CompletableFuture.completedFuture("The answer."));
+        when(llmProperties.getProvider()).thenReturn("openai");
+        LlmProperties.OpenAiProps openAiProps = new LlmProperties.OpenAiProps();
+        openAiProps.setModel("gpt-4o-mini");
+        when(llmProperties.getOpenai()).thenReturn(openAiProps);
+
+        AgentState state = new AgentState(Map.of(
+                "request",       request(),
+                "queryAnalysis", analysis(),
+                "userUuid",      "user-123"
+        ));
+
+        node.process(state);
+        setupCaptor.getValue().run();
+
+        verify(travelTool).setCurrentUserUuid("user-123");
+        verify(telegramTool).setCurrentUserUuid("user-123");
+        verify(googleCalendarTool).setCurrentUserUuid("user-123");
+    }
+
+    @Test
+    void process_success_clearToolContextRunnable_clearsAllTools() {
+        ArgumentCaptor<Runnable> cleanupCaptor = ArgumentCaptor.forClass(Runnable.class);
+        when(generationService.generate(any(), any(), any(), any(), any(), cleanupCaptor.capture()))
+                .thenReturn(CompletableFuture.completedFuture("The answer."));
+        when(llmProperties.getProvider()).thenReturn("openai");
+        LlmProperties.OpenAiProps openAiProps = new LlmProperties.OpenAiProps();
+        openAiProps.setModel("gpt-4o-mini");
+        when(llmProperties.getOpenai()).thenReturn(openAiProps);
+
+        AgentState state = new AgentState(Map.of(
+                "request",       request(),
+                "queryAnalysis", analysis(),
+                "userUuid",      "user-123"
+        ));
+
+        node.process(state);
+        cleanupCaptor.getValue().run();
+
+        verify(travelTool).clearCurrentUserUuid();
+        verify(telegramTool).clearCurrentUserUuid();
+        verify(googleCalendarTool).clearCurrentUserUuid();
+    }
+
     // ── process — LLM circuit-breaker/retry exhaustion ────────────────────────
 
     @Test
     void process_generationFailsAfterRetries_routesToFallback() {
-        when(generationService.generate(any(), any(), any(), any()))
+        when(generationService.generate(any(), any(), any(), any(), any(), any()))
                 .thenReturn(CompletableFuture.completedFuture(null));
 
         AgentState state = new AgentState(Map.of(
