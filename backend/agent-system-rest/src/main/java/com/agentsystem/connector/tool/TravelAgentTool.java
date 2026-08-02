@@ -8,6 +8,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -78,13 +81,66 @@ public class TravelAgentTool {
             sb.append("Notes: ").append(r.notes()).append("\n");
         }
 
-        if (r.expenses() != null && !r.expenses().isEmpty()) {
-            Map<String, Object> first = r.expenses().get(0);
-            Object currencies = first.get("currencies");
-            sb.append("Expenses: ").append(r.expenses().size()).append(" expense record(s) logged")
-                    .append(currencies != null ? " in currencies " + currencies : "").append(".\n");
-        }
+        String expenses = formatExpenses(r.expenses());
+        if (expenses != null) sb.append(expenses);
 
         return sb.toString().stripTrailing();
+    }
+
+    /**
+     * Mirrors the trip-total math in TravelManager.tsx's ExpenseTab exactly (same-currency
+     * sum only, no FX conversion): itemExpenses (pre-trip/fixed costs) and every dateExpenses
+     * group's entries (day-by-day spending) are pooled together, then each entry's per-currency
+     * "amounts" map is summed into a running total per currency code. Cashback is subtracted
+     * only from the defaultCurrency total, by the same convention the UI uses.
+     */
+    @SuppressWarnings("unchecked")
+    private String formatExpenses(List<Map<String, Object>> expenses) {
+        if (expenses == null || expenses.isEmpty()) return null;
+        Map<String, Object> data = expenses.get(0);
+        if (!(data.get("__v") instanceof Number v) || v.intValue() != 2) {
+            return "Expenses: " + expenses.size() + " expense record(s) logged (legacy format, totals unavailable).\n";
+        }
+
+        List<Map<String, Object>> allEntries = new ArrayList<>(
+                (List<Map<String, Object>>) data.getOrDefault("itemExpenses", List.of()));
+        for (Map<String, Object> group : (List<Map<String, Object>>) data.getOrDefault("dateExpenses", List.of())) {
+            allEntries.addAll((List<Map<String, Object>>) group.getOrDefault("entries", List.of()));
+        }
+        if (allEntries.isEmpty()) return "Expenses: no expense entries logged for this trip.\n";
+
+        Map<String, Double> totalsByCurrency = new LinkedHashMap<>();
+        double totalCashback = 0.0;
+        for (Map<String, Object> entry : allEntries) {
+            if (entry.get("amounts") instanceof Map<?, ?> amounts) {
+                for (Map.Entry<?, ?> e : amounts.entrySet()) {
+                    totalsByCurrency.merge(String.valueOf(e.getKey()), toDouble(e.getValue()), Double::sum);
+                }
+            }
+            totalCashback += toDouble(entry.get("cashback"));
+        }
+        String defaultCurrency = String.valueOf(data.getOrDefault("defaultCurrency", ""));
+
+        StringBuilder sb = new StringBuilder("Expenses (").append(allEntries.size()).append(" entries):\n");
+        for (Map.Entry<String, Double> e : totalsByCurrency.entrySet()) {
+            String currency = e.getKey();
+            double total = e.getValue();
+            sb.append("  Total ").append(currency).append(": ").append(money(total));
+            if (currency.equals(defaultCurrency) && totalCashback != 0) {
+                sb.append(" (net of ").append(money(totalCashback)).append(" cashback: ")
+                  .append(money(total - totalCashback)).append(")");
+            }
+            sb.append("\n");
+        }
+        sb.append("  (same-currency sums only — no exchange-rate conversion between currencies)\n");
+        return sb.toString();
+    }
+
+    private static double toDouble(Object o) {
+        return o instanceof Number n ? n.doubleValue() : 0.0;
+    }
+
+    private static String money(double amount) {
+        return String.format("%.2f", amount);
     }
 }
