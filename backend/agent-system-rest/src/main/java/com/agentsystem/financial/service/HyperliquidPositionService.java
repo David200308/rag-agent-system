@@ -20,6 +20,10 @@ public interface HyperliquidPositionService {
             BigDecimal liquidationPrice,
             /** Cumulative funding paid/received since the position was opened (USD, negative = paid). */
             BigDecimal fundingSinceOpen,
+            /** Return on equity as a fraction (e.g. -0.374 = -37.4%), computed by Hyperliquid against the
+             *  position's margin at entry (entryPrice x size / leverage) — NOT the live {@code margin}
+             *  field above, which fluctuates independently. Null if unavailable. */
+            BigDecimal returnOnEquity,
             /** Perp dex this position lives on: "" for Hyperliquid's default dex, or a builder-deployed
              *  dex name (e.g. "xyz" for equities/commodities perps) for HIP-3 markets. */
             String     dex

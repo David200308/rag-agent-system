@@ -151,7 +151,13 @@ public class HyperliquidPositionServiceImpl implements HyperliquidPositionServic
                 BigDecimal positionValue = toBigDecimal(pos.path("positionValue").asText(null));
                 BigDecimal margin = toBigDecimal(pos.path("marginUsed").asText(null));
                 BigDecimal liquidationPrice = toBigDecimal(pos.path("liquidationPx").asText(null));
-                BigDecimal fundingSinceOpen = toBigDecimal(pos.path("cumFunding").path("sinceOpen").asText(null));
+                BigDecimal returnOnEquity = toBigDecimal(pos.path("returnOnEquity").asText(null));
+
+                // Hyperliquid's cumFunding is positive when the position has PAID funding (a cost) and
+                // negative when it has RECEIVED funding — the opposite of how it's shown in their UI
+                // ("-$0.71" for a cost). Negate so a negative value here always means money lost.
+                BigDecimal fundingRaw = toBigDecimal(pos.path("cumFunding").path("sinceOpen").asText(null));
+                BigDecimal fundingSinceOpen = fundingRaw != null ? fundingRaw.negate() : null;
 
                 BigDecimal size = szi.abs();
                 String side = szi.signum() > 0 ? "LONG" : "SHORT";
@@ -160,7 +166,7 @@ public class HyperliquidPositionServiceImpl implements HyperliquidPositionServic
                         : null;
 
                 positions.add(new Position(symbol, side, size, entryPx, leverage, unrealizedPnl, markPrice,
-                        margin, liquidationPrice, fundingSinceOpen, dex));
+                        margin, liquidationPrice, fundingSinceOpen, returnOnEquity, dex));
             }
         } catch (Exception e) {
             log.error("[HyperliquidPositionService] Failed to fetch positions for {} on dex '{}': {}", address, dex, e.getMessage());

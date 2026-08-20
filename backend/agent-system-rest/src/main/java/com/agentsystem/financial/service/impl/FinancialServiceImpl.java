@@ -490,7 +490,14 @@ public class FinancialServiceImpl implements FinancialService {
         if (pos.unrealizedPnl() != null) {
             double convertedPnl = fxService.convert(pos.unrealizedPnl().doubleValue(), "USD", toCurrency);
             convertedCurrentValue = bd(convertedInvest + convertedPnl);
-            if (convertedInvest > 0) {
+
+            // Hyperliquid's displayed PNL% (ROE) is computed against margin at entry (fixed), not the
+            // live `margin` field above (which drifts over time, e.g. from funding settlement) — so it
+            // must come straight from their `returnOnEquity`, not convertedPnl / convertedInvest, or the
+            // percentage shown here would silently diverge from what the exchange itself shows.
+            if (pos.returnOnEquity() != null) {
+                pnlPercent = Math.round(pos.returnOnEquity().doubleValue() * 10000.0) / 100.0;
+            } else if (convertedInvest > 0) {
                 pnlPercent = Math.round(convertedPnl / convertedInvest * 10000.0) / 100.0;
             }
         }

@@ -485,7 +485,8 @@ class FinancialServiceTest {
                 new HyperliquidPositionService.Position("ETH", "LONG",
                         new BigDecimal("2"), new BigDecimal("2500"), new BigDecimal("10"),
                         new BigDecimal("200"), new BigDecimal("2600"),
-                        new BigDecimal("500"), new BigDecimal("2000"), new BigDecimal("-5"), "")));
+                        new BigDecimal("500"), new BigDecimal("2000"), new BigDecimal("-5"),
+                        new BigDecimal("0.5"), "")));
         when(fxService.convert(anyDouble(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
 
         var result = service.listFutures("user@test.com", "USD");
@@ -503,6 +504,10 @@ class FinancialServiceTest {
         assertThat(dto.liquidationPrice()).isEqualByComparingTo("2000");
         assertThat(dto.fundingSinceOpen()).isEqualByComparingTo("-5");
         assertThat(dto.hyperliquidDex()).isNull();
+        // returnOnEquity (0.5 = 50%) must win over the naive convertedPnl/convertedInvest calc
+        // (200/500 = 40%) — Hyperliquid's own ROE is computed against margin-at-entry, not the
+        // live, drifting `margin` field.
+        assertThat(dto.pnlPercent()).isEqualTo(50.0);
     }
 
     @Test
@@ -520,7 +525,8 @@ class FinancialServiceTest {
                 new HyperliquidPositionService.Position("SNDK", "LONG",
                         new BigDecimal("2.878"), new BigDecimal("1733.35"), new BigDecimal("5"),
                         new BigDecimal("-368"), new BigDecimal("1606.6"),
-                        new BigDecimal("628.8"), new BigDecimal("1460.02"), new BigDecimal("-0.69"), "xyz")));
+                        new BigDecimal("628.8"), new BigDecimal("1460.02"), new BigDecimal("-0.69"),
+                        new BigDecimal("-0.384"), "xyz")));
         when(fxService.convert(anyDouble(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
 
         var result = service.listFutures("user@test.com", "USD");

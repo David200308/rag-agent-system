@@ -162,8 +162,15 @@ export function FinancialManager() {
     : null;
 
   const futuresInvested = futures.reduce((s, f) => s + f.convertedInvestAmount, 0);
-  const futuresPnlPct   = futures.some((f) => f.pnlPercent != null) && futuresInvested > 0
-    ? (totalFutures - futuresInvested) / futuresInvested * 100
+  // Leveraged (Hyperliquid) rows have a pnlPercent based on entry-margin ROE, not on
+  // convertedCurrentValue/convertedInvestAmount (which track live margin) — so unlike
+  // stocks/crypto, (totalFutures - futuresInvested) / futuresInvested would silently
+  // diverge from what each row displays. Aggregate as a margin-weighted average of each
+  // row's own (correct) pnlPercent instead, so this always agrees with the table below.
+  const futuresPnlRows  = futures.filter((f) => f.pnlPercent != null && f.convertedInvestAmount > 0);
+  const futuresPnlBase  = futuresPnlRows.reduce((s, f) => s + f.convertedInvestAmount, 0);
+  const futuresPnlPct   = futuresPnlBase > 0
+    ? futuresPnlRows.reduce((s, f) => s + f.pnlPercent! * f.convertedInvestAmount, 0) / futuresPnlBase
     : null;
 
   const grandTotal = totalDeposits + totalStocks + totalCrypto + totalFutures;

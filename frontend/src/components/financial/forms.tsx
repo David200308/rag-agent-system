@@ -260,12 +260,10 @@ export function FutureForm({ initial, onSave, onCancel, saving }: {
             </Field>
           </div>
           <Field label="Side *">
-            <div className="flex gap-5 pt-1">
+            <div className="flex gap-1 rounded-xl border border-[--color-border] p-1">
               {FUTURE_SIDES.map((s) => (
-                <label key={s} className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
-                  <input type="radio" name="side" checked={f.side === s} onChange={() => setField("side", s)} />
-                  {s === "LONG" ? "Long" : "Short"}
-                </label>
+                <SegBtn key={s} label={s === "LONG" ? "Long" : "Short"}
+                  active={f.side === s} onClick={() => setField("side", s)} />
               ))}
             </div>
           </Field>
