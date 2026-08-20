@@ -8,19 +8,22 @@ import {
   type CryptoInvestment,
   type StockInvestment,
   type Card,
+  type FutureInvestment,
   type SalaryUsageRecord,
+  FUTURE_EXCHANGE_KIND_LABELS,
   formatAmount,
   formatPrice,
 } from "@/types/financial";
 import { Modal, SegBtn, SwitchRow } from "./shared-ui";
 import { formatPercentOfTotal, formatExpiry } from "./utils";
 
-type DownloadSection = "deposits" | "stocks" | "crypto" | "cards" | "salary";
+type DownloadSection = "deposits" | "stocks" | "crypto" | "futures" | "cards" | "salary";
 
 const SECTION_LABELS: Record<DownloadSection, string> = {
   deposits: "Cash Deposits",
   stocks:   "Stocks",
   crypto:   "Crypto",
+  futures:  "Futures",
   cards:    "Cards",
   salary:   "Salary & Expense",
 };
@@ -30,6 +33,7 @@ function buildMarkdown(
   deposits: CashDeposit[],
   stocks: StockInvestment[],
   crypto: CryptoInvestment[],
+  futures: FutureInvestment[],
   cards: Card[],
   salary: SalaryUsageRecord[],
   currency: string,
@@ -42,6 +46,7 @@ function buildMarkdown(
   const totalDep = has("deposits") ? deposits.reduce((s, d) => s + (d.convertedAmount ?? 0), 0) : 0;
   const totalStk = has("stocks")   ? stocks.reduce((s, st) => s + (st.convertedCurrentValue ?? st.convertedInvestAmount ?? 0), 0) : 0;
   const totalCry = has("crypto")   ? crypto.reduce((s, c) => s + (c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0), 0) : 0;
+  const totalFut = has("futures")  ? futures.reduce((s, f) => s + (f.convertedCurrentValue ?? f.convertedInvestAmount ?? 0), 0) : 0;
 
   const financialSections = sections.filter((s) => s !== "cards" && s !== "salary");
   if (financialSections.length > 1) {
@@ -51,6 +56,7 @@ function buildMarkdown(
     if (has("deposits")) lines.push(`| Cash Deposits | ${formatAmount(totalDep, currency)} | ${formatPercentOfTotal(totalDep, grandTotal)} |`);
     if (has("stocks"))   lines.push(`| Stock Investments | ${formatAmount(totalStk, currency)} | ${formatPercentOfTotal(totalStk, grandTotal)} |`);
     if (has("crypto"))   lines.push(`| Crypto Investments | ${formatAmount(totalCry, currency)} | ${formatPercentOfTotal(totalCry, grandTotal)} |`);
+    if (has("futures"))  lines.push(`| Futures | ${formatAmount(totalFut, currency)} | ${formatPercentOfTotal(totalFut, grandTotal)} |`);
     lines.push(`| **Total** | **${formatAmount(grandTotal, currency)}** | **100%** |`);
     lines.push("");
   }
@@ -88,6 +94,20 @@ function buildMarkdown(
         ? `${c.pnlPercent >= 0 ? "+" : ""}${c.pnlPercent.toFixed(2)}% (${c.pnlPercent >= 0 ? "+" : ""}${formatAmount(val - c.convertedInvestAmount, currency)})`
         : "—";
       lines.push(`| ${c.symbol} | ${c.name} | ${c.amount} | ${formatAmount(c.investAmount, c.currency)} | ${c.currentPrice != null ? formatAmount(c.currentPrice, "USD") : "—"} | ${c.currentValue != null ? formatAmount(c.currentValue, "USD") : "—"} | ${formatAmount(val, currency)} | ${pnlStr} | ${formatPercentOfTotal(val, totalCry)} |`);
+    }
+    lines.push("");
+  }
+
+  if (has("futures") && futures.length > 0) {
+    lines.push("## Futures", "");
+    lines.push(`| Exchange | Symbol | Side | Qty | Entry Price | Price | Value | ≈ ${currency} | P&L% | % of Total |`);
+    lines.push("|---|---|---|---:|---:|---:|---:|---:|---:|---:|");
+    for (const f of futures) {
+      const val = f.convertedCurrentValue ?? f.convertedInvestAmount ?? 0;
+      const pnlStr = f.pnlPercent != null
+        ? `${f.pnlPercent >= 0 ? "+" : ""}${f.pnlPercent.toFixed(2)}% (${f.pnlPercent >= 0 ? "+" : ""}${formatAmount(val - f.convertedInvestAmount, currency)})`
+        : "—";
+      lines.push(`| ${FUTURE_EXCHANGE_KIND_LABELS[f.exchangeKind]} / ${f.exchange} | ${f.symbol ?? "—"} | ${f.side ?? "—"} | ${f.quantity ?? "—"} | ${f.entryPrice != null ? formatPrice(f.entryPrice) : "—"} | ${f.currentPrice != null ? formatPrice(f.currentPrice) : "—"} | ${f.currentValue != null ? formatAmount(f.currentValue, f.currency) : "—"} | ${formatAmount(val, currency)} | ${pnlStr} | ${formatPercentOfTotal(val, totalFut)} |`);
     }
     lines.push("");
   }
@@ -135,6 +155,7 @@ function exportPdf(
   deposits: CashDeposit[],
   stocks: StockInvestment[],
   crypto: CryptoInvestment[],
+  futures: FutureInvestment[],
   cards: Card[],
   salary: SalaryUsageRecord[],
   currency: string,
@@ -153,6 +174,7 @@ function exportPdf(
   const tDep = has("deposits") ? deposits.reduce((s, d) => s + (d.convertedAmount ?? 0), 0) : 0;
   const tStk = has("stocks")   ? stocks.reduce((s, st) => s + (st.convertedCurrentValue ?? st.convertedInvestAmount ?? 0), 0) : 0;
   const tCry = has("crypto")   ? crypto.reduce((s, c) => s + (c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0), 0) : 0;
+  const tFut = has("futures")  ? futures.reduce((s, f) => s + (f.convertedCurrentValue ?? f.convertedInvestAmount ?? 0), 0) : 0;
   let summaryHtml = "";
   if (financialSections.length > 1) {
     summaryHtml = `<h2>Summary</h2><table style="${ts}"><thead><tr>
@@ -161,6 +183,7 @@ function exportPdf(
   ${has("deposits") ? `<tr><td style="${td}">Cash Deposits</td><td style="${tdR}">${formatAmount(tDep, currency)}</td><td style="${tdR}">${formatPercentOfTotal(tDep, grandTotal)}</td></tr>` : ""}
   ${has("stocks")   ? `<tr><td style="${td}">Stock Investments</td><td style="${tdR}">${formatAmount(tStk, currency)}</td><td style="${tdR}">${formatPercentOfTotal(tStk, grandTotal)}</td></tr>` : ""}
   ${has("crypto")   ? `<tr><td style="${td}">Crypto Investments</td><td style="${tdR}">${formatAmount(tCry, currency)}</td><td style="${tdR}">${formatPercentOfTotal(tCry, grandTotal)}</td></tr>` : ""}
+  ${has("futures")  ? `<tr><td style="${td}">Futures</td><td style="${tdR}">${formatAmount(tFut, currency)}</td><td style="${tdR}">${formatPercentOfTotal(tFut, grandTotal)}</td></tr>` : ""}
   <tr><td style="${td};font-weight:bold">Total</td><td style="${tdR};font-weight:bold">${formatAmount(grandTotal, currency)}</td><td style="${tdR};font-weight:bold">100%</td></tr>
 </tbody></table>`;
   }
@@ -202,6 +225,22 @@ function exportPdf(
     <td style="${tdR}">${formatPercentOfTotal(val, tCry)}</td></tr>`;
   }).join("") : "";
 
+  const futRows = has("futures") ? futures.map(f => {
+    const val = f.convertedCurrentValue ?? f.convertedInvestAmount ?? 0;
+    const pnlStr = f.pnlPercent != null
+      ? `${f.pnlPercent >= 0 ? "+" : ""}${f.pnlPercent.toFixed(2)}% (${f.pnlPercent >= 0 ? "+" : ""}${formatAmount(val - f.convertedInvestAmount, currency)})`
+      : "—";
+    return `<tr>
+    <td style="${td}">${FUTURE_EXCHANGE_KIND_LABELS[f.exchangeKind]} / ${f.exchange}</td><td style="${td}">${f.symbol ?? "—"}</td>
+    <td style="${td}">${f.side ?? "—"}</td><td style="${tdR}">${f.quantity ?? "—"}</td>
+    <td style="${tdR}">${f.entryPrice != null ? formatPrice(f.entryPrice) : "—"}</td>
+    <td style="${tdR}">${f.currentPrice != null ? formatPrice(f.currentPrice) : "—"}</td>
+    <td style="${tdR}">${f.currentValue != null ? formatAmount(f.currentValue, f.currency) : "—"}</td>
+    <td style="${tdR}">${formatAmount(val, currency)}</td>
+    <td style="${tdR}">${pnlStr}</td>
+    <td style="${tdR}">${formatPercentOfTotal(val, tFut)}</td></tr>`;
+  }).join("") : "";
+
   const cardRows = has("cards") ? cards.map(c => {
     const creditStr = c.creditLimit != null
       ? `${c.creditLimitCurrency ?? ""} ${c.creditLimit.toLocaleString("en-US", { maximumFractionDigits: 0 })}`.trim() : "—";
@@ -235,6 +274,11 @@ ${has("crypto") && crypto.length > 0 ? `<h2>Crypto Investments</h2><table style=
   <th style="${th}">Invested</th><th style="${th}">Price (USD)</th><th style="${th}">Value (USD)</th>
   <th style="${th}">≈ ${currency}</th><th style="${th}">P&amp;L%</th><th style="${th}">% of Total</th>
 </tr></thead><tbody>${cryRows}</tbody></table>` : ""}
+${has("futures") && futures.length > 0 ? `<h2>Futures</h2><table style="${ts}"><thead><tr>
+  <th style="${th}">Exchange</th><th style="${th}">Symbol</th><th style="${th}">Side</th><th style="${th}">Qty</th>
+  <th style="${th}">Entry Price</th><th style="${th}">Price</th><th style="${th}">Value</th>
+  <th style="${th}">≈ ${currency}</th><th style="${th}">P&amp;L%</th><th style="${th}">% of Total</th>
+</tr></thead><tbody>${futRows}</tbody></table>` : ""}
 ${has("cards") && cards.length > 0 ? `<h2>Cards</h2><table style="${ts}"><thead><tr>
   <th style="${th}">Bank</th><th style="${th}">Country</th><th style="${th}">Card Name</th>
   <th style="${th}">Types</th><th style="${th}">Network</th><th style="${th}">Expiry</th>
@@ -267,12 +311,12 @@ ${has("salary") && salary.length > 0 ? (() => {
   if (w) { w.document.write(html); w.document.close(); }
 }
 
-export function DownloadModal({ deposits, stocks, crypto, cards, salary, currency, grandTotal, onClose }: {
-  deposits: CashDeposit[]; stocks: StockInvestment[]; crypto: CryptoInvestment[];
+export function DownloadModal({ deposits, stocks, crypto, futures, cards, salary, currency, grandTotal, onClose }: {
+  deposits: CashDeposit[]; stocks: StockInvestment[]; crypto: CryptoInvestment[]; futures: FutureInvestment[];
   cards: Card[]; salary: SalaryUsageRecord[];
   currency: string; grandTotal: number; onClose: () => void;
 }) {
-  const [sections, setSections] = useState<DownloadSection[]>(["deposits", "stocks", "crypto", "cards", "salary"]);
+  const [sections, setSections] = useState<DownloadSection[]>(["deposits", "stocks", "crypto", "futures", "cards", "salary"]);
   const [format,   setFormat]   = useState<"markdown" | "pdf">("markdown");
   const [mode,     setMode]     = useState<"combined" | "separate">("combined");
 
@@ -284,16 +328,16 @@ export function DownloadModal({ deposits, stocks, crypto, cards, salary, currenc
     const date = new Date().toISOString().slice(0, 10);
     if (mode === "combined") {
       if (format === "markdown") {
-        downloadFile(buildMarkdown(sections, deposits, stocks, crypto, cards, salary, currency, grandTotal), `financial-${date}.md`, "text/markdown");
+        downloadFile(buildMarkdown(sections, deposits, stocks, crypto, futures, cards, salary, currency, grandTotal), `financial-${date}.md`, "text/markdown");
       } else {
-        exportPdf(sections, deposits, stocks, crypto, cards, salary, currency, grandTotal, "Financial Report");
+        exportPdf(sections, deposits, stocks, crypto, futures, cards, salary, currency, grandTotal, "Financial Report");
       }
     } else {
       for (const section of sections) {
         if (format === "markdown") {
-          downloadFile(buildMarkdown([section], deposits, stocks, crypto, cards, salary, currency, grandTotal), `financial-${section}-${date}.md`, "text/markdown");
+          downloadFile(buildMarkdown([section], deposits, stocks, crypto, futures, cards, salary, currency, grandTotal), `financial-${section}-${date}.md`, "text/markdown");
         } else {
-          exportPdf([section], deposits, stocks, crypto, cards, salary, currency, grandTotal, SECTION_LABELS[section]);
+          exportPdf([section], deposits, stocks, crypto, futures, cards, salary, currency, grandTotal, SECTION_LABELS[section]);
         }
       }
     }
@@ -308,7 +352,7 @@ export function DownloadModal({ deposits, stocks, crypto, cards, salary, currenc
         <div>
           <p className="mb-1 text-xs text-[--color-muted]">Sections</p>
           <div className="divide-y divide-[--color-border] rounded-xl border border-[--color-border] px-3">
-            {(["deposits", "stocks", "crypto", "cards", "salary"] as DownloadSection[]).map((s) => (
+            {(["deposits", "stocks", "crypto", "futures", "cards", "salary"] as DownloadSection[]).map((s) => (
               <SwitchRow key={s} label={SECTION_LABELS[s]}
                 checked={sections.includes(s)} onChange={() => toggle(s)} />
             ))}

@@ -5,11 +5,13 @@ import { Plus, Pencil, Trash2, RefreshCw, ChevronDown, Eye, EyeOff, Search, Bell
 import { Button } from "@/components/ui/Button";
 import {
   CURRENCIES,
+  FUTURE_EXCHANGE_KIND_LABELS,
   type CashDeposit,
   type CryptoInvestment,
   type Currency,
   type StockInvestment,
   type Card,
+  type FutureInvestment,
   type SalaryUsageRecord,
   formatAmount,
   formatPrice,
@@ -19,14 +21,14 @@ import {
   apiFetch, apiCreate, apiUpdate, apiDelete, apiRefreshPrices,
   fetchExchangeRates, fetchUserCurrency, saveUserCurrency,
   sortData, groupStocksBySymbol, useSort, unique,
-  formatPercentOfTotal, NETWORK_COLORS, TYPE_COLORS, formatExpiry, toTradingViewSymbol,
+  formatPercentOfTotal, NETWORK_COLORS, TYPE_COLORS, EXCHANGE_KIND_COLORS, formatExpiry, toTradingViewSymbol,
 } from "./utils";
 import { Th, Modal, PnlBadge, SummaryCard, SymbolIcon } from "./shared-ui";
 import { SymbolHoverChart } from "./symbol-hover-chart";
 import {
-  type DepositFields, type StockFields, type CryptoFields, type CardFields, type SalaryFields,
-  emptyDeposit, emptyStock, emptyCrypto, emptyCard, emptySalary,
-  DepositForm, StockForm, CryptoForm, CardForm, SalaryForm,
+  type DepositFields, type StockFields, type CryptoFields, type CardFields, type FutureFields, type SalaryFields,
+  emptyDeposit, emptyStock, emptyCrypto, emptyCard, emptyFuture, emptySalary,
+  DepositForm, StockForm, CryptoForm, CardForm, FutureForm, SalaryForm,
 } from "./forms";
 import { StockGroupRows } from "./stock-table";
 import { SalaryLineChart } from "./salary-chart";
@@ -41,6 +43,7 @@ export function FinancialManager() {
   const [deposits,      setDeposits]      = useState<CashDeposit[]>([]);
   const [stocks,        setStocks]        = useState<StockInvestment[]>([]);
   const [crypto,        setCrypto]        = useState<CryptoInvestment[]>([]);
+  const [futures,       setFutures]       = useState<FutureInvestment[]>([]);
   const [cards,         setCards]         = useState<Card[]>([]);
   const [salaryRecords, setSalaryRecords] = useState<SalaryUsageRecord[]>([]);
 
@@ -52,6 +55,7 @@ export function FinancialManager() {
   const depositSort = useSort({ column: "platform", dir: "asc" });
   const stockSort   = useSort({ column: "symbol",   dir: "asc" });
   const cryptoSort  = useSort({ column: "symbol",   dir: "asc" });
+  const futureSort  = useSort({ column: "symbol",   dir: "asc" });
   const cardSort    = useSort({ column: "bank",     dir: "asc" });
   const salarySort  = useSort({ column: "year",     dir: "desc" });
   const [salaryFrom, setSalaryFrom] = useState("");
@@ -74,6 +78,7 @@ export function FinancialManager() {
     | { mode: "add-deposit" }   | { mode: "edit-deposit";  item: CashDeposit }
     | { mode: "add-stock" }     | { mode: "edit-stock";    item: StockInvestment }
     | { mode: "add-crypto" }    | { mode: "edit-crypto";   item: CryptoInvestment }
+    | { mode: "add-future" }    | { mode: "edit-future";   item: FutureInvestment }
     | { mode: "add-card" }      | { mode: "edit-card";     item: Card }
     | { mode: "add-salary" }    | { mode: "edit-salary";   item: SalaryUsageRecord }
     | { mode: "alert"; symbol: string; assetType: "CRYPTO" | "STOCK" }
@@ -91,10 +96,11 @@ export function FinancialManager() {
   const brokerSuggestions = unique(stocks.map((s) => s.broker));
 
   const loadAll = useCallback(async () => {
-    const [deps, stks, cry, cds, sal, cur, rates] = await Promise.all([
+    const [deps, stks, cry, fut, cds, sal, cur, rates] = await Promise.all([
       apiFetch<CashDeposit>("deposits"),
       apiFetch<StockInvestment>("stocks"),
       apiFetch<CryptoInvestment>("crypto"),
+      apiFetch<FutureInvestment>("futures"),
       apiFetch<Card>("cards"),
       apiFetch<SalaryUsageRecord>("salary"),
       fetchUserCurrency(),
@@ -103,6 +109,7 @@ export function FinancialManager() {
     setDeposits(deps);
     setStocks(stks);
     setCrypto(cry);
+    setFutures(fut);
     setCards(cds);
     setSalaryRecords(sal);
     setDefaultCurrency(cur as Currency);
@@ -117,14 +124,16 @@ export function FinancialManager() {
   const handleCurrencyChange = useCallback(async (c: Currency) => {
     setDefaultCurrency(c);
     await saveUserCurrency(c);
-    const [deps, stks, cry] = await Promise.all([
+    const [deps, stks, cry, fut] = await Promise.all([
       apiFetch<CashDeposit>("deposits"),
       apiFetch<StockInvestment>("stocks"),
       apiFetch<CryptoInvestment>("crypto"),
+      apiFetch<FutureInvestment>("futures"),
     ]);
     setDeposits(deps);
     setStocks(stks);
     setCrypto(cry);
+    setFutures(fut);
   }, []);
 
   const handleRefresh = useCallback(async () => {
@@ -140,6 +149,7 @@ export function FinancialManager() {
   const totalDeposits = deposits.reduce((s, d) => s + (d.convertedAmount ?? 0), 0);
   const totalStocks   = stocks.reduce((s, st) => s + (st.convertedCurrentValue ?? st.convertedInvestAmount ?? 0), 0);
   const totalCrypto   = crypto.reduce((s, c) => s + (c.convertedCurrentValue ?? c.convertedInvestAmount ?? 0), 0);
+  const totalFutures  = futures.reduce((s, f) => s + (f.convertedCurrentValue ?? f.convertedInvestAmount ?? 0), 0);
 
   const stocksInvested  = stocks.reduce((s, st) => s + st.convertedInvestAmount, 0);
   const stocksPnlPct    = stocks.some((st) => st.pnlPercent != null) && stocksInvested > 0
@@ -151,7 +161,12 @@ export function FinancialManager() {
     ? (totalCrypto - cryptoInvested) / cryptoInvested * 100
     : null;
 
-  const grandTotal = totalDeposits + totalStocks + totalCrypto;
+  const futuresInvested = futures.reduce((s, f) => s + f.convertedInvestAmount, 0);
+  const futuresPnlPct   = futures.some((f) => f.pnlPercent != null) && futuresInvested > 0
+    ? (totalFutures - futuresInvested) / futuresInvested * 100
+    : null;
+
+  const grandTotal = totalDeposits + totalStocks + totalCrypto + totalFutures;
 
   const toUSD = (amount: number): number | null => {
     if (defaultCurrency === "USD") return null;
@@ -164,6 +179,7 @@ export function FinancialManager() {
     { label: "Cash Deposits",      value: totalDeposits, pnlPercent: null,         pnlAmount: null as number | null,                             share: grandTotal > 0 ? totalDeposits / grandTotal * 100 : 0, usdValue: null as number | null },
     { label: "Stock Investments",  value: totalStocks,   pnlPercent: stocksPnlPct, pnlAmount: stocksPnlPct != null ? totalStocks - stocksInvested : null, share: grandTotal > 0 ? totalStocks  / grandTotal * 100 : 0, usdValue: toUSD(totalStocks) },
     { label: "Crypto Investments", value: totalCrypto,   pnlPercent: cryptoPnlPct, pnlAmount: cryptoPnlPct != null ? totalCrypto - cryptoInvested : null, share: grandTotal > 0 ? totalCrypto  / grandTotal * 100 : 0, usdValue: toUSD(totalCrypto) },
+    { label: "Futures",            value: totalFutures,  pnlPercent: futuresPnlPct, pnlAmount: futuresPnlPct != null ? totalFutures - futuresInvested : null, share: grandTotal > 0 ? totalFutures / grandTotal * 100 : 0, usdValue: toUSD(totalFutures) },
   ] as const;
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
@@ -212,6 +228,25 @@ export function FinancialManager() {
   const deleteCrypto  = async (id: string) => { await apiDelete("crypto",   id); setCrypto((p)   => p.filter((c) => c.id !== id)); };
   const deleteCard    = async (id: string) => { await apiDelete("cards",    id); setCards((p)    => p.filter((c) => c.id !== id)); };
 
+  async function saveFuture(data: FutureFields) {
+    setSaving(true);
+    try {
+      if (modal?.mode === "edit-future") {
+        await apiUpdate<FutureInvestment>("futures", modal.item.id, data);
+      } else {
+        await apiCreate<FutureInvestment>("futures", data);
+      }
+      setModal(null);
+      setFutures(await apiFetch<FutureInvestment>("futures"));
+    } finally { setSaving(false); }
+  }
+
+  // DEX rows are live-fetched (not stored per-position); deleting removes the tracked address instead.
+  const deleteFuture = async (f: FutureInvestment) => {
+    await apiDelete("futures", f.source === "HYPERLIQUID" ? (f.sourceConnectionId ?? f.id) : f.id);
+    setFutures(await apiFetch<FutureInvestment>("futures"));
+  };
+
   async function saveCard(data: CardFields) {
     setSaving(true);
     try {
@@ -247,6 +282,7 @@ export function FinancialManager() {
   const sortedDeposits = sortData(deposits, depositSort.sort);
   const sortedStocks   = sortData(stocks,   stockSort.sort);
   const sortedCrypto   = sortData(crypto,   cryptoSort.sort);
+  const sortedFutures  = sortData(futures,  futureSort.sort);
   const sortedCards    = sortData(cards,    cardSort.sort);
   const sortedSalary   = sortData(salaryRecords, salarySort.sort);
 
@@ -267,6 +303,11 @@ export function FinancialManager() {
           .some((v) => v?.toLowerCase().includes(q)))
     : sortedCrypto;
   const stockGroups = sortData(groupStocksBySymbol(filteredStocks), stockSort.sort);
+  const filteredFutures = q
+    ? sortedFutures.filter((f) =>
+        [f.symbol, f.exchange, f.exchangeKind, f.connectionAddress]
+          .some((v) => v?.toLowerCase().includes(q)))
+    : sortedFutures;
   const filteredCards = q
     ? sortedCards.filter((c) =>
         [c.bank, c.countryRegion, c.cardName, c.network, c.types.join(" ")]
@@ -345,8 +386,8 @@ export function FinancialManager() {
           </div>
         </div>
 
-        {/* Desktop: 3-column grid */}
-        <div className="mt-4 hidden sm:grid sm:grid-cols-3 sm:gap-3">
+        {/* Desktop: 4-column grid */}
+        <div className="mt-4 hidden sm:grid sm:grid-cols-4 sm:gap-3">
           {summaryItems.map((item) => (
             <SummaryCard key={item.label} label={item.label} value={item.value}
               currency={defaultCurrency} pnlPercent={item.pnlPercent} pnlAmount={item.pnlAmount} share={item.share} usdValue={item.usdValue} hide={hideAmounts} />
@@ -369,6 +410,7 @@ export function FinancialManager() {
           <button className={tabCls("deposits")} onClick={() => setTab("deposits")}>Cash Deposits</button>
           <button className={tabCls("stocks")}   onClick={() => setTab("stocks")}>Stocks</button>
           <button className={tabCls("crypto")}   onClick={() => setTab("crypto")}>Crypto</button>
+          <button className={tabCls("futures")}  onClick={() => setTab("futures")}>Futures</button>
           <button className={tabCls("cards")}    onClick={() => setTab("cards")}>Cards</button>
           <button className={tabCls("salary")}   onClick={() => setTab("salary")}>Salary &amp; Expense</button>
         </div>
@@ -385,7 +427,7 @@ export function FinancialManager() {
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[--color-muted]" />
                 <input
                   className="w-full rounded-md border border-[--color-border] bg-[--color-surface] py-1.5 pl-8 pr-3 text-sm outline-none focus:border-[--color-primary] focus:ring-1 focus:ring-[--color-primary]/30"
-                  placeholder={`Search ${tab === "deposits" ? "deposits" : tab === "stocks" ? "stocks" : tab === "crypto" ? "crypto" : tab === "cards" ? "cards" : "salary records"}…`}
+                  placeholder={`Search ${tab === "deposits" ? "deposits" : tab === "stocks" ? "stocks" : tab === "crypto" ? "crypto" : tab === "futures" ? "futures" : tab === "cards" ? "cards" : "salary records"}…`}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -394,11 +436,12 @@ export function FinancialManager() {
                 tab === "deposits" ? { mode: "add-deposit" }
                 : tab === "stocks" ? { mode: "add-stock" }
                 : tab === "crypto" ? { mode: "add-crypto" }
+                : tab === "futures" ? { mode: "add-future" }
                 : tab === "cards"  ? { mode: "add-card" }
                 : { mode: "add-salary" },
               )}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Add {tab === "deposits" ? "Deposit" : tab === "stocks" ? "Stock" : tab === "crypto" ? "Crypto" : tab === "cards" ? "Card" : "Record"}
+                Add {tab === "deposits" ? "Deposit" : tab === "stocks" ? "Stock" : tab === "crypto" ? "Crypto" : tab === "futures" ? "Future" : tab === "cards" ? "Card" : "Record"}
               </Button>
             </div>
 
@@ -574,6 +617,101 @@ export function FinancialManager() {
                             </Button>
                             <Button size="icon" variant="ghost" className="h-7 w-7"
                               onClick={() => void deleteCrypto(c.id)}>
+                              <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+
+            {/* ── Futures ── */}
+            {tab === "futures" && (filteredFutures.length === 0 ? (
+              <p className="py-12 text-center text-sm text-[--color-muted]">
+                {q ? `No futures matching "${searchTerm}".` : "No futures positions yet."}
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-[--color-border]">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className={thCls}>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-[--color-muted]">Exchange</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-[--color-muted]">Symbol</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-[--color-muted]">Side</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">Qty</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">Entry Price</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">Price</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">Value</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">≈ {defaultCurrency}</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">P&amp;L%</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">% of Total</th>
+                      <th className="px-4 py-2.5" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredFutures.map((f) => (
+                      <tr key={f.id} className="border-b border-[--color-border]/50 hover:bg-[--color-border]/20">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${EXCHANGE_KIND_COLORS[f.exchangeKind]}`}>
+                              {FUTURE_EXCHANGE_KIND_LABELS[f.exchangeKind]}
+                            </span>
+                            <span className="text-xs text-[--color-muted]">{f.exchange}</span>
+                            {f.source === "HYPERLIQUID" && (
+                              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Auto</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-medium">
+                          {f.symbol
+                            ? <span className="inline-flex items-center gap-1.5">
+                                <SymbolIcon logoUrl={null} symbol={f.symbol} />
+                                {/* Hover chart only for DEX rows — Hyperliquid's bare base-symbol convention (BTC, ETH)
+                                    matches toTradingViewSymbol's mapping. CEX rows use each exchange's own native
+                                    instrument id (e.g. "BTC-USDT-SWAP"), which that mapping wasn't built for. */}
+                                {f.exchangeKind === "CRYPTO_DEX"
+                                  ? <SymbolHoverChart tvSymbol={toTradingViewSymbol(f.symbol, "crypto")}>{f.symbol}</SymbolHoverChart>
+                                  : f.symbol}
+                              </span>
+                            : <span className="text-xs text-[--color-muted]" title={f.connectionAddress ?? undefined}>
+                                {f.connectionAddress ? `${f.connectionAddress.slice(0, 6)}…${f.connectionAddress.slice(-4)} (no open positions)` : "—"}
+                              </span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {f.side
+                            ? <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${f.side === "LONG" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"}`}>{f.side}</span>
+                            : <span className="text-[--color-muted]">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">{f.quantity != null ? maskAmount(String(f.quantity)) : <span className="text-[--color-muted]">—</span>}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{f.entryPrice != null ? maskAmount(formatPrice(f.entryPrice)) : <span className="text-[--color-muted]">—</span>}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{f.currentPrice != null ? maskAmount(formatPrice(f.currentPrice)) : <span className="text-[--color-muted]">—</span>}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{f.currentValue != null ? maskAmount(formatAmount(f.currentValue, f.currency)) : <span className="text-[--color-muted]">—</span>}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-[--color-muted]">
+                          {f.convertedCurrentValue != null
+                            ? maskAmount(formatAmount(f.convertedCurrentValue, defaultCurrency))
+                            : maskAmount(formatAmount(f.convertedInvestAmount, defaultCurrency))}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {f.pnlPercent != null
+                            ? <PnlBadge percent={f.pnlPercent} amount={(f.convertedCurrentValue ?? f.convertedInvestAmount) - f.convertedInvestAmount} currency={defaultCurrency} hide={hideAmounts} />
+                            : <span className="text-[--color-muted]">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-xs text-[--color-muted]">
+                          {formatPercentOfTotal((f.convertedCurrentValue ?? f.convertedInvestAmount ?? 0), totalFutures)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-1">
+                            {f.source === "MANUAL" && (
+                              <Button size="icon" variant="ghost" className="h-7 w-7"
+                                onClick={() => setModal({ mode: "edit-future", item: f })}>
+                                <Pencil className="h-3.5 w-3.5 text-[--color-muted]" />
+                              </Button>
+                            )}
+                            <Button size="icon" variant="ghost" className="h-7 w-7"
+                              onClick={() => void deleteFuture(f)}>
                               <Trash2 className="h-3.5 w-3.5 text-red-400" />
                             </Button>
                           </div>
@@ -790,6 +928,20 @@ export function FinancialManager() {
         </Modal>
       )}
 
+      {(modal?.mode === "add-future" || modal?.mode === "edit-future") && (
+        <Modal title={modal.mode === "add-future" ? "Add Future" : "Edit Future"} onClose={() => setModal(null)}>
+          <FutureForm
+            initial={modal.mode === "edit-future"
+              ? { exchangeKind: modal.item.exchangeKind, exchange: modal.item.exchange,
+                  symbol: modal.item.symbol, side: modal.item.side,
+                  quantity: modal.item.quantity, entryPrice: modal.item.entryPrice,
+                  leverage: modal.item.leverage, currency: modal.item.currency as Currency,
+                  connectionAddress: modal.item.connectionAddress }
+              : emptyFuture()}
+            onSave={saveFuture} onCancel={() => setModal(null)} saving={saving} />
+        </Modal>
+      )}
+
       {modal?.mode === "alert" && (
         <AlertModal symbol={modal.symbol} assetType={modal.assetType} onClose={() => setModal(null)} />
       )}
@@ -830,6 +982,7 @@ export function FinancialManager() {
           deposits={deposits}
           stocks={stocks}
           crypto={crypto}
+          futures={futures}
           cards={cards}
           salary={salaryRecords}
           currency={defaultCurrency}

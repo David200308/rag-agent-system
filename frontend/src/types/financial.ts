@@ -38,6 +38,24 @@ export const STOCK_TYPE_LABELS: Record<StockType, string> = {
   OTHER:    "Other",
 };
 
+export const FUTURE_EXCHANGE_KINDS = ["SECURITY", "CRYPTO_CEX", "CRYPTO_DEX"] as const;
+export type FutureExchangeKind = typeof FUTURE_EXCHANGE_KINDS[number];
+
+export const FUTURE_EXCHANGE_KIND_LABELS: Record<FutureExchangeKind, string> = {
+  SECURITY:   "Security",
+  CRYPTO_CEX: "Crypto (CEX)",
+  CRYPTO_DEX: "Crypto (DEX)",
+};
+
+export const FUTURE_EXCHANGES_BY_KIND: Record<FutureExchangeKind, string[]> = {
+  SECURITY:   ["IBKR"],
+  CRYPTO_CEX: ["BINANCE", "OKX", "KRAKEN"],
+  CRYPTO_DEX: ["HYPERLIQUID"],
+};
+
+export const FUTURE_SIDES = ["LONG", "SHORT"] as const;
+export type FutureSide = typeof FUTURE_SIDES[number];
+
 // ── Backend DTOs (mirror of Java records) ────────────────────────────────────
 
 export interface CashDeposit {
@@ -103,6 +121,34 @@ export interface CryptoInvestment {
   convertedCurrency: string;
   /** (convertedCurrentValue - convertedInvestAmount) / convertedInvestAmount * 100; null if price unavailable */
   pnlPercent: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FutureInvestment {
+  id: string;
+  ownerEmail: string;
+  exchangeKind: FutureExchangeKind;
+  exchange: string;
+  symbol: string | null;
+  side: FutureSide | null;
+  quantity: number | null;
+  entryPrice: number | null;
+  leverage: number | null;
+  currency: string;
+  connectionAddress: string | null;
+  /** Live mark/last price; null if unavailable */
+  currentPrice: number | null;
+  /** currentPrice × quantity, in `currency`; null if price unavailable */
+  currentValue: number | null;
+  convertedInvestAmount: number;
+  convertedCurrentValue: number | null;
+  convertedCurrency: string;
+  pnlPercent: number | null;
+  /** "MANUAL" for user-entered Security/CEX rows, "HYPERLIQUID" for live-fetched DEX positions */
+  source: "MANUAL" | "HYPERLIQUID";
+  /** Only set for HYPERLIQUID rows — id of the tracked-address row this position was expanded from */
+  sourceConnectionId: string | null;
   createdAt: string;
   updatedAt: string;
 }

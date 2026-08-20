@@ -5,11 +5,13 @@ import com.agentsystem.financial.service.FinancialService;
 import com.agentsystem.financial.dto.CardDto;
 import com.agentsystem.financial.dto.CashDepositDto;
 import com.agentsystem.financial.dto.CryptoInvestmentDto;
+import com.agentsystem.financial.dto.FutureInvestmentDto;
 import com.agentsystem.financial.dto.SalaryUsageRecordDto;
 import com.agentsystem.financial.dto.StockInvestmentDto;
 import com.agentsystem.financial.entity.Card;
 import com.agentsystem.financial.entity.CashDeposit;
 import com.agentsystem.financial.entity.CryptoInvestment;
+import com.agentsystem.financial.entity.FutureInvestment;
 import com.agentsystem.financial.entity.SalaryUsageRecord;
 import com.agentsystem.financial.entity.StockInvestment;
 import com.agentsystem.user.entity.UserPreference;
@@ -246,6 +248,69 @@ class FinancialControllerTest {
         doThrow(new SecurityException("not owner")).when(service).deleteCrypto(anyString(), anyString());
 
         ResponseEntity<Void> resp = controller.deleteCrypto("cry-1", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+    }
+
+    // ── Futures ───────────────────────────────────────────────────────────────
+
+    @Test
+    void listFutures_returnsOk() {
+        stubUuid("user@test.com");
+        when(prefService.getOrDefault("user@test.com")).thenReturn(prefWith("USD"));
+        when(service.listFutures("user@test.com", "USD")).thenReturn(List.of());
+
+        ResponseEntity<List<FutureInvestmentDto>> resp = controller.listFutures(request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+    }
+
+    @Test
+    void createFuture_returns201() {
+        stubUuid("user@test.com");
+        when(service.createFuture(eq("user@test.com"), any())).thenReturn(new FutureInvestment());
+
+        ResponseEntity<FutureInvestment> resp = controller.createFuture(Map.of("exchangeKind", "SECURITY"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(201);
+    }
+
+    @Test
+    void updateFuture_success_returns200() {
+        stubUuid("user@test.com");
+        when(service.updateFuture(eq("fut-1"), eq("user@test.com"), any())).thenReturn(new FutureInvestment());
+
+        ResponseEntity<FutureInvestment> resp = controller.updateFuture("fut-1", Map.of(), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+    }
+
+    @Test
+    void updateFuture_securityException_returns403() {
+        stubUuid("user@test.com");
+        when(service.updateFuture(anyString(), anyString(), any()))
+                .thenThrow(new SecurityException("not owner"));
+
+        ResponseEntity<FutureInvestment> resp = controller.updateFuture("fut-1", Map.of(), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+    }
+
+    @Test
+    void deleteFuture_success_returns204() {
+        stubUuid("user@test.com");
+
+        ResponseEntity<Void> resp = controller.deleteFuture("fut-1", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(204);
+    }
+
+    @Test
+    void deleteFuture_securityException_returns403() {
+        stubUuid("user@test.com");
+        doThrow(new SecurityException("not owner")).when(service).deleteFuture(anyString(), anyString());
+
+        ResponseEntity<Void> resp = controller.deleteFuture("fut-1", request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(403);
     }

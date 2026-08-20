@@ -3,11 +3,13 @@ package com.agentsystem.financial.service;
 import com.agentsystem.financial.dto.CardDto;
 import com.agentsystem.financial.dto.CashDepositDto;
 import com.agentsystem.financial.dto.CryptoInvestmentDto;
+import com.agentsystem.financial.dto.FutureInvestmentDto;
 import com.agentsystem.financial.dto.SalaryUsageRecordDto;
 import com.agentsystem.financial.dto.StockInvestmentDto;
 import com.agentsystem.financial.entity.Card;
 import com.agentsystem.financial.entity.CashDeposit;
 import com.agentsystem.financial.entity.CryptoInvestment;
+import com.agentsystem.financial.entity.FutureInvestment;
 import com.agentsystem.financial.entity.SalaryUsageRecord;
 import com.agentsystem.financial.entity.StockInvestment;
 
@@ -39,6 +41,14 @@ public interface FinancialService {
     CryptoInvestment updateCrypto(String id, String ownerUuid, Map<String, Object> body);
 
     void deleteCrypto(String id, String ownerUuid);
+
+    List<FutureInvestmentDto> listFutures(String ownerUuid, String defaultCurrency);
+
+    FutureInvestment createFuture(String ownerUuid, Map<String, Object> body);
+
+    FutureInvestment updateFuture(String id, String ownerUuid, Map<String, Object> body);
+
+    void deleteFuture(String id, String ownerUuid);
 
     List<CardDto> listCards(String ownerUuid);
 

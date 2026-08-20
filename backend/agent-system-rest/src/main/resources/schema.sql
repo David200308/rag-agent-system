@@ -376,6 +376,23 @@ CREATE TABLE IF NOT EXISTS financial_crypto (
     INDEX idx_fin_cry_owner (owner_uuid)
 );
 
+CREATE TABLE IF NOT EXISTS financial_futures (
+    id                  VARCHAR(36)    PRIMARY KEY,
+    owner_uuid          VARCHAR(36)    NOT NULL,
+    exchange_kind       VARCHAR(20)    NOT NULL,   -- SECURITY | CRYPTO_CEX | CRYPTO_DEX
+    exchange            VARCHAR(20)    NOT NULL,   -- IBKR | BINANCE | OKX | KRAKEN | HYPERLIQUID
+    symbol              VARCHAR(30),               -- null for CRYPTO_DEX (address-only row)
+    side                VARCHAR(5),                -- LONG | SHORT; null for CRYPTO_DEX
+    quantity            DECIMAL(28,8),              -- contracts/size; null for CRYPTO_DEX
+    entry_price         DECIMAL(19,4),              -- null for CRYPTO_DEX
+    leverage            DECIMAL(6,2),               -- optional, manual kinds only
+    currency            VARCHAR(10)    NOT NULL DEFAULT 'USD',
+    connection_address  VARCHAR(255),               -- wallet address; CRYPTO_DEX only
+    created_at          TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_fin_fut_owner (owner_uuid)
+);
+
 CREATE TABLE IF NOT EXISTS financial_cards (
     id              VARCHAR(36)    PRIMARY KEY,
     owner_uuid      VARCHAR(36)    NOT NULL,

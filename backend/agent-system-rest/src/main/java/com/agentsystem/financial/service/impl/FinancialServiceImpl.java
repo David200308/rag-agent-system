@@ -1,22 +1,27 @@
 package com.agentsystem.financial.service.impl;
 
 import com.agentsystem.financial.service.FinancialService;
+import com.agentsystem.financial.service.CexFuturesPriceService;
 import com.agentsystem.financial.service.ExchangeRateService;
+import com.agentsystem.financial.service.HyperliquidPositionService;
 import com.agentsystem.financial.service.MarketPriceService;
 
 import com.agentsystem.financial.dto.CardDto;
 import com.agentsystem.financial.dto.CashDepositDto;
 import com.agentsystem.financial.dto.CryptoInvestmentDto;
+import com.agentsystem.financial.dto.FutureInvestmentDto;
 import com.agentsystem.financial.dto.SalaryUsageRecordDto;
 import com.agentsystem.financial.dto.StockInvestmentDto;
 import com.agentsystem.financial.entity.Card;
 import com.agentsystem.financial.entity.CashDeposit;
 import com.agentsystem.financial.entity.CryptoInvestment;
+import com.agentsystem.financial.entity.FutureInvestment;
 import com.agentsystem.financial.entity.SalaryUsageRecord;
 import com.agentsystem.financial.entity.StockInvestment;
 import com.agentsystem.financial.repository.CardRepository;
 import com.agentsystem.financial.repository.CashDepositRepository;
 import com.agentsystem.financial.repository.CryptoInvestmentRepository;
+import com.agentsystem.financial.repository.FutureInvestmentRepository;
 import com.agentsystem.financial.repository.SalaryUsageRecordRepository;
 import com.agentsystem.financial.repository.StockInvestmentRepository;
 import lombok.RequiredArgsConstructor;
@@ -30,8 +35,10 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -41,10 +48,15 @@ public class FinancialServiceImpl implements FinancialService {
     private final CashDepositRepository       depositRepo;
     private final StockInvestmentRepository   stockRepo;
     private final CryptoInvestmentRepository  cryptoRepo;
+    private final FutureInvestmentRepository  futureRepo;
     private final CardRepository              cardRepo;
     private final SalaryUsageRecordRepository salaryRepo;
     private final ExchangeRateService         fxService;
     private final MarketPriceService          priceService;
+    private final HyperliquidPositionService  hyperliquidService;
+    private final CexFuturesPriceService      cexPriceService;
+
+    private static final Set<String> CEX_EXCHANGES = Set.of("BINANCE", "OKX", "KRAKEN");
 
     // ── Cash Deposits ─────────────────────────────────────────────────────────
 
@@ -280,6 +292,217 @@ public class FinancialServiceImpl implements FinancialService {
         );
     }
 
+    // ── Futures ───────────────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    @Override
+    public List<FutureInvestmentDto> listFutures(String ownerUuid, String defaultCurrency) {
+        List<FutureInvestment> rows = futureRepo.findByOwnerUuidOrderByCreatedAtDesc(ownerUuid);
+
+        List<FutureInvestment> manual = rows.stream()
+                .filter(f -> !"CRYPTO_DEX".equals(f.getExchangeKind()))
+                .collect(Collectors.toList());
+        List<FutureInvestment> dexConnections = rows.stream()
+                .filter(f -> "CRYPTO_DEX".equals(f.getExchangeKind()))
+                .collect(Collectors.toList());
+
+        List<CexFuturesPriceService.ExchangeSymbol> cexPairs = manual.stream()
+                .filter(f -> "CRYPTO_CEX".equals(f.getExchangeKind()))
+                .map(f -> new CexFuturesPriceService.ExchangeSymbol(f.getExchange(), f.getSymbol()))
+                .distinct().collect(Collectors.toList());
+        List<String> securitySymbols = manual.stream()
+                .filter(f -> "SECURITY".equals(f.getExchangeKind()))
+                .map(FutureInvestment::getSymbol).distinct().collect(Collectors.toList());
+
+        if (!cexPairs.isEmpty() && cexPriceService.isStale())          cexPriceService.refreshPrices(cexPairs);
+        if (!securitySymbols.isEmpty() && priceService.isStockStale()) priceService.refreshStockPrices(securitySymbols);
+
+        List<FutureInvestmentDto> result = manual.stream()
+                .map(f -> toManualFutureDto(f, defaultCurrency))
+                .collect(Collectors.toList());
+
+        for (FutureInvestment conn : dexConnections) {
+            List<HyperliquidPositionService.Position> positions = hyperliquidService.fetchPositions(conn.getConnectionAddress());
+            if (positions.isEmpty()) {
+                // No open positions right now — still surface the tracked address itself so it stays manageable/deletable.
+                result.add(toHyperliquidPlaceholderDto(conn, defaultCurrency));
+            } else {
+                for (HyperliquidPositionService.Position pos : positions) {
+                    result.add(toHyperliquidFutureDto(conn, pos, defaultCurrency));
+                }
+            }
+        }
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public FutureInvestment createFuture(String ownerUuid, Map<String, Object> body) {
+        FutureInvestment f = new FutureInvestment();
+        f.setId(UUID.randomUUID().toString());
+        f.setOwnerUuid(ownerUuid);
+        applyFutureFields(f, body);
+        return futureRepo.save(f);
+    }
+
+    @Override
+    @Transactional
+    public FutureInvestment updateFuture(String id, String ownerUuid, Map<String, Object> body) {
+        FutureInvestment f = futureRepo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Not found"));
+        checkOwner(f.getOwnerUuid(), ownerUuid);
+        applyFutureFields(f, body);
+        f.setUpdatedAt(Instant.now());
+        return futureRepo.save(f);
+    }
+
+    @Override
+    @Transactional
+    public void deleteFuture(String id, String ownerUuid) {
+        futureRepo.findById(id).ifPresent(f -> {
+            checkOwner(f.getOwnerUuid(), ownerUuid);
+            futureRepo.delete(f);
+        });
+    }
+
+    private void applyFutureFields(FutureInvestment f, Map<String, Object> body) {
+        String kind = body.containsKey("exchangeKind") ? (String) body.get("exchangeKind") : f.getExchangeKind();
+        if (kind == null) throw new IllegalArgumentException("exchangeKind is required");
+        f.setExchangeKind(kind);
+
+        switch (kind) {
+            case "CRYPTO_DEX" -> {
+                f.setExchange("HYPERLIQUID");
+                String address = body.containsKey("connectionAddress") ? (String) body.get("connectionAddress") : f.getConnectionAddress();
+                if (address == null || address.isBlank()) {
+                    throw new IllegalArgumentException("connectionAddress is required for CRYPTO_DEX");
+                }
+                f.setConnectionAddress(address);
+                f.setSymbol(null);
+                f.setSide(null);
+                f.setQuantity(null);
+                f.setEntryPrice(null);
+                f.setLeverage(null);
+            }
+            case "SECURITY" -> {
+                f.setExchange("IBKR");
+                applyManualFutureFields(f, body);
+            }
+            case "CRYPTO_CEX" -> {
+                String exchange = body.containsKey("exchange") ? (String) body.get("exchange") : f.getExchange();
+                if (exchange == null || !CEX_EXCHANGES.contains(exchange.toUpperCase())) {
+                    throw new IllegalArgumentException("exchange must be one of " + CEX_EXCHANGES + " for CRYPTO_CEX");
+                }
+                f.setExchange(exchange.toUpperCase());
+                applyManualFutureFields(f, body);
+            }
+            default -> throw new IllegalArgumentException("Unknown exchangeKind: " + kind);
+        }
+    }
+
+    private void applyManualFutureFields(FutureInvestment f, Map<String, Object> body) {
+        if (body.containsKey("symbol"))     f.setSymbol(((String) body.get("symbol")).toUpperCase());
+        if (body.containsKey("side"))       f.setSide((String) body.get("side"));
+        if (body.containsKey("quantity"))   f.setQuantity(new BigDecimal(body.get("quantity").toString()));
+        if (body.containsKey("entryPrice")) f.setEntryPrice(new BigDecimal(body.get("entryPrice").toString()));
+        if (body.containsKey("leverage")) {
+            Object lev = body.get("leverage");
+            f.setLeverage(lev != null ? new BigDecimal(lev.toString()) : null);
+        }
+        if (body.containsKey("currency"))   f.setCurrency((String) body.get("currency"));
+        f.setConnectionAddress(null);
+
+        if (f.getSymbol() == null || f.getSymbol().isBlank()) throw new IllegalArgumentException("symbol is required");
+        if (f.getSide() == null || (!f.getSide().equals("LONG") && !f.getSide().equals("SHORT"))) {
+            throw new IllegalArgumentException("side must be LONG or SHORT");
+        }
+        if (f.getQuantity() == null)   throw new IllegalArgumentException("quantity is required");
+        if (f.getEntryPrice() == null) throw new IllegalArgumentException("entryPrice is required");
+    }
+
+    private FutureInvestmentDto toManualFutureDto(FutureInvestment f, String toCurrency) {
+        String sym = f.getSymbol().toUpperCase();
+        boolean isCrypto = "CRYPTO_CEX".equals(f.getExchangeKind());
+
+        // CEX futures use each exchange's own native instrument id (e.g. Binance "BTCUSDT",
+        // OKX "BTC-USDT-SWAP") and price — never the shared Hyperliquid spot-mids cache.
+        Double currentPrice = isCrypto
+                ? cexPriceService.getPrice(f.getExchange(), sym).orElse(null)
+                : priceService.getStockPrice(sym).orElse(null);
+
+        BigDecimal currentValue          = null;
+        BigDecimal convertedCurrentValue = null;
+        Double     pnlPercent            = null;
+
+        double convertedInvest = fxService.convert(
+                f.getEntryPrice().doubleValue() * f.getQuantity().doubleValue(), f.getCurrency(), toCurrency);
+
+        if (currentPrice != null) {
+            currentValue = bd(currentPrice * f.getQuantity().doubleValue());
+            double pnlPerUnit = "SHORT".equals(f.getSide())
+                    ? f.getEntryPrice().doubleValue() - currentPrice
+                    : currentPrice - f.getEntryPrice().doubleValue();
+            double pnlNative = pnlPerUnit * f.getQuantity().doubleValue();
+            double convertedPnl = fxService.convert(pnlNative, f.getCurrency(), toCurrency);
+            convertedCurrentValue = bd(convertedInvest + convertedPnl);
+            if (convertedInvest > 0) {
+                pnlPercent = Math.round(convertedPnl / convertedInvest * 10000.0) / 100.0;
+            }
+        }
+
+        return new FutureInvestmentDto(
+                f.getId(), f.getOwnerUuid(), f.getExchangeKind(), f.getExchange(),
+                f.getSymbol(), f.getSide(), f.getQuantity(), f.getEntryPrice(), f.getLeverage(),
+                f.getCurrency(), f.getConnectionAddress(),
+                currentPrice, currentValue,
+                bd(convertedInvest), convertedCurrentValue, toCurrency,
+                pnlPercent, "MANUAL", null,
+                f.getCreatedAt(), f.getUpdatedAt()
+        );
+    }
+
+    private FutureInvestmentDto toHyperliquidFutureDto(
+            FutureInvestment conn, HyperliquidPositionService.Position pos, String toCurrency) {
+        Double currentPrice = pos.markPrice() != null ? pos.markPrice().doubleValue() : null;
+        BigDecimal currentValue = currentPrice != null ? bd(currentPrice * pos.size().doubleValue()) : null;
+
+        double convertedInvest = fxService.convert(
+                pos.entryPrice() != null ? pos.entryPrice().doubleValue() * pos.size().doubleValue() : 0, "USD", toCurrency);
+
+        BigDecimal convertedCurrentValue = null;
+        Double     pnlPercent            = null;
+        if (pos.unrealizedPnl() != null) {
+            double convertedPnl = fxService.convert(pos.unrealizedPnl().doubleValue(), "USD", toCurrency);
+            convertedCurrentValue = bd(convertedInvest + convertedPnl);
+            if (convertedInvest > 0) {
+                pnlPercent = Math.round(convertedPnl / convertedInvest * 10000.0) / 100.0;
+            }
+        }
+
+        return new FutureInvestmentDto(
+                conn.getId() + ":" + pos.coin(), conn.getOwnerUuid(), "CRYPTO_DEX", "HYPERLIQUID",
+                pos.coin(), pos.side(), pos.size(), pos.entryPrice(), pos.leverage(),
+                "USD", conn.getConnectionAddress(),
+                currentPrice, currentValue,
+                bd(convertedInvest), convertedCurrentValue, toCurrency,
+                pnlPercent, "HYPERLIQUID", conn.getId(),
+                conn.getCreatedAt(), conn.getUpdatedAt()
+        );
+    }
+
+    /** A tracked DEX address with no open positions right now — still shown so it can be removed. */
+    private FutureInvestmentDto toHyperliquidPlaceholderDto(FutureInvestment conn, String toCurrency) {
+        return new FutureInvestmentDto(
+                conn.getId(), conn.getOwnerUuid(), "CRYPTO_DEX", "HYPERLIQUID",
+                null, null, null, null, null,
+                "USD", conn.getConnectionAddress(),
+                null, null,
+                BigDecimal.ZERO, null, toCurrency,
+                null, "HYPERLIQUID", conn.getId(),
+                conn.getCreatedAt(), conn.getUpdatedAt()
+        );
+    }
+
     // ── Cards ─────────────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
@@ -422,13 +645,22 @@ public class FinancialServiceImpl implements FinancialService {
 
     @Override
     public void refreshPrices(String ownerUuid) {
-        List<String> stockSymbols = stockRepo.findByOwnerUuidOrderByCreatedAtDesc(ownerUuid)
-                .stream().map(StockInvestment::getSymbol).distinct().collect(Collectors.toList());
+        List<FutureInvestment> futures = futureRepo.findByOwnerUuidOrderByCreatedAtDesc(ownerUuid);
+
+        List<String> stockSymbols = Stream.concat(
+                        stockRepo.findByOwnerUuidOrderByCreatedAtDesc(ownerUuid).stream().map(StockInvestment::getSymbol),
+                        futures.stream().filter(f -> "SECURITY".equals(f.getExchangeKind())).map(FutureInvestment::getSymbol))
+                .distinct().collect(Collectors.toList());
         List<String> cryptoSymbols = cryptoRepo.findByOwnerUuidOrderByCreatedAtDesc(ownerUuid)
                 .stream().map(CryptoInvestment::getSymbol).distinct().collect(Collectors.toList());
+        List<CexFuturesPriceService.ExchangeSymbol> cexPairs = futures.stream()
+                .filter(f -> "CRYPTO_CEX".equals(f.getExchangeKind()))
+                .map(f -> new CexFuturesPriceService.ExchangeSymbol(f.getExchange(), f.getSymbol()))
+                .distinct().collect(Collectors.toList());
 
         if (!stockSymbols.isEmpty())  priceService.refreshStockPrices(stockSymbols);
         if (!cryptoSymbols.isEmpty()) priceService.refreshCryptoPrices(cryptoSymbols);
+        if (!cexPairs.isEmpty())      cexPriceService.refreshPrices(cexPairs);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

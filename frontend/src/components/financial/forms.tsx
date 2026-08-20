@@ -9,26 +9,42 @@ import {
   STOCK_TYPE_LABELS,
   CARD_TYPES,
   CARD_NETWORKS,
+  FUTURE_EXCHANGE_KINDS,
+  FUTURE_EXCHANGE_KIND_LABELS,
+  FUTURE_EXCHANGES_BY_KIND,
+  FUTURE_SIDES,
   type CashDeposit,
   type CryptoInvestment,
   type StockInvestment,
   type Card,
   type CardNetwork,
+  type FutureInvestment,
+  type FutureExchangeKind,
   type SalaryUsageRecord,
 } from "@/types/financial";
-import { Field, ComboInput } from "./shared-ui";
+import { Field, ComboInput, SegBtn } from "./shared-ui";
 import { inputCls, selectCls } from "./utils";
 
 export type DepositFields = Omit<CashDeposit, "id"|"ownerEmail"|"convertedAmount"|"convertedCurrency"|"createdAt"|"updatedAt">;
 export type StockFields   = Omit<StockInvestment, "id"|"ownerEmail"|"currentPrice"|"priceCurrency"|"logoUrl"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"createdAt"|"updatedAt">;
 export type CryptoFields  = Omit<CryptoInvestment, "id"|"ownerEmail"|"currentPrice"|"logoUrl"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"createdAt"|"updatedAt">;
 export type CardFields    = Omit<Card, "id"|"ownerEmail"|"createdAt"|"updatedAt">;
+export type FutureFields  = Omit<FutureInvestment, "id"|"ownerEmail"|"currentPrice"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"source"|"sourceConnectionId"|"createdAt"|"updatedAt">;
 export type SalaryFields  = Omit<SalaryUsageRecord, "id"|"ownerEmail"|"totalExpense"|"createdAt"|"updatedAt">;
 
 export const emptyDeposit = (): DepositFields => ({ platform:"", platformType:"", countryRegion:"", depositType:"FIXED", currency:"USD", amount:0 });
 export const emptyStock   = (): StockFields   => ({ broker:"", stockType:"US_STOCK", symbol:"", name:"", stockAmount:0, investAmount:0, currency:"USD", fee:0 });
 export const emptyCrypto  = (): CryptoFields  => ({ name:"", symbol:"", amount:0, investAmount:0, currency:"USD" });
 export const emptyCard    = (): CardFields    => ({ bank:"", countryRegion:"", types:[], cardName:"", network:"Visa", expireDate:"", creditLimit:null, creditLimitCurrency:"HKD", sharedCredit:null });
+export const emptyFuture  = (): FutureFields  => ({ exchangeKind:"SECURITY", exchange:"IBKR", symbol:"", side:"LONG", quantity:0, entryPrice:0, leverage:null, currency:"USD", connectionAddress:null });
+
+// Each CEX has its own native instrument-id format — the backend fetches the live price
+// directly from that exchange's API using this exact id, not a shared/unified symbol.
+const CEX_SYMBOL_EXAMPLES: Record<string, string> = {
+  BINANCE: "e.g. BTCUSDT",
+  OKX:     "e.g. BTC-USDT-SWAP",
+  KRAKEN:  "e.g. PF_XBTUSD",
+};
 export const emptySalary  = (): SalaryFields  => {
   const now = new Date();
   return { year: now.getFullYear(), month: now.getMonth() + 1, region: "", currency: "HKD", salary: 0, bonus: 0, retirementSavingEmployee: 0, retirementSavingEmployer: 0, tax: 0, houseRent: 0, livingExpense: 0, otherExpense: 0 };
@@ -175,6 +191,115 @@ export function CryptoForm({ initial, onSave, onCancel, saving }: {
       <p className="text-[11px] text-[--color-muted]">
         Symbol must match Hyperliquid perp asset name (BTC, ETH, SOL…)
       </p>
+      <div className="mt-1 flex justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" size="sm" disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+      </div>
+    </form>
+  );
+}
+
+export function FutureForm({ initial, onSave, onCancel, saving }: {
+  initial: FutureFields;
+  onSave: (d: FutureFields) => void; onCancel: () => void; saving: boolean;
+}) {
+  const [f, setF] = useState(initial);
+  const setField = (k: string, v: unknown) => setF((p) => ({ ...p, [k]: v }));
+
+  const setKind = (kind: FutureExchangeKind) => {
+    setF((p) => ({
+      ...p,
+      exchangeKind: kind,
+      exchange: FUTURE_EXCHANGES_BY_KIND[kind][0]!,
+      symbol: kind === "CRYPTO_DEX" ? null : (p.symbol ?? ""),
+      side: kind === "CRYPTO_DEX" ? null : (p.side ?? "LONG"),
+      quantity: kind === "CRYPTO_DEX" ? null : (p.quantity ?? 0),
+      entryPrice: kind === "CRYPTO_DEX" ? null : (p.entryPrice ?? 0),
+      connectionAddress: kind === "CRYPTO_DEX" ? (p.connectionAddress ?? "") : null,
+    }));
+  };
+
+  const isDex = f.exchangeKind === "CRYPTO_DEX";
+
+  return (
+    <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); onSave(f); }}>
+      <Field label="Exchange Kind">
+        <div className="flex gap-1.5 rounded-md bg-[--color-border]/30 p-1">
+          {FUTURE_EXCHANGE_KINDS.map((k) => (
+            <SegBtn key={k} label={FUTURE_EXCHANGE_KIND_LABELS[k]} active={f.exchangeKind === k} onClick={() => setKind(k)} />
+          ))}
+        </div>
+      </Field>
+
+      {isDex ? (
+        <>
+          <Field label="Exchange">
+            <input className={inputCls} value="Hyperliquid" disabled />
+          </Field>
+          <Field label="Wallet Address *">
+            <input className={inputCls} required value={f.connectionAddress ?? ""}
+              onChange={(e) => setField("connectionAddress", e.target.value)} placeholder="0x…" />
+          </Field>
+          <p className="text-[11px] text-[--color-muted]">
+            We&apos;ll auto-track all open positions for this address — no need to enter symbol or size.
+          </p>
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Exchange">
+              <select className={selectCls} value={f.exchange}
+                onChange={(e) => setField("exchange", e.target.value)}>
+                {FUTURE_EXCHANGES_BY_KIND[f.exchangeKind].map((ex) => <option key={ex} value={ex}>{ex}</option>)}
+              </select>
+            </Field>
+            <Field label="Symbol *">
+              <input className={inputCls} required value={f.symbol ?? ""}
+                onChange={(e) => setField("symbol", e.target.value.toUpperCase())}
+                placeholder={f.exchangeKind === "SECURITY" ? "e.g. ES, NQ" : CEX_SYMBOL_EXAMPLES[f.exchange] ?? "e.g. BTCUSDT"} />
+            </Field>
+          </div>
+          <Field label="Side *">
+            <div className="flex gap-5 pt-1">
+              {FUTURE_SIDES.map((s) => (
+                <label key={s} className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
+                  <input type="radio" name="side" checked={f.side === s} onChange={() => setField("side", s)} />
+                  {s === "LONG" ? "Long" : "Short"}
+                </label>
+              ))}
+            </div>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Quantity *">
+              <input className={inputCls} type="number" required min="0" step="0.00000001"
+                value={f.quantity ?? 0} onChange={(e) => setField("quantity", parseFloat(e.target.value) || 0)} />
+            </Field>
+            <Field label="Entry Price *">
+              <input className={inputCls} type="number" required min="0" step="0.0001"
+                value={f.entryPrice ?? 0} onChange={(e) => setField("entryPrice", parseFloat(e.target.value) || 0)} />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Leverage">
+              <input className={inputCls} type="number" min="0" step="0.1"
+                placeholder="Optional"
+                value={f.leverage ?? ""}
+                onChange={(e) => setField("leverage", e.target.value ? parseFloat(e.target.value) : null)} />
+            </Field>
+            <Field label="Currency">
+              <select className={selectCls} value={f.currency} onChange={(e) => setField("currency", e.target.value)}>
+                {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
+          </div>
+          <p className="text-[11px] text-[--color-muted]">
+            {f.exchangeKind === "CRYPTO_CEX"
+              ? `Enter the symbol exactly as ${f.exchange} lists it — each exchange has its own live price fetched directly from ${f.exchange}, not a shared/unified feed.`
+              : "Live price lookup is best-effort for futures/continuous contracts and may be unavailable."}
+          </p>
+        </>
+      )}
+
       <div className="mt-1 flex justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
         <Button type="submit" size="sm" disabled={saving}>{saving ? "Saving…" : "Save"}</Button>

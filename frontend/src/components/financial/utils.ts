@@ -2,11 +2,12 @@ import { useCallback, useState } from "react";
 import {
   type CardNetwork,
   type CardType,
+  type FutureExchangeKind,
   type StockInvestment,
   type StockType,
 } from "@/types/financial";
 
-export type Tab = "deposits" | "stocks" | "crypto" | "cards" | "salary";
+export type Tab = "deposits" | "stocks" | "crypto" | "futures" | "cards" | "salary";
 export type SortDir = "asc" | "desc";
 export interface SortConfig { column: string; dir: SortDir }
 
@@ -180,6 +181,12 @@ export const NETWORK_COLORS: Record<CardNetwork, string> = {
   UnionPay:  "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
   JCB:       "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
   AMEX:      "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300",
+};
+
+export const EXCHANGE_KIND_COLORS: Record<FutureExchangeKind, string> = {
+  SECURITY:   "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  CRYPTO_CEX: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  CRYPTO_DEX: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
 };
 
 export const TYPE_COLORS: Record<CardType, string> = {

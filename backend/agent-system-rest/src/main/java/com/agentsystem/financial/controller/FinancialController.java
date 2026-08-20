@@ -5,11 +5,13 @@ import com.agentsystem.financial.service.FinancialService;
 import com.agentsystem.financial.dto.CardDto;
 import com.agentsystem.financial.dto.CashDepositDto;
 import com.agentsystem.financial.dto.CryptoInvestmentDto;
+import com.agentsystem.financial.dto.FutureInvestmentDto;
 import com.agentsystem.financial.dto.SalaryUsageRecordDto;
 import com.agentsystem.financial.dto.StockInvestmentDto;
 import com.agentsystem.financial.entity.Card;
 import com.agentsystem.financial.entity.CashDeposit;
 import com.agentsystem.financial.entity.CryptoInvestment;
+import com.agentsystem.financial.entity.FutureInvestment;
 import com.agentsystem.financial.entity.SalaryUsageRecord;
 import com.agentsystem.financial.entity.StockInvestment;
 import com.agentsystem.org.OrgContext;
@@ -136,6 +138,42 @@ public class FinancialController {
     public ResponseEntity<Void> deleteCrypto(@PathVariable String id, HttpServletRequest req) {
         try {
             service.deleteCrypto(id, ownerUuid(req));
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        }
+    }
+
+    // ── Futures ───────────────────────────────────────────────────────────────
+
+    @GetMapping("/futures")
+    @Operation(summary = "List futures positions (Security/CEX manual entries + live-tracked Hyperliquid DEX positions)")
+    public ResponseEntity<List<FutureInvestmentDto>> listFutures(HttpServletRequest req) {
+        return ResponseEntity.ok(service.listFutures(ownerUuid(req), defaultCurrency(req)));
+    }
+
+    @PostMapping("/futures")
+    public ResponseEntity<FutureInvestment> createFuture(
+            @RequestBody Map<String, Object> body, HttpServletRequest req) {
+        return ResponseEntity.status(201).body(service.createFuture(ownerUuid(req), body));
+    }
+
+    @PutMapping("/futures/{id}")
+    public ResponseEntity<FutureInvestment> updateFuture(
+            @PathVariable String id,
+            @RequestBody Map<String, Object> body,
+            HttpServletRequest req) {
+        try {
+            return ResponseEntity.ok(service.updateFuture(id, ownerUuid(req), body));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        }
+    }
+
+    @DeleteMapping("/futures/{id}")
+    public ResponseEntity<Void> deleteFuture(@PathVariable String id, HttpServletRequest req) {
+        try {
+            service.deleteFuture(id, ownerUuid(req));
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();

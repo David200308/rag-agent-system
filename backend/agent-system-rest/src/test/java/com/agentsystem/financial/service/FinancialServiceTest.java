@@ -5,30 +5,24 @@ import com.agentsystem.financial.service.impl.FinancialServiceImpl;
 import com.agentsystem.financial.dto.CardDto;
 import com.agentsystem.financial.dto.CashDepositDto;
 import com.agentsystem.financial.dto.CryptoInvestmentDto;
+import com.agentsystem.financial.dto.FutureInvestmentDto;
 import com.agentsystem.financial.dto.SalaryUsageRecordDto;
 import com.agentsystem.financial.dto.StockInvestmentDto;
 import com.agentsystem.financial.entity.Card;
 import com.agentsystem.financial.entity.CashDeposit;
 import com.agentsystem.financial.entity.CryptoInvestment;
+import com.agentsystem.financial.entity.FutureInvestment;
 import com.agentsystem.financial.entity.SalaryUsageRecord;
 import com.agentsystem.financial.entity.StockInvestment;
 import com.agentsystem.financial.repository.CardRepository;
 import com.agentsystem.financial.repository.CashDepositRepository;
 import com.agentsystem.financial.repository.CryptoInvestmentRepository;
+import com.agentsystem.financial.repository.FutureInvestmentRepository;
 import com.agentsystem.financial.repository.SalaryUsageRecordRepository;
 import com.agentsystem.financial.repository.StockInvestmentRepository;
-
-import com.agentsystem.financial.entity.Card;
-import com.agentsystem.financial.entity.CashDeposit;
-import com.agentsystem.financial.entity.CryptoInvestment;
-import com.agentsystem.financial.entity.SalaryUsageRecord;
-import com.agentsystem.financial.entity.StockInvestment;
-import com.agentsystem.financial.repository.CardRepository;
-import com.agentsystem.financial.repository.CashDepositRepository;
-import com.agentsystem.financial.repository.CryptoInvestmentRepository;
-import com.agentsystem.financial.repository.SalaryUsageRecordRepository;
-import com.agentsystem.financial.repository.StockInvestmentRepository;
+import com.agentsystem.financial.service.CexFuturesPriceService;
 import com.agentsystem.financial.service.ExchangeRateService;
+import com.agentsystem.financial.service.HyperliquidPositionService;
 import com.agentsystem.financial.service.MarketPriceService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,10 +47,13 @@ class FinancialServiceTest {
     @Mock CashDepositRepository       depositRepo;
     @Mock StockInvestmentRepository   stockRepo;
     @Mock CryptoInvestmentRepository  cryptoRepo;
+    @Mock FutureInvestmentRepository  futureRepo;
     @Mock CardRepository              cardRepo;
     @Mock SalaryUsageRecordRepository salaryRepo;
     @Mock ExchangeRateService         fxService;
     @Mock MarketPriceService          priceService;
+    @Mock HyperliquidPositionService  hyperliquidService;
+    @Mock CexFuturesPriceService      cexPriceService;
 
     @InjectMocks FinancialServiceImpl service;
 
@@ -359,6 +356,190 @@ class FinancialServiceTest {
         verify(cryptoRepo, never()).delete(any());
     }
 
+    // ── Futures ───────────────────────────────────────────────────────────────
+
+    @Test
+    void createFuture_security_forcesIbkrExchange() {
+        when(futureRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        ArgumentCaptor<FutureInvestment> cap = ArgumentCaptor.forClass(FutureInvestment.class);
+
+        service.createFuture("user@test.com", Map.of(
+                "exchangeKind", "SECURITY", "symbol", "es",
+                "side", "LONG", "quantity", "2", "entryPrice", "4500", "currency", "USD"));
+
+        verify(futureRepo).save(cap.capture());
+        assertThat(cap.getValue().getExchange()).isEqualTo("IBKR");
+        assertThat(cap.getValue().getSymbol()).isEqualTo("ES");
+        assertThat(cap.getValue().getOwnerUuid()).isEqualTo("user@test.com");
+    }
+
+    @Test
+    void createFuture_cryptoCex_validExchange_saves() {
+        when(futureRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        ArgumentCaptor<FutureInvestment> cap = ArgumentCaptor.forClass(FutureInvestment.class);
+
+        service.createFuture("user@test.com", Map.of(
+                "exchangeKind", "CRYPTO_CEX", "exchange", "binance", "symbol", "BTCUSDT",
+                "side", "SHORT", "quantity", "1", "entryPrice", "65000", "currency", "USD"));
+
+        verify(futureRepo).save(cap.capture());
+        assertThat(cap.getValue().getExchange()).isEqualTo("BINANCE");
+        assertThat(cap.getValue().getSide()).isEqualTo("SHORT");
+    }
+
+    @Test
+    void createFuture_cryptoCex_invalidExchange_throws() {
+        assertThatThrownBy(() -> service.createFuture("user@test.com", Map.of(
+                "exchangeKind", "CRYPTO_CEX", "exchange", "COINBASE", "symbol", "BTC-USD",
+                "side", "LONG", "quantity", "1", "entryPrice", "65000")))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(futureRepo, never()).save(any());
+    }
+
+    @Test
+    void createFuture_cryptoDex_requiresConnectionAddress() {
+        assertThatThrownBy(() -> service.createFuture("user@test.com", Map.of("exchangeKind", "CRYPTO_DEX")))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(futureRepo, never()).save(any());
+    }
+
+    @Test
+    void createFuture_cryptoDex_savesAddressOnlyRow() {
+        when(futureRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        ArgumentCaptor<FutureInvestment> cap = ArgumentCaptor.forClass(FutureInvestment.class);
+
+        service.createFuture("user@test.com", Map.of(
+                "exchangeKind", "CRYPTO_DEX", "connectionAddress", "0xabc123"));
+
+        verify(futureRepo).save(cap.capture());
+        assertThat(cap.getValue().getExchange()).isEqualTo("HYPERLIQUID");
+        assertThat(cap.getValue().getConnectionAddress()).isEqualTo("0xabc123");
+        assertThat(cap.getValue().getSymbol()).isNull();
+    }
+
+    @Test
+    void createFuture_manualMissingSide_throws() {
+        assertThatThrownBy(() -> service.createFuture("user@test.com", Map.of(
+                "exchangeKind", "SECURITY", "symbol", "ES", "quantity", "1", "entryPrice", "4500")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void listFutures_manualLong_priceUp_positivePnl() {
+        FutureInvestment f = future("f-1", "user@test.com", "CRYPTO_CEX", "BINANCE", "BTCUSDT", "LONG",
+                new BigDecimal("1"), new BigDecimal("60000"));
+        when(futureRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(f));
+        when(cexPriceService.isStale()).thenReturn(false);
+        when(cexPriceService.getPrice("BINANCE", "BTCUSDT")).thenReturn(Optional.of(66000.0));
+        when(fxService.convert(anyDouble(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = service.listFutures("user@test.com", "USD");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).source()).isEqualTo("MANUAL");
+        assertThat(result.get(0).pnlPercent()).isEqualTo(10.0);
+    }
+
+    @Test
+    void listFutures_manualShort_priceUp_negativePnl() {
+        FutureInvestment f = future("f-1", "user@test.com", "CRYPTO_CEX", "BINANCE", "BTCUSDT", "SHORT",
+                new BigDecimal("1"), new BigDecimal("60000"));
+        when(futureRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(f));
+        when(cexPriceService.isStale()).thenReturn(false);
+        when(cexPriceService.getPrice("BINANCE", "BTCUSDT")).thenReturn(Optional.of(66000.0));
+        when(fxService.convert(anyDouble(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = service.listFutures("user@test.com", "USD");
+
+        assertThat(result.get(0).pnlPercent()).isEqualTo(-10.0);
+    }
+
+    @Test
+    void listFutures_manualCex_usesExchangeSpecificPrice_notSharedCryptoCache() {
+        // Regression guard: CEX futures must be priced via the per-exchange CexFuturesPriceService,
+        // never via MarketPriceService's shared Hyperliquid spot-mids cache.
+        FutureInvestment f = future("f-1", "user@test.com", "CRYPTO_CEX", "OKX", "BTC-USDT-SWAP", "LONG",
+                new BigDecimal("1"), new BigDecimal("60000"));
+        when(futureRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(f));
+        when(cexPriceService.isStale()).thenReturn(false);
+        when(cexPriceService.getPrice("OKX", "BTC-USDT-SWAP")).thenReturn(Optional.of(61000.0));
+        when(fxService.convert(anyDouble(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.listFutures("user@test.com", "USD");
+
+        verify(priceService, never()).getCryptoPrice(any());
+    }
+
+    @Test
+    void listFutures_dexConnection_expandsLivePositions() {
+        FutureInvestment conn = new FutureInvestment();
+        conn.setId("conn-1");
+        conn.setOwnerUuid("user@test.com");
+        conn.setExchangeKind("CRYPTO_DEX");
+        conn.setExchange("HYPERLIQUID");
+        conn.setConnectionAddress("0xabc");
+        conn.setCurrency("USD");
+
+        when(futureRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(conn));
+        when(hyperliquidService.fetchPositions("0xabc")).thenReturn(List.of(
+                new HyperliquidPositionService.Position("ETH", "LONG",
+                        new BigDecimal("2"), new BigDecimal("2500"), new BigDecimal("10"),
+                        new BigDecimal("200"), new BigDecimal("2600"))));
+        when(fxService.convert(anyDouble(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = service.listFutures("user@test.com", "USD");
+
+        assertThat(result).hasSize(1);
+        FutureInvestmentDto dto = result.get(0);
+        assertThat(dto.source()).isEqualTo("HYPERLIQUID");
+        assertThat(dto.sourceConnectionId()).isEqualTo("conn-1");
+        assertThat(dto.symbol()).isEqualTo("ETH");
+        assertThat(dto.id()).isEqualTo("conn-1:ETH");
+    }
+
+    @Test
+    void listFutures_dexConnection_noOpenPositions_showsPlaceholder() {
+        FutureInvestment conn = new FutureInvestment();
+        conn.setId("conn-1");
+        conn.setOwnerUuid("user@test.com");
+        conn.setExchangeKind("CRYPTO_DEX");
+        conn.setExchange("HYPERLIQUID");
+        conn.setConnectionAddress("0xabc");
+        conn.setCurrency("USD");
+
+        when(futureRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(conn));
+        when(hyperliquidService.fetchPositions("0xabc")).thenReturn(List.of());
+
+        var result = service.listFutures("user@test.com", "USD");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).id()).isEqualTo("conn-1");
+        assertThat(result.get(0).symbol()).isNull();
+        assertThat(result.get(0).sourceConnectionId()).isEqualTo("conn-1");
+    }
+
+    @Test
+    void deleteFuture_ownerCanDelete() {
+        FutureInvestment f = future("f-1", "owner@test.com", "SECURITY", "IBKR", "ES", "LONG",
+                new BigDecimal("1"), new BigDecimal("4500"));
+        when(futureRepo.findById("f-1")).thenReturn(Optional.of(f));
+
+        service.deleteFuture("f-1", "owner@test.com");
+
+        verify(futureRepo).delete(f);
+    }
+
+    @Test
+    void updateFuture_nonOwnerThrowsSecurityException() {
+        FutureInvestment f = future("f-1", "owner@test.com", "SECURITY", "IBKR", "ES", "LONG",
+                new BigDecimal("1"), new BigDecimal("4500"));
+        when(futureRepo.findById("f-1")).thenReturn(Optional.of(f));
+
+        assertThatThrownBy(() -> service.updateFuture("f-1", "attacker@test.com", Map.of()))
+                .isInstanceOf(SecurityException.class);
+        verify(futureRepo, never()).save(any());
+    }
+
     // ── Cards ─────────────────────────────────────────────────────────────────
 
     @Test
@@ -438,6 +619,7 @@ class FinancialServiceTest {
         CryptoInvestment c = crypto("c-1", "user@test.com", "ETH");
         when(stockRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(s));
         when(cryptoRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(c));
+        when(futureRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of());
 
         service.refreshPrices("user@test.com");
 
@@ -449,11 +631,29 @@ class FinancialServiceTest {
     void refreshPrices_noSymbols_noRefreshCalled() {
         when(stockRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of());
         when(cryptoRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of());
+        when(futureRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of());
 
         service.refreshPrices("user@test.com");
 
         verify(priceService, never()).refreshStockPrices(any());
         verify(priceService, never()).refreshCryptoPrices(any());
+    }
+
+    @Test
+    void refreshPrices_includesFutureSymbols() {
+        FutureInvestment secFuture = future("f-1", "user@test.com", "SECURITY", "IBKR", "ES", "LONG",
+                new BigDecimal("1"), new BigDecimal("4500"));
+        FutureInvestment cexFuture = future("f-2", "user@test.com", "CRYPTO_CEX", "BINANCE", "BTCUSDT", "LONG",
+                new BigDecimal("1"), new BigDecimal("60000"));
+        when(stockRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of());
+        when(cryptoRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of());
+        when(futureRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(secFuture, cexFuture));
+
+        service.refreshPrices("user@test.com");
+
+        verify(priceService).refreshStockPrices(List.of("ES"));
+        verify(priceService, never()).refreshCryptoPrices(any());
+        verify(cexPriceService).refreshPrices(List.of(new CexFuturesPriceService.ExchangeSymbol("BINANCE", "BTCUSDT")));
     }
 
     // ── Missing update paths ───────────────────────────────────────────────────
@@ -720,6 +920,21 @@ class FinancialServiceTest {
         c.setInvestAmount(new BigDecimal("1000"));
         c.setCurrency("USD");
         return c;
+    }
+
+    private FutureInvestment future(String id, String email, String exchangeKind, String exchange,
+                                     String symbol, String side, BigDecimal quantity, BigDecimal entryPrice) {
+        FutureInvestment f = new FutureInvestment();
+        f.setId(id);
+        f.setOwnerUuid(email);
+        f.setExchangeKind(exchangeKind);
+        f.setExchange(exchange);
+        f.setSymbol(symbol);
+        f.setSide(side);
+        f.setQuantity(quantity);
+        f.setEntryPrice(entryPrice);
+        f.setCurrency("USD");
+        return f;
     }
 
     private Card card(String id, String email, String types) {
