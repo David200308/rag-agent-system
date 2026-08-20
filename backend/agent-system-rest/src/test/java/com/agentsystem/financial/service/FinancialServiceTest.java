@@ -484,7 +484,8 @@ class FinancialServiceTest {
         when(hyperliquidService.fetchPositions("0xabc")).thenReturn(List.of(
                 new HyperliquidPositionService.Position("ETH", "LONG",
                         new BigDecimal("2"), new BigDecimal("2500"), new BigDecimal("10"),
-                        new BigDecimal("200"), new BigDecimal("2600"))));
+                        new BigDecimal("200"), new BigDecimal("2600"),
+                        new BigDecimal("500"), new BigDecimal("2000"), new BigDecimal("-5"), "")));
         when(fxService.convert(anyDouble(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
 
         var result = service.listFutures("user@test.com", "USD");
@@ -495,6 +496,38 @@ class FinancialServiceTest {
         assertThat(dto.sourceConnectionId()).isEqualTo("conn-1");
         assertThat(dto.symbol()).isEqualTo("ETH");
         assertThat(dto.id()).isEqualTo("conn-1:ETH");
+        // Notional (entryPrice x size) is 5000 — portfolio totals must use the 500 margin instead,
+        // otherwise a leveraged position would inflate the account's total value by 10x.
+        assertThat(dto.margin()).isEqualByComparingTo("500");
+        assertThat(dto.convertedInvestAmount()).isEqualByComparingTo("500");
+        assertThat(dto.liquidationPrice()).isEqualByComparingTo("2000");
+        assertThat(dto.fundingSinceOpen()).isEqualByComparingTo("-5");
+        assertThat(dto.hyperliquidDex()).isNull();
+    }
+
+    @Test
+    void listFutures_dexConnection_builderDeployedDex_hyperliquidDexIsSet() {
+        FutureInvestment conn = new FutureInvestment();
+        conn.setId("conn-1");
+        conn.setOwnerUuid("user@test.com");
+        conn.setExchangeKind("CRYPTO_DEX");
+        conn.setExchange("HYPERLIQUID");
+        conn.setConnectionAddress("0xabc");
+        conn.setCurrency("USD");
+
+        when(futureRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(conn));
+        when(hyperliquidService.fetchPositions("0xabc")).thenReturn(List.of(
+                new HyperliquidPositionService.Position("SNDK", "LONG",
+                        new BigDecimal("2.878"), new BigDecimal("1733.35"), new BigDecimal("5"),
+                        new BigDecimal("-368"), new BigDecimal("1606.6"),
+                        new BigDecimal("628.8"), new BigDecimal("1460.02"), new BigDecimal("-0.69"), "xyz")));
+        when(fxService.convert(anyDouble(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = service.listFutures("user@test.com", "USD");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).symbol()).isEqualTo("SNDK");
+        assertThat(result.get(0).hyperliquidDex()).isEqualTo("xyz");
     }
 
     @Test

@@ -13,7 +13,16 @@ public interface HyperliquidPositionService {
             BigDecimal entryPrice,
             BigDecimal leverage,
             BigDecimal unrealizedPnl,
-            BigDecimal markPrice
+            BigDecimal markPrice,
+            /** Actual USD margin backing this position — the real capital at risk, as opposed to
+             *  the leveraged notional value (entryPrice x size). Null if unavailable. */
+            BigDecimal margin,
+            BigDecimal liquidationPrice,
+            /** Cumulative funding paid/received since the position was opened (USD, negative = paid). */
+            BigDecimal fundingSinceOpen,
+            /** Perp dex this position lives on: "" for Hyperliquid's default dex, or a builder-deployed
+             *  dex name (e.g. "xyz" for equities/commodities perps) for HIP-3 markets. */
+            String     dex
     ) {}
 
     /** Fetches all open positions for a wallet address. Returns an empty list on any failure. */

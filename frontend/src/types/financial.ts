@@ -139,8 +139,15 @@ export interface FutureInvestment {
   connectionAddress: string | null;
   /** Live mark/last price; null if unavailable */
   currentPrice: number | null;
-  /** currentPrice × quantity, in `currency`; null if price unavailable */
+  /** currentPrice × quantity, in `currency`; the full leveraged notional value, null if price unavailable */
   currentValue: number | null;
+  /** Actual capital deployed (margin), in `currency` — not the leveraged notional. Null if unavailable. */
+  margin: number | null;
+  /** Price at which this position would be liquidated, in `currency`; null if unavailable/not applicable */
+  liquidationPrice: number | null;
+  /** Cumulative funding paid/received since the position was opened, in `currency`; null if unavailable/not applicable */
+  fundingSinceOpen: number | null;
+  /** Converted from `margin`, not the leveraged notional — this is what feeds portfolio totals/% of total */
   convertedInvestAmount: number;
   convertedCurrentValue: number | null;
   convertedCurrency: string;
@@ -149,6 +156,8 @@ export interface FutureInvestment {
   source: "MANUAL" | "HYPERLIQUID";
   /** Only set for HYPERLIQUID rows — id of the tracked-address row this position was expanded from */
   sourceConnectionId: string | null;
+  /** Only set for HYPERLIQUID rows on a builder-deployed perp dex (HIP-3, e.g. equities perps); null on the default dex */
+  hyperliquidDex: string | null;
   createdAt: string;
   updatedAt: string;
 }

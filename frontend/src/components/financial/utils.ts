@@ -160,9 +160,18 @@ export function formatExpiry(dateStr: string): string {
 
 // ── TradingView symbol mapping (best-effort; we don't store exchange data) ────
 
-export function toTradingViewSymbol(symbol: string, kind: "crypto" | "stock", stockType?: StockType): string {
+export function toTradingViewSymbol(
+  symbol: string,
+  kind: "crypto" | "stock",
+  stockType?: StockType,
+  hyperliquidDex?: string | null,
+): string {
   const sym = symbol.trim().toUpperCase();
   if (kind === "crypto") {
+    // Builder-deployed perp dexs (HIP-3, e.g. "xyz") mirror real-world equities/commodities
+    // (AAPL, SNDK, GOLD, ...) rather than crypto — there's no "HYPERLIQUID:<SYM>USDC" feed for
+    // these on TradingView, so resolve the bare ticker like a stock instead of forcing one.
+    if (hyperliquidDex) return sym;
     // Matches our backend's price source (Hyperliquid perps), quoted in USDC (e.g. "HYPERLIQUID:BTCUSDC").
     const base = sym.replace(/(USDT|USDC|USD)$/, "");
     return `HYPERLIQUID:${base}USDC`;

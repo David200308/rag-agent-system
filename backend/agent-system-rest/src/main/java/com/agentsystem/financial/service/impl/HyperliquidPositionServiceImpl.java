@@ -149,6 +149,9 @@ public class HyperliquidPositionServiceImpl implements HyperliquidPositionServic
                 BigDecimal leverage = toBigDecimal(pos.path("leverage").path("value").asText(null));
                 BigDecimal unrealizedPnl = toBigDecimal(pos.path("unrealizedPnl").asText(null));
                 BigDecimal positionValue = toBigDecimal(pos.path("positionValue").asText(null));
+                BigDecimal margin = toBigDecimal(pos.path("marginUsed").asText(null));
+                BigDecimal liquidationPrice = toBigDecimal(pos.path("liquidationPx").asText(null));
+                BigDecimal fundingSinceOpen = toBigDecimal(pos.path("cumFunding").path("sinceOpen").asText(null));
 
                 BigDecimal size = szi.abs();
                 String side = szi.signum() > 0 ? "LONG" : "SHORT";
@@ -156,7 +159,8 @@ public class HyperliquidPositionServiceImpl implements HyperliquidPositionServic
                         ? positionValue.divide(size, 8, RoundingMode.HALF_UP)
                         : null;
 
-                positions.add(new Position(symbol, side, size, entryPx, leverage, unrealizedPnl, markPrice));
+                positions.add(new Position(symbol, side, size, entryPx, leverage, unrealizedPnl, markPrice,
+                        margin, liquidationPrice, fundingSinceOpen, dex));
             }
         } catch (Exception e) {
             log.error("[HyperliquidPositionService] Failed to fetch positions for {} on dex '{}': {}", address, dex, e.getMessage());

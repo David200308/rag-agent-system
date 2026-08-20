@@ -645,6 +645,10 @@ export function FinancialManager() {
                       <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">Entry Price</th>
                       <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">Price</th>
                       <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">Value</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">Leverage</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">Margin</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">Liq. Price</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">Funding</th>
                       <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">≈ {defaultCurrency}</th>
                       <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">P&amp;L%</th>
                       <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">% of Total</th>
@@ -673,7 +677,7 @@ export function FinancialManager() {
                                     matches toTradingViewSymbol's mapping. CEX rows use each exchange's own native
                                     instrument id (e.g. "BTC-USDT-SWAP"), which that mapping wasn't built for. */}
                                 {f.exchangeKind === "CRYPTO_DEX"
-                                  ? <SymbolHoverChart tvSymbol={toTradingViewSymbol(f.symbol, "crypto")}>{f.symbol}</SymbolHoverChart>
+                                  ? <SymbolHoverChart tvSymbol={toTradingViewSymbol(f.symbol, "crypto", undefined, f.hyperliquidDex)}>{f.symbol}</SymbolHoverChart>
                                   : f.symbol}
                               </span>
                             : <span className="text-xs text-[--color-muted]" title={f.connectionAddress ?? undefined}>
@@ -689,6 +693,12 @@ export function FinancialManager() {
                         <td className="px-4 py-3 text-right tabular-nums">{f.entryPrice != null ? maskAmount(formatPrice(f.entryPrice)) : <span className="text-[--color-muted]">—</span>}</td>
                         <td className="px-4 py-3 text-right tabular-nums">{f.currentPrice != null ? maskAmount(formatPrice(f.currentPrice)) : <span className="text-[--color-muted]">—</span>}</td>
                         <td className="px-4 py-3 text-right tabular-nums">{f.currentValue != null ? maskAmount(formatAmount(f.currentValue, f.currency)) : <span className="text-[--color-muted]">—</span>}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{f.leverage != null ? `${f.leverage}x` : <span className="text-[--color-muted]">—</span>}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{f.margin != null ? maskAmount(formatAmount(f.margin, f.currency)) : <span className="text-[--color-muted]">—</span>}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{f.liquidationPrice != null ? maskAmount(formatPrice(f.liquidationPrice)) : <span className="text-[--color-muted]">—</span>}</td>
+                        <td className={`px-4 py-3 text-right tabular-nums ${f.fundingSinceOpen != null && f.fundingSinceOpen < 0 ? "text-red-500" : f.fundingSinceOpen != null && f.fundingSinceOpen > 0 ? "text-green-600" : ""}`}>
+                          {f.fundingSinceOpen != null ? maskAmount(formatAmount(f.fundingSinceOpen, f.currency)) : <span className="text-[--color-muted]">—</span>}
+                        </td>
                         <td className="px-4 py-3 text-right tabular-nums text-[--color-muted]">
                           {f.convertedCurrentValue != null
                             ? maskAmount(formatAmount(f.convertedCurrentValue, defaultCurrency))

@@ -29,7 +29,7 @@ export type DepositFields = Omit<CashDeposit, "id"|"ownerEmail"|"convertedAmount
 export type StockFields   = Omit<StockInvestment, "id"|"ownerEmail"|"currentPrice"|"priceCurrency"|"logoUrl"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"createdAt"|"updatedAt">;
 export type CryptoFields  = Omit<CryptoInvestment, "id"|"ownerEmail"|"currentPrice"|"logoUrl"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"createdAt"|"updatedAt">;
 export type CardFields    = Omit<Card, "id"|"ownerEmail"|"createdAt"|"updatedAt">;
-export type FutureFields  = Omit<FutureInvestment, "id"|"ownerEmail"|"currentPrice"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"source"|"sourceConnectionId"|"createdAt"|"updatedAt">;
+export type FutureFields  = Omit<FutureInvestment, "id"|"ownerEmail"|"currentPrice"|"currentValue"|"margin"|"liquidationPrice"|"fundingSinceOpen"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"source"|"sourceConnectionId"|"hyperliquidDex"|"createdAt"|"updatedAt">;
 export type SalaryFields  = Omit<SalaryUsageRecord, "id"|"ownerEmail"|"totalExpense"|"createdAt"|"updatedAt">;
 
 export const emptyDeposit = (): DepositFields => ({ platform:"", platformType:"", countryRegion:"", depositType:"FIXED", currency:"USD", amount:0 });

@@ -434,8 +434,16 @@ public class FinancialServiceImpl implements FinancialService {
         BigDecimal convertedCurrentValue = null;
         Double     pnlPercent            = null;
 
-        double convertedInvest = fxService.convert(
-                f.getEntryPrice().doubleValue() * f.getQuantity().doubleValue(), f.getCurrency(), toCurrency);
+        // Margin (actual capital deployed) is what should count toward portfolio totals — not the
+        // full leveraged notional. Without live per-position margin data for manual entries, the best
+        // available approximation is notional / leverage (falls back to the full notional when
+        // leverage is unset, i.e. 1x).
+        BigDecimal notional = f.getEntryPrice().multiply(f.getQuantity());
+        BigDecimal margin = (f.getLeverage() != null && f.getLeverage().signum() > 0)
+                ? notional.divide(f.getLeverage(), 8, RoundingMode.HALF_UP)
+                : notional;
+
+        double convertedInvest = fxService.convert(margin.doubleValue(), f.getCurrency(), toCurrency);
 
         if (currentPrice != null) {
             currentValue = bd(currentPrice * f.getQuantity().doubleValue());
@@ -454,9 +462,9 @@ public class FinancialServiceImpl implements FinancialService {
                 f.getId(), f.getOwnerUuid(), f.getExchangeKind(), f.getExchange(),
                 f.getSymbol(), f.getSide(), f.getQuantity(), f.getEntryPrice(), f.getLeverage(),
                 f.getCurrency(), f.getConnectionAddress(),
-                currentPrice, currentValue,
+                currentPrice, currentValue, bd(margin), null, null,
                 bd(convertedInvest), convertedCurrentValue, toCurrency,
-                pnlPercent, "MANUAL", null,
+                pnlPercent, "MANUAL", null, null,
                 f.getCreatedAt(), f.getUpdatedAt()
         );
     }
@@ -466,8 +474,16 @@ public class FinancialServiceImpl implements FinancialService {
         Double currentPrice = pos.markPrice() != null ? pos.markPrice().doubleValue() : null;
         BigDecimal currentValue = currentPrice != null ? bd(currentPrice * pos.size().doubleValue()) : null;
 
-        double convertedInvest = fxService.convert(
-                pos.entryPrice() != null ? pos.entryPrice().doubleValue() * pos.size().doubleValue() : 0, "USD", toCurrency);
+        // Portfolio totals must be based on actual margin (capital at risk), not the full leveraged
+        // notional — otherwise a leveraged position inflates the account's total value by its leverage
+        // factor. Fall back to notional/leverage, then full notional, if margin wasn't parseable.
+        BigDecimal notional = pos.entryPrice() != null ? pos.entryPrice().multiply(pos.size()) : BigDecimal.ZERO;
+        BigDecimal margin = pos.margin() != null ? pos.margin()
+                : (pos.leverage() != null && pos.leverage().signum() > 0)
+                        ? notional.divide(pos.leverage(), 8, RoundingMode.HALF_UP)
+                        : notional;
+
+        double convertedInvest = fxService.convert(margin.doubleValue(), "USD", toCurrency);
 
         BigDecimal convertedCurrentValue = null;
         Double     pnlPercent            = null;
@@ -483,9 +499,10 @@ public class FinancialServiceImpl implements FinancialService {
                 conn.getId() + ":" + pos.coin(), conn.getOwnerUuid(), "CRYPTO_DEX", "HYPERLIQUID",
                 pos.coin(), pos.side(), pos.size(), pos.entryPrice(), pos.leverage(),
                 "USD", conn.getConnectionAddress(),
-                currentPrice, currentValue,
+                currentPrice, currentValue, bd(margin), pos.liquidationPrice(), pos.fundingSinceOpen(),
                 bd(convertedInvest), convertedCurrentValue, toCurrency,
                 pnlPercent, "HYPERLIQUID", conn.getId(),
+                (pos.dex() == null || pos.dex().isEmpty()) ? null : pos.dex(),
                 conn.getCreatedAt(), conn.getUpdatedAt()
         );
     }
@@ -496,9 +513,9 @@ public class FinancialServiceImpl implements FinancialService {
                 conn.getId(), conn.getOwnerUuid(), "CRYPTO_DEX", "HYPERLIQUID",
                 null, null, null, null, null,
                 "USD", conn.getConnectionAddress(),
-                null, null,
+                null, null, null, null, null,
                 BigDecimal.ZERO, null, toCurrency,
-                null, "HYPERLIQUID", conn.getId(),
+                null, "HYPERLIQUID", conn.getId(), null,
                 conn.getCreatedAt(), conn.getUpdatedAt()
         );
     }
