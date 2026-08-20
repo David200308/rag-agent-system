@@ -137,8 +137,11 @@ export function PnlBadge({ percent, amount, currency, hide }: {
 
 // ── Summary card ──────────────────────────────────────────────────────────────
 
-export function SummaryCard({ label, value, currency, pnlPercent, pnlAmount, share, usdValue, hide }: {
-  label: string; value: number; currency: string; pnlPercent?: number | null; pnlAmount?: number | null; share?: number; usdValue?: number | null; hide?: boolean;
+export function SummaryCard({ label, value, currency, pnlPercent, pnlAmount, share, usdValue, usdLabel, hide }: {
+  label: string; value: number; currency: string; pnlPercent?: number | null; pnlAmount?: number | null; share?: number;
+  /** Secondary USD line under the main value. Unlabeled it reads as "same total, in USD" (Deposits/Stocks/Crypto);
+   *  pass `usdLabel` when it represents a different quantity instead (e.g. Futures' actual margin, not notional). */
+  usdValue?: number | null; usdLabel?: string; hide?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4 min-w-0">
@@ -150,7 +153,9 @@ export function SummaryCard({ label, value, currency, pnlPercent, pnlAmount, sha
       </div>
       <p className="mt-1 text-lg font-semibold tabular-nums">{hide ? "***" : formatAmount(value, currency)}</p>
       {usdValue != null && (
-        <p className="mt-0.5 text-xs text-[--color-muted] tabular-nums">{hide ? "***" : formatAmount(usdValue, "USD")}</p>
+        <p className="mt-0.5 text-xs text-[--color-muted] tabular-nums">
+          {usdLabel && <span>{usdLabel}: </span>}{hide ? "***" : formatAmount(usdValue, "USD")}
+        </p>
       )}
       {pnlPercent != null && (
         <p className="mt-0.5"><PnlBadge percent={pnlPercent} amount={pnlAmount} currency={currency} hide={hide} /></p>

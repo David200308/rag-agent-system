@@ -182,11 +182,18 @@ export function FinancialManager() {
     return amount / rate;
   };
 
+  // Unlike toUSD, always resolves to a value (never null just because defaultCurrency is
+  // already USD) — used for the Futures card's margin line, which is a distinct quantity
+  // from the main total, not a "same number, other currency" reference.
+  const futuresMarginUsd = defaultCurrency === "USD"
+    ? futuresInvested
+    : (fxRates[defaultCurrency] ? futuresInvested / fxRates[defaultCurrency] : null);
+
   const summaryItems = [
-    { label: "Cash Deposits",      value: totalDeposits, pnlPercent: null,         pnlAmount: null as number | null,                             share: grandTotal > 0 ? totalDeposits / grandTotal * 100 : 0, usdValue: null as number | null },
-    { label: "Stock Investments",  value: totalStocks,   pnlPercent: stocksPnlPct, pnlAmount: stocksPnlPct != null ? totalStocks - stocksInvested : null, share: grandTotal > 0 ? totalStocks  / grandTotal * 100 : 0, usdValue: toUSD(totalStocks) },
-    { label: "Crypto Investments", value: totalCrypto,   pnlPercent: cryptoPnlPct, pnlAmount: cryptoPnlPct != null ? totalCrypto - cryptoInvested : null, share: grandTotal > 0 ? totalCrypto  / grandTotal * 100 : 0, usdValue: toUSD(totalCrypto) },
-    { label: "Futures",            value: totalFutures,  pnlPercent: futuresPnlPct, pnlAmount: futuresPnlPct != null ? totalFutures - futuresInvested : null, share: grandTotal > 0 ? totalFutures / grandTotal * 100 : 0, usdValue: toUSD(totalFutures) },
+    { label: "Cash Deposits",      value: totalDeposits, pnlPercent: null,         pnlAmount: null as number | null,                             share: grandTotal > 0 ? totalDeposits / grandTotal * 100 : 0, usdValue: null as number | null, usdLabel: undefined as string | undefined },
+    { label: "Stock Investments",  value: totalStocks,   pnlPercent: stocksPnlPct, pnlAmount: stocksPnlPct != null ? totalStocks - stocksInvested : null, share: grandTotal > 0 ? totalStocks  / grandTotal * 100 : 0, usdValue: toUSD(totalStocks), usdLabel: undefined as string | undefined },
+    { label: "Crypto Investments", value: totalCrypto,   pnlPercent: cryptoPnlPct, pnlAmount: cryptoPnlPct != null ? totalCrypto - cryptoInvested : null, share: grandTotal > 0 ? totalCrypto  / grandTotal * 100 : 0, usdValue: toUSD(totalCrypto), usdLabel: undefined as string | undefined },
+    { label: "Futures",            value: totalFutures,  pnlPercent: futuresPnlPct, pnlAmount: futuresPnlPct != null ? totalFutures - futuresInvested : null, share: grandTotal > 0 ? totalFutures / grandTotal * 100 : 0, usdValue: futuresMarginUsd, usdLabel: "Margin" as string | undefined },
   ] as const;
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
@@ -397,7 +404,7 @@ export function FinancialManager() {
         <div className="mt-4 hidden sm:grid sm:grid-cols-4 sm:gap-3">
           {summaryItems.map((item) => (
             <SummaryCard key={item.label} label={item.label} value={item.value}
-              currency={defaultCurrency} pnlPercent={item.pnlPercent} pnlAmount={item.pnlAmount} share={item.share} usdValue={item.usdValue} hide={hideAmounts} />
+              currency={defaultCurrency} pnlPercent={item.pnlPercent} pnlAmount={item.pnlAmount} share={item.share} usdValue={item.usdValue} usdLabel={item.usdLabel} hide={hideAmounts} />
           ))}
         </div>
         {/* Mobile: swipeable snap carousel */}
@@ -408,7 +415,7 @@ export function FinancialManager() {
               style={{ scrollSnapAlign: "start", width: "78vw",
                 marginRight: i === summaryItems.length - 1 ? "8vw" : undefined }}>
               <SummaryCard label={item.label} value={item.value}
-                currency={defaultCurrency} pnlPercent={item.pnlPercent} pnlAmount={item.pnlAmount} share={item.share} usdValue={item.usdValue} hide={hideAmounts} />
+                currency={defaultCurrency} pnlPercent={item.pnlPercent} pnlAmount={item.pnlAmount} share={item.share} usdValue={item.usdValue} usdLabel={item.usdLabel} hide={hideAmounts} />
             </div>
           ))}
         </div>
@@ -656,7 +663,6 @@ export function FinancialManager() {
                       <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">Margin</th>
                       <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">Liq. Price</th>
                       <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">Funding</th>
-                      <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">≈ {defaultCurrency}</th>
                       <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">P&amp;L%</th>
                       <th className="px-4 py-2.5 text-right text-xs font-medium text-[--color-muted]">% of Total</th>
                       <th className="px-4 py-2.5" />
@@ -705,11 +711,6 @@ export function FinancialManager() {
                         <td className="px-4 py-3 text-right tabular-nums">{f.liquidationPrice != null ? maskAmount(formatPrice(f.liquidationPrice)) : <span className="text-[--color-muted]">—</span>}</td>
                         <td className={`px-4 py-3 text-right tabular-nums ${f.fundingSinceOpen != null && f.fundingSinceOpen < 0 ? "text-red-500" : f.fundingSinceOpen != null && f.fundingSinceOpen > 0 ? "text-green-600" : ""}`}>
                           {f.fundingSinceOpen != null ? maskAmount(formatAmount(f.fundingSinceOpen, f.currency)) : <span className="text-[--color-muted]">—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-[--color-muted]">
-                          {f.convertedCurrentValue != null
-                            ? maskAmount(formatAmount(f.convertedCurrentValue, defaultCurrency))
-                            : maskAmount(formatAmount(f.convertedInvestAmount, defaultCurrency))}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {f.pnlPercent != null
