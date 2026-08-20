@@ -31,9 +31,10 @@ public record FutureInvestmentDto(
         BigDecimal convertedCurrentValue,
         String     convertedCurrency,
         Double     pnlPercent,
-        /** "MANUAL" for user-entered Security/CEX rows, "HYPERLIQUID" for live-fetched DEX positions. */
+        /** "MANUAL" for user-entered Security/CEX rows, or the DEX name (HYPERLIQUID/JUPITER_PERPS/LIGHTER)
+         *  for live-fetched CRYPTO_DEX positions. */
         String     source,
-        /** Only set for HYPERLIQUID rows — the id of the tracked-address row this position was expanded from. */
+        /** Only set for auto-tracked DEX rows — the id of the tracked-address row this position was expanded from. */
         String     sourceConnectionId,
         /** Only set for HYPERLIQUID rows on a builder-deployed perp dex (HIP-3, e.g. equities perps); null on the default dex. */
         String     hyperliquidDex,

@@ -4,6 +4,8 @@ import com.agentsystem.financial.service.FinancialService;
 import com.agentsystem.financial.service.CexFuturesPriceService;
 import com.agentsystem.financial.service.ExchangeRateService;
 import com.agentsystem.financial.service.HyperliquidPositionService;
+import com.agentsystem.financial.service.JupiterPerpsPositionService;
+import com.agentsystem.financial.service.LighterPositionService;
 import com.agentsystem.financial.service.MarketPriceService;
 
 import com.agentsystem.financial.dto.CardDto;
@@ -54,9 +56,12 @@ public class FinancialServiceImpl implements FinancialService {
     private final ExchangeRateService         fxService;
     private final MarketPriceService          priceService;
     private final HyperliquidPositionService  hyperliquidService;
+    private final JupiterPerpsPositionService jupiterService;
+    private final LighterPositionService      lighterService;
     private final CexFuturesPriceService      cexPriceService;
 
     private static final Set<String> CEX_EXCHANGES = Set.of("BINANCE", "OKX", "KRAKEN");
+    private static final Set<String> DEX_EXCHANGES = Set.of("HYPERLIQUID", "JUPITER_PERPS", "LIGHTER");
 
     // ── Cash Deposits ─────────────────────────────────────────────────────────
 
@@ -322,13 +327,38 @@ public class FinancialServiceImpl implements FinancialService {
                 .collect(Collectors.toList());
 
         for (FutureInvestment conn : dexConnections) {
-            List<HyperliquidPositionService.Position> positions = hyperliquidService.fetchPositions(conn.getConnectionAddress());
-            if (positions.isEmpty()) {
-                // No open positions right now — still surface the tracked address itself so it stays manageable/deletable.
-                result.add(toHyperliquidPlaceholderDto(conn, defaultCurrency));
-            } else {
-                for (HyperliquidPositionService.Position pos : positions) {
-                    result.add(toHyperliquidFutureDto(conn, pos, defaultCurrency));
+            switch (conn.getExchange()) {
+                case "JUPITER_PERPS" -> {
+                    List<JupiterPerpsPositionService.Position> positions = jupiterService.fetchPositions(conn.getConnectionAddress());
+                    if (positions.isEmpty()) {
+                        result.add(toDexPlaceholderDto(conn, defaultCurrency));
+                    } else {
+                        for (JupiterPerpsPositionService.Position pos : positions) {
+                            result.add(toJupiterFutureDto(conn, pos, defaultCurrency));
+                        }
+                    }
+                }
+                case "LIGHTER" -> {
+                    List<LighterPositionService.Position> positions = lighterService.fetchPositions(conn.getConnectionAddress());
+                    if (positions.isEmpty()) {
+                        result.add(toDexPlaceholderDto(conn, defaultCurrency));
+                    } else {
+                        for (LighterPositionService.Position pos : positions) {
+                            result.add(toLighterFutureDto(conn, pos, defaultCurrency));
+                        }
+                    }
+                }
+                default -> {
+                    // HYPERLIQUID (also the default for any pre-existing row without a stored exchange)
+                    List<HyperliquidPositionService.Position> positions = hyperliquidService.fetchPositions(conn.getConnectionAddress());
+                    if (positions.isEmpty()) {
+                        // No open positions right now — still surface the tracked address itself so it stays manageable/deletable.
+                        result.add(toDexPlaceholderDto(conn, defaultCurrency));
+                    } else {
+                        for (HyperliquidPositionService.Position pos : positions) {
+                            result.add(toHyperliquidFutureDto(conn, pos, defaultCurrency));
+                        }
+                    }
                 }
             }
         }
@@ -372,7 +402,11 @@ public class FinancialServiceImpl implements FinancialService {
 
         switch (kind) {
             case "CRYPTO_DEX" -> {
-                f.setExchange("HYPERLIQUID");
+                String exchange = body.containsKey("exchange") ? (String) body.get("exchange") : f.getExchange();
+                if (exchange == null || !DEX_EXCHANGES.contains(exchange.toUpperCase())) {
+                    throw new IllegalArgumentException("exchange must be one of " + DEX_EXCHANGES + " for CRYPTO_DEX");
+                }
+                f.setExchange(exchange.toUpperCase());
                 String address = body.containsKey("connectionAddress") ? (String) body.get("connectionAddress") : f.getConnectionAddress();
                 if (address == null || address.isBlank()) {
                     throw new IllegalArgumentException("connectionAddress is required for CRYPTO_DEX");
@@ -520,15 +554,82 @@ public class FinancialServiceImpl implements FinancialService {
         );
     }
 
-    /** A tracked DEX address with no open positions right now — still shown so it can be removed. */
-    private FutureInvestmentDto toHyperliquidPlaceholderDto(FutureInvestment conn, String toCurrency) {
+    private FutureInvestmentDto toJupiterFutureDto(
+            FutureInvestment conn, JupiterPerpsPositionService.Position pos, String toCurrency) {
+        Double currentPrice = pos.markPrice() != null ? pos.markPrice().doubleValue() : null;
+        BigDecimal currentValue = currentPrice != null ? bd(currentPrice * pos.size().doubleValue()) : null;
+
+        // Verified live: Jupiter's collateral does NOT absorb PnL (unlike Hyperliquid's isolated
+        // margin) — collateral + pnlAfterFeesUsd == value exactly, so it's used directly as the
+        // fixed "invested" basis, no PnL back-out needed here.
+        BigDecimal margin = pos.margin() != null ? pos.margin() : BigDecimal.ZERO;
+        double convertedInvest = fxService.convert(margin.doubleValue(), "USD", toCurrency);
+
+        BigDecimal convertedCurrentValue = null;
+        Double     pnlPercent            = null;
+        if (pos.unrealizedPnl() != null) {
+            double convertedPnl = fxService.convert(pos.unrealizedPnl().doubleValue(), "USD", toCurrency);
+            convertedCurrentValue = bd(convertedInvest + convertedPnl);
+
+            // Already a percentage (not a fraction like Hyperliquid's returnOnEquity) — use as-is.
+            if (pos.returnOnEquityPercent() != null) {
+                pnlPercent = pos.returnOnEquityPercent().setScale(2, RoundingMode.HALF_UP).doubleValue();
+            } else if (convertedInvest > 0) {
+                pnlPercent = Math.round(convertedPnl / convertedInvest * 10000.0) / 100.0;
+            }
+        }
+
         return new FutureInvestmentDto(
-                conn.getId(), conn.getOwnerUuid(), "CRYPTO_DEX", "HYPERLIQUID",
+                conn.getId() + ":" + pos.coin(), conn.getOwnerUuid(), "CRYPTO_DEX", "JUPITER_PERPS",
+                pos.coin(), pos.side(), pos.size(), pos.entryPrice(), pos.leverage(),
+                "USD", conn.getConnectionAddress(),
+                currentPrice, currentValue, bd(margin), pos.liquidationPrice(), pos.fundingSinceOpen(),
+                bd(convertedInvest), convertedCurrentValue, toCurrency,
+                pnlPercent, "JUPITER_PERPS", conn.getId(), null,
+                conn.getCreatedAt(), conn.getUpdatedAt()
+        );
+    }
+
+    private FutureInvestmentDto toLighterFutureDto(
+            FutureInvestment conn, LighterPositionService.Position pos, String toCurrency) {
+        Double currentPrice = pos.markPrice() != null ? pos.markPrice().doubleValue() : null;
+        BigDecimal currentValue = currentPrice != null ? bd(currentPrice * pos.size().doubleValue()) : null;
+
+        // margin here is already the fixed entry-time basis (see LighterPositionService.Position doc),
+        // so — like Jupiter, unlike Hyperliquid — no PnL back-out is needed.
+        BigDecimal margin = pos.margin() != null ? pos.margin() : BigDecimal.ZERO;
+        double convertedInvest = fxService.convert(margin.doubleValue(), "USD", toCurrency);
+
+        BigDecimal convertedCurrentValue = null;
+        Double     pnlPercent            = null;
+        if (pos.unrealizedPnl() != null) {
+            double convertedPnl = fxService.convert(pos.unrealizedPnl().doubleValue(), "USD", toCurrency);
+            convertedCurrentValue = bd(convertedInvest + convertedPnl);
+            if (convertedInvest > 0) {
+                pnlPercent = Math.round(convertedPnl / convertedInvest * 10000.0) / 100.0;
+            }
+        }
+
+        return new FutureInvestmentDto(
+                conn.getId() + ":" + pos.coin(), conn.getOwnerUuid(), "CRYPTO_DEX", "LIGHTER",
+                pos.coin(), pos.side(), pos.size(), pos.entryPrice(), pos.leverage(),
+                "USD", conn.getConnectionAddress(),
+                currentPrice, currentValue, bd(margin), pos.liquidationPrice(), pos.fundingSinceOpen(),
+                bd(convertedInvest), convertedCurrentValue, toCurrency,
+                pnlPercent, "LIGHTER", conn.getId(), null,
+                conn.getCreatedAt(), conn.getUpdatedAt()
+        );
+    }
+
+    /** A tracked DEX address with no open positions right now — still shown so it can be removed. */
+    private FutureInvestmentDto toDexPlaceholderDto(FutureInvestment conn, String toCurrency) {
+        return new FutureInvestmentDto(
+                conn.getId(), conn.getOwnerUuid(), "CRYPTO_DEX", conn.getExchange(),
                 null, null, null, null, null,
                 "USD", conn.getConnectionAddress(),
                 null, null, null, null, null,
                 BigDecimal.ZERO, null, toCurrency,
-                null, "HYPERLIQUID", conn.getId(), null,
+                null, conn.getExchange(), conn.getId(), null,
                 conn.getCreatedAt(), conn.getUpdatedAt()
         );
     }

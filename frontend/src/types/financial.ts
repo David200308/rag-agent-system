@@ -50,7 +50,14 @@ export const FUTURE_EXCHANGE_KIND_LABELS: Record<FutureExchangeKind, string> = {
 export const FUTURE_EXCHANGES_BY_KIND: Record<FutureExchangeKind, string[]> = {
   SECURITY:   ["IBKR"],
   CRYPTO_CEX: ["BINANCE", "OKX", "KRAKEN"],
-  CRYPTO_DEX: ["HYPERLIQUID"],
+  CRYPTO_DEX: ["HYPERLIQUID", "JUPITER_PERPS", "LIGHTER"],
+};
+
+/** Wallet address placeholder per DEX — Jupiter Perps is Solana (base58), the others are EVM (0x…). */
+export const DEX_ADDRESS_PLACEHOLDERS: Record<string, string> = {
+  HYPERLIQUID:    "0x…",
+  JUPITER_PERPS:  "Solana address, e.g. 7xKX…",
+  LIGHTER:        "0x… (L1 deposit address)",
 };
 
 export const FUTURE_SIDES = ["LONG", "SHORT"] as const;
@@ -152,9 +159,9 @@ export interface FutureInvestment {
   convertedCurrentValue: number | null;
   convertedCurrency: string;
   pnlPercent: number | null;
-  /** "MANUAL" for user-entered Security/CEX rows, "HYPERLIQUID" for live-fetched DEX positions */
-  source: "MANUAL" | "HYPERLIQUID";
-  /** Only set for HYPERLIQUID rows — id of the tracked-address row this position was expanded from */
+  /** "MANUAL" for user-entered Security/CEX rows, the DEX name for live-fetched CRYPTO_DEX positions */
+  source: "MANUAL" | "HYPERLIQUID" | "JUPITER_PERPS" | "LIGHTER";
+  /** Only set for auto-tracked DEX rows — id of the tracked-address row this position was expanded from */
   sourceConnectionId: string | null;
   /** Only set for HYPERLIQUID rows on a builder-deployed perp dex (HIP-3, e.g. equities perps); null on the default dex */
   hyperliquidDex: string | null;

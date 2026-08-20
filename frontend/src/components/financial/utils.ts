@@ -165,6 +165,10 @@ export function toTradingViewSymbol(
   kind: "crypto" | "stock",
   stockType?: StockType,
   hyperliquidDex?: string | null,
+  /** Which DEX this row came from. Only "HYPERLIQUID" (the default, for backward compat) gets the
+   *  "HYPERLIQUID:<SYM>USDC" mapping — Jupiter Perps/Lighter don't have a known dedicated TradingView
+   *  feed, so their symbols fall through to the bare-ticker resolution below instead of guessing one. */
+  exchange: string = "HYPERLIQUID",
 ): string {
   const sym = symbol.trim().toUpperCase();
   if (kind === "crypto") {
@@ -172,6 +176,7 @@ export function toTradingViewSymbol(
     // (AAPL, SNDK, GOLD, ...) rather than crypto — there's no "HYPERLIQUID:<SYM>USDC" feed for
     // these on TradingView, so resolve the bare ticker like a stock instead of forcing one.
     if (hyperliquidDex) return sym;
+    if (exchange !== "HYPERLIQUID") return sym;
     // Matches our backend's price source (Hyperliquid perps), quoted in USDC (e.g. "HYPERLIQUID:BTCUSDC").
     const base = sym.replace(/(USDT|USDC|USD)$/, "");
     return `HYPERLIQUID:${base}USDC`;

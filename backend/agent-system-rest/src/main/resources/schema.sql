@@ -380,7 +380,7 @@ CREATE TABLE IF NOT EXISTS financial_futures (
     id                  VARCHAR(36)    PRIMARY KEY,
     owner_uuid          VARCHAR(36)    NOT NULL,
     exchange_kind       VARCHAR(20)    NOT NULL,   -- SECURITY | CRYPTO_CEX | CRYPTO_DEX
-    exchange            VARCHAR(20)    NOT NULL,   -- IBKR | BINANCE | OKX | KRAKEN | HYPERLIQUID
+    exchange            VARCHAR(20)    NOT NULL,   -- IBKR | BINANCE | OKX | KRAKEN | HYPERLIQUID | JUPITER_PERPS | LIGHTER
     symbol              VARCHAR(30),               -- null for CRYPTO_DEX (address-only row)
     side                VARCHAR(5),                -- LONG | SHORT; null for CRYPTO_DEX
     quantity            DECIMAL(28,8),              -- contracts/size; null for CRYPTO_DEX

@@ -26,7 +26,7 @@ public class FutureInvestment {
     @Column(name = "exchange_kind", nullable = false, length = 20)
     private String exchangeKind;
 
-    /** IBKR | BINANCE | OKX | KRAKEN | HYPERLIQUID */
+    /** IBKR | BINANCE | OKX | KRAKEN | HYPERLIQUID | JUPITER_PERPS | LIGHTER */
     @Column(nullable = false, length = 20)
     private String exchange;
 

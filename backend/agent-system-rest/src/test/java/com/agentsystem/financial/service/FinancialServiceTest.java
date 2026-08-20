@@ -23,6 +23,8 @@ import com.agentsystem.financial.repository.StockInvestmentRepository;
 import com.agentsystem.financial.service.CexFuturesPriceService;
 import com.agentsystem.financial.service.ExchangeRateService;
 import com.agentsystem.financial.service.HyperliquidPositionService;
+import com.agentsystem.financial.service.JupiterPerpsPositionService;
+import com.agentsystem.financial.service.LighterPositionService;
 import com.agentsystem.financial.service.MarketPriceService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,6 +55,8 @@ class FinancialServiceTest {
     @Mock ExchangeRateService         fxService;
     @Mock MarketPriceService          priceService;
     @Mock HyperliquidPositionService  hyperliquidService;
+    @Mock JupiterPerpsPositionService jupiterService;
+    @Mock LighterPositionService      lighterService;
     @Mock CexFuturesPriceService      cexPriceService;
 
     @InjectMocks FinancialServiceImpl service;
@@ -409,12 +413,33 @@ class FinancialServiceTest {
         ArgumentCaptor<FutureInvestment> cap = ArgumentCaptor.forClass(FutureInvestment.class);
 
         service.createFuture("user@test.com", Map.of(
-                "exchangeKind", "CRYPTO_DEX", "connectionAddress", "0xabc123"));
+                "exchangeKind", "CRYPTO_DEX", "exchange", "HYPERLIQUID", "connectionAddress", "0xabc123"));
 
         verify(futureRepo).save(cap.capture());
         assertThat(cap.getValue().getExchange()).isEqualTo("HYPERLIQUID");
         assertThat(cap.getValue().getConnectionAddress()).isEqualTo("0xabc123");
         assertThat(cap.getValue().getSymbol()).isNull();
+    }
+
+    @Test
+    void createFuture_cryptoDex_jupiterPerps_savesAddressOnlyRow() {
+        when(futureRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        ArgumentCaptor<FutureInvestment> cap = ArgumentCaptor.forClass(FutureInvestment.class);
+
+        service.createFuture("user@test.com", Map.of(
+                "exchangeKind", "CRYPTO_DEX", "exchange", "jupiter_perps", "connectionAddress", "7xKXsol..."));
+
+        verify(futureRepo).save(cap.capture());
+        assertThat(cap.getValue().getExchange()).isEqualTo("JUPITER_PERPS");
+        assertThat(cap.getValue().getConnectionAddress()).isEqualTo("7xKXsol...");
+    }
+
+    @Test
+    void createFuture_cryptoDex_unknownExchange_throws() {
+        assertThatThrownBy(() -> service.createFuture("user@test.com", Map.of(
+                "exchangeKind", "CRYPTO_DEX", "exchange", "ASTER", "connectionAddress", "0xabc")))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(futureRepo, never()).save(any());
     }
 
     @Test
@@ -538,6 +563,71 @@ class FinancialServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).symbol()).isEqualTo("SNDK");
         assertThat(result.get(0).hyperliquidDex()).isEqualTo("xyz");
+    }
+
+    @Test
+    void listFutures_jupiterPerpsConnection_expandsLivePositions() {
+        FutureInvestment conn = new FutureInvestment();
+        conn.setId("conn-2");
+        conn.setOwnerUuid("user@test.com");
+        conn.setExchangeKind("CRYPTO_DEX");
+        conn.setExchange("JUPITER_PERPS");
+        conn.setConnectionAddress("7xKXsol...");
+        conn.setCurrency("USD");
+
+        when(futureRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(conn));
+        when(jupiterService.fetchPositions("7xKXsol...")).thenReturn(List.of(
+                new JupiterPerpsPositionService.Position("BTC", "SHORT",
+                        new BigDecimal("1.8873"), new BigDecimal("69485.40"), new BigDecimal("5.92"),
+                        new BigDecimal("857.72"), new BigDecimal("68945.11"),
+                        new BigDecimal("22150.68"), new BigDecimal("81032.12"), new BigDecimal("-4.60"),
+                        new BigDecimal("3.87"))));
+        when(fxService.convert(anyDouble(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = service.listFutures("user@test.com", "USD");
+
+        assertThat(result).hasSize(1);
+        FutureInvestmentDto dto = result.get(0);
+        assertThat(dto.symbol()).isEqualTo("BTC");
+        assertThat(dto.exchange()).isEqualTo("JUPITER_PERPS");
+        assertThat(dto.source()).isEqualTo("JUPITER_PERPS");
+        assertThat(dto.sourceConnectionId()).isEqualTo("conn-2");
+        // Jupiter's collateral does NOT absorb PnL (verified live) — used as-is, no back-out.
+        assertThat(dto.margin()).isEqualByComparingTo("22150.68");
+        assertThat(dto.convertedInvestAmount()).isEqualByComparingTo("22150.68");
+        // Already a percentage from Jupiter, not a fraction — used as-is.
+        assertThat(dto.pnlPercent()).isEqualTo(3.87);
+    }
+
+    @Test
+    void listFutures_lighterConnection_expandsLivePositions() {
+        FutureInvestment conn = new FutureInvestment();
+        conn.setId("conn-3");
+        conn.setOwnerUuid("user@test.com");
+        conn.setExchangeKind("CRYPTO_DEX");
+        conn.setExchange("LIGHTER");
+        conn.setConnectionAddress("0xlighter");
+        conn.setCurrency("USD");
+
+        when(futureRepo.findByOwnerUuidOrderByCreatedAtDesc("user@test.com")).thenReturn(List.of(conn));
+        when(lighterService.fetchPositions("0xlighter")).thenReturn(List.of(
+                new LighterPositionService.Position("ETH", "LONG",
+                        new BigDecimal("0.266"), new BigDecimal("1887.00"), new BigDecimal("1.5"),
+                        new BigDecimal("93.56"), new BigDecimal("2238.73"),
+                        new BigDecimal("335"), null, new BigDecimal("-0.687203"))));
+        when(fxService.convert(anyDouble(), any(), any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = service.listFutures("user@test.com", "USD");
+
+        assertThat(result).hasSize(1);
+        FutureInvestmentDto dto = result.get(0);
+        assertThat(dto.symbol()).isEqualTo("ETH");
+        assertThat(dto.exchange()).isEqualTo("LIGHTER");
+        assertThat(dto.source()).isEqualTo("LIGHTER");
+        assertThat(dto.margin()).isEqualByComparingTo("335");
+        assertThat(dto.convertedInvestAmount()).isEqualByComparingTo("335");
+        // No dedicated ROE field for Lighter — falls back to convertedPnl / convertedInvest.
+        assertThat(dto.pnlPercent()).isEqualTo(27.93);
     }
 
     @Test

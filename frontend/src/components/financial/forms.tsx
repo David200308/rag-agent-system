@@ -12,6 +12,7 @@ import {
   FUTURE_EXCHANGE_KINDS,
   FUTURE_EXCHANGE_KIND_LABELS,
   FUTURE_EXCHANGES_BY_KIND,
+  DEX_ADDRESS_PLACEHOLDERS,
   FUTURE_SIDES,
   type CashDeposit,
   type CryptoInvestment,
@@ -234,11 +235,15 @@ export function FutureForm({ initial, onSave, onCancel, saving }: {
       {isDex ? (
         <>
           <Field label="Exchange">
-            <input className={inputCls} value="Hyperliquid" disabled />
+            <select className={selectCls} value={f.exchange}
+              onChange={(e) => setField("exchange", e.target.value)}>
+              {FUTURE_EXCHANGES_BY_KIND[f.exchangeKind].map((ex) => <option key={ex} value={ex}>{ex}</option>)}
+            </select>
           </Field>
           <Field label="Wallet Address *">
             <input className={inputCls} required value={f.connectionAddress ?? ""}
-              onChange={(e) => setField("connectionAddress", e.target.value)} placeholder="0x…" />
+              onChange={(e) => setField("connectionAddress", e.target.value)}
+              placeholder={DEX_ADDRESS_PLACEHOLDERS[f.exchange] ?? "0x…"} />
           </Field>
           <p className="text-[11px] text-[--color-muted]">
             We&apos;ll auto-track all open positions for this address — no need to enter symbol or size.

@@ -258,7 +258,7 @@ export function FinancialManager() {
 
   // DEX rows are live-fetched (not stored per-position); deleting removes the tracked address instead.
   const deleteFuture = async (f: FutureInvestment) => {
-    await apiDelete("futures", f.source === "HYPERLIQUID" ? (f.sourceConnectionId ?? f.id) : f.id);
+    await apiDelete("futures", f.source !== "MANUAL" ? (f.sourceConnectionId ?? f.id) : f.id);
     setFutures(await apiFetch<FutureInvestment>("futures"));
   };
 
@@ -678,7 +678,7 @@ export function FinancialManager() {
                               {FUTURE_EXCHANGE_KIND_LABELS[f.exchangeKind]}
                             </span>
                             <span className="text-xs text-[--color-muted]">{f.exchange}</span>
-                            {f.source === "HYPERLIQUID" && (
+                            {f.source !== "MANUAL" && (
                               <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Auto</span>
                             )}
                           </div>
@@ -691,7 +691,7 @@ export function FinancialManager() {
                                     matches toTradingViewSymbol's mapping. CEX rows use each exchange's own native
                                     instrument id (e.g. "BTC-USDT-SWAP"), which that mapping wasn't built for. */}
                                 {f.exchangeKind === "CRYPTO_DEX"
-                                  ? <SymbolHoverChart tvSymbol={toTradingViewSymbol(f.symbol, "crypto", undefined, f.hyperliquidDex)}>{f.symbol}</SymbolHoverChart>
+                                  ? <SymbolHoverChart tvSymbol={toTradingViewSymbol(f.symbol, "crypto", undefined, f.hyperliquidDex, f.exchange)}>{f.symbol}</SymbolHoverChart>
                                   : f.symbol}
                               </span>
                             : <span className="text-xs text-[--color-muted]" title={f.connectionAddress ?? undefined}>
