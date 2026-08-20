@@ -183,9 +183,10 @@ export function FinancialManager() {
   };
 
   // Unlike toUSD, always resolves to a value (never null just because defaultCurrency is
-  // already USD) — used for the Futures card's margin line, which is a distinct quantity
-  // from the main total, not a "same number, other currency" reference.
-  const futuresMarginUsd = defaultCurrency === "USD"
+  // already USD). For Hyperliquid rows, convertedInvestAmount is the fixed entry-time capital
+  // (margin - unrealizedPnl, backed out because Hyperliquid's live margin already absorbs PnL)
+  // — a genuinely different quantity from the top total (current equity), not a re-conversion.
+  const futuresInvestedUsd = defaultCurrency === "USD"
     ? futuresInvested
     : (fxRates[defaultCurrency] ? futuresInvested / fxRates[defaultCurrency] : null);
 
@@ -193,7 +194,7 @@ export function FinancialManager() {
     { label: "Cash Deposits",      value: totalDeposits, pnlPercent: null,         pnlAmount: null as number | null,                             share: grandTotal > 0 ? totalDeposits / grandTotal * 100 : 0, usdValue: null as number | null, usdLabel: undefined as string | undefined },
     { label: "Stock Investments",  value: totalStocks,   pnlPercent: stocksPnlPct, pnlAmount: stocksPnlPct != null ? totalStocks - stocksInvested : null, share: grandTotal > 0 ? totalStocks  / grandTotal * 100 : 0, usdValue: toUSD(totalStocks), usdLabel: undefined as string | undefined },
     { label: "Crypto Investments", value: totalCrypto,   pnlPercent: cryptoPnlPct, pnlAmount: cryptoPnlPct != null ? totalCrypto - cryptoInvested : null, share: grandTotal > 0 ? totalCrypto  / grandTotal * 100 : 0, usdValue: toUSD(totalCrypto), usdLabel: undefined as string | undefined },
-    { label: "Futures",            value: totalFutures,  pnlPercent: futuresPnlPct, pnlAmount: futuresPnlPct != null ? totalFutures - futuresInvested : null, share: grandTotal > 0 ? totalFutures / grandTotal * 100 : 0, usdValue: futuresMarginUsd, usdLabel: "Margin" as string | undefined },
+    { label: "Futures",            value: totalFutures,  pnlPercent: futuresPnlPct, pnlAmount: futuresPnlPct != null ? totalFutures - futuresInvested : null, share: grandTotal > 0 ? totalFutures / grandTotal * 100 : 0, usdValue: futuresInvestedUsd, usdLabel: "Invested" as string | undefined },
   ] as const;
 
   // ── CRUD ──────────────────────────────────────────────────────────────────

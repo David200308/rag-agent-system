@@ -483,13 +483,19 @@ public class FinancialServiceImpl implements FinancialService {
                         ? notional.divide(pos.leverage(), 8, RoundingMode.HALF_UP)
                         : notional;
 
-        double convertedInvest = fxService.convert(margin.doubleValue(), "USD", toCurrency);
-
         BigDecimal convertedCurrentValue = null;
         Double     pnlPercent            = null;
+        // Hyperliquid's live `margin` (isolated balance) already absorbs the position's running
+        // unrealized PnL — per their own docs, "isolated positions will apply unrealized pnl as
+        // additional margin for the open position." So `margin` IS current equity already; back the
+        // PnL out of it to recover the fixed capital committed at entry (the correct "invested" basis
+        // and ROE denominator), rather than double-counting the loss by adding PnL on top of margin.
+        BigDecimal entryMargin = pos.unrealizedPnl() != null ? margin.subtract(pos.unrealizedPnl()) : margin;
+        double convertedInvest = fxService.convert(entryMargin.doubleValue(), "USD", toCurrency);
+
         if (pos.unrealizedPnl() != null) {
             double convertedPnl = fxService.convert(pos.unrealizedPnl().doubleValue(), "USD", toCurrency);
-            convertedCurrentValue = bd(convertedInvest + convertedPnl);
+            convertedCurrentValue = bd(fxService.convert(margin.doubleValue(), "USD", toCurrency));
 
             // Hyperliquid's displayed PNL% (ROE) is computed against margin at entry (fixed), not the
             // live `margin` field above (which drifts over time, e.g. from funding settlement) — so it

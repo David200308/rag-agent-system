@@ -500,7 +500,11 @@ class FinancialServiceTest {
         // Notional (entryPrice x size) is 5000 — portfolio totals must use the 500 margin instead,
         // otherwise a leveraged position would inflate the account's total value by 10x.
         assertThat(dto.margin()).isEqualByComparingTo("500");
-        assertThat(dto.convertedInvestAmount()).isEqualByComparingTo("500");
+        // Hyperliquid's live margin (500) already absorbs the +200 unrealized PnL — the entry-time
+        // capital committed was margin - pnl = 300, which is what "invested" must reflect (not 500,
+        // which would double-count the gain on top of an already-adjusted margin).
+        assertThat(dto.convertedInvestAmount()).isEqualByComparingTo("300");
+        assertThat(dto.convertedCurrentValue()).isEqualByComparingTo("500");
         assertThat(dto.liquidationPrice()).isEqualByComparingTo("2000");
         assertThat(dto.fundingSinceOpen()).isEqualByComparingTo("-5");
         assertThat(dto.hyperliquidDex()).isNull();
