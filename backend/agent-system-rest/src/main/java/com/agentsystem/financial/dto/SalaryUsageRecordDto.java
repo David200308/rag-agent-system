@@ -1,0 +1,24 @@
+package com.agentsystem.financial.dto;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+
+public record SalaryUsageRecordDto(
+        String     id,
+        String     ownerUuid,
+        int        year,
+        int        month,
+        String     region,
+        String     currency,
+        BigDecimal salary,
+        BigDecimal bonus,
+        BigDecimal retirementSavingEmployee,
+        BigDecimal retirementSavingEmployer,
+        BigDecimal tax,
+        BigDecimal houseRent,
+        BigDecimal livingExpense,
+        BigDecimal otherExpense,
+        BigDecimal totalExpense,
+        Instant    createdAt,
+        Instant    updatedAt
+) {}

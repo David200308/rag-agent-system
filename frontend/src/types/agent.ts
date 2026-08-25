@@ -95,7 +95,7 @@ export interface KnowledgeSourceEntry {
   chunkCount: number;
   ownerEmail: string | null;
   ingestedAt: string;
-  shares: { id: number; sharedEmail: string }[];
+  shares: { id: number; sharedEmail: string | null }[];
 }
 
 /** Mirror of Java Conversation entity returned by GET /conversations */
@@ -118,7 +118,7 @@ export interface BackendMessage {
   createdAt: string;
 }
 
-export type ShareMode   = "READ_ONLY" | "INTERACTIVE";
+export type ShareMode   = "READ_ONLY";
 export type AccessType  = "EVERYONE"  | "WHITELIST";
 
 export interface ConversationShare {
@@ -225,10 +225,11 @@ export interface WebFetchWhitelistEntry {
 
 // ── Workflow engine types ──────────────────────────────────────────────────
 
-export type AgentPattern = "ORCHESTRATOR" | "TEAM";
+export type AgentPattern = "ORCHESTRATOR" | "TEAM" | "GRAPH";
 export type TeamExecMode = "PARALLEL" | "SEQUENTIAL";
 export type AgentRole    = "MAIN" | "SUB" | "PEER";
-export type RunStatus    = "PENDING" | "RUNNING" | "DONE" | "FAILED";
+export type NodeKind     = "AGENT" | "CONDITION" | "END";
+export type RunStatus    = "PENDING" | "RUNNING" | "DONE" | "FAILED" | "CANCELLED";
 export type LogType      = "TOOL_CALL" | "TOOL_RESULT" | "LLM_RESPONSE" | "DELEGATION" | "ERROR" | "SYSTEM";
 
 export const SANDBOX_TOOLS = ["BASH", "CURL", "GIT", "GREP", "PYTHON", "NODE", "SCHEDULE"] as const;
@@ -250,6 +251,9 @@ export interface WorkflowAgent {
   id: number;
   workflowId: string;
   role: AgentRole;
+  nodeKind: NodeKind;              // AGENT | CONDITION | END — GRAPH pattern only, defaults to AGENT
+  conditionExpr: string | null;    // branch-selection instructions, CONDITION nodes only
+  outputSchemaJson: string | null; // optional JSON Schema (subset) the agent's final answer must satisfy
   name: string;
   systemPrompt: string | null;
   toolsJson: string;       // JSON array string, parse client-side
@@ -257,6 +261,15 @@ export interface WorkflowAgent {
   orderIndex: number;
   posX: number;
   posY: number;
+  createdAt: string;
+}
+
+export interface WorkflowEdgeDto {
+  id: number;
+  workflowId: string;
+  sourceNodeId: number;
+  targetNodeId: number;
+  branchLabel: string | null;
   createdAt: string;
 }
 
@@ -268,8 +281,17 @@ export interface WorkflowRun {
   status: RunStatus;
   sandboxContainer: string | null;
   finalOutput: string | null;
+  workflowVersion: number | null;
   startedAt: string;
   finishedAt: string | null;
+}
+
+export interface WorkflowVersion {
+  id: number;
+  workflowId: string;
+  versionNumber: number;
+  label: string | null;
+  createdAt: string;
 }
 
 export interface WorkflowRunLog {
@@ -300,8 +322,25 @@ export interface Skill {
   id: string;
   name: string;
   fileName: string;
-  fileType: "txt" | "md" | "zip";
+  fileType: "txt" | "md" | "csv" | "zip" | "pdf" | "docx";
   size: number;
+  createdAt: string;
+  /** Latest version's approval status. Undefined / absent means APPROVED (personal mode). */
+  status?: "PENDING" | "APPROVED" | "REJECTED";
+  ownerEmail?: string;
+  /** Version number this summary's fields (fileName/fileType/size/status) were taken from. */
+  versionNumber: number;
+}
+
+export interface SkillVersion {
+  id: string;
+  skillId: string;
+  versionNumber: number;
+  fileName: string;
+  fileType: "txt" | "md" | "csv" | "zip" | "pdf" | "docx";
+  sizeBytes: number;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdByEmail?: string;
   createdAt: string;
 }
 

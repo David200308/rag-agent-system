@@ -1,7 +1,7 @@
 # SkyProton Agent System
 
-| Chat Mode                | Workflow Mode                    |
-| ------------------------ | -------------------------------- |
+| Chat Mode                  | Workflow Mode                      |
+| -------------------------- | ---------------------------------- |
 | ![chat](./images/chat.png) | ![workflow](./images/workflow.png) |
 
 ## Tech Stack
@@ -12,34 +12,35 @@
 | -------- | ------------------------------------------------------------------ |
 | Runtime  | Go 1.22                                                            |
 | CLI      | Cobra                                                              |
-| Auth     | OTP email + JWT (stored in `~/.agent-cli/config.json`)             |
-| Identity | Ed25519 key pair — CLI signs requests after login                  |
+| Auth     | OTP email + JWT (stored in`~/.agent-cli/config.json`)            |
+| Identity | Ed25519 key pair — CLI signs requests after login                 |
 | Release  | GitHub Actions cross-compile (linux/darwin/windows × amd64/arm64) |
 
 ### Backend
 
-| Layer            | Technology                                         |
-| ---------------- | -------------------------------------------------- |
-| Runtime          | Java 21 (virtual threads)                          |
-| Framework        | Spring Boot 3.4.5                                  |
-| AI orchestration | Spring AI 1.1                                      |
-| Agent graph      | LangGraph4j 1.7                                    |
-| LLM providers    | OpenAI / OpenRouter / Anthropic / DeepSeek / Local |
-| Vector store     | Weaviate                                           |
-| Embeddings       | Spring AI embedding abstraction                    |
-| Document parsing | Apache Tika (PDF, text, HTML)                      |
-| HTML scraping    | Jsoup                                              |
-| Circuit breaker  | Resilience4j 2.2                                   |
-| Auth             | OTP email (Resend) + JJWT stateless tokens         |
-| Persistence      | MySQL 8 + Spring Data JPA                          |
-| MCP server       | Spring AI MCP WebMVC SSE transport                 |
-| API docs         | SpringDoc OpenAPI (Swagger UI)                     |
+| Layer            | Technology                                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Runtime          | Java 21 (virtual threads)                                                                                                |
+| Framework        | Spring Boot 3.4.5                                                                                                        |
+| AI orchestration | Spring AI 1.1                                                                                                            |
+| Agent graph      | LangGraph4j 1.7                                                                                                          |
+| LLM providers    | OpenAI / OpenRouter / Anthropic / DeepSeek / Local                                                                       |
+| Vector store     | Weaviate                                                                                                                 |
+| Embeddings       | Spring AI embedding abstraction                                                                                          |
+| Document parsing | Apache Tika (PDF, text, HTML)                                                                                            |
+| HTML scraping    | Jsoup                                                                                                                    |
+| Circuit breaker  | Resilience4j 2.2                                                                                                         |
+| Auth             | OTP email (Resend) + Passkey (WebAuthn) + JJWT                                                                           |
+| Persistence      | MySQL 8 + Spring Data JPA                                                                                                |
+| Redis            | Lettuce (Bucket4j rate limits, fallback cache) + Redisson (sandbox semaphore) — shared with the scheduler's Asynq queue |
+| MCP server       | Spring AI MCP WebMVC SSE transport                                                                                       |
+| API docs         | SpringDoc OpenAPI (Swagger UI)                                                                                           |
 
 ### Scheduler
 
 | Layer            | Technology                             |
 | ---------------- | -------------------------------------- |
-| Runtime          | Go 1.24                                |
+| Runtime          | Go 1.25                                |
 | Task queue       | Asynq (Redis-backed)                   |
 | Schedule storage | MySQL (shared with app DB)             |
 | Retry policy     | MaxRetry=3, task timeout=5 min (Asynq) |
@@ -56,89 +57,65 @@
 
 ### Infrastructure
 
-| Component        | Technology                                    |
-| ---------------- | --------------------------------------------- |
-| Vector DB        | Weaviate (Docker)                             |
-| Relational DB    | MySQL (Docker) — app + schedule data         |
-| Task queue       | Redis 7 (Docker) — Asynq backend             |
-| Scheduler        | Go microservice backed by Asynq (`:8082`)   |
-| Observability    | Prometheus + Grafana + Loki + Promtail        |
-| Containerization | Docker Compose                                |
+| Component             | Technology                                                                                                                    |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Vector DB             | Weaviate (Docker)                                                                                                             |
+| Relational DB         | MySQL (Docker) — app + schedule data                                                                                         |
+| Redis                 | Redis 7 (Docker) — shared by the scheduler's Asynq queue and the backend's rate limits, sandbox tracking, and fallback cache |
+| Kafka                 | Apache Kafka, single-node KRaft mode (Docker) — carries notification events (`:9092`)                                      |
+| Scheduler             | Go microservice backed by Asynq (`:8082`)                                                                                   |
+| Storage service       | `agent-system-storage-inner` — Garage (S3-compatible) object storage (`:8083`)                                           |
+| Notification consumer | `agent-system-notification-consumer` — Resend email delivery via Kafka (`:8084`)                                         |
+| Observability         | Prometheus + Grafana + Loki + Promtail                                                                                        |
+| Containerization      | Docker Compose                                                                                                                |
 
 ---
 
 ## System Architecture
 
-```
-  ┌──────────────────────────┐   ┌──────────────────────────┐
-  │     Frontend (Next.js)   │   │     agent-cli (Go)        │
-  │  /  /upload  /workflow…  │   │  auth / chat / workflow   │
-  └────────────┬─────────────┘   │  conversation / financial │
-               │ HTTP / SSE      └────────────┬──────────────┘
-               │                              │ HTTP + JWT
-               └──────────────┬───────────────┘
-┌──────────────▼───────────────────────────────────────────────┐
-│                   Spring Boot Backend (:8081)                 │
-│                                                              │
-│  AuthFilter (JWT)  ──►  AgentController                     │
-│                               │                             │
-│                    ┌──────────▼──────────┐                  │
-│                    │   RagAgentGraph      │                  │
-│                    │  (LangGraph4j)       │                  │
-│                    │                     │                  │
-│                    │  START              │                  │
-│                    │    └─► analyzeQuery │                  │
-│                    │          ├─[RETRIEVE]─► retrieve       │
-│                    │          │               ├─[found]──►  │
-│                    │          │               └─[empty]──►  │
-│                    │          ├─[DIRECT]──► generate ──►END │
-│                    │          └─[FALLBACK]─► fallback ──►END│
-│                    └─────────────────────┘                  │
-│                                                             │
-│  ┌──────────────────┐   ┌──────────────┐  ┌─────────────┐  │
-│  │ DocumentIngestion│   │  Retrieval   │  │  Fallback   │  │
-│  │ Service (Tika +  │   │  Service     │  │  Service    │  │
-│  │  Jsoup)          │   │  (Weaviate)  │  │ (Resilience4j)│ │
-│  └────────┬─────────┘   └──────┬───────┘  └─────────────┘  │
-│           │                    │                             │
-│  ┌────────▼────────────────────▼──────┐                     │
-│  │        Spring AI Abstraction        │                     │
-│  │  EmbeddingModel  │  ChatModel       │                     │
-│  └──────┬──────────────────┬──────────┘                     │
-│         │                  │                                 │
-│   ┌─────▼────┐      ┌──────▼──────┐                         │
-│   │ Weaviate │      │ OpenAI /    │                         │
-│   │ Vector   │      │ Anthropic / │                         │
-│   │ Store    │      │ OpenRouter  │                         │
-│   └──────────┘      └─────────────┘                         │
-│                                                             │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐ │
-│  │ Auth Module  │  │  MCP Server  │  │  Workflow Engine   │ │
-│  │ OTP + JWT    │  │  (SSE)       │  │  + Sandbox +       │ │
-│  └──────────────┘  └──────────────┘  │  SCHEDULE tool     │ │
-│                                      └────────────────────┘ │
-│  ┌──────────────┐  ┌──────────────┐                         │
-│  │  Connectors  │  │    Model     │                         │
-│  │  (Google /   │  │  Selection   │                         │
-│  │   Telegram)  │  │  (per-user)  │                         │
-│  └──────────────┘  └──────────────┘                         │
-└─────────────────────────────────────────────────────────────┘
-          │                    │                   │
-  ┌───────▼──────┐   ┌────────▼────────┐  ┌───────▼─────────────────┐
-  │  Weaviate    │   │     MySQL       │  │  Go Scheduler (:8082)   │
-  │  (vectors)   │   │  (auth, convos, │  │                         │
-  │              │   │   workflows,    │  │  Asynq Scheduler        │
-  └──────────────┘   │   skills,       │  │    └─ enqueues tasks    │
-                     │   schedules,    │  │  Asynq Worker           │
-                     │   model_configs,│  │    └─ rag:trigger       │
-                     │   connectors)   │  │         (MaxRetry=3)    │
-                     └─────────────────┘  │                         │
-                                          │  ┌─────────────────┐    │
-                                          │  │  Redis (:6379)  │    │
-                                          │  │  (task queue)   │    │
-                                          │  └─────────────────┘    │
-                                          └─────────────────────────┘
-```
+![architecture](./images/architecture.png)
+
+---
+
+## Authentication
+
+The system supports two login methods, both producing a signed JWT that encodes `email`, `mode` (`PERSONAL` / `TEAM`), and `orgId` (team mode only).
+
+### Email OTP
+
+A 6-digit one-time code is sent via Resend to the user's whitelisted email address.
+
+### Passkey (WebAuthn)
+
+Users can register a passkey (Face ID, Touch ID, or hardware key) from the Settings page. On subsequent logins, the passkey challenge/response flow issues a JWT scoped to the correct mode and org — including team mode passkey logins.
+
+---
+
+## Personal vs Team Mode
+
+Each JWT is scoped to a mode. The backend enforces isolation at every data layer.
+
+| Resource            | Personal mode | Team mode               |
+| ------------------- | ------------- | ----------------------- |
+| Conversations       | Per-user      | Per-user, scoped to org |
+| Knowledge base      | Per-user      | Shared across org       |
+| Workflows           | Per-user      | Shared across org       |
+| Skills              | Per-user      | Shared across org       |
+| Web-fetch whitelist | Per-user      | Shared across org       |
+| Connector tokens    | Per-user      | Per-user, scoped to org |
+| Financial portfolio | Per-user      | Hidden in team mode     |
+
+### Organizations
+
+Organizations are pre-created by an admin (`POST /api/v1/admin/organizations`). Members are added by an owner via the in-app Team page or the `POST /api/v1/team/members` API.
+
+**Team member management** (`/team` page — visible only in team mode):
+
+| Action              | Who can perform |
+| ------------------- | --------------- |
+| View member list    | All members     |
+| Add / remove member | Owner only      |
+| Transfer ownership  | Owner only      |
 
 ---
 
@@ -155,64 +132,32 @@ The LangGraph4j graph determines the execution path per query:
 
 ---
 
-## Workflow Engine
+## Connectors (MCP)
 
-Workflows compose multiple AI agents into pipelines with two patterns:
+External services are connected via OAuth (Google, Figma) or the Telegram Login Widget. Connector tokens are **org-scoped**: connecting Google in personal mode and in team mode produces two separate, isolated tokens.
 
-| Pattern          | Description                                                 |
-| ---------------- | ----------------------------------------------------------- |
-| `ORCHESTRATOR` | One orchestrator agent routes tasks to specialist agents    |
-| `TEAM`         | Multiple agents run in `PARALLEL` or `SEQUENTIAL` order |
-
-Each workflow run executes inside an ephemeral Docker sandbox (`SandboxService`) with CPU/memory resource limits and a watchdog that terminates runaway containers. Agents can load user-uploaded **Skills** (code files) to extend their capabilities.
-
-### Available Tools
-
-| Tool              | Description                                                        |
-| ----------------- | ------------------------------------------------------------------ |
-| `BASH`          | Execute shell commands in the sandbox                              |
-| `CURL`          | HTTP requests from the sandbox                                     |
-| `GIT`           | Git operations in the sandbox                                      |
-| `GREP`          | Text search in the sandbox                                         |
-| `PYTHON`        | Run Python scripts in the sandbox                                  |
-| `NODE`          | Run Node.js scripts in the sandbox                                 |
-| `SCHEDULE`      | Create, list, or delete scheduled RAG queries (calls Go scheduler) |
-| `GOOGLE_DOCS`   | Read and write Google Docs via connected OAuth token               |
-| `GOOGLE_SHEETS` | Read and write Google Sheets via connected OAuth token             |
-| `GOOGLE_SLIDES` | Read and write Google Slides via connected OAuth token             |
-| `TELEGRAM`      | Send messages to a connected Telegram chat                         |
-
-The `SCHEDULE` tool lets a workflow agent manage schedules on behalf of the user:
-
-```xml
-<!-- Create a scheduled query -->
-<use_tool name="SCHEDULE">
-{"action":"create","conversationId":"<id>","message":"Daily market summary","cron":"0 9 * * 1-5","timezone":"America/New_York","topK":5,"useKnowledgeBase":true,"useWebFetch":true}
-</use_tool>
-
-<!-- List existing schedules -->
-<use_tool name="SCHEDULE">
-{"action":"list","conversationId":"<id>"}
-</use_tool>
-
-<!-- Delete a schedule -->
-<use_tool name="SCHEDULE">
-{"action":"delete","scheduleId":"<schedule-id>"}
-</use_tool>
-```
+| Connector       | Provider key | Features                                         |
+| --------------- | ------------ | ------------------------------------------------ |
+| Google Docs     | `google`   | Read documents, write new docs                   |
+| Google Sheets   | `google`   | Read spreadsheets, write new sheets              |
+| Google Slides   | `google`   | Read presentations, write new slides             |
+| Google Calendar | `google`   | List upcoming events, create new events          |
+| Figma           | `figma`    | OAuth token for Figma file access                |
+| Telegram        | `telegram` | Send messages to the user's linked Telegram chat |
 
 ---
 
-## Conversation Sharing
+## Workflow Engine
 
-Conversations can be shared via a link with configurable access controls.
+Workflows compose multiple AI agents into pipelines with three patterns:
 
-| Field          | Values                          | Description                                   |
-| -------------- | ------------------------------- | --------------------------------------------- |
-| `shareMode`  | `READ_ONLY` / `INTERACTIVE` | Viewer can read only, or also send messages   |
-| `accessType` | `EVERYONE` / `WHITELIST`    | Public link or restricted to specified emails |
+| Pattern          | Description                                                                       |
+| ---------------- | --------------------------------------------------------------------------------- |
+| `ORCHESTRATOR` | One orchestrator agent routes tasks to specialist agents                          |
+| `TEAM`         | Multiple agents run in`PARALLEL` or `SEQUENTIAL` order                        |
+| `GRAPH`        | Explicit node graph — agents, conditions, and an end node wired together by hand |
 
-When `accessType` is `WHITELIST`, only listed emails may access the shared link. `INTERACTIVE` shares notify the conversation owner via Telegram (if connected) when a new participant joins.
+Each workflow run executes inside an ephemeral Docker sandbox (`SandboxService`) with CPU/memory resource limits and a watchdog that terminates runaway containers. Agents can load user-uploaded **Skills** (code files) to extend their capabilities.
 
 ---
 
@@ -223,18 +168,21 @@ A standalone Go binary that wraps the backend REST API for terminal use. Config 
 ### Install
 
 **macOS (Apple Silicon)**
+
 ```bash
 curl -L https://github.com/David200308/rag-agent-system/releases/latest/download/agent-cli_darwin_arm64 \
   -o agent-cli && chmod +x agent-cli && sudo mv agent-cli /usr/local/bin/
 ```
 
 **macOS (Intel)**
+
 ```bash
 curl -L https://github.com/David200308/rag-agent-system/releases/latest/download/agent-cli_darwin_amd64 \
   -o agent-cli && chmod +x agent-cli && sudo mv agent-cli /usr/local/bin/
 ```
 
 **Linux (amd64)**
+
 ```bash
 curl -L https://github.com/David200308/rag-agent-system/releases/latest/download/agent-cli_linux_amd64 \
   -o agent-cli && chmod +x agent-cli && sudo mv agent-cli /usr/local/bin/
@@ -251,13 +199,13 @@ agent-cli auth login
 
 ### Commands
 
-| Command | Subcommands | Description |
-| ------- | ----------- | ----------- |
-| `auth` | `login` `logout` `status` `config` | Authenticate via email OTP; manage server URL |
-| `chat` | *(interactive REPL)* `ask <question>` | Chat with the RAG agent; `-c <id>` continues a conversation |
-| `conversation` (alias `conv`) | `list` `get` `delete` `archive` `unarchive` | Manage conversations |
-| `workflow` (alias `wf`) | `list` `get` `delete` `runs` `logs` | View workflows, run history, and agent logs |
-| `financial` (alias `fin`) | `deposits` `stocks` `crypto` `cards` `prices` | Manage financial portfolio entries |
+| Command                           | Subcommands                                             | Description                                                  |
+| --------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------ |
+| `auth`                          | `login` `logout` `status` `config`              | Authenticate via email OTP; manage server URL                |
+| `chat`                          | *(interactive REPL)* `ask <question>`               | Chat with the RAG agent;`-c <id>` continues a conversation |
+| `conversation` (alias `conv`) | `list` `get` `delete` `archive` `unarchive`   | Manage conversations                                         |
+| `workflow` (alias `wf`)       | `list` `get` `delete` `runs` `logs`           | View workflows, run history, and agent logs                  |
+| `financial` (alias `fin`)     | `deposits` `stocks` `crypto` `cards` `prices` | Manage financial portfolio entries                           |
 
 #### Examples
 
@@ -303,3 +251,17 @@ Go Scheduler (:8082)
 ```
 
 On startup the scheduler reloads all active schedules from MySQL into the Asynq in-process cron engine. When a cron fires, Asynq enqueues a `rag:trigger` task to Redis. The worker picks it up and POSTs to Spring Boot. If the call fails, Asynq retries up to 3 times automatically. Each run is recorded in `schedule_runs` (MySQL).
+
+---
+
+## Internal Microservices
+
+Two backend capabilities are split out of `agent-system-rest` into private Maven modules. Neither has public ingress.
+
+`agent-system-storage-inner` (`:8083`, Garage S3-compatible object storage) is reachable only from `agent-system-rest` over the internal Docker network, authenticated with a shared-secret header (`X-Storage-Key`) instead of a user JWT. `agent-system-rest` talks to it via a typed HTTP client (`StorageClient`).
+
+| Service                        | Port      | Backs                                 | Auth header       |
+| ------------------------------ | --------- | ------------------------------------- | ----------------- |
+| `agent-system-storage-inner` | `:8083` | Garage (S3-compatible) object storage | `X-Storage-Key` |
+
+`agent-system-notification-consumer` (`:8084`) is decoupled further — instead of REST, `agent-system-rest`'s `NotificationClient` publishes events to Kafka topics (`notifications.otp`, `notifications.workflow-complete`), and the consumer's `EmailEventListener` delivers them via Resend. There's no shared-secret auth here; the Kafka broker itself is the trust boundary (internal-network-only, no public ingress). This decoupling means login/register succeeds once the OTP event reaches Kafka — actual email delivery happens asynchronously, with a bounded retry (2 attempts) in the consumer before a failing message is logged and dropped. Email is the only channel today; adding another (push, SMS, Telegram) is a new `@KafkaListener` method, not a rearchitecture.

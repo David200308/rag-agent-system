@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
+  GitBranch,
   LayoutGrid,
   LayoutList,
   Menu,
@@ -214,15 +215,15 @@ export default function WorkflowListPage() {
 /* ── shared helpers ── */
 
 function PatternIcon({ pattern, size = 4 }: { pattern: AgentPattern; size?: number }) {
-  return pattern === "ORCHESTRATOR"
-    ? <Network className={`h-${size} w-${size}`} />
-    : <Users   className={`h-${size} w-${size}`} />;
+  if (pattern === "ORCHESTRATOR") return <Network    className={`h-${size} w-${size}`} />;
+  if (pattern === "GRAPH")        return <GitBranch  className={`h-${size} w-${size}`} />;
+  return <Users className={`h-${size} w-${size}`} />;
 }
 
 function patternLabel(wf: Workflow) {
-  return wf.agentPattern === "ORCHESTRATOR"
-    ? "Orchestrator"
-    : `Team · ${wf.teamExecMode === "SEQUENTIAL" ? "Sequential" : "Parallel"}`;
+  if (wf.agentPattern === "ORCHESTRATOR") return "Orchestrator";
+  if (wf.agentPattern === "GRAPH")        return "Graph";
+  return `Team · ${wf.teamExecMode === "SEQUENTIAL" ? "Sequential" : "Parallel"}`;
 }
 
 /* ── List card (original style) ── */

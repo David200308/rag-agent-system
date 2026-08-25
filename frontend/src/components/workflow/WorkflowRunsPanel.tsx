@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { X, RefreshCw, CheckCircle2, XCircle, CircleDot, Clock } from "lucide-react";
+import { X, RefreshCw, CheckCircle2, XCircle, CircleDot, Clock, Ban, Square, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { WorkflowRunViewer } from "./WorkflowRunViewer";
-import { fetchWorkflowRuns } from "@/lib/api";
+import { fetchWorkflowRuns, stopWorkflowRun, deleteWorkflowRun } from "@/lib/api";
 import type { WorkflowRun } from "@/types/agent";
 import { cn } from "@/lib/utils";
 
@@ -16,10 +16,11 @@ interface Props {
 }
 
 function statusIcon(status: WorkflowRun["status"]) {
-  if (status === "DONE")    return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />;
-  if (status === "FAILED")  return <XCircle      className="h-3.5 w-3.5 text-red-500 shrink-0" />;
-  if (status === "RUNNING") return <CircleDot    className="h-3.5 w-3.5 text-blue-500 animate-pulse shrink-0" />;
-  return                           <Clock        className="h-3.5 w-3.5 text-[--color-muted] shrink-0" />;
+  if (status === "DONE")      return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />;
+  if (status === "FAILED")    return <XCircle      className="h-3.5 w-3.5 text-red-500 shrink-0" />;
+  if (status === "CANCELLED") return <Ban          className="h-3.5 w-3.5 text-[--color-muted] shrink-0" />;
+  if (status === "RUNNING")   return <CircleDot    className="h-3.5 w-3.5 text-blue-500 animate-pulse shrink-0" />;
+  return                             <Clock        className="h-3.5 w-3.5 text-[--color-muted] shrink-0" />;
 }
 
 function duration(run: WorkflowRun) {
@@ -40,35 +41,66 @@ function timeAgo(iso: string) {
 }
 
 export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplete, width }: Props) {
-  const [runs,        setRuns]        = useState<WorkflowRun[]>([]);
-  const [selectedId,  setSelectedId]  = useState<string | null>(liveRunId);
-  const [loading,     setLoading]     = useState(false);
+  const [runs,         setRuns]        = useState<WorkflowRun[]>([]);
+  const [selectedId,   setSelectedId]  = useState<string | null>(liveRunId);
+  const [loading,      setLoading]     = useState(false);
+  const [page,         setPage]        = useState(0);
+  const [pageSize,     setPageSize]    = useState(10);
+  const [totalElements, setTotal]      = useState(0);
+  const [totalPages,   setTotalPages]  = useState(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (p = page, ps = pageSize) => {
     setLoading(true);
     try {
-      const data = await fetchWorkflowRuns(workflowId);
-      setRuns(data);
+      const data = await fetchWorkflowRuns(workflowId, p, ps);
+      setRuns(data.content);
+      setTotal(data.totalElements);
+      setTotalPages(data.totalPages);
     } catch {
       // ignore fetch errors
     } finally {
       setLoading(false);
     }
-  }, [workflowId]);
+  }, [workflowId, page, pageSize]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(page, pageSize); }, [workflowId, page, pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select the live run and refresh the list when it changes
   useEffect(() => {
     if (!liveRunId) return;
     setSelectedId(liveRunId);
-    load();
-  }, [liveRunId, load]);
+    load(0, pageSize);
+    setPage(0);
+  }, [liveRunId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset to first page when page size changes
+  function handlePageSizeChange(newSize: number) {
+    setPageSize(newSize);
+    setPage(0);
+  }
 
   // Refresh list when a run finishes
   function handleRunDone(output: string, status: WorkflowRun["status"]) {
-    setTimeout(load, 500);
+    setTimeout(() => load(page, pageSize), 500);
     onRunComplete?.(output, status);
+  }
+
+  async function handleStop(e: React.MouseEvent, runId: string) {
+    e.stopPropagation();
+    setRuns(prev => prev.map(r => r.id === runId ? { ...r, status: "CANCELLED" } : r));
+    try {
+      await stopWorkflowRun(runId);
+    } finally {
+      load(page, pageSize);
+    }
+  }
+
+  function handleDelete(e: React.MouseEvent, runId: string) {
+    e.stopPropagation();
+    setRuns(prev => prev.filter(r => r.id !== runId));
+    setTotal(t => Math.max(0, t - 1));
+    if (selectedId === runId) setSelectedId(null);
+    deleteWorkflowRun(runId).catch(() => {});
   }
 
   return (
@@ -80,7 +112,7 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
       <div className="flex shrink-0 items-center gap-2 border-b border-[--color-border] px-4 py-3">
         <span className="text-sm font-semibold flex-1">Runs</span>
         <button
-          onClick={load}
+          onClick={() => load(page, pageSize)}
           disabled={loading}
           className="text-[--color-muted] hover:text-[--color-fg] disabled:opacity-40"
           title="Refresh"
@@ -104,11 +136,19 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
           <p className="px-4 py-6 text-center text-xs text-[--color-muted]">No runs yet</p>
         )}
         {runs.map(run => (
-          <button
+          <div
             key={run.id}
+            role="button"
+            tabIndex={0}
             onClick={() => setSelectedId(run.id === selectedId ? null : run.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setSelectedId(run.id === selectedId ? null : run.id);
+              }
+            }}
             className={cn(
-              "flex flex-col gap-1 px-4 py-3 text-left border-b border-[--color-border] hover:bg-[--color-surface-raised] transition-colors",
+              "group flex cursor-pointer flex-col gap-1 px-4 py-3 text-left border-b border-[--color-border] hover:bg-[--color-surface-raised] transition-colors",
               selectedId === run.id && "bg-[--color-surface-raised]",
             )}
           >
@@ -117,9 +157,32 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
               <span className="text-[11px] font-semibold capitalize text-[--color-fg]">
                 {run.status.toLowerCase()}
               </span>
-              {duration(run) && (
-                <span className="ml-auto text-[10px] text-[--color-muted]">{duration(run)}</span>
+              {run.workflowVersion != null && (
+                <span className="rounded-full border border-[--color-border] px-1.5 py-0 text-[9px] font-medium text-[--color-muted]">
+                  v{run.workflowVersion}
+                </span>
               )}
+              <div className="ml-auto flex items-center gap-1.5">
+                {run.status === "RUNNING" && (
+                  <button
+                    onClick={(e) => handleStop(e, run.id)}
+                    className="rounded p-1 text-red-500 hover:bg-red-500/10"
+                    title="Stop"
+                  >
+                    <Square className="h-3 w-3" fill="currentColor" />
+                  </button>
+                )}
+                {duration(run) && (
+                  <span className="text-[10px] text-[--color-muted]">{duration(run)}</span>
+                )}
+                <button
+                  onClick={(e) => handleDelete(e, run.id)}
+                  className="rounded p-1 text-[--color-muted] hover:bg-red-500/10 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100"
+                  title="Delete"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
             </div>
             <p className="text-[11px] text-[--color-muted] line-clamp-2 pl-5">
               {run.userInput}
@@ -127,9 +190,52 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
             <p className="text-[10px] text-[--color-muted]/70 pl-5">
               {timeAgo(run.startedAt)}
             </p>
-          </button>
+          </div>
         ))}
       </div>
+
+      {/* Pagination controls */}
+      {totalElements > 0 && (
+        <div className="shrink-0 flex items-center justify-between border-t border-[--color-border] px-3 py-2">
+          <div className="flex items-center gap-1 text-[10px] text-[--color-muted]">
+            <span>Rows:</span>
+            {[5, 10, 20, 50].map(s => (
+              <button
+                key={s}
+                onClick={() => handlePageSizeChange(s)}
+                className={cn(
+                  "px-1.5 py-0.5 rounded transition-colors",
+                  pageSize === s
+                    ? "bg-[--color-surface-raised] text-[--color-fg] font-semibold"
+                    : "hover:text-[--color-fg]",
+                )}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-[--color-muted]">
+              {page * pageSize + 1}–{Math.min((page + 1) * pageSize, totalElements)} of {totalElements}
+            </span>
+            <button
+              onClick={() => setPage(p => p - 1)}
+              disabled={page === 0}
+              className="text-[--color-muted] hover:text-[--color-fg] disabled:opacity-30"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={page >= totalPages - 1}
+              className="text-[--color-muted] hover:text-[--color-fg] disabled:opacity-30"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
 
       {/* Log detail — fills remaining height */}
       {selectedId && (

@@ -28,8 +28,8 @@ function SectionCard({ title, icon, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-[--color-border] bg-[--color-surface] overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-[--color-border] px-5 py-3.5">
+    <div className="rounded-xl border border-[--color-border] bg-[--color-surface]">
+      <div className="flex items-center gap-2 rounded-t-xl border-b border-[--color-border] px-5 py-3.5">
         <span className="text-[--color-muted]">{icon}</span>
         <h2 className="text-sm font-semibold">{title}</h2>
       </div>

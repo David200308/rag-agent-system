@@ -11,8 +11,8 @@
  */
 import { queryOptions, type MutationOptions } from "@tanstack/react-query";
 import type {
-  AgentPattern, AgentRole, TeamExecMode,
-  Workflow, WorkflowAgent, WorkflowRun, WorkflowRunLog,
+  AgentPattern, AgentRole, NodeKind, TeamExecMode,
+  Workflow, WorkflowAgent, WorkflowEdgeDto, WorkflowRun, WorkflowRunLog, WorkflowVersion,
   AgentRequest,
   AgentResponse,
   AccessType,
@@ -27,6 +27,7 @@ import type {
   ShareMetaResponse,
   ShareMode,
   Skill,
+  SkillVersion,
   UpdateScheduleRequest,
   UrlIngestionResult,
   WebFetchWhitelistEntry,
@@ -34,6 +35,12 @@ import type {
   WorkflowSchedule,
   CreateWorkflowScheduleRequest,
 } from "@/types/agent";
+import type {
+  AlertsResponse,
+  CreatePriceAlertRequest,
+  PriceAlert,
+  UpdateAlertRequest,
+} from "@/types/alerts";
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
 
@@ -187,13 +194,6 @@ export async function fetchSharedConversation(token: string): Promise<ShareMetaR
   return res.json() as Promise<ShareMetaResponse>;
 }
 
-export async function submitSharedQuery(
-  token: string,
-  query: string,
-): Promise<AgentResponse> {
-  return postJson<AgentResponse>(`/api/share/${token}/query`, { query });
-}
-
 // ── Web-fetch whitelist ───────────────────────────────────────────────────────
 
 export async function fetchWebFetchWhitelist(): Promise<WebFetchWhitelistEntry[]> {
@@ -272,6 +272,35 @@ export async function updateWorkflowSchedule(id: string, payload: UpdateSchedule
 
 export async function deleteWorkflowSchedule(id: string): Promise<void> {
   await fetch(`/api/scheduler/schedules/${id}`, { method: "DELETE" });
+}
+
+// ── Investment alerts (crypto/stock price) ────────────────────────────────────
+
+export async function fetchAlerts(): Promise<AlertsResponse> {
+  const res = await fetch("/api/alerts");
+  if (!res.ok) return { price: [], defi: [], predictMarket: [] };
+  return res.json() as Promise<AlertsResponse>;
+}
+
+export async function createPriceAlert(payload: CreatePriceAlertRequest): Promise<PriceAlert> {
+  return postJson<PriceAlert>("/api/alerts", payload);
+}
+
+export async function updateAlert(type: string, id: string, payload: UpdateAlertRequest): Promise<PriceAlert> {
+  const res = await fetch(`/api/alerts/${type}/${id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status}: ${text}`);
+  }
+  return res.json() as Promise<PriceAlert>;
+}
+
+export async function deleteAlert(type: string, id: string): Promise<void> {
+  await fetch(`/api/alerts/${type}/${id}`, { method: "DELETE" });
 }
 
 // ── Model config API ──────────────────────────────────────────────────────────
@@ -371,6 +400,9 @@ export async function upsertWorkflowAgent(workflowId: string, agent: {
   orderIndex?: number;
   posX?: number;
   posY?: number;
+  nodeKind?: NodeKind;
+  conditionExpr?: string | null;
+  outputSchemaJson?: string | null;
 }): Promise<WorkflowAgent> {
   return postJson<WorkflowAgent>(`/api/workflow/${workflowId}/agents`, agent);
 }
@@ -379,11 +411,57 @@ export async function deleteWorkflowAgent(workflowId: string, agentId: number): 
   await fetch(`/api/workflow/${workflowId}/agents/${agentId}`, { method: "DELETE" });
 }
 
-// Runs
-export async function fetchWorkflowRuns(workflowId: string): Promise<WorkflowRun[]> {
-  const res = await fetch(`/api/workflow/${workflowId}/runs`);
+// Edges (GRAPH pattern)
+export async function fetchWorkflowEdges(workflowId: string): Promise<WorkflowEdgeDto[]> {
+  const res = await fetch(`/api/workflow/${workflowId}/edges`);
   if (!res.ok) return [];
-  return res.json() as Promise<WorkflowRun[]>;
+  return res.json() as Promise<WorkflowEdgeDto[]>;
+}
+
+export async function upsertWorkflowEdge(workflowId: string, edge: {
+  sourceNodeId: number;
+  targetNodeId: number;
+  branchLabel?: string | null;
+}): Promise<WorkflowEdgeDto> {
+  return postJson<WorkflowEdgeDto>(`/api/workflow/${workflowId}/edges`, edge);
+}
+
+export async function deleteWorkflowEdge(workflowId: string, edgeId: number): Promise<void> {
+  await fetch(`/api/workflow/${workflowId}/edges/${edgeId}`, { method: "DELETE" });
+}
+
+// Versions
+export async function fetchWorkflowVersions(workflowId: string): Promise<WorkflowVersion[]> {
+  const res = await fetch(`/api/workflow/${workflowId}/versions`);
+  if (!res.ok) return [];
+  return res.json() as Promise<WorkflowVersion[]>;
+}
+
+export async function saveWorkflowVersion(workflowId: string, label?: string): Promise<WorkflowVersion> {
+  return postJson<WorkflowVersion>(`/api/workflow/${workflowId}/versions`, { label: label ?? null });
+}
+
+export async function restoreWorkflowVersion(workflowId: string, versionNumber: number): Promise<WorkflowVersion> {
+  return postJson<WorkflowVersion>(`/api/workflow/${workflowId}/versions/${versionNumber}/restore`, {});
+}
+
+// Runs
+export interface PagedWorkflowRuns {
+  content: WorkflowRun[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
+
+export async function fetchWorkflowRuns(
+  workflowId: string,
+  page = 0,
+  size = 10,
+): Promise<PagedWorkflowRuns> {
+  const res = await fetch(`/api/workflow/${workflowId}/runs?page=${page}&size=${size}`);
+  if (!res.ok) return { content: [], totalElements: 0, totalPages: 0, number: page, size };
+  return res.json() as Promise<PagedWorkflowRuns>;
 }
 
 export async function startWorkflowRun(
@@ -404,6 +482,14 @@ export async function fetchRunLogs(runId: string): Promise<WorkflowRunLog[]> {
   const res = await fetch(`/api/workflow/runs/${runId}/logs`);
   if (!res.ok) return [];
   return res.json() as Promise<WorkflowRunLog[]>;
+}
+
+export async function stopWorkflowRun(runId: string): Promise<void> {
+  await fetch(`/api/workflow/runs/${runId}/stop`, { method: "POST" });
+}
+
+export async function deleteWorkflowRun(runId: string): Promise<void> {
+  await fetch(`/api/workflow/runs/${runId}`, { method: "DELETE" });
 }
 
 // ── Skills API ────────────────────────────────────────────────────────────────
@@ -427,6 +513,24 @@ export async function deleteSkill(id: string): Promise<void> {
 
 export async function fetchSkillContent(id: string): Promise<string> {
   const res = await fetch(`/api/skills/${id}`);
+  if (!res.ok) return "";
+  return res.text();
+}
+
+export async function fetchSkillVersions(id: string): Promise<SkillVersion[]> {
+  const res = await fetch(`/api/skills/${id}/versions`);
+  if (!res.ok) return [];
+  return res.json() as Promise<SkillVersion[]>;
+}
+
+export async function uploadSkillVersion(id: string, file: File): Promise<SkillVersion> {
+  const form = new FormData();
+  form.append("file", file);
+  return postForm<SkillVersion>(`/api/skills/${id}/versions`, form);
+}
+
+export async function fetchSkillVersionContent(id: string, versionNumber: number): Promise<string> {
+  const res = await fetch(`/api/skills/${id}/versions/${versionNumber}`);
   if (!res.ok) return "";
   return res.text();
 }

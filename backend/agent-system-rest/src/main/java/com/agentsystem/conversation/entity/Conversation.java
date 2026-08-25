@@ -1,0 +1,50 @@
+package com.agentsystem.conversation.entity;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.time.Instant;
+
+@Entity
+@Table(name = "conversations")
+@Getter
+@Setter
+@NoArgsConstructor
+public class Conversation {
+
+    @Id
+    @Column(length = 36)
+    private String id;   // UUID assigned by the application
+
+    @Column(name = "user_uuid", length = 36)
+    private String userUuid;
+
+    /** Org slug when in team mode; null = personal. */
+    @Column(name = "org_id", length = 100)
+    private String orgId;
+
+    @Column(name = "archived", nullable = false)
+    private boolean archived = false;
+
+    /** Model display name to use for this conversation; null = user/system default. */
+    @Column(name = "selected_model", length = 100)
+    private String selectedModel;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt = Instant.now();
+
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt = Instant.now();
+
+    public Conversation(String id, String userUuid) {
+        this.id       = id;
+        this.userUuid = userUuid;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        this.updatedAt = Instant.now();
+    }
+}

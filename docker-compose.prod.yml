@@ -10,6 +10,10 @@
 #      echo "sk-..."                       > secrets/openai_api_key
 #      echo "$(openssl rand -base64 64)"   > secrets/auth_jwt_secret
 #      echo "$(openssl rand -base64 32)"   > secrets/scheduler_service_key
+#      echo "$(openssl rand -base64 32)"   > secrets/storage_service_key
+#      echo "$(openssl rand -base64 32)"   > secrets/alert_service_key
+#      echo "..."                          > secrets/garage_access_key   # pre-seeded via `garage key import`
+#      echo "..."                          > secrets/garage_secret_key
 #      # ... (see full list below)
 #      chmod 600 secrets/*
 #
@@ -46,6 +50,14 @@ secrets:
     file: ./secrets/finnhub_api_key
   scheduler_service_key:
     file: ./secrets/scheduler_service_key
+  storage_service_key:
+    file: ./secrets/storage_service_key
+  alert_service_key:
+    file: ./secrets/alert_service_key
+  garage_access_key:
+    file: ./secrets/garage_access_key
+  garage_secret_key:
+    file: ./secrets/garage_secret_key
   google_client_id:
     file: ./secrets/google_client_id
   google_client_secret:
@@ -110,7 +122,30 @@ services:
       retries: 10
       start_period: 30s
 
-  # ── Redis (Asynq task queue backend) ─────────────────────────────────────────
+  # ── Kafka (notification events: OTP + workflow-complete) ──────────────────────
+  kafka:
+    image: apache/kafka:3.9.2
+    container_name: agent-system-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+    restart: unless-stopped
+
+  # ── Redis — shared by the Go scheduler (Asynq queue) and the Java backend
+  #    (rate-limit buckets, sandbox container tracking, fallback answer cache) ──
   redis:
     image: redis:7-alpine
     container_name: agent-system-redis
@@ -120,6 +155,84 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # ── Garage (S3-compatible object storage for images) ──────────────────────────
+  # garage.toml is rendered from observability/garage/garage.toml.template by
+  # setup.sh (embeds the generated rpc_secret/admin_token). S3 API (3900) and
+  # admin API (3903) stay on the internal docker network only.
+  garage:
+    image: dxflrs/garage:v1.0.1
+    container_name: agent-system-garage
+    restart: unless-stopped
+    volumes:
+      - ./observability/garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Image storage microservice (agent-system-storage-inner module) ───────────
+  storage:
+    build:
+      context: ./backend
+      dockerfile: agent-system-storage-inner/Dockerfile
+    container_name: agent-system-storage
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    secrets:
+      - mysql_password
+      - storage_service_key
+      - garage_access_key
+      - garage_secret_key
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-ragagent}
+      MYSQL_USER: ${MYSQL_USER:-ragagent}
+      GARAGE_S3_ENDPOINT: http://garage:3900
+      GARAGE_REGION: ${GARAGE_REGION:-garage}
+      GARAGE_BUCKET: ${GARAGE_BUCKET:-agent-system-images}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8083/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+
+  # ── Notification consumer (agent-system-notification-consumer module) ────────
+  # Email today (Resend), consumed from Kafka; more channels (Telegram, push, etc.)
+  # land here later as new @KafkaListener methods.
+  notification-consumer:
+    build:
+      context: ./backend
+      dockerfile: agent-system-notification-consumer/Dockerfile
+    container_name: agent-system-notification-consumer
+    ports:
+      - "8084:8084"
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    secrets:
+      - resend_api_key
+      - resend_from_email
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8084/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
 
   # ── Go scheduler microservice ─────────────────────────────────────────────────
   scheduler:
@@ -157,20 +270,106 @@ services:
       retries: 5
       start_period: 15s
 
-  # ── Spring Boot backend ───────────────────────────────────────────────────────
+  # ── Go investment-alert-task microservice (crypto/stock price, DeFi, and ────
+  #    prediction-market alerts) ──────────────────────────────────────────────
+  investment-alert-task:
+    build:
+      context: ./investment-alert-task
+      dockerfile: Dockerfile
+    container_name: agent-system-investment-alert-task
+    ports:
+      - "8085:8085"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    secrets:
+      - alert_service_key
+      - mysql_password
+    environment:
+      PORT: 8085
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-ragagent}
+      MYSQL_USER: ${MYSQL_USER:-ragagent}
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ALERT_SERVICE_KEY_FILE: /run/secrets/alert_service_key
+      PYTH_API_URL: ${PYTH_API_URL:-https://hermes.pyth.network}
+      PYTH_API_KEY: ${PYTH_API_KEY:-}
+      CHECK_INTERVAL: ${ALERT_CHECK_INTERVAL:-60}
+      RULE_RELOAD_INTERVAL: ${ALERT_RULE_RELOAD_INTERVAL:-60}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8085/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Docker socket proxy ────────────────────────────────────────────────────────
+  # Mediates the backend's access to the Docker API for SandboxService (spawns
+  # ephemeral containers to run skill code). The backend never mounts the real
+  # /var/run/docker.sock directly — only this proxy does — and the proxy is
+  # restricted to the handful of endpoints SandboxService needs (container
+  # lifecycle, exec, stats). This reduces, but does not fully eliminate, the
+  # blast radius of an RCE/SSRF in the backend: container-create requests are
+  # still allowed (required for sandboxing), so a compromised backend could in
+  # principle create a privileged/host-bind-mounted container through it. For
+  # full isolation, run the host's Docker daemon with userns-remap enabled
+  # (rootless Docker), or move sandbox execution to a separate host/VM outside
+  # the backend's blast radius.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: agent-system-docker-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      EXEC: 1
+      POST: 1
+      INFO: 1
+      IMAGES: 0
+      NETWORKS: 0
+      VOLUMES: 0
+      BUILD: 0
+      SWARM: 0
+      SERVICES: 0
+      TASKS: 0
+      NODES: 0
+      SECRETS: 0
+      CONFIGS: 0
+      PLUGINS: 0
+      SYSTEM: 0
+      DISTRIBUTION: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2375/_ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Spring Boot backend (agent-system-rest module) ────────────────────────────
   # docker-entrypoint.sh reads /run/secrets/* → env vars before the JVM starts.
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: agent-system-rest/Dockerfile
     container_name: agent-system-backend
     ports:
       - "8081:8081"
     restart: unless-stopped
     depends_on:
+      docker-socket-proxy:
+        condition: service_healthy
       mysql:
         condition: service_healthy
       weaviate:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     secrets:
       - mysql_password
@@ -179,10 +378,10 @@ services:
       - anthropic_api_key
       - openrouter_api_key
       - auth_jwt_secret
-      - resend_api_key
-      - resend_from_email
       - finnhub_api_key
       - scheduler_service_key
+      - storage_service_key
+      - alert_service_key
       - google_client_id
       - google_client_secret
       - figma_client_id
@@ -198,6 +397,15 @@ services:
       # ── Weaviate
       WEAVIATE_HOST: weaviate
       WEAVIATE_PORT: 8080
+      # ── Redis (rate limiting, sandbox tracking, fallback cache — shared with scheduler's Asynq queue)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # ── Image storage (agent-system-storage-inner, Garage-backed)
+      STORAGE_URL: http://storage:8083
+      # ── Investment alerts (crypto/stock price, DeFi, prediction-market)
+      ALERT_URL: http://investment-alert-task:8085
+      # ── Notifications (agent-system-notification-consumer, Resend-backed email via Kafka)
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       # ── LLM
       LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
       # Embeddings use Ollama (nomic-embed-text) running on the host.
@@ -215,6 +423,11 @@ services:
       AUTH_ENABLED: ${AUTH_ENABLED:-true}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
       AUTH_OTP_EXPIRY_MINUTES: ${AUTH_OTP_EXPIRY_MINUTES:-10}
+      # ── Admin (comma-separated emails allowed to manage orgs system-wide)
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      # ── MCP transport auth (blank = /mcp/** closed; only set if you use MCP clients)
+      MCP_API_KEY: ${MCP_API_KEY:-}
+      MCP_EMAIL: ${MCP_EMAIL:-}
       # ── Client identity
       CLIENT_IDENTITY_ENABLED: ${CLIENT_IDENTITY_ENABLED:-false}
       CLIENT_IOS_SECRET: ${CLIENT_IOS_SECRET:-}
@@ -223,8 +436,8 @@ services:
       AUTH_PASSKEY_RP_ID: ${AUTH_PASSKEY_RP_ID:-localhost}
       AUTH_PASSKEY_RP_NAME: ${AUTH_PASSKEY_RP_NAME:-RAG Agent}
       AUTH_PASSKEY_ORIGIN: ${AUTH_PASSKEY_ORIGIN:-http://localhost:3000}
-      # ── Resend (RESEND_API_KEY + RESEND_FROM_EMAIL come from secrets)
       # ── Financial / Market data (FINNHUB_API_KEY comes from secrets)
+      # ── Travel (no secrets — records stored in MySQL, map tiles via CartoDB)
       # ── Distributed tracing (disabled — no OTEL collector in this stack)
       # To enable: add an OTEL collector service, then set:
       #   TRACING_SAMPLE_RATE=1.0
@@ -237,8 +450,9 @@ services:
       # ── Connectors (credentials come from secrets; TELEGRAM_BOT_USERNAME is non-secret)
       CONNECTOR_CALLBACK_BASE_URL: ${CONNECTOR_CALLBACK_BASE_URL:-http://localhost:3000}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      # ── Sandbox (SandboxService talks to Docker through the restricted proxy
+      # below instead of mounting the host socket directly)
+      DOCKER_HOST: tcp://docker-socket-proxy:2375
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -355,6 +569,8 @@ services:
 volumes:
   weaviate_data:
   mysql_data:
+  garage_meta:
+  garage_data:
   prometheus_data:
   grafana_data:
   loki_data:

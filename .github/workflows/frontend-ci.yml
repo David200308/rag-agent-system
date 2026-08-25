@@ -100,7 +100,7 @@ jobs:
           build-args: |
             BACKEND_URL=http://backend:8081
             AUTH_ENABLED=true
-            AUTH_JWT_EXPIRY_HOURS=72
+            AUTH_JWT_EXPIRY_HOURS=168
           # Disable OCI attestation manifests — GHCR rejects them when using
           # GITHUB_TOKEN, causing the push to fail silently with no image produced.
           provenance: false

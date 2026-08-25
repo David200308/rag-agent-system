@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	"scheduler/config"
 	"scheduler/store"
@@ -18,11 +19,14 @@ const Queue = "rag-scheduler"
 
 // TriggerPayload is serialised into the Asynq task at enqueue time.
 // BackendURL and ServiceKey are injected at execution time from live config.
+// RunID is deliberately not part of this payload: this exact payload is
+// re-enqueued unchanged on every cron tick of a recurring schedule, so a
+// RunID baked in here would be shared by every execution. NewHandler derives
+// a fresh per-execution ID from the Asynq task ID at run time instead.
 // Either ConversationID+Message or WorkflowID+WorkflowInput must be set.
 type TriggerPayload struct {
 	ScheduleID       string `json:"scheduleId"`
-	RunID            string `json:"runId"`
-	UserEmail        string `json:"userEmail"`
+	UserUuid         string `json:"userUuid"`
 	ConversationID   string `json:"conversationId"`
 	Message          string `json:"message"`
 	WorkflowID       string `json:"workflowId,omitempty"`
@@ -56,34 +60,43 @@ func NewHandler(cfg *config.Config, st *store.Store) asynq.HandlerFunc {
 			return fmt.Errorf("unmarshal payload: %w", err)
 		}
 
+		// asynq.GetTaskID is unique per enqueue (i.e. per cron tick) but stable
+		// across that task's own retries — exactly the identifier this run needs:
+		// distinct run-history rows per execution, and a stable idempotency key
+		// the backend can use to dedupe retries of one execution.
+		runID, ok := asynq.GetTaskID(ctx)
+		if !ok {
+			runID = uuid.New().String()
+		}
+
 		startTime := time.Now().UTC()
-		_ = st.InsertRun(p.ScheduleID, p.RunID, "RUNNING", startTime)
+		_ = st.InsertRun(p.ScheduleID, runID, "RUNNING", startTime)
 
 		var err error
 		if p.WorkflowID != "" {
-			err = callWorkflowBackend(ctx, cfg.BackendURL, cfg.ServiceKey, p)
+			err = callWorkflowBackend(ctx, cfg.BackendURL, cfg.ServiceKey, runID, p)
 		} else {
-			err = callChatBackend(ctx, cfg.BackendURL, cfg.ServiceKey, p)
+			err = callChatBackend(ctx, cfg.BackendURL, cfg.ServiceKey, runID, p)
 		}
 
 		status := "COMPLETED"
 		if err != nil {
 			status = "FAILED"
 		}
-		_ = st.CompleteRun(p.RunID, status, time.Now().UTC())
+		_ = st.CompleteRun(runID, status, time.Now().UTC())
 		return err
 	}
 }
 
-func callChatBackend(ctx context.Context, backendURL, serviceKey string, p TriggerPayload) error {
+func callChatBackend(ctx context.Context, backendURL, serviceKey, idempotencyKey string, p TriggerPayload) error {
 	body, err := json.Marshal(struct {
-		UserEmail        string `json:"userEmail"`
+		UserUuid         string `json:"userUuid"`
 		ConversationID   string `json:"conversationId"`
 		Message          string `json:"message"`
 		TopK             int    `json:"topK"`
 		UseKnowledgeBase bool   `json:"useKnowledgeBase"`
 		UseWebFetch      bool   `json:"useWebFetch"`
-	}{p.UserEmail, p.ConversationID, p.Message, p.TopK, p.UseKnowledgeBase, p.UseWebFetch})
+	}{p.UserUuid, p.ConversationID, p.Message, p.TopK, p.UseKnowledgeBase, p.UseWebFetch})
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
@@ -95,6 +108,7 @@ func callChatBackend(ctx context.Context, backendURL, serviceKey string, p Trigg
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Scheduler-Key", serviceKey)
+	req.Header.Set("X-Idempotency-Key", idempotencyKey)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -107,12 +121,12 @@ func callChatBackend(ctx context.Context, backendURL, serviceKey string, p Trigg
 	return nil
 }
 
-func callWorkflowBackend(ctx context.Context, backendURL, serviceKey string, p TriggerPayload) error {
+func callWorkflowBackend(ctx context.Context, backendURL, serviceKey, idempotencyKey string, p TriggerPayload) error {
 	body, err := json.Marshal(struct {
-		UserEmail     string `json:"userEmail"`
+		UserUuid      string `json:"userUuid"`
 		WorkflowID    string `json:"workflowId"`
 		WorkflowInput string `json:"workflowInput"`
-	}{p.UserEmail, p.WorkflowID, p.WorkflowInput})
+	}{p.UserUuid, p.WorkflowID, p.WorkflowInput})
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
@@ -124,6 +138,7 @@ func callWorkflowBackend(ctx context.Context, backendURL, serviceKey string, p T
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Scheduler-Key", serviceKey)
+	req.Header.Set("X-Idempotency-Key", idempotencyKey)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {

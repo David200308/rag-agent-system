@@ -1,0 +1,83 @@
+spring:
+  application:
+    name: agent-system-storage-inner
+
+  config:
+    import:
+      - optional:classpath:application.local.yml
+
+  servlet:
+    multipart:
+      max-file-size: ${STORAGE_MAX_FILE_SIZE_MB:10}MB
+      max-request-size: ${STORAGE_MAX_FILE_SIZE_MB:10}MB
+
+  # ── MySQL — same shared database as agent-system-rest, own `stored_images` table ──
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:ragagent}?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useUnicode=true
+    username: ${MYSQL_USER:ragagent}
+    password: ${MYSQL_PASSWORD:ragagent}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none   # schema.sql manages the DDL
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      continue-on-error: true
+
+server:
+  port: 8083
+
+# ── Garage (S3-compatible object storage) ────────────────────────────────────
+garage:
+  endpoint: ${GARAGE_S3_ENDPOINT:http://localhost:3900}
+  region: ${GARAGE_REGION:garage}
+  access-key: ${GARAGE_ACCESS_KEY:}
+  secret-key: ${GARAGE_SECRET_KEY:}
+  bucket: ${GARAGE_BUCKET:agent-system-images}
+
+# ── Shared secret expected on X-Storage-Key from agent-system-rest ──────────
+storage:
+  service-key: ${STORAGE_SERVICE_KEY:storage-secret-key}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      garage:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        wait-duration-in-open-state: 5s
+        failure-rate-threshold: 50
+  retry:
+    instances:
+      garage:
+        max-attempts: 3
+        wait-duration: 500ms
+        retry-exceptions:
+          - software.amazon.awssdk.core.exception.SdkClientException
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, circuitbreakers, prometheus
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
+
+logging:
+  level:
+    com.agentsystem.storage: DEBUG

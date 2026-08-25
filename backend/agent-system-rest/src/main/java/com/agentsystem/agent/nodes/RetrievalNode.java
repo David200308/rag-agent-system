@@ -1,0 +1,89 @@
+package com.agentsystem.agent.nodes;
+
+import com.agentsystem.agent.state.AgentState;
+import com.agentsystem.knowledge.service.KnowledgeSourceService;
+import com.agentsystem.org.OrgContext;
+import com.agentsystem.rag.service.RetrievalService;
+import com.agentsystem.schema.AgentRequest;
+import com.agentsystem.schema.DocumentResult;
+import com.agentsystem.schema.QueryAnalysis;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * Node 2 — Retrieval.
+ *
+ * Queries Weaviate through {@link RetrievalService} using the refined query
+ * produced by {@link QueryAnalyzerNode}.  Resilience4j circuit-breaker and
+ * retry logic live inside {@link RetrievalService}.
+ *
+ * Routes after completion:
+ *   documents found  → "generate"
+ *   no documents     → "fallback"
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class RetrievalNode {
+
+    private final RetrievalService     retrievalService;
+    private final KnowledgeSourceService knowledgeSourceService;
+
+    public Map<String, Object> process(AgentState state) {
+        AgentRequest  request  = state.request().orElseThrow();
+        QueryAnalysis analysis = state.queryAnalysis().orElseThrow();
+
+        // Safety guard: knowledge base search was disabled per-request.
+        // WebFetchNode should have already rerouted to DIRECT, but guard here too.
+        if (!request.isKnowledgeBaseEnabled()) {
+            log.info("[RetrievalNode] Knowledge base disabled for this request — skipping");
+            return Map.of();
+        }
+
+        String query    = analysis.refinedQuery();
+        int    topK     = request.effectiveTopK();
+        String userUuid = state.userUuid().orElse(null);
+
+        // Resolve the set of source IDs this caller is allowed to read.
+        // null means auth is disabled — no source restriction applied.
+        Set<String> allowedSources = resolveAllowedSources(userUuid);
+
+        log.debug("[RetrievalNode] Retrieving top-{} docs for: {} (user={}, allowedSources={})",
+                topK, query, userUuid, allowedSources == null ? "unrestricted" : allowedSources.size());
+
+        List<DocumentResult> docs = retrievalService.retrieve(
+                query, topK, request.filters(), allowedSources);
+
+        log.info("[RetrievalNode] Retrieved {} documents", docs.size());
+
+        if (docs.isEmpty()) {
+            return Map.of(
+                    "route",         "FALLBACK",
+                    "fallbackReason", "No relevant documents found in the knowledge base"
+            );
+        }
+
+        return Map.of("documents", docs);
+    }
+
+    /**
+     * Returns the set of source IDs the caller may read, or {@code null} when auth is
+     * disabled (no restriction). An empty set means the user has no accessible sources.
+     */
+    private Set<String> resolveAllowedSources(String userUuid) {
+        if (userUuid == null) {
+            // Auth is disabled — allow unrestricted access (null = no filter).
+            return null;
+        }
+        OrgContext ctx = new OrgContext(userUuid, null, "PERSONAL", null);
+        return knowledgeSourceService.listAccessible(ctx).stream()
+                .map(ks -> ks.getSource())
+                .collect(Collectors.toSet());
+    }
+}

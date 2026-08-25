@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"agent-cli/internal/style"
 )
 
 var chatCmd = &cobra.Command{
@@ -36,14 +38,14 @@ func runREPL() error {
 	reader := bufio.NewReader(os.Stdin)
 	var conversationID string
 
-	fmt.Println("RAG Agent — type 'exit' to quit, 'new' to start a new conversation.")
+	fmt.Println(style.Bold("RAG Agent") + style.Dim(" — type 'exit' to quit, 'new' to start a new conversation."))
 	if conversationID != "" {
-		fmt.Printf("Conversation: %s\n", conversationID)
+		fmt.Println(style.Dim("Conversation: " + conversationID))
 	}
 	fmt.Println()
 
 	for {
-		fmt.Print("You: ")
+		fmt.Print(style.Cyan(style.Bold("You: ")))
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			return nil
@@ -58,7 +60,7 @@ func runREPL() error {
 		}
 		if line == "new" {
 			conversationID = ""
-			fmt.Println("Started a new conversation.")
+			fmt.Println(style.OK("Started a new conversation."))
 			continue
 		}
 
@@ -69,12 +71,12 @@ func runREPL() error {
 
 		var resp map[string]any
 		if err := c.JSON("POST", "/api/v1/agent/query", body, &resp); err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			fmt.Fprintln(os.Stderr, style.Red("error: ")+err.Error())
 			continue
 		}
 
 		answer, _ := resp["answer"].(string)
-		fmt.Printf("\nAgent: %s\n\n", answer)
+		fmt.Printf("\n%s %s\n\n", style.Green(style.Bold("Agent:")), answer)
 
 		// Persist conversation ID across turns
 		if meta, ok := resp["metadata"].(map[string]any); ok {
@@ -102,7 +104,7 @@ func askAgent(question, conversationID string) error {
 
 	if meta, ok := resp["metadata"].(map[string]any); ok {
 		if id, ok := meta["conversationId"].(string); ok && id != "" {
-			fmt.Printf("\n[conversation: %s]\n", id)
+			fmt.Println(style.Dim(fmt.Sprintf("\n[conversation: %s]", id)))
 		}
 	}
 	return nil

@@ -1,57 +1,14 @@
 import { request } from "@/lib/backend-client";
+import { parseUploadedFile, forwardSkillMultipart, type ParsedUpload } from "@/lib/skillUpload";
 import { cookies } from "next/headers";
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
-import { writeFile, mkdir, readFile } from "node:fs/promises";
-import path from "node:path";
-import os from "node:os";
 import type { NextRequest } from "next/server";
 
-const execAsync = promisify(exec);
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8081";
 
 async function authHeaders() {
   const store = await cookies();
   const token = store.get("rag-session")?.value;
   return token ? { authorization: `Bearer ${token}` } : {};
-}
-
-const BINARY_EXTS = new Set([
-  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".svg",
-  ".pdf", ".zip", ".tar", ".gz", ".bz2", ".7z", ".rar",
-  ".jar", ".class", ".pyc", ".pyo", ".pyd",
-  ".exe", ".dll", ".so", ".dylib", ".bin",
-  ".woff", ".woff2", ".ttf", ".eot", ".otf",
-  ".mp3", ".mp4", ".wav", ".avi", ".mov", ".mkv", ".flv",
-  ".db", ".sqlite", ".pkl", ".npz", ".npy",
-]);
-
-async function extractZipContent(zipBuffer: ArrayBuffer): Promise<string> {
-  const tmpDir  = path.join(os.tmpdir(), `skill-zip-${Date.now()}`);
-  const zipPath = `${tmpDir}.zip`;
-  await writeFile(zipPath, Buffer.from(zipBuffer));
-  await mkdir(tmpDir, { recursive: true });
-  try {
-    await execAsync(`unzip -o "${zipPath}" -d "${tmpDir}"`);
-    const { stdout } = await execAsync(
-      `find "${tmpDir}" -type f -not -path '*/__MACOSX/*' -not -name '.DS_Store' -not -name '*.DS_Store' | sort`
-    );
-    const files = stdout.trim().split("\n").filter(Boolean);
-    const sections = await Promise.all(
-      files.map(async f => {
-        const rel = path.relative(tmpDir, f);
-        const ext = path.extname(f).toLowerCase();
-        if (BINARY_EXTS.has(ext)) {
-          return `<<< ${rel} >>>\n(binary file — preview not available)`;
-        }
-        const content = await readFile(f, "utf-8").catch(() => "(binary file — preview not available)");
-        return `<<< ${rel} >>>\n${content}`;
-      }),
-    );
-    return sections.join("\n\n");
-  } finally {
-    await execAsync(`rm -rf "${tmpDir}" "${zipPath}"`).catch(() => {});
-  }
 }
 
 export async function GET() {
@@ -70,32 +27,20 @@ export async function POST(req: NextRequest) {
 
   if (!file) return Response.json({ error: "No file" }, { status: 400 });
 
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  if (!["txt", "md", "zip"].includes(ext)) {
+  let parsed: ParsedUpload;
+  try {
+    parsed = await parseUploadedFile(file);
+  } catch {
     return Response.json({ error: "Unsupported file type" }, { status: 400 });
   }
 
-  const buffer  = await file.arrayBuffer();
-  const content = ext === "zip"
-    ? await extractZipContent(buffer)
-    : Buffer.from(buffer).toString("utf-8");
-
-  const payload = {
-    name:     name || file.name.replace(/\.[^.]+$/, ""),
-    fileName: file.name,
-    fileType: ext,
-    size:     file.size,
-    content,
-  };
-
-  const { statusCode, headers, body } = await request(
+  const res = await forwardSkillMultipart(
     `${BACKEND}/api/v1/skills`,
-    {
-      method:  "POST",
-      headers: { "content-type": "application/json", ...await authHeaders() },
-      body:    JSON.stringify(payload),
-    },
+    parsed,
+    file.name,
+    { name: name || file.name.replace(/\.[^.]+$/, ""), fileType: parsed.ext },
+    await authHeaders(),
   );
-  const ct = ([] as string[]).concat(headers["content-type"] ?? "application/json")[0] ?? "application/json";
-  return new Response(await body.text(), { status: statusCode, headers: { "content-type": ct } });
+  const ct = res.headers.get("content-type") ?? "application/json";
+  return new Response(await res.text(), { status: res.status, headers: { "content-type": ct } });
 }

@@ -1,0 +1,370 @@
+package com.agentsystem.org.service;
+
+import com.agentsystem.org.service.impl.OrganizationServiceImpl;
+
+import com.agentsystem.config.AdminProperties;
+import com.agentsystem.org.entity.OrgMember;
+import com.agentsystem.org.entity.OrgMemberId;
+import com.agentsystem.org.entity.Organization;
+import com.agentsystem.org.repository.OrgMemberRepository;
+import com.agentsystem.org.repository.OrganizationRepository;
+import com.agentsystem.user.entity.User;
+import com.agentsystem.user.entity.UserStatus;
+import com.agentsystem.user.service.UserAccountService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class OrganizationServiceTest {
+
+    @Mock OrganizationRepository orgRepo;
+    @Mock OrgMemberRepository    memberRepo;
+    @Mock UserAccountService     userAccountService;
+
+    OrganizationServiceImpl service;
+
+    @BeforeEach
+    void setUp() {
+        service = new OrganizationServiceImpl(orgRepo, memberRepo,
+                new AdminProperties(List.of("admin@test.com")), userAccountService);
+    }
+
+    /** resolveUuid() bridges email -> uuid; reuse the email string as the uuid for test simplicity. */
+    private void stubUuid(String email) {
+        lenient().when(userAccountService.findByEmail(email))
+                .thenReturn(Optional.of(new User(email, email, UserStatus.USER, true)));
+    }
+
+    // ── create ────────────────────────────────────────────────────────────────
+
+    @Test
+    void create_validSlug_savesOrg() {
+        when(orgRepo.existsById("skyproton")).thenReturn(false);
+        when(orgRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        ArgumentCaptor<Organization> captor = ArgumentCaptor.forClass(Organization.class);
+
+        Organization result = service.create("skyproton", "SkyProton");
+
+        verify(orgRepo).save(captor.capture());
+        assertThat(captor.getValue().getOrgId()).isEqualTo("skyproton");
+        assertThat(captor.getValue().getName()).isEqualTo("SkyProton");
+    }
+
+    @Test
+    void create_duplicateSlug_throwsIllegalArgument() {
+        when(orgRepo.existsById("skyproton")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.create("skyproton", "Another"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("already exists");
+    }
+
+    @Test
+    void create_invalidSlug_throwsIllegalArgument() {
+        assertThatThrownBy(() -> service.create("A", "Short"))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(() -> service.create("has spaces", "Bad"))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(() -> service.create("UPPERCASE", "Bad"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ── addMember ─────────────────────────────────────────────────────────────
+
+    @Test
+    void addMember_newEmail_savesMember() {
+        stubUuid("alice@test.com");
+        when(orgRepo.existsById("skyproton")).thenReturn(true);
+        when(memberRepo.existsByOrgIdAndUserUuid("skyproton", "alice@test.com")).thenReturn(false);
+        when(memberRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        OrgMember m = service.addMember("skyproton", "alice@test.com", OrgMember.Role.MEMBER);
+
+        assertThat(m.getOrgId()).isEqualTo("skyproton");
+        assertThat(m.getUserUuid()).isEqualTo("alice@test.com");
+        assertThat(m.getEmail()).isEqualTo("alice@test.com");
+        assertThat(m.getRole()).isEqualTo(OrgMember.Role.MEMBER);
+    }
+
+    @Test
+    void addMember_orgNotFound_throwsIllegalArgument() {
+        when(orgRepo.existsById("ghost")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.addMember("ghost", "alice@test.com", OrgMember.Role.MEMBER))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not found");
+    }
+
+    @Test
+    void addMember_unregisteredEmail_throwsIllegalArgument() {
+        when(orgRepo.existsById("skyproton")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.addMember("skyproton", "ghost@test.com", OrgMember.Role.MEMBER))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not a registered user");
+    }
+
+    @Test
+    void addMember_alreadyMember_throwsIllegalArgument() {
+        stubUuid("alice@test.com");
+        when(orgRepo.existsById("skyproton")).thenReturn(true);
+        when(memberRepo.existsByOrgIdAndUserUuid("skyproton", "alice@test.com")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.addMember("skyproton", "alice@test.com", OrgMember.Role.MEMBER))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("already a member");
+    }
+
+    // ── removeMember ──────────────────────────────────────────────────────────
+
+    @Test
+    void removeMember_delegatesToRepository() {
+        stubUuid("bob@test.com");
+
+        service.removeMember("skyproton", "bob@test.com");
+
+        verify(memberRepo).deleteById(new OrgMemberId("skyproton", "bob@test.com"));
+    }
+
+    @Test
+    void removeMember_unregisteredEmail_throwsIllegalArgument() {
+        assertThatThrownBy(() -> service.removeMember("skyproton", "ghost@test.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not a registered user");
+    }
+
+    // ── listMembers ───────────────────────────────────────────────────────────
+
+    @Test
+    void listMembers_returnsAllOrgMembers() {
+        OrgMember m = new OrgMember("skyproton", "alice@test.com", "alice@test.com", OrgMember.Role.OWNER);
+        when(memberRepo.findByOrgId("skyproton")).thenReturn(List.of(m));
+
+        assertThat(service.listMembers("skyproton")).containsExactly(m);
+    }
+
+    // ── isMember ──────────────────────────────────────────────────────────────
+
+    @Test
+    void isMember_orgExistsAndEmailIsMember_returnsTrue() {
+        stubUuid("alice@test.com");
+        when(orgRepo.existsById("skyproton")).thenReturn(true);
+        when(memberRepo.existsByOrgIdAndUserUuid("skyproton", "alice@test.com")).thenReturn(true);
+
+        assertThat(service.isMember("skyproton", "alice@test.com")).isTrue();
+    }
+
+    @Test
+    void isMember_orgDoesNotExist_returnsFalse() {
+        when(orgRepo.existsById("ghost")).thenReturn(false);
+
+        assertThat(service.isMember("ghost", "alice@test.com")).isFalse();
+        verify(memberRepo, never()).existsByOrgIdAndUserUuid(any(), any());
+    }
+
+    @Test
+    void isMember_orgExistsButEmailNotMember_returnsFalse() {
+        stubUuid("stranger@test.com");
+        when(orgRepo.existsById("skyproton")).thenReturn(true);
+        when(memberRepo.existsByOrgIdAndUserUuid("skyproton", "stranger@test.com")).thenReturn(false);
+
+        assertThat(service.isMember("skyproton", "stranger@test.com")).isFalse();
+    }
+
+    @Test
+    void isMember_orgExistsButEmailUnregistered_returnsFalse() {
+        when(orgRepo.existsById("skyproton")).thenReturn(true);
+
+        assertThat(service.isMember("skyproton", "ghost@test.com")).isFalse();
+    }
+
+    // ── requireOwner ──────────────────────────────────────────────────────────
+
+    @Test
+    void requireOwner_ownerRole_doesNotThrow() {
+        stubUuid("owner@test.com");
+        OrgMember owner = new OrgMember("skyproton", "owner@test.com", "owner@test.com", OrgMember.Role.OWNER);
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "owner@test.com"))
+                .thenReturn(Optional.of(owner));
+
+        // should not throw
+        service.requireOwner("skyproton", "owner@test.com");
+    }
+
+    @Test
+    void requireOwner_memberRole_throwsSecurityException() {
+        stubUuid("member@test.com");
+        OrgMember member = new OrgMember("skyproton", "member@test.com", "member@test.com", OrgMember.Role.MEMBER);
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "member@test.com"))
+                .thenReturn(Optional.of(member));
+
+        assertThatThrownBy(() -> service.requireOwner("skyproton", "member@test.com"))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("owner");
+    }
+
+    @Test
+    void requireOwner_notAMember_throwsSecurityException() {
+        stubUuid("outsider@test.com");
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "outsider@test.com"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.requireOwner("skyproton", "outsider@test.com"))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test
+    void requireOwner_unregisteredEmail_throwsSecurityException() {
+        assertThatThrownBy(() -> service.requireOwner("skyproton", "ghost@test.com"))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    // ── transferOwner ─────────────────────────────────────────────────────────
+
+    @Test
+    void transferOwner_swapsRolesAtomically() {
+        stubUuid("owner@test.com");
+        stubUuid("new@test.com");
+        OrgMember currentOwner = new OrgMember("skyproton", "owner@test.com", "owner@test.com", OrgMember.Role.OWNER);
+        OrgMember newOwner     = new OrgMember("skyproton", "new@test.com",   "new@test.com",   OrgMember.Role.MEMBER);
+
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "owner@test.com"))
+                .thenReturn(Optional.of(currentOwner));
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "new@test.com"))
+                .thenReturn(Optional.of(newOwner));
+        when(memberRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        service.transferOwner("skyproton", "owner@test.com", "new@test.com");
+
+        assertThat(currentOwner.getRole()).isEqualTo(OrgMember.Role.MEMBER);
+        assertThat(newOwner.getRole()).isEqualTo(OrgMember.Role.OWNER);
+        verify(memberRepo, times(2)).save(any());
+    }
+
+    @Test
+    void transferOwner_newOwnerNotMember_throwsIllegalArgument() {
+        stubUuid("owner@test.com");
+        stubUuid("ghost@test.com");
+        OrgMember currentOwner = new OrgMember("skyproton", "owner@test.com", "owner@test.com", OrgMember.Role.OWNER);
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "owner@test.com"))
+                .thenReturn(Optional.of(currentOwner));
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "ghost@test.com"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                service.transferOwner("skyproton", "owner@test.com", "ghost@test.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not a member");
+    }
+
+    @Test
+    void transferOwner_callerNotOwner_throwsSecurityException() {
+        stubUuid("member@test.com");
+        OrgMember member = new OrgMember("skyproton", "member@test.com", "member@test.com", OrgMember.Role.MEMBER);
+        when(memberRepo.findByOrgIdAndUserUuid("skyproton", "member@test.com"))
+                .thenReturn(Optional.of(member));
+
+        assertThatThrownBy(() ->
+                service.transferOwner("skyproton", "member@test.com", "other@test.com"))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    // ── listAll ───────────────────────────────────────────────────────────────
+
+    @Test
+    void listAll_returnsAllOrganizations() {
+        Organization org = new Organization("skyproton", "Skyproton");
+        when(orgRepo.findAll()).thenReturn(List.of(org));
+
+        List<Organization> result = service.listAll();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getOrgId()).isEqualTo("skyproton");
+    }
+
+    // ── get ───────────────────────────────────────────────────────────────────
+
+    @Test
+    void get_existingOrg_returnsOrg() {
+        Organization org = new Organization("skyproton", "Skyproton");
+        when(orgRepo.findById("skyproton")).thenReturn(Optional.of(org));
+
+        Organization result = service.get("skyproton");
+
+        assertThat(result.getOrgId()).isEqualTo("skyproton");
+    }
+
+    @Test
+    void get_notFound_throwsIllegalArgument() {
+        when(orgRepo.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.get("missing"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("missing");
+    }
+
+    // ── delete ────────────────────────────────────────────────────────────────
+
+    @Test
+    void delete_callsDeleteById() {
+        service.delete("skyproton");
+
+        verify(orgRepo).deleteById("skyproton");
+    }
+
+    // ── requireSystemAdmin ────────────────────────────────────────────────────
+
+    @Test
+    void requireSystemAdmin_configuredEmail_doesNotThrow() {
+        service.requireSystemAdmin("admin@test.com");
+    }
+
+    @Test
+    void requireSystemAdmin_caseInsensitive_doesNotThrow() {
+        service.requireSystemAdmin("Admin@Test.com");
+    }
+
+    @Test
+    void requireSystemAdmin_unlistedEmail_throwsSecurityException() {
+        assertThatThrownBy(() -> service.requireSystemAdmin("stranger@test.com"))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test
+    void requireSystemAdmin_nullEmail_throwsSecurityException() {
+        assertThatThrownBy(() -> service.requireSystemAdmin(null))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    // ── requireOrgExists ──────────────────────────────────────────────────────
+
+    @Test
+    void requireOrgExists_exists_noException() {
+        when(orgRepo.existsById("skyproton")).thenReturn(true);
+
+        service.requireOrgExists("skyproton");
+    }
+
+    @Test
+    void requireOrgExists_notExists_throwsIllegalArgument() {
+        when(orgRepo.existsById("ghost")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.requireOrgExists("ghost"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ghost");
+    }
+}

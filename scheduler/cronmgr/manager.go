@@ -5,7 +5,6 @@ import (
 	"log"
 	"sync"
 
-	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	"scheduler/model"
 	"scheduler/worker"
@@ -80,10 +79,14 @@ func (m *Manager) LoadAll(schedules []*model.Schedule) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 func buildTask(sc *model.Schedule) (*asynq.Task, error) {
+	// RunID is intentionally not set here: this task template is re-enqueued
+	// unchanged on every cron tick, so a RunID baked in at registration time
+	// would be shared by every execution of the schedule. worker.NewHandler
+	// derives a fresh, per-execution ID from the Asynq task ID at run time
+	// instead (stable across that execution's own retries, unique per tick).
 	return worker.NewTriggerTask(worker.TriggerPayload{
 		ScheduleID:       sc.ID,
-		RunID:            uuid.New().String(),
-		UserEmail:        sc.OwnerEmail,
+		UserUuid:         sc.OwnerUuid,
 		ConversationID:   sc.ConversationID,
 		Message:          sc.Message,
 		WorkflowID:       sc.WorkflowID,

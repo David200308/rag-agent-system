@@ -28,8 +28,13 @@ export async function GET() {
       { headers: { authorization: `Bearer ${token}` } },
     );
     if (statusCode === 200) {
-      const data = (await body.json()) as { valid: boolean; email?: string };
-      return Response.json({ enabled: true, email: data.email ?? null });
+      const data = (await body.json()) as { valid: boolean; email?: string; mode?: string; orgId?: string };
+      return Response.json({
+        enabled: true,
+        email:   data.email ?? null,
+        mode:    data.mode  ?? "PERSONAL",
+        orgId:   data.orgId ?? null,
+      });
     }
   } catch {
     // backend unreachable — return enabled without email

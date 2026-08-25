@@ -74,6 +74,22 @@ const CONNECTORS: Connector[] = [
     ),
   },
   {
+    id: "google-calendar",
+    provider: "google",
+    name: "Google Calendar",
+    description: "View upcoming events and create calendar events directly from chat.",
+    icon: (
+      <svg viewBox="0 0 48 48" className="h-8 w-8" fill="none">
+        <rect x="4" y="8" width="40" height="36" rx="3" fill="#fff" stroke="#E0E0E0" strokeWidth="1.5" />
+        <rect x="4" y="8" width="40" height="12" rx="3" fill="#1A73E8" />
+        <rect x="4" y="17" width="40" height="3" fill="#1A73E8" />
+        <rect x="16" y="4" width="4" height="8" rx="2" fill="#1A73E8" />
+        <rect x="28" y="4" width="4" height="8" rx="2" fill="#1A73E8" />
+        <text x="24" y="38" textAnchor="middle" fontSize="16" fontWeight="bold" fill="#1A73E8">31</text>
+      </svg>
+    ),
+  },
+  {
     id: "figma",
     provider: "figma",
     name: "Figma",

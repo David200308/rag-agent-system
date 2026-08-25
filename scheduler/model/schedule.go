@@ -10,7 +10,7 @@ type Schedule struct {
 	ConversationID   string     `json:"conversationId"`
 	WorkflowID       string     `json:"workflowId,omitempty"`
 	WorkflowInput    string     `json:"workflowInput,omitempty"`
-	OwnerEmail       string     `json:"ownerEmail"`
+	OwnerUuid        string     `json:"ownerUuid"`
 	Message          string     `json:"message"`
 	CronExpr         string     `json:"cronExpr"`
 	Timezone         string     `json:"timezone"`
@@ -67,7 +67,7 @@ type UpdateRequest struct {
 // InternalCreateRequest is the body for POST /internal/schedules (service-key auth).
 // Used by the Spring Boot workflow engine to create schedules on behalf of a user.
 type InternalCreateRequest struct {
-	OwnerEmail       string `json:"ownerEmail"`
+	OwnerUuid        string `json:"ownerUuid"`
 	ConversationID   string `json:"conversationId"`
 	WorkflowID       string `json:"workflowId"`
 	WorkflowInput    string `json:"workflowInput"`

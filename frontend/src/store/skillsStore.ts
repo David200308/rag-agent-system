@@ -8,6 +8,8 @@ interface SkillsState {
   setAgentSkills: (agentId: number, skillIds: string[]) => void;
   getAgentSkills: (agentId: number) => string[];
   clearAgentSkills: (agentId: number) => void;
+  /** Reset in-memory and persisted state. Called on logout so the next user on this device doesn't see the previous user's skill selections. */
+  clearAll: () => void;
 }
 
 export const useSkillsStore = create<SkillsState>()(
@@ -28,6 +30,8 @@ export const useSkillsStore = create<SkillsState>()(
           delete next[String(agentId)];
           return { agentSkills: next };
         }),
+
+      clearAll: () => set({ agentSkills: {} }),
     }),
     { name: "agent-skills" }
   )

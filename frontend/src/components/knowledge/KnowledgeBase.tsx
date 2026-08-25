@@ -376,7 +376,9 @@ function UrlStatusBadge({ status }: { status: UrlEntry["status"] }) {
 function ShareRow({ entry, onSaved }: { entry: KnowledgeSourceEntry; onSaved: (emails: string[]) => void }) {
   const [open, setOpen]           = useState(false);
   const [emailInput, setEmailInput] = useState("");
-  const [emails, setEmails]       = useState<string[]>(entry.shares.map((s) => s.sharedEmail));
+  const [emails, setEmails]       = useState<string[]>(
+    entry.shares.map((s) => s.sharedEmail).filter((e): e is string => Boolean(e)),
+  );
   const [saving, setSaving]       = useState(false);
 
   const addEmail = () => {
@@ -693,8 +695,8 @@ function ManagePanel() {
                         {...cardProps}
                         isOwner={
                           // auth disabled (no email on either side) → treat as owner
-                          currentEmail === null ||
-                          s.ownerEmail === null ||
+                          !currentEmail ||
+                          !s.ownerEmail ||
                           s.ownerEmail.toLowerCase() === currentEmail.toLowerCase()
                         }
                       />

@@ -30,7 +30,8 @@ Commands:
   chat         Send queries to the agent (interactive or single-shot)
   conversation Manage your conversations
   workflow     View workflows and their run history
-  financial    Manage your financial portfolio`,
+  financial    Manage your financial portfolio
+  travel       Manage your travel records`,
 	SilenceUsage: true,
 }
 

@@ -27,6 +27,8 @@ interface ChatState {
     backendConversations: BackendConversation[],
     messagesByBackendId: Record<string, BackendMessage[]>,
   ) => void;
+  /** Reset in-memory and persisted state. Called on logout so the next user on this device doesn't see the previous user's conversations. */
+  clearAll: () => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -157,6 +159,8 @@ export const useChatStore = create<ChatState>()(
           };
         });
       },
+
+      clearAll: () => set({ conversations: [], activeId: null }),
     }),
     {
       name: "rag-chat-store",

@@ -7,6 +7,8 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+
+	"agent-cli/internal/style"
 )
 
 var financialCmd = &cobra.Command{
@@ -33,7 +35,7 @@ var depositsListCmd = &cobra.Command{
 			return nil
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tPLATFORM\tTYPE\tCURRENCY\tAMOUNT\tCONVERTED")
+		fmt.Fprintln(w, style.Header("ID\tPLATFORM\tTYPE\tCURRENCY\tAMOUNT\tCONVERTED"))
 		for _, d := range items {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%v\t%v %s\n",
 				str(d, "id"), str(d, "platform"), str(d, "depositType"),
@@ -84,18 +86,18 @@ var stocksListCmd = &cobra.Command{
 			return nil
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tSYMBOL\tNAME\tSHARES\tCURR PRICE\tPNL%")
+		fmt.Fprintln(w, style.Header("ID\tSYMBOL\tNAME\tSHARES\tCURR PRICE\tPNL%"))
 		for _, s := range items {
 			pnl := "N/A"
 			if v, ok := s["pnlPercent"].(float64); ok {
-				pnl = fmt.Sprintf("%.2f%%", v)
+				pnl = style.PnL(v, fmt.Sprintf("%+.2f%%", v))
 			}
 			price := "N/A"
 			if v, ok := s["currentPrice"].(float64); ok {
 				price = fmt.Sprintf("%.4f %s", v, str(s, "priceCurrency"))
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%v\t%s\t%s\n",
-				str(s, "id"), str(s, "symbol"), str(s, "name"),
+				str(s, "id"), style.Bold(str(s, "symbol")), str(s, "name"),
 				s["stockAmount"], price, pnl)
 		}
 		w.Flush()
@@ -142,18 +144,18 @@ var cryptoListCmd = &cobra.Command{
 			return nil
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tSYMBOL\tNAME\tAMOUNT\tCURR PRICE (USDT)\tPNL%")
+		fmt.Fprintln(w, style.Header("ID\tSYMBOL\tNAME\tAMOUNT\tCURR PRICE (USDT)\tPNL%"))
 		for _, s := range items {
 			pnl := "N/A"
 			if v, ok := s["pnlPercent"].(float64); ok {
-				pnl = fmt.Sprintf("%.2f%%", v)
+				pnl = style.PnL(v, fmt.Sprintf("%+.2f%%", v))
 			}
 			price := "N/A"
 			if v, ok := s["currentPrice"].(float64); ok {
 				price = fmt.Sprintf("%.4f", v)
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%v\t%s\t%s\n",
-				str(s, "id"), str(s, "symbol"), str(s, "name"),
+				str(s, "id"), style.Bold(str(s, "symbol")), str(s, "name"),
 				s["amount"], price, pnl)
 		}
 		w.Flush()
@@ -200,7 +202,7 @@ var cardsListCmd = &cobra.Command{
 			return nil
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tBANK\tCARD NAME\tNETWORK\tEXPIRY\tCREDIT LIMIT")
+		fmt.Fprintln(w, style.Header("ID\tBANK\tCARD NAME\tNETWORK\tEXPIRY\tCREDIT LIMIT"))
 		for _, card := range items {
 			limit := "N/A"
 			if v := card["creditLimit"]; v != nil {
@@ -236,6 +238,59 @@ var cardsDeleteCmd = &cobra.Command{
 	RunE:  financialDelete("/api/v1/financial/cards"),
 }
 
+// ── Salary ────────────────────────────────────────────────────────────────────
+
+var salaryCmd = &cobra.Command{Use: "salary", Short: "Manage salary usage records"}
+
+var salaryListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List salary usage records",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := newClient()
+		var items []map[string]any
+		if err := c.JSON("GET", "/api/v1/financial/salary", nil, &items); err != nil {
+			return err
+		}
+		if len(items) == 0 {
+			fmt.Println("No salary records found.")
+			return nil
+		}
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, style.Header("ID\tPERIOD\tREGION\tCURRENCY\tSALARY\tBONUS\tTAX\tEXPENSES"))
+		for _, s := range items {
+			year, _ := s["year"].(float64)
+			month, _ := s["month"].(float64)
+			period := fmt.Sprintf("%04d-%02d", int(year), int(month))
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%v\t%v\t%v\t%v\n",
+				str(s, "id"), period, str(s, "region"), str(s, "currency"),
+				s["salary"], s["bonus"], s["tax"], s["totalExpense"])
+		}
+		w.Flush()
+		return nil
+	},
+}
+
+var salaryAddCmd = &cobra.Command{
+	Use:   "add",
+	Short: "Create a salary usage record",
+	Long:  "Create a salary usage record.\n\nExample:\n  agent-cli financial salary add --data '{\"year\":2026,\"month\":7,\"region\":\"US\",\"currency\":\"USD\",\"salary\":9000,\"bonus\":0,\"tax\":1800}'",
+	RunE:  financialCreate("POST", "/api/v1/financial/salary"),
+}
+
+var salaryUpdateCmd = &cobra.Command{
+	Use:   "update <id>",
+	Short: "Update a salary usage record",
+	Args:  cobra.ExactArgs(1),
+	RunE:  financialUpdate("PUT", "/api/v1/financial/salary"),
+}
+
+var salaryDeleteCmd = &cobra.Command{
+	Use:   "delete <id>",
+	Short: "Delete a salary usage record",
+	Args:  cobra.ExactArgs(1),
+	RunE:  financialDelete("/api/v1/financial/salary"),
+}
+
 // ── Prices ────────────────────────────────────────────────────────────────────
 
 var pricesCmd = &cobra.Command{Use: "prices", Short: "Manage market prices"}
@@ -248,7 +303,7 @@ var pricesRefreshCmd = &cobra.Command{
 		if err := c.JSON("POST", "/api/v1/financial/prices/refresh", nil, nil); err != nil {
 			return err
 		}
-		fmt.Println("Prices refreshed.")
+		fmt.Println(style.OK("Prices refreshed."))
 		return nil
 	},
 }
@@ -301,7 +356,7 @@ func financialDelete(basePath string) func(*cobra.Command, []string) error {
 		if err := c.JSON("DELETE", basePath+"/"+args[0], nil, nil); err != nil {
 			return err
 		}
-		fmt.Printf("Deleted %s.\n", args[0])
+		fmt.Println(style.OK(fmt.Sprintf("Deleted %s.", args[0])))
 		return nil
 	}
 }
@@ -318,6 +373,7 @@ func init() {
 		stocksAddCmd, stocksUpdateCmd,
 		cryptoAddCmd, cryptoUpdateCmd,
 		cardsAddCmd, cardsUpdateCmd,
+		salaryAddCmd, salaryUpdateCmd,
 	} {
 		cmd.Flags().String("data", "", "JSON body (required)")
 	}
@@ -326,8 +382,9 @@ func init() {
 	stocksCmd.AddCommand(stocksListCmd, stocksAddCmd, stocksUpdateCmd, stocksDeleteCmd)
 	cryptoCmd.AddCommand(cryptoListCmd, cryptoAddCmd, cryptoUpdateCmd, cryptoDeleteCmd)
 	cardsCmd.AddCommand(cardsListCmd, cardsAddCmd, cardsUpdateCmd, cardsDeleteCmd)
+	salaryCmd.AddCommand(salaryListCmd, salaryAddCmd, salaryUpdateCmd, salaryDeleteCmd)
 	pricesCmd.AddCommand(pricesRefreshCmd)
 
-	financialCmd.AddCommand(depositsCmd, stocksCmd, cryptoCmd, cardsCmd, pricesCmd)
+	financialCmd.AddCommand(depositsCmd, stocksCmd, cryptoCmd, cardsCmd, salaryCmd, pricesCmd)
 	rootCmd.AddCommand(financialCmd)
 }

@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: agent-system-notification-consumer
+
+  config:
+    import:
+      - optional:classpath:application.local.yml
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: notification-consumer
+      auto-offset-reset: earliest
+      # Wraps JsonDeserializer so a malformed/untrusted record becomes a normal listener-level
+      # error (caught by kafkaErrorHandler's bounded retry) instead of killing the whole
+      # consumer thread — DefaultErrorHandler cannot act on a raw SerializationException,
+      # since that happens during poll(), before any record reaches the listener.
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: com.agentsystem.notification.email.listener
+        # The producer (agent-system-rest) has its own NotificationClient.OtpRequestedEvent /
+        # WorkflowCompletedEvent classes — different FQCNs from this module's EmailEventListener
+        # ones. Type mapping resolves the __TypeId__ header to a logical name shared by both
+        # sides instead of the producer's class name, which this module doesn't have on its
+        # classpath. Keys here must stay in sync with the producer's mapping.
+        # alertTriggered is produced directly by the Go investment-alert-task service (not
+        # agent-system-rest) — see investment-alert-task/notify/client.go — but uses the same
+        # logical-name convention so it resolves to this module's own record.
+        spring.json.type.mapping: otpRequested:com.agentsystem.notification.email.listener.EmailEventListener$OtpRequestedEvent,workflowCompleted:com.agentsystem.notification.email.listener.EmailEventListener$WorkflowCompletedEvent,alertTriggered:com.agentsystem.notification.email.listener.EmailEventListener$AlertTriggeredEvent
+
+server:
+  port: 8084
+
+# ── Resend (transactional email) ──────────────────────────────────────────────
+resend:
+  api-key: ${RESEND_API_KEY:}
+  from-email: ${RESEND_FROM_EMAIL:noreply@example.com}
+
+# ── logo-url is the branding image used in the email template header ─────────
+notification:
+  email:
+    logo-url: ${NOTIFICATION_EMAIL_LOGO_URL:https://www.skyproton.com/_next/static/media/logo-black-front-no-background.0acya-sxbgd9s.svg}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.agentsystem.notification: DEBUG

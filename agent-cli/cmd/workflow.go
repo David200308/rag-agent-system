@@ -6,6 +6,8 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+
+	"agent-cli/internal/style"
 )
 
 var workflowCmd = &cobra.Command{
@@ -28,7 +30,7 @@ var wfListCmd = &cobra.Command{
 			return nil
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tNAME\tPATTERN\tCREATED")
+		fmt.Fprintln(w, style.Header("ID\tNAME\tPATTERN\tCREATED"))
 		for _, wf := range workflows {
 			id, _ := wf["id"].(string)
 			name, _ := wf["name"].(string)
@@ -60,9 +62,9 @@ var wfGetCmd = &cobra.Command{
 		if len(agents) == 0 {
 			return nil
 		}
-		fmt.Println("\nAgents:")
+		fmt.Println(style.Bold("\nAgents:"))
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "  ID\tNAME\tROLE")
+		fmt.Fprintln(w, style.Header("  ID\tNAME\tROLE"))
 		for _, a := range agents {
 			id := fmt.Sprintf("%v", a["id"])
 			name, _ := a["name"].(string)
@@ -83,7 +85,7 @@ var wfDeleteCmd = &cobra.Command{
 		if err := c.JSON("DELETE", "/api/v1/workflow/"+args[0], nil, nil); err != nil {
 			return err
 		}
-		fmt.Printf("Workflow %s deleted.\n", args[0])
+		fmt.Println(style.OK(fmt.Sprintf("Workflow %s deleted.", args[0])))
 		return nil
 	},
 }
@@ -103,7 +105,7 @@ var wfRunsCmd = &cobra.Command{
 			return nil
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "RUN ID\tSTATUS\tSTARTED\tINPUT")
+		fmt.Fprintln(w, style.Header("RUN ID\tSTATUS\tSTARTED\tINPUT"))
 		for _, r := range runs {
 			runID, _ := r["id"].(string)
 			status, _ := r["status"].(string)
@@ -112,9 +114,42 @@ var wfRunsCmd = &cobra.Command{
 			if len(input) > 40 {
 				input = input[:40] + "…"
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", runID, status, startedAt, input)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", runID, style.Status(status), startedAt, input)
 		}
 		w.Flush()
+		return nil
+	},
+}
+
+var wfRunCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Manage individual workflow runs",
+}
+
+var wfRunStopCmd = &cobra.Command{
+	Use:   "stop <run-id>",
+	Short: "Stop a running (or pending) workflow run",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := newClient()
+		if err := c.JSON("POST", "/api/v1/workflow/runs/"+args[0]+"/stop", nil, nil); err != nil {
+			return err
+		}
+		fmt.Println(style.OK(fmt.Sprintf("Run %s stopped.", args[0])))
+		return nil
+	},
+}
+
+var wfRunDeleteCmd = &cobra.Command{
+	Use:   "delete <run-id>",
+	Short: "Delete a run and its logs (stops it first if still active)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := newClient()
+		if err := c.JSON("DELETE", "/api/v1/workflow/runs/"+args[0], nil, nil); err != nil {
+			return err
+		}
+		fmt.Println(style.OK(fmt.Sprintf("Run %s deleted.", args[0])))
 		return nil
 	},
 }
@@ -139,9 +174,9 @@ var wfLogsCmd = &cobra.Command{
 			logType, _ := l["logType"].(string)
 			content, _ := l["content"].(string)
 			if agent != "" {
-				fmt.Printf("[%s] [%s] [%s] %s\n", ts, agent, logType, content)
+				fmt.Printf("%s %s [%s] %s\n", style.Dim("["+ts+"]"), style.Cyan("["+agent+"]"), style.LogType(logType), content)
 			} else {
-				fmt.Printf("[%s] [%s] %s\n", ts, logType, content)
+				fmt.Printf("%s [%s] %s\n", style.Dim("["+ts+"]"), style.LogType(logType), content)
 			}
 		}
 		return nil
@@ -154,6 +189,10 @@ func init() {
 	workflowCmd.AddCommand(wfDeleteCmd)
 	workflowCmd.AddCommand(wfRunsCmd)
 	workflowCmd.AddCommand(wfLogsCmd)
+
+	wfRunCmd.AddCommand(wfRunStopCmd)
+	wfRunCmd.AddCommand(wfRunDeleteCmd)
+	workflowCmd.AddCommand(wfRunCmd)
 
 	rootCmd.AddCommand(workflowCmd)
 }

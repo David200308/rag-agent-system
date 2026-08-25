@@ -26,7 +26,7 @@ services:
       timeout: 5s
       retries: 10
 
-  # ── Relational DB (auth: whitelist, OTP, JWT) ─────────────────────────────────
+  # ── Relational DB (auth: email whitelist; OTP codes live in Redis, JWT is stateless) ──
   mysql:
     image: mysql:latest
     container_name: agent-system-mysql
@@ -46,11 +46,35 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Spring Boot backend ───────────────────────────────────────────────────────
+  # ── Kafka (notification events: OTP + workflow-complete) ──────────────────────
+  kafka:
+    image: apache/kafka:3.9.2
+    container_name: agent-system-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+    restart: unless-stopped
+
+  # ── Spring Boot backend (agent-system-rest module) ────────────────────────────
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: agent-system-rest/Dockerfile
     container_name: agent-system-backend
     ports:
       - "8081:8081"
@@ -60,6 +84,10 @@ services:
         condition: service_healthy
       weaviate:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     environment:
       # ── Database
       MYSQL_HOST: mysql
@@ -67,6 +95,9 @@ services:
       MYSQL_DB: ${MYSQL_DB:-ragagent}
       MYSQL_USER: ${MYSQL_USER:-ragagent}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ragagent}
+      # ── Redis (rate limiting, sandbox tracking, fallback cache — shared with scheduler's Asynq queue)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       # ── Weaviate
       WEAVIATE_HOST: weaviate
       WEAVIATE_PORT: 8080
@@ -90,15 +121,18 @@ services:
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-changeme-use-a-long-random-base64-string-in-production}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
       AUTH_OTP_EXPIRY_MINUTES: ${AUTH_OTP_EXPIRY_MINUTES:-10}
+      # ── Admin (comma-separated emails allowed to manage orgs system-wide)
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      # ── MCP transport auth (blank = /mcp/** closed)
+      MCP_API_KEY: ${MCP_API_KEY:-}
+      MCP_EMAIL: ${MCP_EMAIL:-}
       # ── Client identity (set CLIENT_IDENTITY_ENABLED=true to enforce)
       CLIENT_IDENTITY_ENABLED: ${CLIENT_IDENTITY_ENABLED:-false}
       CLIENT_IOS_SECRET: ${CLIENT_IOS_SECRET:-changeme-ios-shared-secret}
       CLIENT_WEB_SECRET: ${CLIENT_WEB_SECRET:-changeme-web-shared-secret}
-      # ── Resend (email OTP)
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
-      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-noreply@example.com}
       # ── Financial / Market data
       FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
+      # ── Travel (no API keys — records stored in MySQL, map tiles via CartoDB)
       # ── Web fetch
       WEB_FETCH_ENABLED: ${WEB_FETCH_ENABLED:-true}
       WEB_FETCH_TIMEOUT: ${WEB_FETCH_TIMEOUT:-10}
@@ -106,6 +140,14 @@ services:
       # ── Scheduler
       SCHEDULER_URL: http://scheduler:8082
       SCHEDULER_SERVICE_KEY: ${SCHEDULER_SERVICE_KEY:-scheduler-secret-key}
+      # ── Image storage (agent-system-storage-inner, Garage-backed)
+      STORAGE_URL: http://storage:8083
+      STORAGE_SERVICE_KEY: ${STORAGE_SERVICE_KEY:-storage-secret-key}
+      # ── Investment alerts (crypto/stock price, DeFi, prediction-market)
+      ALERT_URL: http://investment-alert-task:8085
+      ALERT_SERVICE_KEY: ${ALERT_SERVICE_KEY:-alert-secret-key}
+      # ── Notifications (agent-system-notification-consumer, Resend-backed email via Kafka)
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot)
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
@@ -121,7 +163,8 @@ services:
       retries: 8
       start_period: 60s
 
-  # ── Redis (Asynq task queue backend) ─────────────────────────────────────────
+  # ── Redis — shared by the Go scheduler (Asynq queue) and the Java backend
+  #    (rate-limit buckets, sandbox container tracking, fallback answer cache) ──
   redis:
     image: redis:7-alpine
     container_name: agent-system-redis
@@ -131,6 +174,82 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # ── Garage (S3-compatible object storage for images) ──────────────────────────
+  # garage.toml is rendered from observability/garage/garage.toml.template by
+  # setup.sh (embeds the generated rpc_secret/admin_token). S3 API (3900) and
+  # admin API (3903) stay on the internal docker network only.
+  garage:
+    image: dxflrs/garage:v1.0.1
+    container_name: agent-system-garage
+    restart: unless-stopped
+    volumes:
+      - ./observability/garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Image storage microservice (agent-system-storage-inner module) ───────────
+  storage:
+    build:
+      context: ./backend
+      dockerfile: agent-system-storage-inner/Dockerfile
+    container_name: agent-system-storage
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-ragagent}
+      MYSQL_USER: ${MYSQL_USER:-ragagent}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ragagent}
+      STORAGE_SERVICE_KEY: ${STORAGE_SERVICE_KEY:-storage-secret-key}
+      GARAGE_S3_ENDPOINT: http://garage:3900
+      GARAGE_REGION: ${GARAGE_REGION:-garage}
+      GARAGE_ACCESS_KEY: ${GARAGE_ACCESS_KEY:-}
+      GARAGE_SECRET_KEY: ${GARAGE_SECRET_KEY:-}
+      GARAGE_BUCKET: ${GARAGE_BUCKET:-agent-system-images}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8083/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+
+  # ── Notification consumer (agent-system-notification-consumer module) ────────
+  # Email today (Resend), consumed from Kafka; more channels (Telegram, push, etc.)
+  # land here later as new @KafkaListener methods.
+  notification-consumer:
+    build:
+      context: ./backend
+      dockerfile: agent-system-notification-consumer/Dockerfile
+    container_name: agent-system-notification-consumer
+    ports:
+      - "8084:8084"
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-noreply@example.com}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8084/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 20s
 
   # ── Go scheduler microservice ─────────────────────────────────────────────────
   scheduler:
@@ -160,6 +279,39 @@ services:
       SCHEDULER_SERVICE_KEY: ${SCHEDULER_SERVICE_KEY:-scheduler-secret-key}
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8082/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Investment alert task (crypto/stock price, DeFi, and prediction-market alerts) ──
+  investment-alert-task:
+    build:
+      context: ./investment-alert-task
+      dockerfile: Dockerfile
+    container_name: agent-system-investment-alert-task
+    ports:
+      - "8085:8085"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      PORT: 8085
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-ragagent}
+      MYSQL_USER: ${MYSQL_USER:-ragagent}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ragagent}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ALERT_SERVICE_KEY: ${ALERT_SERVICE_KEY:-alert-secret-key}
+      PYTH_API_URL: ${PYTH_API_URL:-https://hermes.pyth.network}
+      PYTH_API_KEY: ${PYTH_API_KEY:-}
+      CHECK_INTERVAL: ${ALERT_CHECK_INTERVAL:-60}
+      RULE_RELOAD_INTERVAL: ${ALERT_RULE_RELOAD_INTERVAL:-60}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8085/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -268,6 +420,8 @@ services:
 volumes:
   weaviate_data:
   mysql_data:
+  garage_meta:
+  garage_data:
   prometheus_data:
   grafana_data:
   loki_data:

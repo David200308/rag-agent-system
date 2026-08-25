@@ -5,7 +5,7 @@ import { X, Copy, Check, Link2, Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { createShare, getShare, revokeShare } from "@/lib/api";
-import type { AccessType, ConversationShare, ShareMode } from "@/types/agent";
+import type { AccessType, ConversationShare } from "@/types/agent";
 
 interface ShareModalProps {
   conversationId: string;
@@ -31,7 +31,6 @@ function formatExpiry(expiresAt: string | null): string {
 export function ShareModal({ conversationId, onClose }: ShareModalProps) {
   const [share, setShare]             = useState<ConversationShare | null | undefined>(undefined);
   const [expireDays, setExpireDays]   = useState<number | null>(7);
-  const [shareMode, setShareMode]     = useState<ShareMode>("READ_ONLY");
   const [accessType, setAccessType]   = useState<AccessType>("EVERYONE");
   const [whitelist, setWhitelist]     = useState<string[]>([]);
   const [emailInput, setEmailInput]   = useState("");
@@ -46,7 +45,6 @@ export function ShareModal({ conversationId, onClose }: ShareModalProps) {
       .then((s) => {
         if (s) {
           setShare(s);
-          setShareMode(s.shareMode ?? "READ_ONLY");
           setAccessType(s.accessType ?? "EVERYONE");
           setWhitelist(s.whitelist ?? []);
         } else {
@@ -64,7 +62,7 @@ export function ShareModal({ conversationId, onClose }: ShareModalProps) {
     setLoading(true);
     setError(null);
     try {
-      const created = await createShare(conversationId, expireDays, shareMode, accessType, whitelist);
+      const created = await createShare(conversationId, expireDays, "READ_ONLY", accessType, whitelist);
       setShare(created);
     } catch {
       setError("Failed to create share link.");
@@ -134,37 +132,6 @@ export function ShareModal({ conversationId, onClose }: ShareModalProps) {
           {/* No share yet — create form */}
           {share === null && (
             <>
-              {/* Mode selector */}
-              <div>
-                <p className="mb-2 text-xs font-medium text-[--color-muted] uppercase tracking-wide">
-                  Share mode
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["READ_ONLY", "INTERACTIVE"] as ShareMode[]).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setShareMode(mode)}
-                      className={[
-                        "rounded-lg border px-3 py-2 text-xs font-medium text-left transition-colors",
-                        shareMode === mode
-                          ? "border-gray-900 bg-gray-900 text-white dark:border-gray-100 dark:bg-gray-100 dark:text-black"
-                          : "border-[--color-border] text-[--color-muted] hover:border-gray-400",
-                      ].join(" ")}
-                    >
-                      <div className="font-semibold">
-                        {mode === "READ_ONLY" ? "Read only" : "Interactive"}
-                      </div>
-                      <div className="mt-0.5 text-[10px] leading-tight opacity-70">
-                        {mode === "READ_ONLY"
-                          ? "Visitors can view the conversation"
-                          : "Visitors can ask questions too"}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Access type */}
               <div>
                 <p className="mb-2 text-xs font-medium text-[--color-muted] uppercase tracking-wide">
@@ -284,13 +251,8 @@ export function ShareModal({ conversationId, onClose }: ShareModalProps) {
           {share && (
             <>
               <div className="flex items-center gap-2 rounded-lg border border-[--color-border] bg-[--color-surface-raised] px-2.5 py-1.5 text-xs">
-                <span className={[
-                  "rounded-full px-2 py-0.5 font-medium",
-                  share.shareMode === "INTERACTIVE"
-                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                    : "bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-400",
-                ].join(" ")}>
-                  {share.shareMode === "INTERACTIVE" ? "Interactive" : "Read only"}
+                <span className="rounded-full px-2 py-0.5 font-medium bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-gray-400">
+                  Read only
                 </span>
                 <span className="rounded-full border border-[--color-border] px-2 py-0.5 font-medium text-[--color-muted]">
                   {share.accessType === "WHITELIST"

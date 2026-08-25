@@ -38,6 +38,31 @@ export const STOCK_TYPE_LABELS: Record<StockType, string> = {
   OTHER:    "Other",
 };
 
+export const FUTURE_EXCHANGE_KINDS = ["SECURITY", "CRYPTO_CEX", "CRYPTO_DEX"] as const;
+export type FutureExchangeKind = typeof FUTURE_EXCHANGE_KINDS[number];
+
+export const FUTURE_EXCHANGE_KIND_LABELS: Record<FutureExchangeKind, string> = {
+  SECURITY:   "Security",
+  CRYPTO_CEX: "Crypto (CEX)",
+  CRYPTO_DEX: "Crypto (DEX)",
+};
+
+export const FUTURE_EXCHANGES_BY_KIND: Record<FutureExchangeKind, string[]> = {
+  SECURITY:   ["IBKR"],
+  CRYPTO_CEX: ["BINANCE", "OKX", "KRAKEN"],
+  CRYPTO_DEX: ["HYPERLIQUID", "JUPITER_PERPS", "LIGHTER"],
+};
+
+/** Wallet address placeholder per DEX — Jupiter Perps is Solana (base58), the others are EVM (0x…). */
+export const DEX_ADDRESS_PLACEHOLDERS: Record<string, string> = {
+  HYPERLIQUID:    "0x…",
+  JUPITER_PERPS:  "Solana address, e.g. 7xKX…",
+  LIGHTER:        "0x… (L1 deposit address)",
+};
+
+export const FUTURE_SIDES = ["LONG", "SHORT"] as const;
+export type FutureSide = typeof FUTURE_SIDES[number];
+
 // ── Backend DTOs (mirror of Java records) ────────────────────────────────────
 
 export interface CashDeposit {
@@ -70,6 +95,8 @@ export interface StockInvestment {
   /** Live price from Yahoo Finance in priceCurrency; null if unavailable */
   currentPrice: number | null;
   priceCurrency: string | null;
+  /** Company logo image URL from Finnhub; null if unavailable */
+  logoUrl: string | null;
   /** currentPrice × stockAmount; null if price unavailable */
   currentValue: number | null;
   convertedInvestAmount: number;
@@ -92,6 +119,8 @@ export interface CryptoInvestment {
   currency: string;
   /** Live USDT price from Binance; null if unavailable */
   currentPrice: number | null;
+  /** Coin logo image URL from CoinGecko; null if unavailable */
+  logoUrl: string | null;
   /** currentPrice × amount (USDT); null if price unavailable */
   currentValue: number | null;
   convertedInvestAmount: number;
@@ -99,6 +128,43 @@ export interface CryptoInvestment {
   convertedCurrency: string;
   /** (convertedCurrentValue - convertedInvestAmount) / convertedInvestAmount * 100; null if price unavailable */
   pnlPercent: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FutureInvestment {
+  id: string;
+  ownerEmail: string;
+  exchangeKind: FutureExchangeKind;
+  exchange: string;
+  symbol: string | null;
+  side: FutureSide | null;
+  quantity: number | null;
+  entryPrice: number | null;
+  leverage: number | null;
+  currency: string;
+  connectionAddress: string | null;
+  /** Live mark/last price; null if unavailable */
+  currentPrice: number | null;
+  /** currentPrice × quantity, in `currency`; the full leveraged notional value, null if price unavailable */
+  currentValue: number | null;
+  /** Actual capital deployed (margin), in `currency` — not the leveraged notional. Null if unavailable. */
+  margin: number | null;
+  /** Price at which this position would be liquidated, in `currency`; null if unavailable/not applicable */
+  liquidationPrice: number | null;
+  /** Cumulative funding paid/received since the position was opened, in `currency`; null if unavailable/not applicable */
+  fundingSinceOpen: number | null;
+  /** Converted from `margin`, not the leveraged notional — this is what feeds portfolio totals/% of total */
+  convertedInvestAmount: number;
+  convertedCurrentValue: number | null;
+  convertedCurrency: string;
+  pnlPercent: number | null;
+  /** "MANUAL" for user-entered Security/CEX rows, the DEX name for live-fetched CRYPTO_DEX positions */
+  source: "MANUAL" | "HYPERLIQUID" | "JUPITER_PERPS" | "LIGHTER";
+  /** Only set for auto-tracked DEX rows — id of the tracked-address row this position was expanded from */
+  sourceConnectionId: string | null;
+  /** Only set for HYPERLIQUID rows on a builder-deployed perp dex (HIP-3, e.g. equities perps); null on the default dex */
+  hyperliquidDex: string | null;
   createdAt: string;
   updatedAt: string;
 }

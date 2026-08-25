@@ -1,0 +1,28 @@
+package com.agentsystem.financial.dto;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+
+public record CryptoInvestmentDto(
+        String     id,
+        String     ownerUuid,
+        String     name,
+        String     symbol,
+        BigDecimal amount,
+        BigDecimal investAmount,
+        String     currency,
+        /** Live price in USDT from Binance; null if unavailable. */
+        Double     currentPrice,
+        /** Coin logo image URL from CoinGecko; null if unavailable. */
+        String     logoUrl,
+        /** currentPrice × amount (in USDT); null if price unavailable. */
+        BigDecimal currentValue,
+        BigDecimal convertedInvestAmount,
+        /** currentValue converted to defaultCurrency; null if price unavailable. */
+        BigDecimal convertedCurrentValue,
+        String     convertedCurrency,
+        /** (convertedCurrentValue - convertedInvestAmount) / convertedInvestAmount * 100; null if price unavailable. */
+        Double     pnlPercent,
+        Instant    createdAt,
+        Instant    updatedAt
+) {}

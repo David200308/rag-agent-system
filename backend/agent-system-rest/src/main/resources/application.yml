@@ -1,0 +1,379 @@
+spring:
+  application:
+    name: rag-agent-system
+
+  config:
+    import:
+      - optional:classpath:application.local.yml
+      - optional:classpath:application.prod.yml
+
+  threads:
+    virtual:
+      enabled: true  # JDK 21 virtual threads for all Spring MVC requests
+
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
+
+  # ── Redis (rate-limit buckets, sandbox container tracking, fallback cache) ────
+  # Shared with the Go scheduler's Asynq queue — same instance, same docker-compose service.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  # ── MySQL (auth: email whitelist, OTP codes, sessions) ────────────────────────
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:ragagent}?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useUnicode=true
+    username: ${MYSQL_USER:ragagent}
+    password: ${MYSQL_PASSWORD:ragagent}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none   # schema.sql manages the DDL
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  # ── Kafka (agent-system-notification-consumer, Resend-backed email) ──────────
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        # Keys here must stay in sync with agent-system-notification-consumer's mapping —
+        # see that module's application.yml for why this exists (different FQCNs per side).
+        spring.json.type.mapping: otpRequested:com.agentsystem.notification.NotificationClient$OtpRequestedEvent,workflowCompleted:com.agentsystem.notification.NotificationClient$WorkflowCompletedEvent
+        max.block.ms: 5000
+
+  sql:
+    init:
+      mode: always                            # always run schema.sql on startup
+      schema-locations: classpath:schema.sql
+      continue-on-error: true                 # tolerates "already exists" errors from CREATE TABLE IF NOT EXISTS races
+
+  ai:
+    # ── OpenAI ──────────────────────────────────────────────────────────────
+    openai:
+      # Fallback to "none" so Spring AI auto-configs pass key validation even when
+      # OPENAI_API_KEY is not set (e.g. when using a local LLM provider).
+      api-key: ${OPENAI_API_KEY:none}
+      # Chat/embedding/audio/image auto-configs excluded in AgentSystemApplication.
+      # LlmProviderConfig builds the ChatModel based on llm.provider.
+
+    # ── Anthropic ────────────────────────────────────────────────────────────
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}
+      # Chat auto-config excluded in AgentSystemApplication — managed by LlmProviderConfig.
+
+    # ── Weaviate Vector Store ─────────────────────────────────────────────────
+    vectorstore:
+      weaviate:
+        scheme: http
+        # Spring AI's WeaviateVectorStoreProperties has no separate port field —
+        # the port must be included in the host string.
+        host: ${WEAVIATE_HOST:localhost}:${WEAVIATE_PORT:8080}
+        api-key: ${WEAVIATE_API_KEY:}
+        object-class: RagDocuments
+        content-field-name: content
+        filter-field:
+          source: TEXT
+          category: TEXT
+
+    # ── RAG pipeline ─────────────────────────────────────────────────────────
+    rag:
+      chunk-size: 1000
+      chunk-overlap: 200
+      top-k: 5
+      similarity-threshold: 0.70
+
+    # ── MCP Server ────────────────────────────────────────────────────────────
+    # SSE endpoint: GET http://localhost:8081/mcp/sse
+    # Connect Claude Desktop by adding to claude_desktop_config.json:
+    #   { "mcpServers": { "rag-agent": { "url": "http://localhost:8081/mcp/sse" } } }
+    mcp:
+      server:
+        enabled: true
+        name: rag-agent-mcp-server
+        version: 1.0.0
+
+# ── LLM provider selector ────────────────────────────────────────────────────
+# Set llm.provider to one of: openai | anthropic | openrouter | deepseek | local
+# This is the system default used when a user has no model preference.
+# Users can override per-request via the model selection feature (POST /api/v1/models).
+#
+#   openai     → OPENAI_API_KEY
+#   anthropic  → ANTHROPIC_API_KEY
+#   openrouter → OPENROUTER_API_KEY
+#   deepseek   → DEEPSEEK_API_KEY
+#   local      → no API key needed (Ollama / LM Studio / llama.cpp)
+llm:
+  provider: ${LLM_PROVIDER:openai}
+  # System-level default model (display name of a model_configs DB entry).
+  # Sits below per-conversation and per-user model selection in the priority chain.
+  # Leave blank to use the raw LLM_PROVIDER + its configured model as the fallback.
+  default-model: ${DEFAULT_MODEL:}
+  # Override embedding provider independently. Defaults to llm.provider if unset.
+  # Use EMBEDDING_PROVIDER=local for Ollama, or leave unset to use OpenAI embeddings.
+  embedding-provider: ${EMBEDDING_PROVIDER:}
+
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: https://api.openai.com
+    model: ${OPENAI_MODEL:gpt-4o-mini}
+    embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+    temperature: 0.1
+
+  anthropic:
+    api-key: ${ANTHROPIC_API_KEY:}
+    base-url: https://api.anthropic.com
+    model: ${ANTHROPIC_MODEL:claude-opus-4-6}
+    max-tokens: 8096
+    temperature: 0.1
+
+  openrouter:
+    api-key: ${OPENROUTER_API_KEY:}
+    base-url: https://openrouter.ai/api/v1
+    # Any model available on OpenRouter, e.g. openai/gpt-4o-mini, anthropic/claude-opus-4-6
+    model: ${OPENROUTER_MODEL:openai/gpt-4o-mini}
+    embedding-model: ${OPENROUTER_EMBEDDING_MODEL:openai/text-embedding-3-small}
+    temperature: 0.1
+    # Optional HTTP headers forwarded to OpenRouter
+    site-url: ${OPENROUTER_SITE_URL:http://localhost:8081}
+    site-name: ${OPENROUTER_SITE_NAME:rag-agent-system}
+
+  # ── DeepSeek ─────────────────────────────────────────────────────────────────
+  # OpenAI-compatible endpoint. Models: deepseek-chat (V3), deepseek-reasoner (R1)
+  deepseek:
+    api-key: ${DEEPSEEK_API_KEY:}
+    base-url: https://api.deepseek.com
+    model: ${DEEPSEEK_MODEL:deepseek-chat}
+    temperature: 0.1
+
+  # ── Local LLM (Ollama / LM Studio / llama.cpp) ─────────────────────────────
+  # Works with any server that exposes an OpenAI-compatible /v1 endpoint.
+  # No API key is required.
+  #
+  # Spring AI appends /v1/chat/completions to this base URL, so do NOT include /v1.
+  #   Ollama    default: http://localhost:11434  (ollama serve)
+  #   LM Studio default: http://localhost:1234
+  local:
+    base-url: ${LOCAL_LLM_URL:http://localhost:11434}
+    # Model name as known to the local server, e.g. llama3, mistral, phi3
+    model: ${LOCAL_LLM_MODEL:llama3}
+    # Ollama embedding model — run: ollama pull nomic-embed-text
+    embedding-model: ${LOCAL_EMBEDDING_MODEL:nomic-embed-text}
+    temperature: 0.1
+
+# ── Sandbox (Docker-based isolated execution for workflow agents) ─────────────
+# Set SANDBOX_ENABLED=false to disable Docker sandboxing (tool calls won't run).
+# Build the sandbox image: docker build -f Dockerfile.sandbox -t ragagent/sandbox:latest .
+sandbox:
+  enabled: ${SANDBOX_ENABLED:true}
+  image: ${SANDBOX_IMAGE:ragagent/sandbox:latest}
+  memory-limit: ${SANDBOX_MEMORY:512m}
+  cpu-quota: ${SANDBOX_CPU_QUOTA:50000}        # 50% of one core (100000 = 100%)
+  exec-timeout-seconds: ${SANDBOX_EXEC_TIMEOUT:30}
+  # Queue-based admission control
+  max-concurrent: ${SANDBOX_MAX_CONCURRENT:3}  # max simultaneous sandbox containers
+  queue-capacity: ${SANDBOX_QUEUE_CAPACITY:10} # max runs waiting; excess are rejected
+  # Host resource thresholds — rejects new runs if the host is too stressed
+  cpu-load-threshold: ${SANDBOX_CPU_THRESHOLD:0.90}       # reject if CPU > 90%
+  free-memory-threshold: ${SANDBOX_MEM_THRESHOLD:0.10}    # reject if free RAM < 10%
+
+# ── Web-fetch feature ────────────────────────────────────────────────────────
+# Controls the ability for agent queries to include live web page content.
+# The domain whitelist is managed entirely via the database:
+#   POST   /api/v1/agent/web-fetch/whitelist  {"domain": "example.com"}
+#   DELETE /api/v1/agent/web-fetch/whitelist/{domain}
+#   GET    /api/v1/agent/web-fetch/whitelist
+web-fetch:
+  enabled: ${WEB_FETCH_ENABLED:true}
+  timeout-seconds: ${WEB_FETCH_TIMEOUT:10}
+  max-content-length-chars: ${WEB_FETCH_MAX_CHARS:50000}
+
+server:
+  port: 8081
+
+# ── Resilience4j ─────────────────────────────────────────────────────────────
+resilience4j:
+  circuitbreaker:
+    instances:
+      retrieval:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        wait-duration-in-open-state: 5s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 80
+        slow-call-duration-threshold: 3s
+        record-exceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+      llm:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+
+  retry:
+    instances:
+      retrieval:
+        max-attempts: 3
+        wait-duration: 500ms
+        retry-exceptions:
+          - java.io.IOException
+      llm:
+        max-attempts: 2
+        wait-duration: 1s
+
+  timelimiter:
+    instances:
+      retrieval:
+        timeout-duration: 5s
+      llm:
+        timeout-duration: 30s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, circuitbreakers, prometheus
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
+  # Distributed tracing — disabled by default (no collector needed in dev).
+  # Set TRACING_SAMPLE_RATE=1.0 in production when a collector is running.
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLE_RATE:0.0}
+  # OTLP exporter — point at Jaeger/Tempo/Grafana agent via OTEL_EXPORTER_OTLP_ENDPOINT.
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+# ── Rate limiting (Bucket4j token bucket, per authenticated user or client IP) ─
+# agentQueryLimit: max LLM queries per user per minute  (expensive upstream calls)
+# ingestLimit:     max document ingestion calls per user per minute
+# defaultLimit:    all other API calls per user per minute
+rate-limit:
+  agent-query-limit: ${RATE_LIMIT_QUERY:20}
+  ingest-limit: ${RATE_LIMIT_INGEST:10}
+  default-limit: ${RATE_LIMIT_DEFAULT:100}
+  otp-limit: ${RATE_LIMIT_OTP:5}
+  # Only enable if a reverse proxy/load balancer in front of this service overwrites
+  # X-Forwarded-For with the real client IP — otherwise callers can spoof it to bypass
+  # IP-based rate limiting.
+  trust-forwarded-for: ${RATE_LIMIT_TRUST_FORWARDED_FOR:false}
+
+# ── Fallback answer cache ─────────────────────────────────────────────────────
+fallback:
+  # How long a cached fallback answer (Redis key fallback:answer-cache:*) stays valid.
+  cache-ttl-minutes: ${FALLBACK_CACHE_TTL_MINUTES:60}
+
+# ── Client identity enforcement ───────────────────────────────────────────────
+# Requires every authenticated request to carry a signed client header.
+# CLI uses Ed25519 (registered key). iOS + web use HMAC-SHA256 shared secrets.
+# Set CLIENT_IDENTITY_ENABLED=true to enforce; false = disabled (default).
+client:
+  identity:
+    enabled: ${CLIENT_IDENTITY_ENABLED:false}
+    ios-secret: ${CLIENT_IOS_SECRET:}
+    web-secret: ${CLIENT_WEB_SECRET:}
+
+# ── Auth (registration + OTP login, JWT tokens) ──────────────────────────────
+# Set AUTH_ENABLED=false to disable login entirely (open access).
+auth:
+  enabled: ${AUTH_ENABLED:false}
+  otp-expiry-minutes: ${AUTH_OTP_EXPIRY_MINUTES:10}
+  jwt-secret: ${AUTH_JWT_SECRET:changeme-use-a-long-random-base64-string-in-production}
+  jwt-expiry-hours: ${AUTH_JWT_EXPIRY_HOURS:24}
+  passkey:
+    # Must match the domain serving the app (no port, no scheme).
+    # For local dev: localhost. For production: yourdomain.com
+    rp-id: ${AUTH_PASSKEY_RP_ID:localhost}
+    rp-name: ${AUTH_PASSKEY_RP_NAME:RAG Agent}
+    # Full origin including scheme and port.
+    # For local dev: http://localhost:3000. For production: https://yourdomain.com
+    origin: ${AUTH_PASSKEY_ORIGIN:http://localhost:3000}
+
+# ── Admin (system-wide access to /api/v1/admin/orgs/**) ─────────────────────
+# Comma-separated emails allowed to create/delete orgs and manage org membership
+# across the whole system. Empty by default — those endpoints reject everyone
+# until this is set.
+admin:
+  emails: ${ADMIN_EMAILS:}
+
+# ── MCP transport auth (/mcp/sse) ────────────────────────────────────────────
+# The MCP transport has no per-request JWT, so it's gated by a single shared key
+# instead. Leave api-key blank to keep /mcp/** closed (recommended unless you
+# actually use Claude Desktop/Code against this server). email scopes
+# search_knowledge to that user's accessible knowledge sources; leave blank to
+# deny all sources by default.
+mcp:
+  api-key: ${MCP_API_KEY:}
+  email: ${MCP_EMAIL:}
+
+# ── External connectors (Google Workspace + Figma OAuth) ─────────────────────
+# Register OAuth apps at:
+#   Google: https://console.cloud.google.com/apis/credentials
+#   Figma:  https://www.figma.com/developers/apps
+#
+# Redirect URI to register (must match CONNECTOR_CALLBACK_BASE_URL):
+#   {CONNECTOR_CALLBACK_BASE_URL}/api/connectors/google/callback
+#   {CONNECTOR_CALLBACK_BASE_URL}/api/connectors/figma/callback
+connectors:
+  callback-base-url: ${CONNECTOR_CALLBACK_BASE_URL:http://localhost:3000}
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
+    client-secret: ${GOOGLE_CLIENT_SECRET:}
+  figma:
+    client-id: ${FIGMA_CLIENT_ID:}
+    client-secret: ${FIGMA_CLIENT_SECRET:}
+  # Register a bot at https://t.me/BotFather, then set these env vars.
+  # Register the webhook: POST https://api.telegram.org/bot<TOKEN>/setWebhook?url=<BACKEND_URL>/api/v1/connectors/telegram/webhook
+  telegram:
+    bot-token: ${TELEGRAM_BOT_TOKEN:}
+    bot-username: ${TELEGRAM_BOT_USERNAME:}
+
+# ── Go Scheduler microservice ────────────────────────────────────────────────
+# Shared service key used by the Go scheduler to authenticate trigger calls.
+scheduler:
+  service-key: ${SCHEDULER_SERVICE_KEY:scheduler-secret-key}
+  url: ${SCHEDULER_URL:http://localhost:8082}
+
+# ── agent-system-storage-inner microservice (Garage-backed image storage) ───
+storage:
+  service-key: ${STORAGE_SERVICE_KEY:storage-secret-key}
+  url: ${STORAGE_URL:http://localhost:8083}
+
+# ── Go investment-alert-task microservice (crypto/stock price, DeFi, and ────
+#    prediction-market alerts) ────────────────────────────────────────────────
+alert:
+  service-key: ${ALERT_SERVICE_KEY:alert-secret-key}
+  url: ${ALERT_URL:http://localhost:8085}
+
+# ── agent-system-notification-consumer microservice — see the top-level spring.kafka
+#    block above; the OTP/workflow-complete emails it sends are configured there. ──
+
+# ── Financial / Market Data ───────────────────────────────────────────────────
+financial:
+  finnhub:
+    api-key: ${FINNHUB_API_KEY:}
+
+logging:
+  level:
+    com.agentsystem: DEBUG
+    org.springframework.ai: INFO
+    org.bsc.langgraph4j: DEBUG
+    # Suppress connection errors when no OTEL collector is running (sample rate = 0 by default)
+    io.opentelemetry.exporter: WARN
+  # logback-spring.xml adds traceId/spanId to every line automatically

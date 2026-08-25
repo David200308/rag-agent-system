@@ -15,10 +15,13 @@ function ct(h: Record<string, string | string[] | undefined>) {
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_req: NextRequest, { params }: Ctx) {
+export async function GET(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
+  const { searchParams } = req.nextUrl;
+  const page = searchParams.get("page") ?? "0";
+  const size = searchParams.get("size") ?? "10";
   const { statusCode, headers, body } = await request(
-    `${BACKEND}/api/v1/workflow/${id}/runs`,
+    `${BACKEND}/api/v1/workflow/${id}/runs?page=${page}&size=${size}`,
     { method: "GET", headers: await authHeader() },
   );
   return new Response(await body.text(), { status: statusCode, headers: { "content-type": ct(headers) } });
