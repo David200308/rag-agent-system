@@ -6,65 +6,60 @@
 	objectVersion = 56;
 	objects = {
 
-/* Begin PBXFileReference section — xcconfig */
-		AA00FF000000000000000001 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Configs/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
-		AA00FF000000000000000002 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Configs/Release.xcconfig; sourceTree = SOURCE_ROOT; };
-/* End PBXFileReference section — xcconfig */
-
 /* Begin PBXBuildFile section */
 		AA0001000000000000000001 /* SkyProtonAgentApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000001 /* SkyProtonAgentApp.swift */; };
 		AA0001000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000002 /* ContentView.swift */; };
 		AA0001000000000000000003 /* AuthModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000003 /* AuthModels.swift */; };
-		AA0001000000000000000004 /* AgentModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000004 /* AgentModels.swift */; };
-		AA0001000000000000000005 /* ConversationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000005 /* ConversationModels.swift */; };
 		AA0001000000000000000006 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000006 /* APIClient.swift */; };
 		AA0001000000000000000007 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000007 /* KeychainHelper.swift */; };
 		AA0001000000000000000008 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000008 /* AuthService.swift */; };
 		AA0001000000000000000009 /* AgentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000009 /* AgentService.swift */; };
 		AA000100000000000000000A /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000000A /* AuthViewModel.swift */; };
-		AA000100000000000000000B /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000000B /* ChatViewModel.swift */; };
-		AA000100000000000000000C /* ConversationListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000000C /* ConversationListViewModel.swift */; };
 		AA000100000000000000000D /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000000D /* LoginView.swift */; };
 		AA000100000000000000000E /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000000E /* MainTabView.swift */; };
-		AA000100000000000000000F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000000F /* ChatView.swift */; };
-		AA0001000000000000000010 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000010 /* MessageBubble.swift */; };
-		AA0001000000000000000011 /* ConversationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000011 /* ConversationListView.swift */; };
 		AA0001000000000000000013 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000013 /* SettingsView.swift */; };
 		AA0001000000000000000014 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000014 /* Assets.xcassets */; };
-		AA0001000000000000000016 /* ShareConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000016 /* ShareConversationView.swift */; };
-		AA000100000000000000001C /* MarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000001C /* MarkdownView.swift */; };
 		AA0001000000000000000019 /* FinancialModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000019 /* FinancialModels.swift */; };
-		AA000100000000000000001A /* WorkflowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000001A /* WorkflowView.swift */; };
 		AA000100000000000000001B /* FinancialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000001B /* FinancialView.swift */; };
+		AA000100000000000000001D /* TravelModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000001D /* TravelModels.swift */; };
+		AA000100000000000000001E /* TravelListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000001E /* TravelListView.swift */; };
+		AA000100000000000000001F /* TravelDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000001F /* TravelDetailView.swift */; };
+		AA0001000000000000000021 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000021 /* Theme.swift */; };
+		AA0001000000000000000022 /* FinanceMarketsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000022 /* FinanceMarketsView.swift */; };
+		AA0001000000000000000023 /* FinanceFuturesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000023 /* FinanceFuturesView.swift */; };
+		AA0001000000000000000024 /* FinanceDepositsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000024 /* FinanceDepositsView.swift */; };
+		AA0001000000000000000025 /* FinanceCardsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000025 /* FinanceCardsView.swift */; };
+		AA0001000000000000000026 /* FinanceSalaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000026 /* FinanceSalaryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		AA0002000000000000000001 /* SkyProtonAgentApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkyProtonAgentApp.swift; sourceTree = "<group>"; };
 		AA0002000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		AA0002000000000000000003 /* AuthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthModels.swift; sourceTree = "<group>"; };
-		AA0002000000000000000004 /* AgentModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentModels.swift; sourceTree = "<group>"; };
-		AA0002000000000000000005 /* ConversationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationModels.swift; sourceTree = "<group>"; };
 		AA0002000000000000000006 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		AA0002000000000000000007 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 		AA0002000000000000000008 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		AA0002000000000000000009 /* AgentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentService.swift; sourceTree = "<group>"; };
 		AA000200000000000000000A /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
-		AA000200000000000000000B /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
-		AA000200000000000000000C /* ConversationListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListViewModel.swift; sourceTree = "<group>"; };
 		AA000200000000000000000D /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		AA000200000000000000000E /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
-		AA000200000000000000000F /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
-		AA0002000000000000000010 /* MessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubble.swift; sourceTree = "<group>"; };
-		AA0002000000000000000011 /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
 		AA0002000000000000000013 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		AA0002000000000000000014 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		AA0002000000000000000016 /* ShareConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareConversationView.swift; sourceTree = "<group>"; };
-		AA000200000000000000001C /* MarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownView.swift; sourceTree = "<group>"; };
-		AA0002000000000000000019 /* FinancialModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinancialModels.swift; sourceTree = "<group>"; };
-		AA000200000000000000001A /* WorkflowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowView.swift; sourceTree = "<group>"; };
-		AA000200000000000000001B /* FinancialView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinancialView.swift; sourceTree = "<group>"; };
 		AA0002000000000000000015 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA0002000000000000000019 /* FinancialModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinancialModels.swift; sourceTree = "<group>"; };
+		AA000200000000000000001B /* FinancialView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinancialView.swift; sourceTree = "<group>"; };
+		AA000200000000000000001D /* TravelModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TravelModels.swift; sourceTree = "<group>"; };
+		AA000200000000000000001E /* TravelListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TravelListView.swift; sourceTree = "<group>"; };
+		AA000200000000000000001F /* TravelDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TravelDetailView.swift; sourceTree = "<group>"; };
 		AA0002000000000000000020 /* SkyProtonAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SkyProtonAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0002000000000000000021 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		AA0002000000000000000022 /* FinanceMarketsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceMarketsView.swift; sourceTree = "<group>"; };
+		AA0002000000000000000023 /* FinanceFuturesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceFuturesView.swift; sourceTree = "<group>"; };
+		AA0002000000000000000024 /* FinanceDepositsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceDepositsView.swift; sourceTree = "<group>"; };
+		AA0002000000000000000025 /* FinanceCardsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceCardsView.swift; sourceTree = "<group>"; };
+		AA0002000000000000000026 /* FinanceSalaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceSalaryView.swift; sourceTree = "<group>"; };
+		AA00FF000000000000000001 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Configs/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		AA00FF000000000000000002 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Configs/Release.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -83,6 +78,7 @@
 			children = (
 				AA0002000000000000000001 /* SkyProtonAgentApp.swift */,
 				AA0002000000000000000002 /* ContentView.swift */,
+				AA0002000000000000000021 /* Theme.swift */,
 				AA0004000000000000000002 /* Models */,
 				AA0004000000000000000003 /* Services */,
 				AA0004000000000000000004 /* ViewModels */,
@@ -97,9 +93,8 @@
 			isa = PBXGroup;
 			children = (
 				AA0002000000000000000003 /* AuthModels.swift */,
-				AA0002000000000000000004 /* AgentModels.swift */,
-				AA0002000000000000000005 /* ConversationModels.swift */,
 				AA0002000000000000000019 /* FinancialModels.swift */,
+				AA000200000000000000001D /* TravelModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -119,8 +114,6 @@
 			isa = PBXGroup;
 			children = (
 				AA000200000000000000000A /* AuthViewModel.swift */,
-				AA000200000000000000000B /* ChatViewModel.swift */,
-				AA000200000000000000000C /* ConversationListViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -130,32 +123,11 @@
 			children = (
 				AA000200000000000000000D /* LoginView.swift */,
 				AA000200000000000000000E /* MainTabView.swift */,
-				AA0004000000000000000006 /* Chat */,
-				AA0004000000000000000007 /* Conversations */,
 				AA0004000000000000000009 /* Settings */,
-				AA000400000000000000000B /* Workflow */,
 				AA000400000000000000000C /* Financial */,
+				AA0004000000000000000012 /* Travel */,
 			);
 			path = Views;
-			sourceTree = "<group>";
-		};
-		AA0004000000000000000006 /* Chat */ = {
-			isa = PBXGroup;
-			children = (
-				AA000200000000000000000F /* ChatView.swift */,
-				AA0002000000000000000010 /* MessageBubble.swift */,
-				AA0002000000000000000016 /* ShareConversationView.swift */,
-				AA000200000000000000001C /* MarkdownView.swift */,
-			);
-			path = Chat;
-			sourceTree = "<group>";
-		};
-		AA0004000000000000000007 /* Conversations */ = {
-			isa = PBXGroup;
-			children = (
-				AA0002000000000000000011 /* ConversationListView.swift */,
-			);
-			path = Conversations;
 			sourceTree = "<group>";
 		};
 		AA0004000000000000000009 /* Settings */ = {
@@ -166,18 +138,15 @@
 			path = Settings;
 			sourceTree = "<group>";
 		};
-		AA000400000000000000000B /* Workflow */ = {
-			isa = PBXGroup;
-			children = (
-				AA000200000000000000001A /* WorkflowView.swift */,
-			);
-			path = Workflow;
-			sourceTree = "<group>";
-		};
 		AA000400000000000000000C /* Financial */ = {
 			isa = PBXGroup;
 			children = (
 				AA000200000000000000001B /* FinancialView.swift */,
+				AA0002000000000000000022 /* FinanceMarketsView.swift */,
+				AA0002000000000000000023 /* FinanceFuturesView.swift */,
+				AA0002000000000000000024 /* FinanceDepositsView.swift */,
+				AA0002000000000000000025 /* FinanceCardsView.swift */,
+				AA0002000000000000000026 /* FinanceSalaryView.swift */,
 			);
 			path = Financial;
 			sourceTree = "<group>";
@@ -190,12 +159,31 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		AA0004000000000000000011 /* MainGroup */ = {
+		AA0004000000000000000011 = {
 			isa = PBXGroup;
 			children = (
 				AA0004000000000000000001 /* SkyProtonAgent */,
 				AA0004000000000000000010 /* Products */,
+				BEE2CBFD303DF47100F791C0 /* Recovered References */,
 			);
+			sourceTree = "<group>";
+		};
+		AA0004000000000000000012 /* Travel */ = {
+			isa = PBXGroup;
+			children = (
+				AA000200000000000000001E /* TravelListView.swift */,
+				AA000200000000000000001F /* TravelDetailView.swift */,
+			);
+			path = Travel;
+			sourceTree = "<group>";
+		};
+		BEE2CBFD303DF47100F791C0 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				AA00FF000000000000000001 /* Debug.xcconfig */,
+				AA00FF000000000000000002 /* Release.xcconfig */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -241,7 +229,7 @@
 				en,
 				Base,
 			);
-			mainGroup = AA0004000000000000000011 /* MainGroup */;
+			mainGroup = AA0004000000000000000011;
 			productRefGroup = AA0004000000000000000010 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -270,26 +258,25 @@
 				AA0001000000000000000001 /* SkyProtonAgentApp.swift in Sources */,
 				AA0001000000000000000002 /* ContentView.swift in Sources */,
 				AA0001000000000000000003 /* AuthModels.swift in Sources */,
-				AA0001000000000000000004 /* AgentModels.swift in Sources */,
-				AA0001000000000000000005 /* ConversationModels.swift in Sources */,
 				AA0001000000000000000006 /* APIClient.swift in Sources */,
 				AA0001000000000000000007 /* KeychainHelper.swift in Sources */,
 				AA0001000000000000000008 /* AuthService.swift in Sources */,
 				AA0001000000000000000009 /* AgentService.swift in Sources */,
 				AA000100000000000000000A /* AuthViewModel.swift in Sources */,
-				AA000100000000000000000B /* ChatViewModel.swift in Sources */,
-				AA000100000000000000000C /* ConversationListViewModel.swift in Sources */,
 				AA000100000000000000000D /* LoginView.swift in Sources */,
 				AA000100000000000000000E /* MainTabView.swift in Sources */,
-				AA000100000000000000000F /* ChatView.swift in Sources */,
-				AA0001000000000000000010 /* MessageBubble.swift in Sources */,
-				AA0001000000000000000011 /* ConversationListView.swift in Sources */,
 				AA0001000000000000000013 /* SettingsView.swift in Sources */,
-				AA0001000000000000000016 /* ShareConversationView.swift in Sources */,
-				AA000100000000000000001C /* MarkdownView.swift in Sources */,
 				AA0001000000000000000019 /* FinancialModels.swift in Sources */,
-				AA000100000000000000001A /* WorkflowView.swift in Sources */,
 				AA000100000000000000001B /* FinancialView.swift in Sources */,
+				AA000100000000000000001D /* TravelModels.swift in Sources */,
+				AA000100000000000000001E /* TravelListView.swift in Sources */,
+				AA000100000000000000001F /* TravelDetailView.swift in Sources */,
+				AA0001000000000000000021 /* Theme.swift in Sources */,
+				AA0001000000000000000022 /* FinanceMarketsView.swift in Sources */,
+				AA0001000000000000000023 /* FinanceFuturesView.swift in Sources */,
+				AA0001000000000000000024 /* FinanceDepositsView.swift in Sources */,
+				AA0001000000000000000025 /* FinanceCardsView.swift in Sources */,
+				AA0001000000000000000026 /* FinanceSalaryView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -422,6 +409,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = M8V55585XA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SkyProtonAgent/Info.plist;
@@ -447,6 +435,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = M8V55585XA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SkyProtonAgent/Info.plist;
