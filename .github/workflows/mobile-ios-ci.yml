@@ -1,0 +1,67 @@
+name: iOS CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/ios/**'
+      - '.github/workflows/mobile-ios-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mobile/ios/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (iOS Simulator)
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: mobile/ios
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: ${{ runner.os }}-deriveddata-${{ hashFiles('mobile/ios/SkyProtonAgent.xcodeproj/project.pbxproj') }}
+          restore-keys: |
+            ${{ runner.os }}-deriveddata-
+
+      # Picks whatever iPhone simulator the runner's current Xcode ships with, rather than
+      # hardcoding a device name — those change with every Xcode release and a hardcoded
+      # name is a common source of CI breakage after a runner image update.
+      - name: Resolve simulator destination
+        id: destination
+        run: |
+          DEVICE=$(xcrun simctl list devices available \
+            | grep -m1 'iPhone' \
+            | sed -E 's/^[[:space:]]*([^(]+) \(.*/\1/' \
+            | sed -E 's/[[:space:]]+$//')
+          if [ -z "$DEVICE" ]; then
+            echo "No available iPhone simulator found on this runner" >&2
+            exit 1
+          fi
+          echo "Using simulator: $DEVICE"
+          echo "name=$DEVICE" >> "$GITHUB_OUTPUT"
+
+      # No test target exists yet, so this validates compilation only. Once a unit/UI test
+      # target is added, switch this to `xcodebuild test` with the same destination.
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild build \
+            -project SkyProtonAgent.xcodeproj \
+            -scheme SkyProtonAgent \
+            -destination "platform=iOS Simulator,name=${{ steps.destination.outputs.name }}" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
