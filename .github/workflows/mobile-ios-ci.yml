@@ -29,6 +29,15 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      # Debug.xcconfig / Release.xcconfig are gitignored (they hold CLIENT_IOS_SECRET) — the
+      # project won't build without *a* file at that path, so use the committed placeholder
+      # templates as-is. Fine for CI, which only needs the app to compile, not talk to a
+      # real backend.
+      - name: Provision xcconfig placeholders
+        run: |
+          cp Configs/Debug.xcconfig.example Configs/Debug.xcconfig
+          cp Configs/Release.xcconfig.example Configs/Release.xcconfig
+
       - name: Cache DerivedData
         uses: actions/cache@v4
         with:
