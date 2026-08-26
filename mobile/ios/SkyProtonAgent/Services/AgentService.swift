@@ -60,6 +60,17 @@ final class AgentService {
     func updateSalary(id: String, _ fields: [String: Any]) async throws { try await client.putRaw("/api/v1/financial/salary/\(id)", body: fields) }
     func deleteSalary(id: String) async throws { try await client.delete("/api/v1/financial/salary/\(id)") }
 
+    // MARK: – Price alerts
+
+    func listPriceAlerts() async throws -> [PriceAlert] {
+        let response: AlertsResponse = try await client.get("/api/v1/alerts")
+        return response.price
+    }
+
+    func createPriceAlert(_ fields: [String: Any]) async throws { try await client.postRaw("/api/v1/alerts/price", body: fields) }
+    func updatePriceAlert(id: String, _ fields: [String: Any]) async throws { try await client.patchRaw("/api/v1/alerts/price/\(id)", body: fields) }
+    func deletePriceAlert(id: String) async throws { try await client.delete("/api/v1/alerts/price/\(id)") }
+
     // MARK: – Travel
 
     func listTravelRecords() async throws -> [TravelRecord] {

@@ -113,6 +113,11 @@ final class APIClient {
         try await performNoContent(req)
     }
 
+    func patchRaw(_ path: String, body: [String: Any], auth: Bool = true) async throws {
+        let req = try buildRawRequest(method: "PATCH", path: path, body: body, auth: auth)
+        try await performNoContent(req)
+    }
+
     private func buildRawRequest(method: String, path: String, body: [String: Any], auth: Bool) throws -> URLRequest {
         guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
         var req = URLRequest(url: url)

@@ -319,14 +319,16 @@ func formatNum(_ v: Double) -> String {
         : String(format: "%.4f", v)
 }
 
-extension StockInvestment {
-    var stockTypeBadge: String {
-        switch stockType {
-        case "US_STOCK": return "US"
-        case "HK_STOCK": return "HK"
-        case "CN_STOCK": return "CN"
-        case "SG_STOCK": return "SG"
-        default:         return "—"
-        }
+func stockTypeBadgeLabel(_ stockType: String) -> String {
+    switch stockType {
+    case "US_STOCK": return "US"
+    case "HK_STOCK": return "HK"
+    case "CN_STOCK": return "CN"
+    case "SG_STOCK": return "SG"
+    default:         return "—"
     }
+}
+
+extension StockInvestment {
+    var stockTypeBadge: String { stockTypeBadgeLabel(stockType) }
 }
