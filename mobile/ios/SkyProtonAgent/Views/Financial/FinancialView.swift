@@ -23,29 +23,74 @@ final class FinancialStore: ObservableObject {
     func loadAll() async {
         isLoading = true
         loadError = nil
-        do {
-            async let d = service.listCashDeposits()
-            async let s = service.listStocks()
-            async let c = service.listCrypto()
-            async let f = service.listFutures()
-            async let k = service.listCards()
-            async let r = service.listSalaryRecords()
-            deposits      = try await d
-            stocks        = try await s
-            crypto        = try await c
-            futures       = try await f
-            cards         = try await k
-            salaryRecords = try await r
-        } catch {
-            loadError = error.localizedDescription
-        }
+
+        // Await each concurrent request in its own do/catch: one slow or failing
+        // endpoint must not cancel the still-in-flight requests for the others
+        // (an un-awaited `async let` is cancelled when its scope exits early).
+        async let d = service.listCashDeposits()
+        async let s = service.listStocks()
+        async let c = service.listCrypto()
+        async let f = service.listFutures()
+        async let k = service.listCards()
+        async let r = service.listSalaryRecords()
+
+        do { deposits = try await d } catch { setLoadError(error) }
+        do { stocks = try await s } catch { setLoadError(error) }
+        do { crypto = try await c } catch { setLoadError(error) }
+        do { futures = try await f } catch { setLoadError(error) }
+        do { cards = try await k } catch { setLoadError(error) }
+        do { salaryRecords = try await r } catch { setLoadError(error) }
+
         isLoading = false
     }
 
     func refresh() async {
-        try? await service.refreshPrices()
+        // Run the price refresh first so loadAll() picks up fresh prices, but don't let a
+        // failure here silently disappear — surface it unless loadAll() already reports
+        // something more specific (that's the more actionable error to show).
+        var refreshError: Error?
+        do { try await service.refreshPrices() } catch { refreshError = error }
         await loadAll()
+        if loadError == nil, let refreshError, (refreshError as? APIError)?.isCancellation != true {
+            loadError = "Price refresh failed: \(refreshError.localizedDescription)"
+        }
     }
+
+    private func setLoadError(_ error: Error) {
+        guard (error as? APIError)?.isCancellation != true else { return }
+        loadError = error.localizedDescription
+    }
+
+    // MARK: – Mutations
+    //
+    // The create/update endpoints return the raw JPA entity, not the converted DTO
+    // the list endpoints return (with computed fields like convertedCurrentValue),
+    // so instead of trying to model both shapes, every mutation just re-runs
+    // `loadAll()` afterward and lets the canonical GET response be the source of truth.
+
+    func addDeposit(_ fields: [String: Any]) async throws { try await service.createDeposit(fields); await loadAll() }
+    func editDeposit(id: String, _ fields: [String: Any]) async throws { try await service.updateDeposit(id: id, fields); await loadAll() }
+    func removeDeposit(id: String) async throws { try await service.deleteDeposit(id: id); await loadAll() }
+
+    func addStock(_ fields: [String: Any]) async throws { try await service.createStock(fields); await loadAll() }
+    func editStock(id: String, _ fields: [String: Any]) async throws { try await service.updateStock(id: id, fields); await loadAll() }
+    func removeStock(id: String) async throws { try await service.deleteStock(id: id); await loadAll() }
+
+    func addCrypto(_ fields: [String: Any]) async throws { try await service.createCrypto(fields); await loadAll() }
+    func editCrypto(id: String, _ fields: [String: Any]) async throws { try await service.updateCrypto(id: id, fields); await loadAll() }
+    func removeCrypto(id: String) async throws { try await service.deleteCrypto(id: id); await loadAll() }
+
+    func addFuture(_ fields: [String: Any]) async throws { try await service.createFuture(fields); await loadAll() }
+    func editFuture(id: String, _ fields: [String: Any]) async throws { try await service.updateFuture(id: id, fields); await loadAll() }
+    func removeFuture(id: String) async throws { try await service.deleteFuture(id: id); await loadAll() }
+
+    func addCard(_ fields: [String: Any]) async throws { try await service.createCard(fields); await loadAll() }
+    func editCard(id: String, _ fields: [String: Any]) async throws { try await service.updateCard(id: id, fields); await loadAll() }
+    func removeCard(id: String) async throws { try await service.deleteCard(id: id); await loadAll() }
+
+    func addSalary(_ fields: [String: Any]) async throws { try await service.createSalary(fields); await loadAll() }
+    func editSalary(id: String, _ fields: [String: Any]) async throws { try await service.updateSalary(id: id, fields); await loadAll() }
+    func removeSalary(id: String) async throws { try await service.deleteSalary(id: id); await loadAll() }
 
     var depositsTotal: Double { deposits.reduce(0) { $0 + $1.convertedAmount } }
     var depositsCurrency: String { deposits.first?.convertedCurrency ?? "USD" }
@@ -88,6 +133,7 @@ struct FinancialView: View {
     var onProfileTap: () -> Void = {}
     @StateObject private var store = FinancialStore()
     @State private var isRefreshing = false
+    @AppStorage(balanceHiddenKey) private var isBalanceHidden = false
 
     var body: some View {
         NavigationStack {
@@ -140,10 +186,20 @@ struct FinancialView: View {
     private var netWorthHero: some View {
         ThemeCard(padding: 20) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Total net worth")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.inkSoft)
-                Text(formatMoney(store.netWorth, currency: store.stocksCurrency))
+                HStack(spacing: 6) {
+                    Text("Total net worth")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.inkSoft)
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) { isBalanceHidden.toggle() }
+                    } label: {
+                        Image(systemName: isBalanceHidden ? "eye.slash" : "eye")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.inkFaint)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Text(isBalanceHidden ? "••••••" : formatMoney(store.netWorth, currency: store.stocksCurrency))
                     .font(Theme.serif(42, weight: .regular))
                     .foregroundStyle(Theme.ink)
             }
@@ -170,7 +226,7 @@ struct FinancialView: View {
                     moduleRow(icon: "building.columns.fill",
                               title: "Deposits",
                               subtitle: "\(store.deposits.count) accounts",
-                              trailing: formatMoney(store.depositsTotal, currency: store.depositsCurrency))
+                              trailing: maskedMoney(store.depositsTotal, currency: store.depositsCurrency, hidden: isBalanceHidden))
                 }
                 Divider().overlay(Theme.hairline).padding(.leading, 68)
 
@@ -178,7 +234,7 @@ struct FinancialView: View {
                     moduleRow(icon: "chart.bar.fill",
                               title: "Stocks",
                               subtitle: "\(store.stocks.count) positions",
-                              trailing: formatMoney(store.stocksValue, currency: store.stocksCurrency),
+                              trailing: maskedMoney(store.stocksValue, currency: store.stocksCurrency, hidden: isBalanceHidden),
                               pnl: store.stocks.isEmpty ? nil : store.stocksPnlPercent)
                 }
                 Divider().overlay(Theme.hairline).padding(.leading, 68)
@@ -187,7 +243,7 @@ struct FinancialView: View {
                     moduleRow(icon: "hexagon.fill",
                               title: "Crypto",
                               subtitle: "\(store.crypto.count) assets",
-                              trailing: formatMoney(store.cryptoValue, currency: store.cryptoCurrency),
+                              trailing: maskedMoney(store.cryptoValue, currency: store.cryptoCurrency, hidden: isBalanceHidden),
                               pnl: store.crypto.isEmpty ? nil : store.cryptoPnlPercent)
                 }
                 Divider().overlay(Theme.hairline).padding(.leading, 68)
@@ -196,7 +252,7 @@ struct FinancialView: View {
                     moduleRow(icon: "bolt.fill",
                               title: "Futures",
                               subtitle: "\(store.futures.count) open",
-                              trailing: formatMoney(store.futuresOpenPnl, currency: store.futuresCurrency),
+                              trailing: maskedMoney(store.futuresOpenPnl, currency: store.futuresCurrency, hidden: isBalanceHidden),
                               trailingTint: store.futures.isEmpty ? nil : (store.futuresOpenPnl >= 0 ? Theme.positive : Theme.negative))
                 }
             }
@@ -241,12 +297,20 @@ struct FinancialView: View {
     }
 }
 
+/// Shared `@AppStorage` key so the hide-balance toggle set from anywhere in Finance
+/// (currently the net worth hero) is read the same way by every Finance screen.
+let balanceHiddenKey = "financeBalanceHidden"
+
 func formatMoney(_ v: Double, currency: String) -> String {
     let f = NumberFormatter()
     f.numberStyle = .currency
     f.currencyCode = currency
     f.maximumFractionDigits = 2
     return f.string(from: NSNumber(value: v)) ?? "\(currency) \(String(format: "%.2f", v))"
+}
+
+func maskedMoney(_ v: Double, currency: String, hidden: Bool) -> String {
+    hidden ? "••••••" : formatMoney(v, currency: currency)
 }
 
 func formatNum(_ v: Double) -> String {

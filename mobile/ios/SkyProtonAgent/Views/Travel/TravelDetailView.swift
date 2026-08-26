@@ -1,4 +1,5 @@
 import SwiftUI
+import MapKit
 
 struct TravelDetailView: View {
     let trip: TravelRecord
@@ -13,7 +14,7 @@ struct TravelDetailView: View {
                 }
 
                 if !trip.stops.isEmpty {
-                    RouteMapView(stops: trip.stops)
+                    RouteMapView(stops: trip.stops, trip: trip)
                         .frame(height: 190)
                         .background(Theme.chipFill)
                         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -184,40 +185,40 @@ private extension TransportType {
     }
 }
 
-/// A stylized route diagram (not a real map — no network map tiles are fetched).
+/// A real MapKit route: a marker per stop, a polyline connecting them in order, dashed to
+/// match each leg's transport (mirrors the web app's Leaflet map's `dashArray` convention —
+/// plane legs dashed, ferry legs finely dashed, everything else solid).
 private struct RouteMapView: View {
     let stops: [TravelStop]
+    let trip: TravelRecord
 
     var body: some View {
-        GeometryReader { geo in
-            let n = max(stops.count, 2)
-            let pad: CGFloat = 28
-            let points: [CGPoint] = (0..<n).map { i in
-                let x = pad + (geo.size.width - 2 * pad) * CGFloat(i) / CGFloat(n - 1)
-                let wobble: CGFloat = (i % 2 == 0) ? 0.72 : 0.32
-                let y = pad + (geo.size.height - 2 * pad) * wobble
-                return CGPoint(x: x, y: y)
+        Map(initialPosition: fitRegion(for: [trip])) {
+            ForEach(Array(legs(for: stops).enumerated()), id: \.offset) { _, leg in
+                MapPolyline(coordinates: [
+                    CLLocationCoordinate2D(latitude: leg.from.lat, longitude: leg.from.lon),
+                    CLLocationCoordinate2D(latitude: leg.to.lat, longitude: leg.to.lon),
+                ])
+                .stroke(Theme.travel, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, dash: mapDashPattern(for: leg.to.transport)))
             }
-            ZStack {
-                Path { path in
-                    guard let first = points.first else { return }
-                    path.move(to: first)
-                    for p in points.dropFirst() { path.addLine(to: p) }
+            ForEach(Array(stops.enumerated()), id: \.offset) { _, stop in
+                Annotation(stop.city, coordinate: CLLocationCoordinate2D(latitude: stop.lat, longitude: stop.lon)) {
+                    VStack(spacing: 3) {
+                        Circle()
+                            .fill(Theme.surface)
+                            .overlay(Circle().stroke(Theme.travel, lineWidth: 2))
+                            .frame(width: 10, height: 10)
+                        Text(stop.city)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(Theme.inkSoft)
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(Theme.surface.opacity(0.9))
+                            .clipShape(Capsule())
+                    }
                 }
-                .stroke(Theme.travel, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-
-                ForEach(Array(points.enumerated()), id: \.offset) { i, p in
-                    Circle()
-                        .fill(Theme.surface)
-                        .overlay(Circle().stroke(Theme.travel, lineWidth: 2))
-                        .frame(width: 12, height: 12)
-                        .position(p)
-                    Text(stops[i].city)
-                        .font(.caption2)
-                        .foregroundStyle(Theme.inkSoft)
-                        .position(x: p.x, y: min(p.y + 16, geo.size.height - 8))
-                }
+                .annotationTitles(.hidden)
             }
         }
+        .mapStyle(.standard(pointsOfInterest: .excludingAll))
     }
 }

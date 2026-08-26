@@ -1,4 +1,5 @@
 import SwiftUI
+import MapKit
 
 struct TravelListView: View {
     @State private var trips: [TravelRecord] = []
@@ -28,6 +29,13 @@ struct TravelListView: View {
                                 .padding(12)
                                 .background(Theme.surface)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+
+                            if trips.contains(where: { !$0.stops.isEmpty }) {
+                                TravelOverviewMap(trips: trips)
+                                    .frame(height: 180)
+                                    .background(Theme.chipFill)
+                                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                             }
 
                             if !trips.isEmpty { statStrip }
@@ -86,7 +94,9 @@ struct TravelListView: View {
         do {
             trips = try await service.listTravelRecords()
         } catch {
-            loadError = error.localizedDescription
+            if (error as? APIError)?.isCancellation != true {
+                loadError = error.localizedDescription
+            }
         }
         isLoading = false
     }
@@ -162,5 +172,38 @@ private struct RouteSketch: View {
                 Circle().fill(Color.white).frame(width: 6, height: 6).position(p)
             }
         }
+    }
+}
+
+/// All trips overlaid on one MapKit map, each trip's route/stops in its own color from
+/// `tripColors` — mirrors the web app's multi-trip Leaflet overview map. Unlike the
+/// single-trip detail map, stops here are small dots without a permanent city label,
+/// since a dozen trips' worth of labels would clutter a card this size.
+private struct TravelOverviewMap: View {
+    let trips: [TravelRecord]
+
+    var body: some View {
+        Map(initialPosition: fitRegion(for: trips)) {
+            ForEach(Array(trips.enumerated()), id: \.element.id) { idx, trip in
+                let color = tripColors[idx % tripColors.count]
+                ForEach(Array(legs(for: trip.stops).enumerated()), id: \.offset) { _, leg in
+                    MapPolyline(coordinates: [
+                        CLLocationCoordinate2D(latitude: leg.from.lat, longitude: leg.from.lon),
+                        CLLocationCoordinate2D(latitude: leg.to.lat, longitude: leg.to.lon),
+                    ])
+                    .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: mapDashPattern(for: leg.to.transport)))
+                }
+                ForEach(Array(trip.stops.enumerated()), id: \.offset) { _, stop in
+                    Annotation(stop.city, coordinate: CLLocationCoordinate2D(latitude: stop.lat, longitude: stop.lon)) {
+                        Circle()
+                            .fill(color)
+                            .frame(width: 8, height: 8)
+                            .overlay(Circle().stroke(Theme.surface, lineWidth: 1.5))
+                    }
+                    .annotationTitles(.hidden)
+                }
+            }
+        }
+        .mapStyle(.standard(pointsOfInterest: .excludingAll))
     }
 }

@@ -3,6 +3,9 @@ import Charts
 
 struct FinanceSalaryView: View {
     @ObservedObject var store: FinancialStore
+    @State private var showAddSheet = false
+    @State private var editingRecord: SalaryUsageRecord?
+    @AppStorage(balanceHiddenKey) private var isBalanceHidden = false
 
     private var sorted: [SalaryUsageRecord] {
         store.salaryRecords.sorted { ($0.year, $0.month) > ($1.year, $1.month) }
@@ -24,22 +27,29 @@ struct FinanceSalaryView: View {
                         ThemeCard(padding: 16) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Salary + Bonus").font(.caption).foregroundStyle(Theme.inkSoft)
-                                Text(formatMoney(totalSalaryBonus, currency: currency)).font(.system(size: 18, weight: .bold)).foregroundStyle(Theme.ink)
+                                Text(maskedMoney(totalSalaryBonus, currency: currency, hidden: isBalanceHidden)).font(.system(size: 18, weight: .bold)).foregroundStyle(Theme.ink)
                             }
                         }
                         ThemeCard(padding: 16) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Total Expense").font(.caption).foregroundStyle(Theme.inkSoft)
-                                Text(formatMoney(totalExpense, currency: currency)).font(.system(size: 18, weight: .bold)).foregroundStyle(Theme.ink)
+                                Text(maskedMoney(totalExpense, currency: currency, hidden: isBalanceHidden)).font(.system(size: 18, weight: .bold)).foregroundStyle(Theme.ink)
                             }
                         }
                     }
 
-                    ThemeCard {
-                        SalaryChartView(records: sorted)
+                    if isBalanceHidden {
+                        ThemeCard {
+                            Text("Amounts hidden").font(.subheadline).foregroundStyle(Theme.inkFaint)
+                                .frame(maxWidth: .infinity).padding(.vertical, 40)
+                        }
+                    } else {
+                        ThemeCard {
+                            SalaryChartView(records: sorted)
+                        }
                     }
                     ThemeCard(padding: 12) {
-                        SalaryTableView(records: sorted)
+                        SalaryTableView(records: sorted, onSelect: { editingRecord = $0 }, hidden: isBalanceHidden)
                     }
                 }
             }
@@ -50,6 +60,13 @@ struct FinanceSalaryView: View {
         .tabBarSafeArea()
         .navigationTitle("Salary & Expense")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button { showAddSheet = true } label: { Image(systemName: "plus") }
+            }
+        }
+        .sheet(isPresented: $showAddSheet) { SalaryFormView(store: store, editing: nil) }
+        .sheet(item: $editingRecord) { r in SalaryFormView(store: store, editing: r) }
     }
 }
 
@@ -93,6 +110,8 @@ private struct SalaryChartView: View {
 
 private struct SalaryTableView: View {
     let records: [SalaryUsageRecord]
+    var onSelect: (SalaryUsageRecord) -> Void = { _ in }
+    var hidden: Bool = false
 
     private struct ColDef { let title: String; let width: CGFloat }
     private let cols: [ColDef] = [
@@ -141,6 +160,8 @@ private struct SalaryTableView: View {
                     }
                     .padding(.vertical, 9).padding(.horizontal, 2)
                     .background(idx % 2 == 0 ? Color.clear : Theme.chipFill)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onSelect(record) }
                     Divider().overlay(Theme.hairline)
                 }
 
@@ -162,11 +183,166 @@ private struct SalaryTableView: View {
 
     private func fmt(_ value: Double, _ currency: String) -> String {
         guard value != 0 else { return "—" }
+        if hidden { return "••••" }
         let f = NumberFormatter()
         f.numberStyle = .currency
         f.currencyCode = currency
         f.minimumFractionDigits = 0
         f.maximumFractionDigits = 2
         return f.string(from: NSNumber(value: value)) ?? "\(currency) \(String(format: "%.2f", value))"
+    }
+}
+
+private struct SalaryFormView: View {
+    @ObservedObject var store: FinancialStore
+    var editing: SalaryUsageRecord?
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var year = Calendar.current.component(.year, from: Date())
+    @State private var month = Calendar.current.component(.month, from: Date())
+    @State private var region = ""
+    @State private var currency = "USD"
+    @State private var salary = ""
+    @State private var bonus = ""
+    @State private var retirementSavingEmployee = ""
+    @State private var retirementSavingEmployer = ""
+    @State private var tax = ""
+    @State private var houseRent = ""
+    @State private var livingExpense = ""
+    @State private var otherExpense = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+    @State private var showDeleteConfirm = false
+
+    // Matches the web app's computed total exactly: living + house rent + other — tax is
+    // tracked separately and deliberately excluded (it isn't a discretionary "expense").
+    private var totalExpense: Double {
+        (Double(houseRent) ?? 0) + (Double(livingExpense) ?? 0) + (Double(otherExpense) ?? 0)
+    }
+
+    private var isValid: Bool {
+        !region.trimmingCharacters(in: .whitespaces).isEmpty && Double(salary) != nil
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Period") {
+                    Stepper("Year: \(String(year))", value: $year, in: 2000...2100)
+                    Picker("Month", selection: $month) {
+                        ForEach(1...12, id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
+                    }
+                    ComboField(placeholder: "Region (e.g. Hong Kong SAR, Singapore)", text: $region,
+                               suggestions: Array(Set(store.salaryRecords.map(\.region))).sorted())
+                    Picker("Currency", selection: $currency) {
+                        ForEach(commonCurrencies, id: \.self) { Text($0).tag($0) }
+                    }
+                }
+                Section("Income") {
+                    labeledField("Salary (excl. retirement)", $salary)
+                    labeledField("Bonus", $bonus)
+                    labeledField("Retirement saving — employee", $retirementSavingEmployee)
+                    labeledField("Retirement saving — employer", $retirementSavingEmployer)
+                }
+                Section("Expenses") {
+                    labeledField("Tax", $tax)
+                    labeledField("House rent", $houseRent)
+                    labeledField("Living expense", $livingExpense)
+                    labeledField("Other expense", $otherExpense)
+                    HStack {
+                        Text("Total expense").foregroundStyle(Theme.inkSoft)
+                        Spacer()
+                        Text(formatMoney(totalExpense, currency: currency)).foregroundStyle(Theme.ink)
+                    }
+                }
+                if editing != nil {
+                    Section {
+                        Button("Delete record", role: .destructive) { showDeleteConfirm = true }
+                    }
+                }
+                if let errorMessage {
+                    Section { Text(errorMessage).font(.caption).foregroundStyle(.red) }
+                }
+            }
+            .navigationTitle(editing == nil ? "Add Salary Record" : "Edit Salary Record")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    if isSaving { ProgressView() } else {
+                        Button("Save") { Task { await save() } }.disabled(!isValid)
+                    }
+                }
+            }
+            .confirmationDialog("Delete this salary record?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { Task { await delete() } }
+                Button("Cancel", role: .cancel) {}
+            }
+        }
+        .onAppear(perform: populate)
+    }
+
+    private func labeledField(_ label: String, _ text: Binding<String>) -> some View {
+        HStack {
+            Text(label).foregroundStyle(Theme.inkSoft)
+            Spacer()
+            TextField("0", text: text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 120)
+        }
+    }
+
+    private func populate() {
+        guard let editing else { return }
+        year = editing.year
+        month = editing.month
+        region = editing.region
+        currency = editing.currency
+        salary = formatNum(editing.salary)
+        bonus = formatNum(editing.bonus)
+        retirementSavingEmployee = formatNum(editing.retirementSavingEmployee)
+        retirementSavingEmployer = formatNum(editing.retirementSavingEmployer)
+        tax = formatNum(editing.tax)
+        houseRent = formatNum(editing.houseRent)
+        livingExpense = formatNum(editing.livingExpense)
+        otherExpense = formatNum(editing.otherExpense)
+    }
+
+    private func save() async {
+        guard let sal = Double(salary) else { return }
+        isSaving = true; errorMessage = nil
+        let fields: [String: Any] = [
+            "year": year, "month": month, "region": region, "currency": currency,
+            "salary": sal, "bonus": Double(bonus) ?? 0,
+            "retirementSavingEmployee": Double(retirementSavingEmployee) ?? 0,
+            "retirementSavingEmployer": Double(retirementSavingEmployer) ?? 0,
+            "tax": Double(tax) ?? 0, "houseRent": Double(houseRent) ?? 0,
+            "livingExpense": Double(livingExpense) ?? 0, "otherExpense": Double(otherExpense) ?? 0,
+            "totalExpense": totalExpense,
+        ]
+        do {
+            if let editing {
+                try await store.editSalary(id: editing.id, fields)
+            } else {
+                try await store.addSalary(fields)
+            }
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isSaving = false
+    }
+
+    private func delete() async {
+        guard let editing else { return }
+        isSaving = true; errorMessage = nil
+        do {
+            try await store.removeSalary(id: editing.id)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isSaving = false
     }
 }

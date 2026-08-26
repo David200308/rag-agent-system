@@ -1,9 +1,22 @@
 import Foundation
 
+// Mirrors frontend/src/types/financial.ts exactly, so the mobile forms offer the same choices as the web app.
+let commonCurrencies = ["HKD", "CNY", "USD", "JPY", "SGD", "GBP", "AUD", "EUR", "CAD"]
+let depositTypes = ["FIXED", "FLEX"]
+let stockTypes = ["US_STOCK", "HK_STOCK", "CN_STOCK", "SG_STOCK", "OTHER"]
+let stockTypeLabels: [String: String] = [
+    "US_STOCK": "US Stock", "HK_STOCK": "HK Stock", "CN_STOCK": "CN Stock", "SG_STOCK": "SG Stock", "OTHER": "Other",
+]
+let cardTypes = ["Credit", "Debit", "ATM"]
+let cardNetworks = ["Mastercard", "Visa", "UnionPay", "JCB", "AMEX"]
+let cexExchanges = ["BINANCE", "OKX", "KRAKEN"]
+let futureSides = ["LONG", "SHORT"]
+
 struct CashDeposit: Codable, Identifiable {
     let id: String
     let platform: String
     let platformType: String
+    let countryRegion: String?  // nullable on the backend — older/API-created rows may not have it set
     let depositType: String
     let currency: String
     let amount: Double
@@ -21,7 +34,10 @@ struct StockInvestment: Codable, Identifiable {
     let stockAmount: Double
     let investAmount: Double
     let currency: String
+    let fee: Double
     let currentPrice: Double?
+    let priceCurrency: String?
+    let logoUrl: String?
     let currentValue: Double?
     let convertedInvestAmount: Double
     let convertedCurrentValue: Double?
@@ -38,6 +54,7 @@ struct CryptoInvestment: Codable, Identifiable {
     let investAmount: Double
     let currency: String
     let currentPrice: Double?
+    let logoUrl: String?
     let currentValue: Double?
     let convertedInvestAmount: Double
     let convertedCurrentValue: Double?
@@ -77,11 +94,12 @@ struct FinancialCard: Codable, Identifiable {
     let bank: String
     let cardName: String
     let network: String
-    let countryRegion: String
+    let countryRegion: String?  // nullable on the backend — older/API-created rows may not have it set
     let types: [String]
     let creditLimit: Double?
     let creditLimitCurrency: String?
-    let expireDate: String
+    let sharedCredit: Bool?
+    let expireDate: String?  // nullable on the backend — older/API-created rows may not have it set
     let createdAt: String
 }
 
