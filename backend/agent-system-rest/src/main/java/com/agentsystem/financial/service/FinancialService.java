@@ -15,6 +15,7 @@ import com.agentsystem.financial.entity.StockInvestment;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public interface FinancialService {
 
@@ -33,6 +34,9 @@ public interface FinancialService {
     StockInvestment updateStock(String id, String ownerUuid, Map<String, Object> body);
 
     void deleteStock(String id, String ownerUuid);
+
+    /** Looks up a stock ticker's company display name, for the Add Stock form's auto-fill. */
+    Optional<String> lookupStockName(String symbol);
 
     List<CryptoInvestmentDto> listCrypto(String ownerUuid, String defaultCurrency);
 

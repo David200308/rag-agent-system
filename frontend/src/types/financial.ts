@@ -27,15 +27,15 @@ export type Currency = typeof CURRENCIES[number];
 export const DEPOSIT_TYPES = ["FIXED", "FLEX"] as const;
 export type DepositType = typeof DEPOSIT_TYPES[number];
 
-export const STOCK_TYPES = ["US_STOCK", "HK_STOCK", "CN_STOCK", "SG_STOCK", "OTHER"] as const;
+export const STOCK_TYPES = ["US_STOCK", "HK_STOCK", "CN_STOCK", "JP_STOCK", "FR_STOCK"] as const;
 export type StockType = typeof STOCK_TYPES[number];
 
 export const STOCK_TYPE_LABELS: Record<StockType, string> = {
   US_STOCK: "US Stock",
   HK_STOCK: "HK Stock",
   CN_STOCK: "CN Stock",
-  SG_STOCK: "SG Stock",
-  OTHER:    "Other",
+  JP_STOCK: "JP Stock",
+  FR_STOCK: "FR Stock",
 };
 
 export const FUTURE_EXCHANGE_KINDS = ["SECURITY", "CRYPTO_CEX", "CRYPTO_DEX"] as const;

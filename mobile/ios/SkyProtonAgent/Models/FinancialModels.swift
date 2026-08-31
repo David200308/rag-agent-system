@@ -3,9 +3,9 @@ import Foundation
 // Mirrors frontend/src/types/financial.ts exactly, so the mobile forms offer the same choices as the web app.
 let commonCurrencies = ["HKD", "CNY", "USD", "JPY", "SGD", "GBP", "AUD", "EUR", "CAD"]
 let depositTypes = ["FIXED", "FLEX"]
-let stockTypes = ["US_STOCK", "HK_STOCK", "CN_STOCK", "SG_STOCK", "OTHER"]
+let stockTypes = ["US_STOCK", "HK_STOCK", "CN_STOCK", "JP_STOCK", "FR_STOCK"]
 let stockTypeLabels: [String: String] = [
-    "US_STOCK": "US Stock", "HK_STOCK": "HK Stock", "CN_STOCK": "CN Stock", "SG_STOCK": "SG Stock", "OTHER": "Other",
+    "US_STOCK": "US Stock", "HK_STOCK": "HK Stock", "CN_STOCK": "CN Stock", "JP_STOCK": "JP Stock", "FR_STOCK": "FR Stock",
 ]
 let cardTypes = ["Credit", "Debit", "ATM"]
 let cardNetworks = ["Mastercard", "Visa", "UnionPay", "JCB", "AMEX"]

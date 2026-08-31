@@ -2,6 +2,7 @@ package com.agentsystem.financial.service;
 
 import com.agentsystem.financial.service.impl.MarketPriceServiceImpl;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -100,9 +102,7 @@ class MarketPriceServiceTest {
         Map<String, String> currencies = new ConcurrentHashMap<>(Map.of(
                 "0700.HK", "HKD",
                 "600036.SS", "CNY",
-                "D05.SI", "SGD",
                 "7203.T", "JPY",
-                "BP.L", "GBP",
                 "BHP.AX", "AUD",
                 "RY.TO", "CAD",
                 "AAPL", "USD"
@@ -111,12 +111,23 @@ class MarketPriceServiceTest {
 
         assertThat(service.getStockCurrency("0700.HK")).hasValue("HKD");
         assertThat(service.getStockCurrency("600036.SS")).hasValue("CNY");
-        assertThat(service.getStockCurrency("D05.SI")).hasValue("SGD");
         assertThat(service.getStockCurrency("7203.T")).hasValue("JPY");
-        assertThat(service.getStockCurrency("BP.L")).hasValue("GBP");
         assertThat(service.getStockCurrency("BHP.AX")).hasValue("AUD");
         assertThat(service.getStockCurrency("RY.TO")).hasValue("CAD");
         assertThat(service.getStockCurrency("AAPL")).hasValue("USD");
+    }
+
+    @Test
+    void lookupStockName_cached_returnsWithoutFetching() {
+        Map<String, String> names = new ConcurrentHashMap<>(Map.of("AAPL", "Apple Inc."));
+        ReflectionTestUtils.setField(service, "stockNames", names);
+
+        assertThat(service.lookupStockName("aapl")).hasValue("Apple Inc.");
+    }
+
+    @Test
+    void lookupStockName_blankSymbol_returnsEmptyWithoutFetching() {
+        assertThat(service.lookupStockName("  ")).isEmpty();
     }
 
     // ── Logo cache ────────────────────────────────────────────────────────────
@@ -195,18 +206,8 @@ class MarketPriceServiceTest {
     }
 
     @Test
-    void inferCurrency_siSuffix_returnsSGD() throws Exception {
-        assertThat(callInferCurrency("D05.SI")).isEqualTo("SGD");
-    }
-
-    @Test
     void inferCurrency_tSuffix_returnsJPY() throws Exception {
         assertThat(callInferCurrency("7203.T")).isEqualTo("JPY");
-    }
-
-    @Test
-    void inferCurrency_lSuffix_returnsGBP() throws Exception {
-        assertThat(callInferCurrency("BP.L")).isEqualTo("GBP");
     }
 
     @Test
@@ -217,6 +218,11 @@ class MarketPriceServiceTest {
     @Test
     void inferCurrency_toSuffix_returnsCAD() throws Exception {
         assertThat(callInferCurrency("RY.TO")).isEqualTo("CAD");
+    }
+
+    @Test
+    void inferCurrency_paSuffix_returnsEUR() throws Exception {
+        assertThat(callInferCurrency("MC.PA")).isEqualTo("EUR");
     }
 
     @Test
@@ -266,6 +272,114 @@ class MarketPriceServiceTest {
         assertThat(service.getCryptoPrice("BTC")).isEmpty();
     }
 
+    // ── Pyth routing (HK/CN/JP only) ────────────────────────────────────────────
+
+    @Test
+    void isPythRouted_hkSuffix_isTrue() throws Exception {
+        assertThat(callIsPythRouted("0700.HK")).isTrue();
+    }
+
+    @Test
+    void isPythRouted_ssAndSzSuffix_isTrue() throws Exception {
+        assertThat(callIsPythRouted("600519.SS")).isTrue();
+        assertThat(callIsPythRouted("000001.SZ")).isTrue();
+    }
+
+    @Test
+    void isPythRouted_tSuffix_isTrue() throws Exception {
+        assertThat(callIsPythRouted("7203.T")).isTrue();
+    }
+
+    @Test
+    void isPythRouted_usFr_isFalse() throws Exception {
+        assertThat(callIsPythRouted("AAPL")).isFalse();
+        assertThat(callIsPythRouted("MC.PA")).isFalse();
+    }
+
+    // ── Yahoo routing (FR only) ──────────────────────────────────────────────────
+
+    @Test
+    void isYahooRouted_paSuffix_isTrue() throws Exception {
+        assertThat(callIsYahooRouted("MC.PA")).isTrue();
+    }
+
+    @Test
+    void isYahooRouted_usHkJp_isFalse() throws Exception {
+        assertThat(callIsYahooRouted("AAPL")).isFalse();
+        assertThat(callIsYahooRouted("0700.HK")).isFalse();
+        assertThat(callIsYahooRouted("7203.T")).isFalse();
+    }
+
+    // ── Pyth HK/CN/JP feed matching ─────────────────────────────────────────────
+
+    private static final String TENCENT_FIXTURE = """
+            [
+              {
+                "id": "2229ed6410e4f9e0a91b74a2f08c3048cfb6c2c80b3f1a4dbbfb8765b653cef1",
+                "attributes": {"asset_type":"Equity","description":"TENCENT HOLDINGS LTD / HONG KONG DOLLAR","display_symbol":"TENCENT","nasdaq_symbol":"0700","quote_currency":"HKD","symbol":"Equity.HK.0700/HKD"}
+              }
+            ]
+            """;
+
+    private static final String TOYOTA_FIXTURE = """
+            [
+              {
+                "id": "5679f0e0c3934e6f21d5c2e8f0a1f3b0d5c6e7f8a9b0c1d2e3f4a5b6c7d8e9f0",
+                "attributes": {"asset_type":"Equity","description":"TOYOTA MOTOR CORPORATION / JAPANESE YEN","display_symbol":"TOYOTA","nasdaq_symbol":"7203","quote_currency":"JPY","symbol":"Equity.JP.7203/JPY"}
+              }
+            ]
+            """;
+
+    @Test
+    void pickNativeExchangeMatch_exactTickerUnderExchangePrefix_returnsId() throws Exception {
+        JsonNode results = new ObjectMapper().readTree(TENCENT_FIXTURE);
+
+        Optional<String> id = callPickNativeExchangeMatch(results, "0700", "Equity.HK.");
+
+        assertThat(id).contains("2229ed6410e4f9e0a91b74a2f08c3048cfb6c2c80b3f1a4dbbfb8765b653cef1");
+    }
+
+    @Test
+    void pickNativeExchangeMatch_jpTickerUnderJpPrefix_returnsId() throws Exception {
+        JsonNode results = new ObjectMapper().readTree(TOYOTA_FIXTURE);
+
+        Optional<String> id = callPickNativeExchangeMatch(results, "7203", "Equity.JP.");
+
+        assertThat(id).contains("5679f0e0c3934e6f21d5c2e8f0a1f3b0d5c6e7f8a9b0c1d2e3f4a5b6c7d8e9f0");
+    }
+
+    @Test
+    void pickNativeExchangeMatch_wrongExchangePrefix_returnsEmpty() throws Exception {
+        JsonNode results = new ObjectMapper().readTree(TENCENT_FIXTURE);
+
+        Optional<String> id = callPickNativeExchangeMatch(results, "0700", "Equity.CN.");
+
+        assertThat(id).isEmpty();
+    }
+
+    @Test
+    void pickNativeExchangeMatch_noTickerMatch_returnsEmpty() throws Exception {
+        JsonNode results = new ObjectMapper().readTree(TENCENT_FIXTURE);
+
+        Optional<String> id = callPickNativeExchangeMatch(results, "9988", "Equity.HK.");
+
+        assertThat(id).isEmpty();
+    }
+
+    @Test
+    void pickNativeExchangeMatch_deprecatedFeed_isExcluded() throws Exception {
+        String fixture = """
+                [
+                  {"id":"dep-1","attributes":{"description":"DEPRECATED FEED - TENCENT / HONG KONG DOLLAR","nasdaq_symbol":"0700","symbol":"Equity.HK.0700/HKD"}}
+                ]
+                """;
+        JsonNode results = new ObjectMapper().readTree(fixture);
+
+        Optional<String> id = callPickNativeExchangeMatch(results, "0700", "Equity.HK.");
+
+        assertThat(id).isEmpty();
+    }
+
     // ── reflection helper ─────────────────────────────────────────────────────
 
     private String callInferCurrency(String symbol) throws Exception {
@@ -273,5 +387,27 @@ class MarketPriceServiceTest {
                 "inferCurrency", String.class);
         m.setAccessible(true);
         return (String) m.invoke(null, symbol);  // static method
+    }
+
+    private boolean callIsPythRouted(String symbol) throws Exception {
+        java.lang.reflect.Method m = MarketPriceServiceImpl.class.getDeclaredMethod(
+                "isPythRouted", String.class);
+        m.setAccessible(true);
+        return (boolean) m.invoke(null, symbol);  // static method
+    }
+
+    private boolean callIsYahooRouted(String symbol) throws Exception {
+        java.lang.reflect.Method m = MarketPriceServiceImpl.class.getDeclaredMethod(
+                "isYahooRouted", String.class);
+        m.setAccessible(true);
+        return (boolean) m.invoke(null, symbol);  // static method
+    }
+
+    @SuppressWarnings("unchecked")
+    private Optional<String> callPickNativeExchangeMatch(JsonNode results, String code, String exchangePrefix) throws Exception {
+        java.lang.reflect.Method m = MarketPriceServiceImpl.class.getDeclaredMethod(
+                "pickNativeExchangeMatch", JsonNode.class, String.class, String.class);
+        m.setAccessible(true);
+        return (Optional<String>) m.invoke(null, results, code, exchangePrefix);  // static method
     }
 }

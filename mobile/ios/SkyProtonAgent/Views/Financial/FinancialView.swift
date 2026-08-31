@@ -324,7 +324,8 @@ func stockTypeBadgeLabel(_ stockType: String) -> String {
     case "US_STOCK": return "US"
     case "HK_STOCK": return "HK"
     case "CN_STOCK": return "CN"
-    case "SG_STOCK": return "SG"
+    case "JP_STOCK": return "JP"
+    case "FR_STOCK": return "FR"
     default:         return "—"
     }
 }

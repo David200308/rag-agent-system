@@ -24,7 +24,7 @@ import {
   type SalaryUsageRecord,
 } from "@/types/financial";
 import { Field, ComboInput, SegBtn } from "./shared-ui";
-import { inputCls, selectCls } from "./utils";
+import { apiLookupStockName, inputCls, selectCls } from "./utils";
 
 export type DepositFields = Omit<CashDeposit, "id"|"ownerEmail"|"convertedAmount"|"convertedCurrency"|"createdAt"|"updatedAt">;
 export type StockFields   = Omit<StockInvestment, "id"|"ownerEmail"|"currentPrice"|"priceCurrency"|"logoUrl"|"currentValue"|"convertedInvestAmount"|"convertedCurrentValue"|"convertedCurrency"|"pnlPercent"|"createdAt"|"updatedAt">;
@@ -101,7 +101,22 @@ export function StockForm({ initial, brokers, onSave, onCancel, saving }: {
   onSave: (d: StockFields) => void; onCancel: () => void; saving: boolean;
 }) {
   const [f, setF] = useState(initial);
+  const [nameLookupPending, setNameLookupPending] = useState(false);
   const setField = (k: string, v: unknown) => setF((p) => ({ ...p, [k]: v }));
+
+  // Auto-fills Name from Symbol on blur, via Finnhub/Pyth company-profile lookup — never
+  // overwrites a name the user (or an existing edit) already has.
+  const handleSymbolBlur = async () => {
+    if (!f.symbol.trim() || f.name.trim()) return;
+    setNameLookupPending(true);
+    try {
+      const name = await apiLookupStockName(f.symbol);
+      if (name) setField("name", name);
+    } finally {
+      setNameLookupPending(false);
+    }
+  };
+
   return (
     <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); onSave(f); }}>
       <Field label="Broker *">
@@ -117,12 +132,14 @@ export function StockForm({ initial, brokers, onSave, onCancel, saving }: {
         <Field label="Symbol *">
           <input className={inputCls} required value={f.symbol}
             onChange={(e) => setField("symbol", e.target.value.toUpperCase())}
+            onBlur={handleSymbolBlur}
             placeholder="e.g. AAPL, 0700.HK" />
         </Field>
       </div>
       <Field label="Name *">
         <input className={inputCls} required value={f.name}
-          onChange={(e) => setField("name", e.target.value)} placeholder="e.g. Apple Inc." />
+          onChange={(e) => setField("name", e.target.value)}
+          placeholder={nameLookupPending ? "Looking up…" : "e.g. Apple Inc."} />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Shares *">
@@ -146,7 +163,7 @@ export function StockForm({ initial, brokers, onSave, onCancel, saving }: {
         </Field>
       </div>
       <p className="text-[11px] text-[--color-muted]">
-        Use Finnhub ticker format: AAPL (US), 0700.HK (HK), 600519.SS (CN), D05.SI (SG)
+        Use Finnhub ticker format: AAPL (US), 0700.HK (HK), 600519.SS (CN), 7203.T (JP), MC.PA (FR)
       </p>
       <div className="mt-1 flex justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>

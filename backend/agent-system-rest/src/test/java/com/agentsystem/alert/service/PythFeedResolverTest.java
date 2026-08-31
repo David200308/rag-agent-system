@@ -145,4 +145,38 @@ class PythFeedResolverTest {
         m.setAccessible(true);
         return (Optional<String>) m.invoke(resolver, results, base);
     }
+
+    // ── Exchange suffix stripping ───────────────────────────────────────────────
+
+    @Test
+    void stripExchangeSuffix_hkSuffix_isStripped() throws Exception {
+        assertThat(callStripExchangeSuffix("0700.HK")).isEqualTo("0700");
+    }
+
+    @Test
+    void stripExchangeSuffix_deSuffix_isStripped() throws Exception {
+        assertThat(callStripExchangeSuffix("SAP.DE")).isEqualTo("SAP");
+    }
+
+    @Test
+    void stripExchangeSuffix_paSuffix_isStripped() throws Exception {
+        assertThat(callStripExchangeSuffix("MC.PA")).isEqualTo("MC");
+    }
+
+    @Test
+    void stripExchangeSuffix_unknownSuffix_isLeftAlone() throws Exception {
+        // "BRK.B" — a real US ticker with a dot that isn't an exchange suffix.
+        assertThat(callStripExchangeSuffix("BRK.B")).isEqualTo("BRK.B");
+    }
+
+    @Test
+    void stripExchangeSuffix_noSuffix_isLeftAlone() throws Exception {
+        assertThat(callStripExchangeSuffix("AAPL")).isEqualTo("AAPL");
+    }
+
+    private String callStripExchangeSuffix(String symbol) throws Exception {
+        Method m = PythFeedResolver.class.getDeclaredMethod("stripExchangeSuffix", String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(null, symbol);
+    }
 }

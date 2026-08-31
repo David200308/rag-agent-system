@@ -47,6 +47,20 @@ export async function apiRefreshPrices(): Promise<void> {
   await fetch("/api/financial/prices", { method: "POST" });
 }
 
+/** Looks up a stock ticker's company name, for the Add Stock form's auto-fill. */
+export async function apiLookupStockName(symbol: string): Promise<string | null> {
+  const trimmed = symbol.trim();
+  if (!trimmed) return null;
+  try {
+    const res = await fetch(`/api/financial/stocks/lookup?symbol=${encodeURIComponent(trimmed)}`);
+    if (!res.ok) return null;
+    const data = await res.json() as { name?: string };
+    return data.name?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchExchangeRates(): Promise<Record<string, number>> {
   try {
     const res = await fetch("/api/financial/rates");
@@ -183,9 +197,9 @@ export function toTradingViewSymbol(
   }
   switch (stockType) {
     case "HK_STOCK": return `HKEX:${sym.replace(/^0+/, "").padStart(4, "0")}`;
-    case "SG_STOCK": return `SGX:${sym}`;
     case "CN_STOCK": return `SSE:${sym}`;
-    default:         return sym; // US_STOCK / OTHER: let TradingView resolve the primary listing
+    case "JP_STOCK": return `TSE:${sym}`;
+    default:         return sym; // US_STOCK / FR_STOCK: let TradingView resolve the primary listing
   }
 }
 

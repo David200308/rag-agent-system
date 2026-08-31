@@ -25,7 +25,7 @@ public class StockInvestment {
     @Column(nullable = false, length = 255)
     private String broker;
 
-    /** US_STOCK | HK_STOCK | CN_STOCK | SG_STOCK | OTHER */
+    /** US_STOCK | HK_STOCK | CN_STOCK | JP_STOCK | FR_STOCK */
     @Column(name = "stock_type", nullable = false, length = 20)
     private String stockType;
 

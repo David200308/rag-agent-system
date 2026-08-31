@@ -108,6 +108,14 @@ public class FinancialController {
         }
     }
 
+    @GetMapping("/stocks/lookup")
+    @Operation(summary = "Look up a stock ticker's company display name, for Add Stock form auto-fill")
+    public ResponseEntity<Map<String, String>> lookupStock(@RequestParam String symbol) {
+        return service.lookupStockName(symbol)
+                .map(name -> ResponseEntity.ok(Map.of("name", name)))
+                .orElseGet(() -> ResponseEntity.ok(Map.of()));
+    }
+
     // ── Crypto ────────────────────────────────────────────────────────────────
 
     @GetMapping("/crypto")

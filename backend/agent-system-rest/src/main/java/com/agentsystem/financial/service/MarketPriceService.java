@@ -12,6 +12,9 @@ public interface MarketPriceService {
 
     Optional<String> getStockLogo(String symbol);
 
+    /** Resolves a symbol's company display name, fetching it live (and caching) if not already known. */
+    Optional<String> lookupStockName(String symbol);
+
     Optional<Double> getCryptoPrice(String symbol);
 
     Optional<String> getCryptoLogo(String symbol);

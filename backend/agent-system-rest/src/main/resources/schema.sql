@@ -351,7 +351,7 @@ CREATE TABLE IF NOT EXISTS financial_stocks (
     id              VARCHAR(36)    PRIMARY KEY,
     owner_uuid      VARCHAR(36)    NOT NULL,
     broker          VARCHAR(255)   NOT NULL,
-    stock_type      VARCHAR(20)    NOT NULL,   -- US_STOCK | HK_STOCK | CN_STOCK | SG_STOCK | OTHER
+    stock_type      VARCHAR(20)    NOT NULL,   -- US_STOCK | HK_STOCK | CN_STOCK | JP_STOCK | FR_STOCK
     symbol          VARCHAR(20)    NOT NULL,
     name            VARCHAR(255)   NOT NULL,
     stock_amount    DECIMAL(19,4)  NOT NULL,

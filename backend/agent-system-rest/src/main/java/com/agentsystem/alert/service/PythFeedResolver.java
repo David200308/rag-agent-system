@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.util.Comparator;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.StreamSupport;
 
 /**
@@ -50,6 +51,17 @@ public class PythFeedResolver {
             .build();
 
     /**
+     * Exchange suffixes used by the Financial section's Finnhub-format symbols (e.g. "0700.HK",
+     * "SAP.DE") that Pyth's equity search doesn't understand — Pyth only indexes bare US-listed
+     * tickers. Stripped before querying so alerts can be set from those rows at all; this is
+     * best-effort only, since Pyth's equity coverage is overwhelmingly US-listed names, so most
+     * non-US tickers still won't resolve to a feed even once the suffix is removed.
+     */
+    private static final Set<String> KNOWN_EXCHANGE_SUFFIXES = Set.of(
+            "HK", "SS", "SZ", "SI", "T", "L", "AX", "TO",
+            "DE", "PA", "AS", "BR", "MI", "MC", "LS", "VI", "IR", "HE");
+
+    /**
      * @param symbol    plain symbol, e.g. "BTC" or "QQQ" (case-insensitive)
      * @param assetType "CRYPTO" or "STOCK"
      * @return the resolved Pyth feed ID, or empty if no matching feed was found
@@ -57,6 +69,9 @@ public class PythFeedResolver {
     public Optional<String> resolveFeedId(String symbol, String assetType) {
         String base = symbol.trim().toUpperCase(Locale.ROOT);
         String pythAssetType = "STOCK".equalsIgnoreCase(assetType) ? "equity" : "crypto";
+        if ("equity".equals(pythAssetType)) {
+            base = stripExchangeSuffix(base);
+        }
         String cacheKey = pythAssetType + ":" + base;
 
         String cached = feedIdCache.getIfPresent(cacheKey);
@@ -85,6 +100,14 @@ public class PythFeedResolver {
             log.warn("[PythFeedResolver] Failed to resolve feed for symbol={} assetType={}: {}", symbol, assetType, e.getMessage());
             return Optional.empty();
         }
+    }
+
+    /** Strips a trailing ".XX" exchange suffix (e.g. "0700.HK" -> "0700") when it's a known one. */
+    private static String stripExchangeSuffix(String symbol) {
+        int dot = symbol.lastIndexOf('.');
+        if (dot < 0) return symbol;
+        String suffix = symbol.substring(dot + 1);
+        return KNOWN_EXCHANGE_SUFFIXES.contains(suffix) ? symbol.substring(0, dot) : symbol;
     }
 
     /**
