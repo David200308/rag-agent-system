@@ -9,10 +9,16 @@ final class FinancialStore: ObservableObject {
     @Published var cards: [FinancialCard] = []
     @Published var salaryRecords: [SalaryUsageRecord] = []
     @Published var isLoading = false
+    @Published var isLoadingCards = false
+    @Published var isLoadingSalary = false
     @Published var loadError: String?
 
     private let service = AgentService.shared
     private var didLoadOnce = false
+    // cards/salary don't feed the summary totals on the main Financial screen, so they're
+    // fetched lazily the first time their own screen appears, not bundled into loadAll().
+    private var didLoadCards = false
+    private var didLoadSalary = false
 
     func loadIfNeeded() async {
         guard !didLoadOnce else { return }
@@ -31,17 +37,37 @@ final class FinancialStore: ObservableObject {
         async let s = service.listStocks()
         async let c = service.listCrypto()
         async let f = service.listFutures()
-        async let k = service.listCards()
-        async let r = service.listSalaryRecords()
 
         do { deposits = try await d } catch { setLoadError(error) }
         do { stocks = try await s } catch { setLoadError(error) }
         do { crypto = try await c } catch { setLoadError(error) }
         do { futures = try await f } catch { setLoadError(error) }
-        do { cards = try await k } catch { setLoadError(error) }
-        do { salaryRecords = try await r } catch { setLoadError(error) }
 
         isLoading = false
+    }
+
+    func loadCardsIfNeeded() async {
+        guard !didLoadCards else { return }
+        await loadCards()
+    }
+
+    func loadCards() async {
+        didLoadCards = true
+        isLoadingCards = true
+        do { cards = try await service.listCards() } catch { didLoadCards = false; setLoadError(error) }
+        isLoadingCards = false
+    }
+
+    func loadSalaryIfNeeded() async {
+        guard !didLoadSalary else { return }
+        await loadSalary()
+    }
+
+    func loadSalary() async {
+        didLoadSalary = true
+        isLoadingSalary = true
+        do { salaryRecords = try await service.listSalaryRecords() } catch { didLoadSalary = false; setLoadError(error) }
+        isLoadingSalary = false
     }
 
     func refresh() async {
@@ -51,6 +77,8 @@ final class FinancialStore: ObservableObject {
         var refreshError: Error?
         do { try await service.refreshPrices() } catch { refreshError = error }
         await loadAll()
+        if didLoadCards { await loadCards() }
+        if didLoadSalary { await loadSalary() }
         if loadError == nil, let refreshError, (refreshError as? APIError)?.isCancellation != true {
             loadError = "Price refresh failed: \(refreshError.localizedDescription)"
         }
@@ -84,13 +112,13 @@ final class FinancialStore: ObservableObject {
     func editFuture(id: String, _ fields: [String: Any]) async throws { try await service.updateFuture(id: id, fields); await loadAll() }
     func removeFuture(id: String) async throws { try await service.deleteFuture(id: id); await loadAll() }
 
-    func addCard(_ fields: [String: Any]) async throws { try await service.createCard(fields); await loadAll() }
-    func editCard(id: String, _ fields: [String: Any]) async throws { try await service.updateCard(id: id, fields); await loadAll() }
-    func removeCard(id: String) async throws { try await service.deleteCard(id: id); await loadAll() }
+    func addCard(_ fields: [String: Any]) async throws { try await service.createCard(fields); await loadCards() }
+    func editCard(id: String, _ fields: [String: Any]) async throws { try await service.updateCard(id: id, fields); await loadCards() }
+    func removeCard(id: String) async throws { try await service.deleteCard(id: id); await loadCards() }
 
-    func addSalary(_ fields: [String: Any]) async throws { try await service.createSalary(fields); await loadAll() }
-    func editSalary(id: String, _ fields: [String: Any]) async throws { try await service.updateSalary(id: id, fields); await loadAll() }
-    func removeSalary(id: String) async throws { try await service.deleteSalary(id: id); await loadAll() }
+    func addSalary(_ fields: [String: Any]) async throws { try await service.createSalary(fields); await loadSalary() }
+    func editSalary(id: String, _ fields: [String: Any]) async throws { try await service.updateSalary(id: id, fields); await loadSalary() }
+    func removeSalary(id: String) async throws { try await service.deleteSalary(id: id); await loadSalary() }
 
     var depositsTotal: Double { deposits.reduce(0) { $0 + $1.convertedAmount } }
     var depositsCurrency: String { deposits.first?.convertedCurrency ?? "USD" }

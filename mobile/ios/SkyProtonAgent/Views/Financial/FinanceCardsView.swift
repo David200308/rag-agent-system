@@ -23,7 +23,11 @@ struct FinanceCardsView: View {
                         }
                     }
                 }
-                if filtered.isEmpty {
+                if store.isLoadingCards && store.cards.isEmpty {
+                    ThemeCard {
+                        ProgressView().frame(maxWidth: .infinity)
+                    }
+                } else if filtered.isEmpty {
                     ThemeCard {
                         Text(store.cards.isEmpty ? "No cards" : "No results")
                             .foregroundStyle(Theme.inkFaint).frame(maxWidth: .infinity)
@@ -74,6 +78,7 @@ struct FinanceCardsView: View {
                 Button { showAddSheet = true } label: { Image(systemName: "plus") }
             }
         }
+        .task { await store.loadCardsIfNeeded() }
         .sheet(isPresented: $showAddSheet) { CardFormView(store: store, editing: nil) }
         .sheet(item: $editingCard) { c in CardFormView(store: store, editing: c) }
         .confirmationDialog(

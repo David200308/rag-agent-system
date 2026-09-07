@@ -2,7 +2,7 @@ package com.agentsystem.travel.controller;
 
 import com.agentsystem.travel.service.TravelService;
 
-import com.agentsystem.travel.dto.TravelRecordDto;
+import com.agentsystem.travel.dto.TravelRecordSummaryDto;
 import com.agentsystem.travel.entity.TravelRecord;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,8 +22,20 @@ public class TravelController {
     private final TravelService service;
 
     @GetMapping
-    public ResponseEntity<List<TravelRecordDto>> list(HttpServletRequest req) {
+    public ResponseEntity<List<TravelRecordSummaryDto>> list(HttpServletRequest req) {
         return ResponseEntity.ok(service.list(ownerUuid(req)));
+    }
+
+    @GetMapping("/{id}/expenses")
+    public ResponseEntity<List<Map<String, Object>>> expenses(
+            @PathVariable String id, HttpServletRequest req) {
+        try {
+            return ResponseEntity.ok(service.getExpenses(id, ownerUuid(req)));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @PostMapping

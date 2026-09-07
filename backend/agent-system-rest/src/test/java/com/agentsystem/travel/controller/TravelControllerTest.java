@@ -2,7 +2,7 @@ package com.agentsystem.travel.controller;
 
 import com.agentsystem.travel.service.TravelService;
 
-import com.agentsystem.travel.dto.TravelRecordDto;
+import com.agentsystem.travel.dto.TravelRecordSummaryDto;
 import com.agentsystem.travel.entity.TravelRecord;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
@@ -45,10 +45,10 @@ class TravelControllerTest {
     @Test
     void list_returnsOkWithRecords() {
         stubUuid("user@test.com");
-        TravelRecordDto dto = new TravelRecordDto("id-1", "user@test.com", "Trip", null, null, null, null, null, false, Instant.now(), Instant.now());
+        TravelRecordSummaryDto dto = new TravelRecordSummaryDto("id-1", "user@test.com", "Trip", null, null, null, null, false, Instant.now(), Instant.now());
         when(service.list("user@test.com")).thenReturn(List.of(dto));
 
-        ResponseEntity<List<TravelRecordDto>> resp = controller.list(request);
+        ResponseEntity<List<TravelRecordSummaryDto>> resp = controller.list(request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).hasSize(1);
@@ -60,11 +60,45 @@ class TravelControllerTest {
         when(request.getAttribute("authenticatedUserUuid")).thenReturn(null);
         when(service.list("anonymous")).thenReturn(List.of());
 
-        ResponseEntity<List<TravelRecordDto>> resp = controller.list(request);
+        ResponseEntity<List<TravelRecordSummaryDto>> resp = controller.list(request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).isEmpty();
         verify(service).list("anonymous");
+    }
+
+    // ── expenses ──────────────────────────────────────────────────────────────
+
+    @Test
+    void expenses_ownerMatch_returnsList() {
+        stubUuid("user@test.com");
+        List<Map<String, Object>> expenses = List.of(Map.of("category", "Flight"));
+        when(service.getExpenses("id-1", "user@test.com")).thenReturn(expenses);
+
+        ResponseEntity<List<Map<String, Object>>> resp = controller.expenses("id-1", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).isEqualTo(expenses);
+    }
+
+    @Test
+    void expenses_wrongOwner_returns403() {
+        stubUuid("other@test.com");
+        when(service.getExpenses("id-1", "other@test.com")).thenThrow(new SecurityException("Forbidden"));
+
+        ResponseEntity<List<Map<String, Object>>> resp = controller.expenses("id-1", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+    }
+
+    @Test
+    void expenses_notFound_returns404() {
+        stubUuid("user@test.com");
+        when(service.getExpenses("missing", "user@test.com")).thenThrow(new IllegalArgumentException("Not found"));
+
+        ResponseEntity<List<Map<String, Object>>> resp = controller.expenses("missing", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(404);
     }
 
     // ── create ────────────────────────────────────────────────────────────────

@@ -4,8 +4,10 @@ import com.agentsystem.travel.service.impl.TravelServiceImpl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.agentsystem.travel.dto.TravelRecordDto;
+import com.agentsystem.travel.dto.TravelRecordSummaryDto;
 import com.agentsystem.travel.entity.TravelRecord;
 import com.agentsystem.travel.repository.TravelRecordRepository;
+import com.agentsystem.travel.repository.TravelRecordSummaryProjection;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,14 +49,29 @@ class TravelServiceTest {
         return r;
     }
 
+    private TravelRecordSummaryProjection projection(String id, String email, String title, String stopsJson) {
+        return new TravelRecordSummaryProjection() {
+            public String getId() { return id; }
+            public String getOwnerUuid() { return email; }
+            public String getTitle() { return title; }
+            public String getStartDate() { return "2025-06-01"; }
+            public String getEndDate() { return "2025-06-10"; }
+            public String getStopsJson() { return stopsJson; }
+            public String getNotes() { return null; }
+            public boolean isAllowChat() { return false; }
+            public Instant getCreatedAt() { return Instant.now(); }
+            public Instant getUpdatedAt() { return Instant.now(); }
+        };
+    }
+
     // ── list ──────────────────────────────────────────────────────────────────
 
     @Test
     void list_returnsAllRecordsForEmail() {
-        TravelRecord r = makeRecord("id-1", "user@test.com");
-        when(repo.findByOwnerUuidOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+        when(repo.findSummaryByOwnerUuidOrderByStartDateDesc("user@test.com"))
+                .thenReturn(List.of(projection("id-1", "user@test.com", "Trip to Paris", null)));
 
-        List<TravelRecordDto> result = service.list("user@test.com");
+        List<TravelRecordSummaryDto> result = service.list("user@test.com");
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo("id-1");
@@ -64,18 +81,18 @@ class TravelServiceTest {
 
     @Test
     void list_noRecords_returnsEmpty() {
-        when(repo.findByOwnerUuidOrderByStartDateDesc("other@test.com")).thenReturn(List.of());
+        when(repo.findSummaryByOwnerUuidOrderByStartDateDesc("other@test.com")).thenReturn(List.of());
 
         assertThat(service.list("other@test.com")).isEmpty();
     }
 
     @Test
     void list_recordWithStopsJson_parsesStops() {
-        TravelRecord r = makeRecord("id-2", "user@test.com");
-        r.setStopsJson("[{\"city\":\"Paris\",\"days\":3}]");
-        when(repo.findByOwnerUuidOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+        when(repo.findSummaryByOwnerUuidOrderByStartDateDesc("user@test.com"))
+                .thenReturn(List.of(projection("id-2", "user@test.com", "Trip",
+                        "[{\"city\":\"Paris\",\"days\":3}]")));
 
-        List<TravelRecordDto> result = service.list("user@test.com");
+        List<TravelRecordSummaryDto> result = service.list("user@test.com");
 
         assertThat(result.get(0).stops()).hasSize(1);
         assertThat(result.get(0).stops().get(0)).containsEntry("city", "Paris");
@@ -83,47 +100,64 @@ class TravelServiceTest {
 
     @Test
     void list_recordWithInvalidStopsJson_returnsEmptyStops() {
-        TravelRecord r = makeRecord("id-3", "user@test.com");
-        r.setStopsJson("not-valid-json");
-        when(repo.findByOwnerUuidOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+        when(repo.findSummaryByOwnerUuidOrderByStartDateDesc("user@test.com"))
+                .thenReturn(List.of(projection("id-3", "user@test.com", "Trip", "not-valid-json")));
 
-        List<TravelRecordDto> result = service.list("user@test.com");
+        List<TravelRecordSummaryDto> result = service.list("user@test.com");
 
         assertThat(result.get(0).stops()).isEmpty();
     }
 
     @Test
     void list_recordWithBlankStopsJson_returnsEmptyStops() {
-        TravelRecord r = makeRecord("id-4", "user@test.com");
-        r.setStopsJson("   ");
-        when(repo.findByOwnerUuidOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+        when(repo.findSummaryByOwnerUuidOrderByStartDateDesc("user@test.com"))
+                .thenReturn(List.of(projection("id-4", "user@test.com", "Trip", "   ")));
 
-        List<TravelRecordDto> result = service.list("user@test.com");
+        List<TravelRecordSummaryDto> result = service.list("user@test.com");
 
         assertThat(result.get(0).stops()).isEmpty();
     }
 
+    // ── getExpenses ───────────────────────────────────────────────────────────
+
     @Test
-    void list_recordWithExpensesJson_parsesExpenses() {
+    void getExpenses_ownerMatch_parsesExpenses() {
         TravelRecord r = makeRecord("id-5", "user@test.com");
         r.setExpensesJson("[{\"category\":\"Flight\",\"amount\":1200,\"currency\":\"USD\"}]");
-        when(repo.findByOwnerUuidOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+        when(repo.findById("id-5")).thenReturn(Optional.of(r));
 
-        List<TravelRecordDto> result = service.list("user@test.com");
+        List<Map<String, Object>> result = service.getExpenses("id-5", "user@test.com");
 
-        assertThat(result.get(0).expenses()).hasSize(1);
-        assertThat(result.get(0).expenses().get(0)).containsEntry("category", "Flight");
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0)).containsEntry("category", "Flight");
     }
 
     @Test
-    void list_recordWithInvalidExpensesJson_returnsEmptyExpenses() {
+    void getExpenses_invalidJson_returnsEmpty() {
         TravelRecord r = makeRecord("id-6", "user@test.com");
         r.setExpensesJson("not-valid-json");
-        when(repo.findByOwnerUuidOrderByStartDateDesc("user@test.com")).thenReturn(List.of(r));
+        when(repo.findById("id-6")).thenReturn(Optional.of(r));
 
-        List<TravelRecordDto> result = service.list("user@test.com");
+        assertThat(service.getExpenses("id-6", "user@test.com")).isEmpty();
+    }
 
-        assertThat(result.get(0).expenses()).isEmpty();
+    @Test
+    void getExpenses_notFound_throwsIllegalArgument() {
+        when(repo.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getExpenses("missing", "user@test.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Not found");
+    }
+
+    @Test
+    void getExpenses_wrongOwner_throwsSecurityException() {
+        TravelRecord r = makeRecord("id-7x", "owner@test.com");
+        when(repo.findById("id-7x")).thenReturn(Optional.of(r));
+
+        assertThatThrownBy(() -> service.getExpenses("id-7x", "other@test.com"))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Forbidden");
     }
 
     // ── create ────────────────────────────────────────────────────────────────

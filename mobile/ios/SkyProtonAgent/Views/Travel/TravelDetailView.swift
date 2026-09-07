@@ -3,6 +3,8 @@ import MapKit
 
 struct TravelDetailView: View {
     let trip: TravelRecord
+    @State private var expenseData: TripExpenseData?
+    @State private var expensesLoaded = false
 
     var body: some View {
         ScrollView {
@@ -25,7 +27,7 @@ struct TravelDetailView: View {
                     itineraryCard
                 }
 
-                if let data = trip.expenseData, !(data.itemExpenses.isEmpty && data.dateExpenses.isEmpty) {
+                if let data = expenseData, !(data.itemExpenses.isEmpty && data.dateExpenses.isEmpty) {
                     HStack {
                         SectionLabel(text: "Expenses")
                         Spacer()
@@ -42,6 +44,20 @@ struct TravelDetailView: View {
         .tabBarSafeArea()
         .navigationTitle("Trip")
         .navigationBarTitleDisplayMode(.inline)
+        .task { await loadExpenses() }
+    }
+
+    /// The trip list omits expenses (see `TravelRecord`), so fetch this trip's expenses
+    /// separately the first time its detail view appears.
+    private func loadExpenses() async {
+        guard !expensesLoaded else { return }
+        expensesLoaded = true
+        do {
+            let raw = try await AgentService.shared.getTravelExpenses(id: trip.id)
+            expenseData = TripExpenseData.from(raw)
+        } catch {
+            // Best-effort — leave the expenses section hidden on failure.
+        }
     }
 
     private var itineraryCard: some View {

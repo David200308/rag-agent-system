@@ -76,6 +76,11 @@ final class AgentService {
     func listTravelRecords() async throws -> [TravelRecord] {
         try await client.get("/api/v1/travel")
     }
+
+    /// Fetched separately from the list — see the note on `TravelRecord`.
+    func getTravelExpenses(id: String) async throws -> [JSONValue] {
+        try await client.get("/api/v1/travel/\(id)/expenses")
+    }
 }
 
 private struct _EmptyBody: Encodable {}

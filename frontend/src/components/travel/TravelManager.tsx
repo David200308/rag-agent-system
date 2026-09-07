@@ -46,6 +46,12 @@ async function apiDelete(id: string): Promise<void> {
   await fetch(`/api/travel/${id}`, { method: "DELETE" });
 }
 
+async function apiGetExpenses(id: string): Promise<unknown[]> {
+  const res = await fetch(`/api/travel/${id}/expenses`);
+  if (!res.ok) return [];
+  return res.json() as Promise<unknown[]>;
+}
+
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
 const inputCls =
@@ -688,24 +694,20 @@ function ExpenseTable({
   );
 }
 
+function emptyExpenseData(): TripExpenseData {
+  return { __v: 2, currencies: [], defaultCurrency: "", itemExpenses: [], dateExpenses: [] };
+}
+
 function ExpenseTab({
-  record, onSaved,
+  record, onSaved, cachedExpenses, onExpensesLoaded,
 }: {
   record: TravelRecord; onSaved: () => void;
+  cachedExpenses: unknown[] | undefined;
+  onExpensesLoaded: (id: string, expenses: unknown[]) => void;
 }) {
-  const init = (): TripExpenseData => {
-    const existing = parseTripExpenseData(record.expenses);
-    const currencies = existing?.currencies ?? [];
-    return {
-      __v: 2,
-      currencies,
-      defaultCurrency: existing?.defaultCurrency ?? currencies[0] ?? "",
-      itemExpenses:    existing?.itemExpenses ?? [],
-      dateExpenses:    buildDateGroups(record.startDate, record.endDate, existing?.dateExpenses ?? []),
-    };
-  };
-
-  const [data, setData]               = useState<TripExpenseData>(init);
+  const [expenses, setExpenses]       = useState<unknown[] | null>(cachedExpenses ?? null);
+  const [loadingExpenses, setLoadingExpenses] = useState(cachedExpenses === undefined);
+  const [data, setData]               = useState<TripExpenseData>(emptyExpenseData);
   const [saving, setSaving]           = useState(false);
   const [availableCards, setAvailableCards] = useState<FinancialCard[]>([]);
 
@@ -716,12 +718,45 @@ function ExpenseTab({
       .catch(() => {});
   }, []);
 
-  useEffect(() => { setData(init()); }, [record.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Expenses are omitted from the trip list payload — fetch on demand the first time
+  // this tab is opened for a trip, then reuse the parent-level cache thereafter.
+  useEffect(() => {
+    if (cachedExpenses !== undefined) {
+      setExpenses(cachedExpenses);
+      setLoadingExpenses(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingExpenses(true);
+    apiGetExpenses(record.id).then((fetched) => {
+      if (cancelled) return;
+      setExpenses(fetched);
+      onExpensesLoaded(record.id, fetched);
+      setLoadingExpenses(false);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [record.id]);
+
+  useEffect(() => {
+    if (expenses === null) return;
+    const existing = parseTripExpenseData(expenses);
+    const currencies = existing?.currencies ?? [];
+    setData({
+      __v: 2,
+      currencies,
+      defaultCurrency: existing?.defaultCurrency ?? currencies[0] ?? "",
+      itemExpenses:    existing?.itemExpenses ?? [],
+      dateExpenses:    buildDateGroups(record.startDate, record.endDate, existing?.dateExpenses ?? []),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [record.id, expenses]);
 
   async function save() {
     setSaving(true);
     try {
       await apiUpdate(record.id, { expenses: [data] });
+      onExpensesLoaded(record.id, [data]);
       onSaved();
     } finally {
       setSaving(false);
@@ -805,6 +840,10 @@ function ExpenseTab({
   const netTotal   = primaryCur ? (totalsByCur[primaryCur] ?? 0) - totalCashback : null;
 
   const availableCurrencies = COMMON_CURRENCIES.filter((c) => !data.currencies.includes(c));
+
+  if (loadingExpenses) {
+    return <p className="text-xs text-[--color-muted] px-1 py-2">Loading expenses…</p>;
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -1121,9 +1160,11 @@ function EmptyTab({ icon, text }: { icon: string; text: string }) {
 }
 
 function TravelDetailPanel({
-  record, color, onClose, onUpdate,
+  record, color, onClose, onUpdate, expensesCache, onExpensesLoaded,
 }: {
   record: TravelRecord; color: string; onClose: () => void; onUpdate: () => void;
+  expensesCache: Record<string, unknown[]>;
+  onExpensesLoaded: (id: string, expenses: unknown[]) => void;
 }) {
   const [mounted, setMounted] = useState(false);
   const [tab, setTab] = useState<DetailTab>("detail");
@@ -1297,7 +1338,12 @@ function TravelDetailPanel({
           )}
 
           {tab === "expense" && (
-            <ExpenseTab record={record} onSaved={onUpdate} />
+            <ExpenseTab
+              record={record}
+              onSaved={onUpdate}
+              cachedExpenses={expensesCache[record.id]}
+              onExpensesLoaded={onExpensesLoaded}
+            />
           )}
 
           {tab === "transport" && (
@@ -1351,7 +1397,12 @@ export function TravelManager() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailId,   setDetailId]   = useState<string | null>(null);
   const [mapHeight,  setMapHeight]  = useState(MAP_DEFAULT);
+  const [expensesCache, setExpensesCache] = useState<Record<string, unknown[]>>({});
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
+
+  const onExpensesLoaded = useCallback((id: string, expenses: unknown[]) => {
+    setExpensesCache((c) => ({ ...c, [id]: expenses }));
+  }, []);
 
   const onDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     const clientY = "touches" in e ? e.touches[0]!.clientY : e.clientY;
@@ -1545,6 +1596,8 @@ export function TravelManager() {
           color={TRIP_COLORS[detailIndex % TRIP_COLORS.length] ?? "#6b7280"}
           onClose={() => setDetailId(null)}
           onUpdate={load}
+          expensesCache={expensesCache}
+          onExpensesLoaded={onExpensesLoaded}
         />
       )}
     </div>

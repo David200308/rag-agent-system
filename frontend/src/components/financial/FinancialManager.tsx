@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, Pencil, Trash2, RefreshCw, ChevronDown, Eye, EyeOff, Search, Bell } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
@@ -52,6 +52,13 @@ export function FinancialManager() {
   const [saving,     setSaving]     = useState(false);
   const [fxRates,    setFxRates]    = useState<Record<string, number>>({});
 
+  // cards/salary aren't needed for the summary cards, so they're fetched lazily
+  // (first tab visit, or before the download modal opens) instead of on mount.
+  const [loadingCards,  setLoadingCards]  = useState(false);
+  const [loadingSalary, setLoadingSalary] = useState(false);
+  const cardsLoadedRef  = useRef(false);
+  const salaryLoadedRef = useRef(false);
+
   const depositSort = useSort({ column: "platform", dir: "asc" });
   const stockSort   = useSort({ column: "symbol",   dir: "asc" });
   const cryptoSort  = useSort({ column: "symbol",   dir: "asc" });
@@ -96,13 +103,11 @@ export function FinancialManager() {
   const brokerSuggestions = unique(stocks.map((s) => s.broker));
 
   const loadAll = useCallback(async () => {
-    const [deps, stks, cry, fut, cds, sal, cur, rates] = await Promise.all([
+    const [deps, stks, cry, fut, cur, rates] = await Promise.all([
       apiFetch<CashDeposit>("deposits"),
       apiFetch<StockInvestment>("stocks"),
       apiFetch<CryptoInvestment>("crypto"),
       apiFetch<FutureInvestment>("futures"),
-      apiFetch<Card>("cards"),
-      apiFetch<SalaryUsageRecord>("salary"),
       fetchUserCurrency(),
       fetchExchangeRates(),
     ]);
@@ -110,8 +115,6 @@ export function FinancialManager() {
     setStocks(stks);
     setCrypto(cry);
     setFutures(fut);
-    setCards(cds);
-    setSalaryRecords(sal);
     setDefaultCurrency(cur as Currency);
     setFxRates(rates);
   }, []);
@@ -120,6 +123,39 @@ export function FinancialManager() {
     setLoading(true);
     loadAll().finally(() => setLoading(false));
   }, [loadAll]);
+
+  const ensureCards = useCallback(async () => {
+    if (cardsLoadedRef.current) return;
+    cardsLoadedRef.current = true;
+    setLoadingCards(true);
+    try {
+      setCards(await apiFetch<Card>("cards"));
+    } catch (e) {
+      cardsLoadedRef.current = false;
+      throw e;
+    } finally {
+      setLoadingCards(false);
+    }
+  }, []);
+
+  const ensureSalary = useCallback(async () => {
+    if (salaryLoadedRef.current) return;
+    salaryLoadedRef.current = true;
+    setLoadingSalary(true);
+    try {
+      setSalaryRecords(await apiFetch<SalaryUsageRecord>("salary"));
+    } catch (e) {
+      salaryLoadedRef.current = false;
+      throw e;
+    } finally {
+      setLoadingSalary(false);
+    }
+  }, []);
+
+  const handleDownloadClick = useCallback(async () => {
+    await Promise.all([ensureCards(), ensureSalary()]);
+    setShowDownload(true);
+  }, [ensureCards, ensureSalary]);
 
   const handleCurrencyChange = useCallback(async (c: Currency) => {
     setDefaultCurrency(c);
@@ -381,7 +417,7 @@ export function FinancialManager() {
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
             </button>
             <button
-              onClick={() => setShowDownload(true)}
+              onClick={() => void handleDownloadClick()}
               title="Download report"
               className="flex items-center gap-1.5 rounded-md border border-[--color-border] bg-[--color-surface] px-2.5 py-1.5 text-xs text-[--color-muted] hover:text-inherit"
             >
@@ -426,8 +462,8 @@ export function FinancialManager() {
           <button className={tabCls("stocks")}   onClick={() => setTab("stocks")}>Stocks</button>
           <button className={tabCls("crypto")}   onClick={() => setTab("crypto")}>Crypto</button>
           <button className={tabCls("futures")}  onClick={() => setTab("futures")}>Futures</button>
-          <button className={tabCls("cards")}    onClick={() => setTab("cards")}>Cards</button>
-          <button className={tabCls("salary")}   onClick={() => setTab("salary")}>Salary &amp; Expense</button>
+          <button className={tabCls("cards")}    onClick={() => { setTab("cards");  void ensureCards();  }}>Cards</button>
+          <button className={tabCls("salary")}   onClick={() => { setTab("salary"); void ensureSalary(); }}>Salary &amp; Expense</button>
         </div>
       </div>
 
@@ -761,7 +797,9 @@ export function FinancialManager() {
                     </button>
                   )}
                 </div>
-                {filteredSalary.length === 0 ? (
+                {loadingSalary ? (
+                  <p className="py-12 text-center text-sm text-[--color-muted]">Loading…</p>
+                ) : filteredSalary.length === 0 ? (
                   <p className="py-12 text-center text-sm text-[--color-muted]">
                     {q ? `No records matching "${searchTerm}".` : "No salary records yet."}
                   </p>
@@ -834,7 +872,9 @@ export function FinancialManager() {
             )}
 
             {/* ── Cards ── */}
-            {tab === "cards" && (filteredCards.length === 0 ? (
+            {tab === "cards" && (loadingCards ? (
+              <p className="py-12 text-center text-sm text-[--color-muted]">Loading…</p>
+            ) : filteredCards.length === 0 ? (
               <p className="py-12 text-center text-sm text-[--color-muted]">
                 {q ? `No cards matching "${searchTerm}".` : "No cards yet."}
               </p>

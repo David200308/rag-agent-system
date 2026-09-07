@@ -5,8 +5,10 @@ import com.agentsystem.travel.service.TravelService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.agentsystem.travel.dto.TravelRecordDto;
+import com.agentsystem.travel.dto.TravelRecordSummaryDto;
 import com.agentsystem.travel.entity.TravelRecord;
 import com.agentsystem.travel.repository.TravelRecordRepository;
+import com.agentsystem.travel.repository.TravelRecordSummaryProjection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,9 +30,9 @@ public class TravelServiceImpl implements TravelService {
 
     @Transactional(readOnly = true)
     @Override
-    public List<TravelRecordDto> list(String ownerUuid) {
-        return repo.findByOwnerUuidOrderByStartDateDesc(ownerUuid).stream()
-                .map(this::toDto)
+    public List<TravelRecordSummaryDto> list(String ownerUuid) {
+        return repo.findSummaryByOwnerUuidOrderByStartDateDesc(ownerUuid).stream()
+                .map(this::toSummaryDto)
                 .toList();
     }
 
@@ -72,6 +74,15 @@ public class TravelServiceImpl implements TravelService {
         });
     }
 
+    @Transactional(readOnly = true)
+    @Override
+    public List<Map<String, Object>> getExpenses(String id, String ownerUuid) {
+        TravelRecord r = repo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Not found"));
+        if (!r.getOwnerUuid().equals(ownerUuid)) throw new SecurityException("Forbidden");
+        return parseJsonList(r.getExpensesJson(), "expenses", id);
+    }
+
     private void applyFields(TravelRecord r, Map<String, Object> body) {
         if (body.containsKey("title"))     r.setTitle(str(body, "title"));
         if (body.containsKey("startDate")) r.setStartDate(str(body, "startDate"));
@@ -101,30 +112,34 @@ public class TravelServiceImpl implements TravelService {
     }
 
     private TravelRecordDto toDto(TravelRecord r) {
-        List<Map<String, Object>> stops = Collections.emptyList();
-        if (r.getStopsJson() != null && !r.getStopsJson().isBlank()) {
-            try {
-                stops = mapper.readValue(r.getStopsJson(),
-                        new TypeReference<List<Map<String, Object>>>() {});
-            } catch (Exception e) {
-                log.warn("Failed to parse stops for record {}", r.getId(), e);
-            }
-        }
-        List<Map<String, Object>> expenses = Collections.emptyList();
-        if (r.getExpensesJson() != null && !r.getExpensesJson().isBlank()) {
-            try {
-                expenses = mapper.readValue(r.getExpensesJson(),
-                        new TypeReference<List<Map<String, Object>>>() {});
-            } catch (Exception e) {
-                log.warn("Failed to parse expenses for record {}", r.getId(), e);
-            }
-        }
+        List<Map<String, Object>> stops = parseJsonList(r.getStopsJson(), "stops", r.getId());
+        List<Map<String, Object>> expenses = parseJsonList(r.getExpensesJson(), "expenses", r.getId());
         return new TravelRecordDto(
                 r.getId(), r.getOwnerUuid(), r.getTitle(),
                 r.getStartDate(), r.getEndDate(),
                 stops, expenses, r.getNotes(), r.isAllowChat(),
                 r.getCreatedAt(), r.getUpdatedAt()
         );
+    }
+
+    private TravelRecordSummaryDto toSummaryDto(TravelRecordSummaryProjection p) {
+        List<Map<String, Object>> stops = parseJsonList(p.getStopsJson(), "stops", p.getId());
+        return new TravelRecordSummaryDto(
+                p.getId(), p.getOwnerUuid(), p.getTitle(),
+                p.getStartDate(), p.getEndDate(),
+                stops, p.getNotes(), p.isAllowChat(),
+                p.getCreatedAt(), p.getUpdatedAt()
+        );
+    }
+
+    private List<Map<String, Object>> parseJsonList(String json, String fieldName, String recordId) {
+        if (json == null || json.isBlank()) return Collections.emptyList();
+        try {
+            return mapper.readValue(json, new TypeReference<List<Map<String, Object>>>() {});
+        } catch (Exception e) {
+            log.warn("Failed to parse {} for record {}", fieldName, recordId, e);
+            return Collections.emptyList();
+        }
     }
 
     private static String str(Map<String, Object> body, String key) {

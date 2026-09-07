@@ -54,11 +54,15 @@ export default function TravelMap({ records, selectedId, onSelectRecord }: Props
       scrollWheelZoom
       zoomControl
       attributionControl={false}
+      maxBounds={[[-90, -180], [90, 180]]}
+      maxBoundsViscosity={1.0}
+      minZoom={2}
     >
       <AttributionControl prefix={false} />
       <TileLayer
         attribution='&copy; <a href="https://carto.com">CARTO</a>'
         url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+        noWrap
       />
       <FitBounds records={records} />
 

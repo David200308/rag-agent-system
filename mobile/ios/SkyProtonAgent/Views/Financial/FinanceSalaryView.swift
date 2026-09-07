@@ -14,7 +14,11 @@ struct FinanceSalaryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if sorted.isEmpty {
+                if store.isLoadingSalary && sorted.isEmpty {
+                    ThemeCard {
+                        ProgressView().frame(maxWidth: .infinity)
+                    }
+                } else if sorted.isEmpty {
                     ThemeCard {
                         Text("No salary records").foregroundStyle(Theme.inkFaint).frame(maxWidth: .infinity)
                     }
@@ -65,6 +69,7 @@ struct FinanceSalaryView: View {
                 Button { showAddSheet = true } label: { Image(systemName: "plus") }
             }
         }
+        .task { await store.loadSalaryIfNeeded() }
         .sheet(isPresented: $showAddSheet) { SalaryFormView(store: store, editing: nil) }
         .sheet(item: $editingRecord) { r in SalaryFormView(store: store, editing: r) }
     }

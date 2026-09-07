@@ -27,10 +27,10 @@ struct TravelStop: Codable, Identifiable {
     let notes: String?
 }
 
-/// A minimal, permissive JSON tree used to read `TravelRecord.expenses` — that column can hold
-/// either the current `{__v: 2, ...}` shape or an older, differently-shaped format. Decoding it
-/// through this generic tree (rather than a strict `Codable` struct) means one trip with legacy
-/// expense data can't fail decoding for the whole `/api/v1/travel` list response.
+/// A minimal, permissive JSON tree used to read a trip's expenses (`GET /api/v1/travel/{id}/expenses`) —
+/// that data can hold either the current `{__v: 2, ...}` shape or an older, differently-shaped format.
+/// Decoding it through this generic tree (rather than a strict `Codable` struct) means legacy expense
+/// data can't fail decoding for the whole response.
 enum JSONValue: Codable {
     case string(String)
     case number(Double)
@@ -121,6 +121,12 @@ struct TripExpenseData {
         self.itemExpenses = json["itemExpenses"]?.arrayValue?.compactMap { RichExpenseEntry(json: $0) } ?? []
         self.dateExpenses = json["dateExpenses"]?.arrayValue?.compactMap { DateExpenseGroup(json: $0) } ?? []
     }
+
+    /// `GET /api/v1/travel/{id}/expenses` returns the raw `[Map]` list stored on the trip — the
+    /// current format wraps its one `TripExpenseData` object as that list's first element.
+    static func from(_ raw: [JSONValue]) -> TripExpenseData? {
+        raw.first.flatMap { TripExpenseData(json: $0) }
+    }
 }
 
 struct TravelRecord: Codable, Identifiable {
@@ -133,16 +139,11 @@ struct TravelRecord: Codable, Identifiable {
     let allowChat: Bool
     let createdAt: String
     let updatedAt: String
-    private let expensesRaw: [JSONValue]
 
-    enum CodingKeys: String, CodingKey {
-        case id, title, startDate, endDate, stops, notes, allowChat, createdAt, updatedAt
-        case expensesRaw = "expenses"
-    }
-
-    var expenseData: TripExpenseData? {
-        expensesRaw.first.flatMap { TripExpenseData(json: $0) }
-    }
+    // `expenses` is deliberately absent here: `GET /api/v1/travel` (the list endpoint this struct
+    // decodes) omits it entirely to avoid shipping every trip's expense history on load. Fetch a
+    // trip's expenses on demand via `AgentService.getTravelExpenses(id:)`, which decodes them
+    // straight into `TripExpenseData` without going through `TravelRecord`.
 
     private static let dayFormatter: DateFormatter = {
         let f = DateFormatter()

@@ -58,7 +58,10 @@ export interface TravelRecord {
   startDate:  string;
   endDate:    string;
   stops:      TravelStop[];
-  expenses:   unknown[];  // stores [TripExpenseData] (v2) or legacy format
+  // Omitted by the list endpoint (GET /api/travel) to avoid shipping every trip's
+  // expense history on load; fetched on demand via GET /api/travel/{id}/expenses
+  // when a trip's expense tab is opened, and cached here per-record afterward.
+  expenses?:  unknown[];  // stores [TripExpenseData] (v2) or legacy format
   notes?:     string;
   allowChat:  boolean;    // opt-in, default false: expose this trip to the chat agent
   createdAt:  string;
