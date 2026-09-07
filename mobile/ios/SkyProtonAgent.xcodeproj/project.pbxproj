@@ -36,6 +36,7 @@
 		AA000100000000000000002A /* TravelMapKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000002A /* TravelMapKit.swift */; };
 		AA000100000000000000002B /* AlertModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000002B /* AlertModels.swift */; };
 		AA000100000000000000002C /* PriceAlertSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000002C /* PriceAlertSheet.swift */; };
+		AA000100000000000000002D /* TravelAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000002D /* TravelAnalysisView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -70,6 +71,7 @@
 		AA000200000000000000002A /* TravelMapKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TravelMapKit.swift; sourceTree = "<group>"; };
 		AA000200000000000000002B /* AlertModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertModels.swift; sourceTree = "<group>"; };
 		AA000200000000000000002C /* PriceAlertSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertSheet.swift; sourceTree = "<group>"; };
+		AA000200000000000000002D /* TravelAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TravelAnalysisView.swift; sourceTree = "<group>"; };
 		AA00FF000000000000000001 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Configs/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		AA00FF000000000000000002 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Configs/Release.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -191,6 +193,7 @@
 				AA000200000000000000001E /* TravelListView.swift */,
 				AA000200000000000000001F /* TravelDetailView.swift */,
 				AA000200000000000000002A /* TravelMapKit.swift */,
+				AA000200000000000000002D /* TravelAnalysisView.swift */,
 			);
 			path = Travel;
 			sourceTree = "<group>";
@@ -301,6 +304,7 @@
 				AA000100000000000000002A /* TravelMapKit.swift in Sources */,
 				AA000100000000000000002B /* AlertModels.swift in Sources */,
 				AA000100000000000000002C /* PriceAlertSheet.swift in Sources */,
+				AA000100000000000000002D /* TravelAnalysisView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

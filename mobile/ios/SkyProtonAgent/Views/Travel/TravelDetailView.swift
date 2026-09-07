@@ -25,7 +25,7 @@ struct TravelDetailView: View {
                     itineraryCard
                 }
 
-                if let data = trip.expenseData, !data.dateExpenses.isEmpty {
+                if let data = trip.expenseData, !(data.itemExpenses.isEmpty && data.dateExpenses.isEmpty) {
                     HStack {
                         SectionLabel(text: "Expenses")
                         Spacer()
@@ -86,9 +86,54 @@ struct TravelDetailView: View {
 
     private func expensesCard(_ data: TripExpenseData) -> some View {
         VStack(alignment: .leading, spacing: 14) {
+            if !data.itemExpenses.isEmpty {
+                itemExpensesCard(data.itemExpenses, currency: data.defaultCurrency)
+            }
             ForEach(Array(data.dateExpenses.enumerated()), id: \.offset) { index, group in
                 if !group.entries.isEmpty {
                     dateGroupCard(group, currency: data.defaultCurrency)
+                }
+            }
+        }
+    }
+
+    private func itemExpensesCard(_ entries: [RichExpenseEntry], currency: String) -> some View {
+        let subtotal = entries.reduce(0.0) { $0 + ($1.amounts[currency] ?? 0) }
+        return ThemeCard(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("Pre-trip / Fixed")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.inkSoft)
+                    Spacer()
+                    Text(formatAmount(subtotal, currency: currency))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.inkFaint)
+                        .monospacedDigit()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Theme.chipFill)
+
+                ForEach(Array(entries.enumerated()), id: \.offset) { idx, entry in
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(entry.name).font(.subheadline).foregroundStyle(Theme.ink)
+                            if entry.cashback > 0 {
+                                tag("Cashback \(formatAmount(entry.cashback, currency: currency))", tint: Theme.positive)
+                            }
+                        }
+                        Spacer(minLength: 12)
+                        Text(formatAmount(entry.amounts[currency] ?? entry.amounts.values.first ?? 0, currency: currency))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.ink)
+                            .monospacedDigit()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    if idx < entries.count - 1 {
+                        Divider().overlay(Theme.hairline).padding(.leading, 16)
+                    }
                 }
             }
         }
@@ -156,8 +201,7 @@ struct TravelDetailView: View {
     }
 
     private func expenseTotalLabel(_ data: TripExpenseData) -> String {
-        let total = data.dateExpenses
-            .flatMap(\.entries)
+        let total = (data.itemExpenses + data.dateExpenses.flatMap(\.entries))
             .reduce(0.0) { $0 + ($1.amounts[data.defaultCurrency] ?? 0) }
         return formatAmount(total, currency: data.defaultCurrency)
     }

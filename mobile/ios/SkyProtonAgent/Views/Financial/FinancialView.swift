@@ -144,6 +144,7 @@ struct FinancialView: View {
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 22) {
+                            screenTitle
                             if let err = store.loadError {
                                 errorBanner(err)
                             }
@@ -163,7 +164,7 @@ struct FinancialView: View {
                     }
                 }
             }
-            .navigationTitle("Finance")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: onProfileTap) {
@@ -181,6 +182,12 @@ struct FinancialView: View {
             .task { await store.loadIfNeeded() }
         }
         .tint(Theme.graphite)
+    }
+
+    private var screenTitle: some View {
+        Text("Finance")
+            .font(Theme.serif(34, weight: .bold).italic())
+            .foregroundStyle(Theme.ink)
     }
 
     private var netWorthHero: some View {
@@ -265,7 +272,7 @@ struct FinancialView: View {
             RoundedRectangle(cornerRadius: 13, style: .continuous)
                 .fill(Theme.chipFill)
                 .frame(width: 40, height: 40)
-                .overlay(Image(systemName: icon).font(.system(size: 16)).foregroundStyle(Theme.graphite))
+                .overlay(Image(systemName: icon).font(.system(size: 16)).foregroundStyle(Theme.ink))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.ink)
                 Text(subtitle).font(.system(size: 12.5)).foregroundStyle(Theme.inkFaint)

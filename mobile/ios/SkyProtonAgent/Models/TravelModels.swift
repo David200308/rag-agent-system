@@ -108,6 +108,8 @@ struct DateExpenseGroup: Identifiable {
 struct TripExpenseData {
     let currencies: [String]
     let defaultCurrency: String
+    /// One-off items (e.g. flight tickets) — the web app's "PRE-TRIP / FIXED" section.
+    let itemExpenses: [RichExpenseEntry]
     let dateExpenses: [DateExpenseGroup]
 
     init?(json: JSONValue) {
@@ -116,6 +118,7 @@ struct TripExpenseData {
         }
         self.defaultCurrency = defaultCurrency
         self.currencies = json["currencies"]?.arrayValue?.compactMap { $0.stringValue } ?? []
+        self.itemExpenses = json["itemExpenses"]?.arrayValue?.compactMap { RichExpenseEntry(json: $0) } ?? []
         self.dateExpenses = json["dateExpenses"]?.arrayValue?.compactMap { DateExpenseGroup(json: $0) } ?? []
     }
 }

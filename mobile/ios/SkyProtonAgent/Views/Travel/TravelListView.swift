@@ -5,6 +5,7 @@ struct TravelListView: View {
     @State private var trips: [TravelRecord] = []
     @State private var isLoading = false
     @State private var loadError: String?
+    @State private var showAnalysis = false
 
     private let service = AgentService.shared
 
@@ -21,6 +22,7 @@ struct TravelListView: View {
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
+                            titleRow
                             if let err = loadError {
                                 HStack(spacing: 8) {
                                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
@@ -64,10 +66,30 @@ struct TravelListView: View {
                     .refreshable { await load() }
                 }
             }
-            .navigationTitle("Travel")
+            .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showAnalysis) { TravelAnalysisView(trips: trips) }
             .task { await load() }
         }
         .tint(Theme.travel)
+    }
+
+    private var titleRow: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Travel")
+                .font(Theme.serif(34, weight: .bold).italic())
+                .foregroundStyle(Theme.ink)
+            Spacer()
+            if !trips.isEmpty {
+                Button { showAnalysis = true } label: {
+                    Image(systemName: "chart.bar.xaxis")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Theme.ink)
+                        .frame(width: 36, height: 36)
+                        .background(Theme.chipFill)
+                        .clipShape(Circle())
+                }
+            }
+        }
     }
 
     private var statStrip: some View {

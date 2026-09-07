@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var authVM: AuthViewModel
     @State private var showLogoutConfirm = false
+    @AppStorage(appearanceModeKey) private var appearanceMode: AppearanceMode = .system
 
     var body: some View {
         NavigationStack {
@@ -39,6 +40,17 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Account")
+                }
+
+                Section {
+                    Picker("Appearance", selection: $appearanceMode) {
+                        ForEach(AppearanceMode.allCases) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Appearance")
                 }
             }
             .listStyle(.insetGrouped)

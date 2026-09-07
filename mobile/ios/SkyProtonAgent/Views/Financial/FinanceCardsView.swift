@@ -134,7 +134,7 @@ private struct CardFormView: View {
                             HStack {
                                 Text(t).foregroundStyle(Theme.ink)
                                 Spacer()
-                                if types.contains(t) { Image(systemName: "checkmark").foregroundStyle(Theme.graphite) }
+                                if types.contains(t) { Image(systemName: "checkmark").foregroundStyle(Theme.ink) }
                             }
                         }
                     }

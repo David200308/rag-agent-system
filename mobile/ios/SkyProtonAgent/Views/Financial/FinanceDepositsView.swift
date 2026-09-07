@@ -119,7 +119,10 @@ private struct DepositFormView: View {
                     ComboField(placeholder: "Platform type (e.g. Bank, Brokerage)", text: $platformType,
                                suggestions: Array(Set(store.deposits.map(\.platformType))).sorted())
                     ComboField(placeholder: "Country / region", text: $countryRegion,
-                               suggestions: Array(Set(store.deposits.compactMap(\.countryRegion))).sorted())
+                               suggestions: Array(Set(store.deposits.compactMap {
+                                   let v = $0.countryRegion?.trimmingCharacters(in: .whitespaces)
+                                   return (v?.isEmpty ?? true) ? nil : v
+                               })).sorted())
                 }
                 Section("Amount") {
                     Picker("Fixed / Flex", selection: $depositType) {
