@@ -64,9 +64,9 @@
 | Redis                 | Redis 7 (Docker) — shared by the scheduler's Asynq queue and the backend's rate limits, sandbox tracking, and fallback cache |
 | Kafka                 | Apache Kafka, single-node KRaft mode (Docker) — carries notification events (`:9092`)                                      |
 | Scheduler             | Go microservice backed by Asynq (`:8082`)                                                                                   |
-| Storage service       | `storage-inner` — Garage (S3-compatible) object storage (`:8083`)                                           |
-| Notification consumer | `notification-consumer` — Resend email delivery via Kafka (`:8084`)                                         |
-| Auth service           | `auth-inner` — JWT mint/validate, OTP login+registration, WebAuthn passkeys, CLI Ed25519 key auth (`:8086`)               |
+| Storage service       | `storage-inner` — Garage (S3-compatible) object storage (`:8083`)                                                        |
+| Notification consumer | `notification-consumer` — Resend email delivery via Kafka (`:8084`)                                                      |
+| Auth service          | `auth-inner` — JWT mint/validate, OTP login+registration, WebAuthn passkeys, CLI Ed25519 key auth (`:8086`)              |
 | Observability         | Prometheus + Grafana + Loki + Promtail                                                                                        |
 | Containerization      | Docker Compose                                                                                                                |
 
@@ -261,12 +261,12 @@ Five backend capabilities are split out of `agent-system-rest` into private Mave
 
 `storage-inner` (`:8083`, Garage S3-compatible object storage) is reachable only from `agent-system-rest` over the internal Docker network, authenticated with a shared-secret header (`X-Storage-Key`) instead of a user JWT. `agent-system-rest` talks to it via a typed HTTP client (`StorageClient`).
 
-| Service                        | Port      | Backs                                 | Auth header       |
-| ------------------------------ | --------- | ------------------------------------- | ----------------- |
-| `storage-inner` | `:8083` | Garage (S3-compatible) object storage | `X-Storage-Key` |
-| `auth-inner`                  | `:8086` | JWT mint/validate, OTP, WebAuthn passkeys, CLI Ed25519 key auth | `X-Auth-Key` |
-| `finance-inner`               | `:8087` | Financial portfolio (cash/stocks/crypto/futures/cards/salary) + live market data | `X-Finance-Key` |
-| `travel-inner`                | `:8088` | Trips, stops, expenses, chat-visibility opt-in | `X-Travel-Key` |
+| Service           | Port      | Backs                                                                            | Auth header       |
+| ----------------- | --------- | -------------------------------------------------------------------------------- | ----------------- |
+| `storage-inner` | `:8083` | Garage (S3-compatible) object storage                                            | `X-Storage-Key` |
+| `auth-inner`    | `:8086` | JWT mint/validate, OTP, WebAuthn passkeys, CLI Ed25519 key auth                  | `X-Auth-Key`    |
+| `finance-inner` | `:8087` | Financial portfolio (cash/stocks/crypto/futures/cards/salary) + live market data | `X-Finance-Key` |
+| `travel-inner`  | `:8088` | Trips, stops, expenses, chat-visibility opt-in                                   | `X-Travel-Key`  |
 
 `notification-consumer` (`:8084`) is decoupled further — instead of REST, `agent-system-rest`'s `NotificationClient` publishes events to Kafka topics (`notifications.otp`, `notifications.workflow-complete`), and the consumer's `EmailEventListener` delivers them via Resend. There's no shared-secret auth here; the Kafka broker itself is the trust boundary (internal-network-only, no public ingress). This decoupling means login/register succeeds once the OTP event reaches Kafka — actual email delivery happens asynchronously, with a bounded retry (2 attempts) in the consumer before a failing message is logged and dropped. Email is the only channel today; adding another (push, SMS, Telegram) is a new `@KafkaListener` method, not a rearchitecture.
 
