@@ -9,6 +9,7 @@ COPY storage-inner/pom.xml storage-inner/pom.xml
 COPY notification-consumer/pom.xml notification-consumer/pom.xml
 COPY auth-inner/pom.xml auth-inner/pom.xml
 COPY finance-inner/pom.xml finance-inner/pom.xml
+COPY travel-inner/pom.xml travel-inner/pom.xml
 RUN mvn -B -pl finance-inner -am dependency:resolve dependency:resolve-plugins \
     -Dmaven.wagon.http.retryHandler.count=3 \
     -Dmaven.wagon.http.retryHandler.requestSentEnabled=true
