@@ -10,7 +10,7 @@ import org.springframework.web.client.RestClient;
 import java.util.List;
 
 /**
- * Calls agent-system-storage-inner's internal REST API on behalf of authenticated users.
+ * Calls storage-inner's internal REST API on behalf of authenticated users.
  * Uses X-Storage-Key authentication — no JWT needed (mirrors WorkflowScheduleClient).
  */
 @Component

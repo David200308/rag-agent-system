@@ -1,8 +1,8 @@
 package com.agentsystem.auth.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.agentsystem.auth.AuthInnerClient;
 import com.agentsystem.auth.ClientIdentityProperties;
-import com.agentsystem.auth.service.CliKeyService;
 import com.agentsystem.auth.service.ClientIdentityService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,7 +24,7 @@ import static org.mockito.Mockito.*;
 class ClientIdentityFilterTest {
 
     @Mock ClientIdentityService identityService;
-    @Mock CliKeyService         cliKeyService;
+    @Mock AuthInnerClient       authInnerClient;
     @Mock HttpServletRequest    request;
     @Mock HttpServletResponse   response;
     @Mock FilterChain           chain;
@@ -81,7 +81,7 @@ class ClientIdentityFilterTest {
         when(request.getHeader("X-Cli-Version")).thenReturn("1.0.0");
         when(request.getHeader("X-Cli-Timestamp")).thenReturn(String.valueOf(ts));
         when(request.getMethod()).thenReturn("GET");
-        when(cliKeyService.verify(anyString(), anyString(), anyString(), anyString(), anyString(), anyLong()))
+        when(authInnerClient.verifyCliSignature(anyString(), anyString(), anyString(), anyString(), anyString(), anyLong()))
                 .thenReturn(true);
 
         filter.doFilterInternal(request, response, chain);
@@ -103,7 +103,7 @@ class ClientIdentityFilterTest {
         when(request.getHeader("X-Cli-Version")).thenReturn("1.0.0");
         when(request.getHeader("X-Cli-Timestamp")).thenReturn(String.valueOf(ts));
         when(request.getMethod()).thenReturn("POST");
-        when(cliKeyService.verify(anyString(), anyString(), anyString(), anyString(), anyString(), anyLong()))
+        when(authInnerClient.verifyCliSignature(anyString(), anyString(), anyString(), anyString(), anyString(), anyLong()))
                 .thenReturn(false);
 
         StringWriter sw = new StringWriter();
@@ -242,6 +242,6 @@ class ClientIdentityFilterTest {
 
     private ClientIdentityFilter makeFilter(boolean enabled) {
         ClientIdentityProperties props = new ClientIdentityProperties(enabled, "ios-secret", "web-secret");
-        return new ClientIdentityFilter(props, identityService, cliKeyService, new ObjectMapper());
+        return new ClientIdentityFilter(props, identityService, authInnerClient, new ObjectMapper());
     }
 }

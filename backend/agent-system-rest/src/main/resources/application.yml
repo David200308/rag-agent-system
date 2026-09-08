@@ -38,13 +38,13 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
 
-  # ── Kafka (agent-system-notification-consumer, Resend-backed email) ──────────
+  # ── Kafka (notification-consumer, Resend-backed email) ──────────
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
-        # Keys here must stay in sync with agent-system-notification-consumer's mapping —
+        # Keys here must stay in sync with notification-consumer's mapping —
         # see that module's application.yml for why this exists (different FQCNs per side).
         spring.json.type.mapping: otpRequested:com.agentsystem.notification.NotificationClient$OtpRequestedEvent,workflowCompleted:com.agentsystem.notification.NotificationClient$WorkflowCompletedEvent
         max.block.ms: 5000
@@ -290,20 +290,17 @@ client:
     web-secret: ${CLIENT_WEB_SECRET:}
 
 # ── Auth (registration + OTP login, JWT tokens) ──────────────────────────────
-# Set AUTH_ENABLED=false to disable login entirely (open access).
+# Set AUTH_ENABLED=false to disable login entirely (open access). JWT secret, OTP
+# expiry, and passkey RP config all moved to the auth-inner microservice — see
+# auth-inner below for the actual login/JWT logic; this flag is checked locally
+# by AuthFilter before it even bothers calling auth-inner.
 auth:
   enabled: ${AUTH_ENABLED:false}
-  otp-expiry-minutes: ${AUTH_OTP_EXPIRY_MINUTES:10}
-  jwt-secret: ${AUTH_JWT_SECRET:changeme-use-a-long-random-base64-string-in-production}
-  jwt-expiry-hours: ${AUTH_JWT_EXPIRY_HOURS:24}
-  passkey:
-    # Must match the domain serving the app (no port, no scheme).
-    # For local dev: localhost. For production: yourdomain.com
-    rp-id: ${AUTH_PASSKEY_RP_ID:localhost}
-    rp-name: ${AUTH_PASSKEY_RP_NAME:RAG Agent}
-    # Full origin including scheme and port.
-    # For local dev: http://localhost:3000. For production: https://yourdomain.com
-    origin: ${AUTH_PASSKEY_ORIGIN:http://localhost:3000}
+
+# ── auth-inner (JWT mint/validate, OTP, passkeys, CLI key auth) ──────────────
+auth-inner:
+  url: ${AUTH_INNER_URL:http://localhost:8086}
+  service-key: ${AUTH_SERVICE_KEY:auth-secret-key}
 
 # ── Admin (system-wide access to /api/v1/admin/orgs/**) ─────────────────────
 # Comma-separated emails allowed to create/delete orgs and manage org membership
@@ -350,7 +347,7 @@ scheduler:
   service-key: ${SCHEDULER_SERVICE_KEY:scheduler-secret-key}
   url: ${SCHEDULER_URL:http://localhost:8082}
 
-# ── agent-system-storage-inner microservice (Garage-backed image storage) ───
+# ── storage-inner microservice (Garage-backed image storage) ───
 storage:
   service-key: ${STORAGE_SERVICE_KEY:storage-secret-key}
   url: ${STORAGE_URL:http://localhost:8083}
@@ -361,13 +358,18 @@ alert:
   service-key: ${ALERT_SERVICE_KEY:alert-secret-key}
   url: ${ALERT_URL:http://localhost:8085}
 
-# ── agent-system-notification-consumer microservice — see the top-level spring.kafka
+# ── notification-consumer microservice — see the top-level spring.kafka
 #    block above; the OTP/workflow-complete emails it sends are configured there. ──
 
-# ── Financial / Market Data ───────────────────────────────────────────────────
-financial:
-  finnhub:
-    api-key: ${FINNHUB_API_KEY:}
+# ── finance-inner (financial portfolio + live market data) ───────────────────
+finance-inner:
+  url: ${FINANCE_INNER_URL:http://localhost:8087}
+  service-key: ${FINANCE_SERVICE_KEY:finance-secret-key}
+
+# ── travel-inner (trips, stops, expenses, chat-visibility opt-in) ────────────
+travel-inner:
+  url: ${TRAVEL_INNER_URL:http://localhost:8088}
+  service-key: ${TRAVEL_SERVICE_KEY:travel-secret-key}
 
 logging:
   level:

@@ -18,7 +18,7 @@ type Config struct {
 
 	ServiceKey string // X-Alert-Key, shared secret with agent-system-rest (inbound CRUD auth)
 
-	// Kafka (shared with agent-system-rest / agent-system-notification-consumer) — fired
+	// Kafka (shared with agent-system-rest / notification-consumer) — fired
 	// alerts are published directly to notifications.alert-triggered, see notify.Client.
 	KafkaBootstrapServers string
 

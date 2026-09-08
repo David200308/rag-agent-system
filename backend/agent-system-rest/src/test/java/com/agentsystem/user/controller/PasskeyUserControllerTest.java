@@ -1,7 +1,8 @@
 package com.agentsystem.user.controller;
 
+import com.agentsystem.auth.AuthInnerClient;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.agentsystem.auth.service.PasskeyService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,16 +20,10 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class PasskeyUserControllerTest {
 
-    @Mock PasskeyService    passkeyService;
+    @Mock AuthInnerClient    authInnerClient;
     @Mock HttpServletRequest request;
-    ObjectMapper objectMapper = new ObjectMapper();
 
-    PasskeyUserController controller;
-
-    @org.junit.jupiter.api.BeforeEach
-    void setUp() {
-        controller = new PasskeyUserController(passkeyService, objectMapper);
-    }
+    @InjectMocks PasskeyUserController controller;
 
     private void stubEmail(String email) {
         when(request.getAttribute("authenticatedEmail")).thenReturn(email);
@@ -48,8 +43,8 @@ class PasskeyUserControllerTest {
     @Test
     void registerBegin_success_returns200() throws Exception {
         stubEmail("user@test.com");
-        when(passkeyService.startRegistration("user@test.com"))
-                .thenReturn("{\"challenge\":\"abc123\"}");
+        JsonNode options = new ObjectMapper().readTree("{\"challenge\":\"abc123\"}");
+        when(authInnerClient.passkeyRegisterBegin("user@test.com")).thenReturn(options);
 
         ResponseEntity<Object> resp = controller.registerBegin(request);
 
@@ -58,9 +53,9 @@ class PasskeyUserControllerTest {
     }
 
     @Test
-    void registerBegin_serviceThrows_returns500() throws Exception {
+    void registerBegin_serviceThrows_returns500() {
         stubEmail("user@test.com");
-        when(passkeyService.startRegistration(anyString()))
+        when(authInnerClient.passkeyRegisterBegin(anyString()))
                 .thenThrow(new RuntimeException("WebAuthn error"));
 
         ResponseEntity<Object> resp = controller.registerBegin(request);
@@ -91,9 +86,9 @@ class PasskeyUserControllerTest {
     }
 
     @Test
-    void registerFinish_success_returns200() throws Exception {
+    void registerFinish_success_returns200() {
         stubEmail("user@test.com");
-        doNothing().when(passkeyService).finishRegistration(anyString(), anyString());
+        doNothing().when(authInnerClient).passkeyRegisterFinish(anyString(), anyString());
 
         ResponseEntity<Map<String, String>> resp = controller.registerFinish(
                 Map.of("response", "{\"id\":\"cred-1\"}"), request);
@@ -103,10 +98,10 @@ class PasskeyUserControllerTest {
     }
 
     @Test
-    void registerFinish_illegalArgument_returns400() throws Exception {
+    void registerFinish_illegalArgument_returns400() {
         stubEmail("user@test.com");
         doThrow(new IllegalArgumentException("challenge expired"))
-                .when(passkeyService).finishRegistration(anyString(), anyString());
+                .when(authInnerClient).passkeyRegisterFinish(anyString(), anyString());
 
         ResponseEntity<Map<String, String>> resp = controller.registerFinish(
                 Map.of("response", "{\"id\":\"cred-1\"}"), request);
@@ -116,22 +111,10 @@ class PasskeyUserControllerTest {
     }
 
     @Test
-    void registerFinish_illegalState_returns400() throws Exception {
-        stubEmail("user@test.com");
-        doThrow(new IllegalStateException("credential already registered"))
-                .when(passkeyService).finishRegistration(anyString(), anyString());
-
-        ResponseEntity<Map<String, String>> resp = controller.registerFinish(
-                Map.of("response", "{\"id\":\"cred-1\"}"), request);
-
-        assertThat(resp.getStatusCode().value()).isEqualTo(400);
-    }
-
-    @Test
-    void registerFinish_unexpectedException_returns500() throws Exception {
+    void registerFinish_unexpectedException_returns500() {
         stubEmail("user@test.com");
         doThrow(new RuntimeException("internal error"))
-                .when(passkeyService).finishRegistration(anyString(), anyString());
+                .when(authInnerClient).passkeyRegisterFinish(anyString(), anyString());
 
         ResponseEntity<Map<String, String>> resp = controller.registerFinish(
                 Map.of("response", "{\"id\":\"cred-1\"}"), request);
@@ -153,12 +136,12 @@ class PasskeyUserControllerTest {
     @Test
     void deletePasskey_success_returns200() {
         stubEmail("user@test.com");
-        doNothing().when(passkeyService).deletePasskeys("user@test.com");
+        doNothing().when(authInnerClient).passkeyDelete("user@test.com");
 
         ResponseEntity<Map<String, String>> resp = controller.deletePasskey(request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("message", "Passkey removed");
-        verify(passkeyService).deletePasskeys("user@test.com");
+        verify(authInnerClient).passkeyDelete("user@test.com");
     }
 }

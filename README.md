@@ -64,8 +64,9 @@
 | Redis                 | Redis 7 (Docker) — shared by the scheduler's Asynq queue and the backend's rate limits, sandbox tracking, and fallback cache |
 | Kafka                 | Apache Kafka, single-node KRaft mode (Docker) — carries notification events (`:9092`)                                      |
 | Scheduler             | Go microservice backed by Asynq (`:8082`)                                                                                   |
-| Storage service       | `agent-system-storage-inner` — Garage (S3-compatible) object storage (`:8083`)                                           |
-| Notification consumer | `agent-system-notification-consumer` — Resend email delivery via Kafka (`:8084`)                                         |
+| Storage service       | `storage-inner` — Garage (S3-compatible) object storage (`:8083`)                                           |
+| Notification consumer | `notification-consumer` — Resend email delivery via Kafka (`:8084`)                                         |
+| Auth service           | `auth-inner` — JWT mint/validate, OTP login+registration, WebAuthn passkeys, CLI Ed25519 key auth (`:8086`)               |
 | Observability         | Prometheus + Grafana + Loki + Promtail                                                                                        |
 | Containerization      | Docker Compose                                                                                                                |
 
@@ -256,12 +257,21 @@ On startup the scheduler reloads all active schedules from MySQL into the Asynq 
 
 ## Internal Microservices
 
-Two backend capabilities are split out of `agent-system-rest` into private Maven modules. Neither has public ingress.
+Five backend capabilities are split out of `agent-system-rest` into private Maven modules. None has public ingress — clients always go through `agent-system-rest`'s public `/api/v1/**` routes, which proxy to these internally.
 
-`agent-system-storage-inner` (`:8083`, Garage S3-compatible object storage) is reachable only from `agent-system-rest` over the internal Docker network, authenticated with a shared-secret header (`X-Storage-Key`) instead of a user JWT. `agent-system-rest` talks to it via a typed HTTP client (`StorageClient`).
+`storage-inner` (`:8083`, Garage S3-compatible object storage) is reachable only from `agent-system-rest` over the internal Docker network, authenticated with a shared-secret header (`X-Storage-Key`) instead of a user JWT. `agent-system-rest` talks to it via a typed HTTP client (`StorageClient`).
 
 | Service                        | Port      | Backs                                 | Auth header       |
 | ------------------------------ | --------- | ------------------------------------- | ----------------- |
-| `agent-system-storage-inner` | `:8083` | Garage (S3-compatible) object storage | `X-Storage-Key` |
+| `storage-inner` | `:8083` | Garage (S3-compatible) object storage | `X-Storage-Key` |
+| `auth-inner`                  | `:8086` | JWT mint/validate, OTP, WebAuthn passkeys, CLI Ed25519 key auth | `X-Auth-Key` |
+| `finance-inner`               | `:8087` | Financial portfolio (cash/stocks/crypto/futures/cards/salary) + live market data | `X-Finance-Key` |
+| `travel-inner`                | `:8088` | Trips, stops, expenses, chat-visibility opt-in | `X-Travel-Key` |
 
-`agent-system-notification-consumer` (`:8084`) is decoupled further — instead of REST, `agent-system-rest`'s `NotificationClient` publishes events to Kafka topics (`notifications.otp`, `notifications.workflow-complete`), and the consumer's `EmailEventListener` delivers them via Resend. There's no shared-secret auth here; the Kafka broker itself is the trust boundary (internal-network-only, no public ingress). This decoupling means login/register succeeds once the OTP event reaches Kafka — actual email delivery happens asynchronously, with a bounded retry (2 attempts) in the consumer before a failing message is logged and dropped. Email is the only channel today; adding another (push, SMS, Telegram) is a new `@KafkaListener` method, not a rearchitecture.
+`notification-consumer` (`:8084`) is decoupled further — instead of REST, `agent-system-rest`'s `NotificationClient` publishes events to Kafka topics (`notifications.otp`, `notifications.workflow-complete`), and the consumer's `EmailEventListener` delivers them via Resend. There's no shared-secret auth here; the Kafka broker itself is the trust boundary (internal-network-only, no public ingress). This decoupling means login/register succeeds once the OTP event reaches Kafka — actual email delivery happens asynchronously, with a bounded retry (2 attempts) in the consumer before a failing message is logged and dropped. Email is the only channel today; adding another (push, SMS, Telegram) is a new `@KafkaListener` method, not a rearchitecture.
+
+`auth-inner` owns JWT signing/verification, OTP login+registration, WebAuthn passkey registration/authentication, and CLI Ed25519 key registration/verification — moved out of `agent-system-rest` so every internal caller (not just the REST API) has one place to validate a token instead of re-implementing it. `agent-system-rest`'s `AuthFilter`/`ClientIdentityFilter`/`CliSignatureFilter` all call it via `AuthInnerClient` on every request instead of validating locally, and the Go `scheduler` service calls its `/internal/validate` endpoint directly (bypassing `agent-system-rest` entirely) for the same reason scheduler already did this before the extraction — it needs to check a JWT on every incoming request without depending on the whole monolith being healthy. `auth-inner` owns `cli_public_keys`/`passkey_credentials` outright, and holds narrow, purpose-scoped read/write access to the shared `users`/`organizations`/`org_members` tables that `agent-system-rest`'s `user`/`org` packages otherwise own.
+
+`finance-inner` owns the financial portfolio tables (`financial_cash_deposits`, `financial_stocks`, `financial_crypto`, `financial_futures`, `financial_cards`, `salary_usage_records`) and every live market-data integration (Finnhub, Pyth, exchange rates, Hyperliquid/Jupiter/Lighter DEX positions) outright — unlike `auth-inner`, it has no dependency on the `user`/`org` packages at all. `agent-system-rest`'s `FinancialController` resolves `ownerUuid` (from the JWT) and the user's default display currency locally, then passes both explicitly to `finance-inner` via `FinanceInnerClient` — finance-inner never looks either up itself, so it stays fully decoupled from identity/org concerns.
+
+`travel-inner` owns the `travel_records` table outright and, like `finance-inner`, has zero dependency on `user`/`org`. It's the smallest of the four but the one with the most interesting caller: the chat agent's `TravelAgentTool` (a Spring AI `@Tool`) used to read trips directly from the in-process repository — the only chat tool that ever touched a DB table directly instead of calling an external service. It now calls `TravelInnerClient.listChatVisible(uuid)` like everything else, joining every other connector tool's established network-call pattern. Only trips a user has explicitly opted into (`allowChat=true`, off by default) are ever returned to the tool, so this stays a hard privacy boundary rather than a prompt-level hint. `TravelInnerClient` defines its own local `TravelRecord` record mirroring the JSON wire shape (the same pattern `StorageClient` uses) rather than depending on travel-inner's internal DTO class.

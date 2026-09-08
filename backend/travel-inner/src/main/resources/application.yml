@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: travel-inner
+
+  config:
+    import:
+      - optional:classpath:application.local.yml
+
+  # ── MySQL — same shared database as agent-system-rest, owns travel_records ────
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:ragagent}?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useUnicode=true
+    username: ${MYSQL_USER:ragagent}
+    password: ${MYSQL_PASSWORD:ragagent}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none   # schema.sql manages the DDL
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      continue-on-error: true   # tolerates "already exists" errors from CREATE TABLE IF NOT EXISTS races
+
+server:
+  port: 8088
+
+# ── Shared secret expected on X-Travel-Key from agent-system-rest ────────────
+travel:
+  service-key: ${TRAVEL_SERVICE_KEY:travel-secret-key}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.agentsystem.travel: DEBUG

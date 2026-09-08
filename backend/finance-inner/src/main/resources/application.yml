@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: finance-inner
+
+  config:
+    import:
+      - optional:classpath:application.local.yml
+
+  # ── MySQL — same shared database as agent-system-rest, owns the financial_* tables ──
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:ragagent}?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useUnicode=true
+    username: ${MYSQL_USER:ragagent}
+    password: ${MYSQL_PASSWORD:ragagent}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none   # schema.sql manages the DDL
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      continue-on-error: true   # tolerates "already exists" errors from CREATE TABLE IF NOT EXISTS races
+
+server:
+  port: 8087
+
+# ── Financial / Market data ───────────────────────────────────────────────────
+financial:
+  finnhub:
+    api-key: ${FINNHUB_API_KEY:}
+
+# ── Shared secret expected on X-Finance-Key from agent-system-rest ───────────
+finance:
+  service-key: ${FINANCE_SERVICE_KEY:finance-secret-key}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.agentsystem.financial: DEBUG

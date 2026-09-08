@@ -63,6 +63,7 @@ func (h *Handler) validateToken(authHeader string) (string, error) {
 		return "", err
 	}
 	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("X-Auth-Key", h.cfg.AuthServiceKey)
 
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
 	if err != nil {

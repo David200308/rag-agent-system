@@ -1,10 +1,8 @@
 package com.agentsystem.auth.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.agentsystem.auth.AuthInnerClient;
 import com.agentsystem.auth.AuthProperties;
-import com.agentsystem.auth.service.AuthService;
-import com.agentsystem.auth.service.JwtService;
-import com.agentsystem.user.service.UserAccountService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,8 +23,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AuthFilterTest {
 
-    @Mock AuthService        authService;
-    @Mock UserAccountService userAccountService;
+    @Mock AuthInnerClient    authInnerClient;
     @Mock HttpServletRequest request;
     @Mock HttpServletResponse response;
     @Mock FilterChain        chain;
@@ -36,10 +33,10 @@ class AuthFilterTest {
 
     @BeforeEach
     void setUp() {
-        AuthProperties enabled  = new AuthProperties(true,  10, "secret-key", 24);
-        AuthProperties disabled = new AuthProperties(false, 10, "secret-key", 24);
-        filterEnabled  = new AuthFilter(enabled,  authService, userAccountService, new ObjectMapper());
-        filterDisabled = new AuthFilter(disabled, authService, userAccountService, new ObjectMapper());
+        AuthProperties enabled  = new AuthProperties(true);
+        AuthProperties disabled = new AuthProperties(false);
+        filterEnabled  = new AuthFilter(enabled,  authInnerClient, new ObjectMapper());
+        filterDisabled = new AuthFilter(disabled, authInnerClient, new ObjectMapper());
     }
 
     // ── shouldNotFilter ────────────────────────────────────────────────────────
@@ -102,20 +99,19 @@ class AuthFilterTest {
 
     private static final String USER_UUID = "11111111-1111-1111-1111-111111111111";
 
-    private static JwtService.TokenClaims personal(String userUuid) {
-        return new JwtService.TokenClaims(userUuid, "PERSONAL", null);
+    private static AuthInnerClient.ValidateResult personal(String userUuid, String email) {
+        return new AuthInnerClient.ValidateResult(true, userUuid, email, "PERSONAL", null);
     }
 
-    private static JwtService.TokenClaims team(String userUuid, String orgId) {
-        return new JwtService.TokenClaims(userUuid, "TEAM", orgId);
+    private static AuthInnerClient.ValidateResult team(String userUuid, String email, String orgId) {
+        return new AuthInnerClient.ValidateResult(true, userUuid, email, "TEAM", orgId);
     }
 
     @Test
     void doFilterInternal_validToken_setsAllAttributesAndContinues() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/agent/query");
         when(request.getHeader("Authorization")).thenReturn("Bearer valid-token");
-        when(authService.validateTokenFull("valid-token")).thenReturn(personal(USER_UUID));
-        when(userAccountService.getEmailByUuid(USER_UUID)).thenReturn("user@example.com");
+        when(authInnerClient.validate("valid-token")).thenReturn(personal(USER_UUID, "user@example.com"));
 
         filterEnabled.doFilterInternal(request, response, chain);
 
@@ -131,8 +127,7 @@ class AuthFilterTest {
     void doFilterInternal_teamToken_setsOrgIdAttribute() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/agent/query");
         when(request.getHeader("Authorization")).thenReturn("Bearer team-token");
-        when(authService.validateTokenFull("team-token")).thenReturn(team(USER_UUID, "skyproton"));
-        when(userAccountService.getEmailByUuid(USER_UUID)).thenReturn("user@example.com");
+        when(authInnerClient.validate("team-token")).thenReturn(team(USER_UUID, "user@example.com", "skyproton"));
 
         filterEnabled.doFilterInternal(request, response, chain);
 
@@ -146,6 +141,8 @@ class AuthFilterTest {
     void doFilterInternal_missingAuthHeader_returns401() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/agent/query");
         when(request.getHeader("Authorization")).thenReturn(null);
+        when(authInnerClient.validate(null))
+                .thenReturn(new AuthInnerClient.ValidateResult(false, null, null, null, null));
         when(response.getWriter()).thenReturn(new PrintWriter(new StringWriter()));
 
         filterEnabled.doFilterInternal(request, response, chain);
@@ -158,7 +155,8 @@ class AuthFilterTest {
     void doFilterInternal_invalidToken_returns401() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/agent/query");
         when(request.getHeader("Authorization")).thenReturn("Bearer bad-token");
-        when(authService.validateTokenFull("bad-token")).thenReturn(null);
+        when(authInnerClient.validate("bad-token"))
+                .thenReturn(new AuthInnerClient.ValidateResult(false, null, null, null, null));
         when(response.getWriter()).thenReturn(new PrintWriter(new StringWriter()));
 
         filterEnabled.doFilterInternal(request, response, chain);
@@ -171,6 +169,8 @@ class AuthFilterTest {
     void doFilterInternal_connectorPath_noToken_allowsThrough() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/connectors/google/status");
         when(request.getHeader("Authorization")).thenReturn(null);
+        when(authInnerClient.validate(null))
+                .thenReturn(new AuthInnerClient.ValidateResult(false, null, null, null, null));
 
         filterEnabled.doFilterInternal(request, response, chain);
 
@@ -182,8 +182,7 @@ class AuthFilterTest {
     void doFilterInternal_connectorPath_validToken_setsAllAttributesAndAllows() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/connectors/google/docs");
         when(request.getHeader("Authorization")).thenReturn("Bearer valid-token");
-        when(authService.validateTokenFull("valid-token")).thenReturn(personal(USER_UUID));
-        when(userAccountService.getEmailByUuid(USER_UUID)).thenReturn("user@example.com");
+        when(authInnerClient.validate("valid-token")).thenReturn(personal(USER_UUID, "user@example.com"));
 
         filterEnabled.doFilterInternal(request, response, chain);
 

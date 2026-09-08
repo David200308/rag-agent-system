@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Thin pass-through to agent-system-storage-inner — this service never talks to
+ * Thin pass-through to storage-inner — this service never talks to
  * Garage or the image metadata table directly.
  */
 @Slf4j

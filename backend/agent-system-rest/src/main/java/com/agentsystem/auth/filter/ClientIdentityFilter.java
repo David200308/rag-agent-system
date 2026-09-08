@@ -1,8 +1,8 @@
 package com.agentsystem.auth.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.agentsystem.auth.AuthInnerClient;
 import com.agentsystem.auth.ClientIdentityProperties;
-import com.agentsystem.auth.service.CliKeyService;
 import com.agentsystem.auth.service.ClientIdentityService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -37,7 +37,7 @@ public class ClientIdentityFilter extends OncePerRequestFilter {
 
     private final ClientIdentityProperties  props;
     private final ClientIdentityService     identityService;
-    private final CliKeyService             cliKeyService;
+    private final AuthInnerClient           authInnerClient;
     private final ObjectMapper              objectMapper;
 
     @Override
@@ -78,7 +78,7 @@ public class ClientIdentityFilter extends OncePerRequestFilter {
             String tsHeader = request.getHeader("X-Cli-Timestamp");
             if (email != null && version != null && tsHeader != null) {
                 try {
-                    valid = cliKeyService.verify(email, cliSig, version, method, path,
+                    valid = authInnerClient.verifyCliSignature(email, cliSig, version, method, path,
                             Long.parseLong(tsHeader));
                 } catch (NumberFormatException ignored) {}
             }

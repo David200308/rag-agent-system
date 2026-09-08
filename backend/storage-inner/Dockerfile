@@ -5,20 +5,21 @@ WORKDIR /app
 
 COPY pom.xml .
 COPY agent-system-rest/pom.xml agent-system-rest/pom.xml
-COPY agent-system-storage-inner/pom.xml agent-system-storage-inner/pom.xml
-COPY agent-system-notification-consumer/pom.xml agent-system-notification-consumer/pom.xml
-RUN mvn -B -pl agent-system-storage-inner -am dependency:resolve dependency:resolve-plugins \
+COPY storage-inner/pom.xml storage-inner/pom.xml
+COPY notification-consumer/pom.xml notification-consumer/pom.xml
+COPY auth-inner/pom.xml auth-inner/pom.xml
+RUN mvn -B -pl storage-inner -am dependency:resolve dependency:resolve-plugins \
     -Dmaven.wagon.http.retryHandler.count=3 \
     -Dmaven.wagon.http.retryHandler.requestSentEnabled=true
 
-COPY agent-system-storage-inner/src agent-system-storage-inner/src
-RUN mvn -pl agent-system-storage-inner -am package -DskipTests -B
+COPY storage-inner/src storage-inner/src
+RUN mvn -pl storage-inner -am package -DskipTests -B
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-COPY --from=build /app/agent-system-storage-inner/target/*.jar app.jar
+COPY --from=build /app/storage-inner/target/*.jar app.jar
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

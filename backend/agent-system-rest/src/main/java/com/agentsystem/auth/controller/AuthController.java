@@ -1,10 +1,6 @@
 package com.agentsystem.auth.controller;
 
-import com.agentsystem.auth.service.AuthService;
-import com.agentsystem.auth.service.CliKeyService;
-import com.agentsystem.org.service.OrganizationService;
-import com.agentsystem.user.entity.UserStatus;
-import com.agentsystem.user.service.UserAccountService;
+import com.agentsystem.auth.AuthInnerClient;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +11,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 /**
- * Auth endpoints — always public (excluded from AuthFilter).
+ * Auth endpoints — always public (excluded from AuthFilter). Thin proxy over auth-inner's
+ * internal API: JWT mint/validate, OTP, and CLI key registration all live there now.
  *
  *  POST /api/v1/auth/register/request-otp — send OTP to verify a new email for registration
  *  POST /api/v1/auth/register/verify-otp  — verify code, create a PRE_USER row
@@ -32,10 +29,7 @@ import java.util.Map;
 @Tag(name = "Auth", description = "Email OTP login endpoints (JWT)")
 public class AuthController {
 
-    private final AuthService         authService;
-    private final CliKeyService       cliKeyService;
-    private final OrganizationService orgService;
-    private final UserAccountService  userAccountService;
+    private final AuthInnerClient authInnerClient;
 
     // ── Register: request OTP ─────────────────────────────────────────────────────
 
@@ -51,7 +45,7 @@ public class AuthController {
         }
 
         try {
-            authService.requestRegistrationOtp(email);
+            authInnerClient.requestRegisterOtp(email);
             return ResponseEntity.ok(Map.of("message", "Code sent to " + email));
         } catch (Exception e) {
             log.error("[AuthController] registerRequestOtp error: {}", e.getMessage(), e);
@@ -75,11 +69,11 @@ public class AuthController {
         }
 
         try {
-            UserStatus status = authService.verifyRegistrationOtp(email, code);
-            String message = status == UserStatus.USER
+            String status = authInnerClient.verifyRegisterOtp(email, code);
+            String message = "USER".equals(status)
                     ? "This email is already approved — you can sign in."
                     : "Thanks! Your registration is pending approval.";
-            return ResponseEntity.ok(Map.of("status", status.name(), "message", message));
+            return ResponseEntity.ok(Map.of("status", status, "message", message));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(401)
                     .body(Map.of("error", e.getMessage()));
@@ -104,7 +98,7 @@ public class AuthController {
         }
 
         try {
-            authService.requestOtp(email);
+            authInnerClient.requestLoginOtp(email);
             return ResponseEntity.ok(Map.of("message", "Code sent to " + email));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(403)
@@ -134,7 +128,7 @@ public class AuthController {
         }
 
         try {
-            String jwt = authService.verifyOtp(email, code, mode, orgId);
+            String jwt = authInnerClient.verifyLoginOtp(email, code, mode, orgId);
             return ResponseEntity.ok(Map.of("token", jwt));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(401)
@@ -164,17 +158,17 @@ public class AuthController {
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
         String token = extractToken(authHeader);
-        var claims = (token != null) ? authService.validateTokenFull(token) : null;
+        var result = authInnerClient.validate(token);
 
-        if (claims == null) {
+        if (!result.valid()) {
             return ResponseEntity.ok(Map.of("valid", false));
         }
-        java.util.Map<String, Object> result = new java.util.HashMap<>();
-        result.put("valid", true);
-        result.put("email", userAccountService.getEmailByUuid(claims.userUuid()));
-        result.put("mode",  claims.mode());
-        if (claims.orgId() != null) result.put("orgId", claims.orgId());
-        return ResponseEntity.ok(result);
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        body.put("valid", true);
+        body.put("email", result.email());
+        body.put("mode",  result.mode());
+        if (result.orgId() != null) body.put("orgId", result.orgId());
+        return ResponseEntity.ok(body);
     }
 
     // ── Register CLI public key ───────────────────────────────────────────────────
@@ -187,9 +181,9 @@ public class AuthController {
 
         // /api/v1/auth/* is exempt from AuthFilter, so validate the JWT manually
         // (same pattern as the /validate endpoint above)
-        String token = extractToken(authHeader);
-        String email = (token != null) ? authService.validateToken(token) : null;
-        if (email == null) {
+        String token  = extractToken(authHeader);
+        var    result = authInnerClient.validate(token);
+        if (!result.valid()) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
 
@@ -199,7 +193,7 @@ public class AuthController {
         }
 
         try {
-            String fingerprint = cliKeyService.registerKey(email, publicKey);
+            String fingerprint = authInnerClient.registerCliKey(result.email(), publicKey);
             return ResponseEntity.ok(Map.of(
                     "message",     "CLI key registered",
                     "fingerprint", fingerprint
@@ -214,20 +208,10 @@ public class AuthController {
     @GetMapping("/org/{orgId}")
     @Operation(summary = "Check whether an org slug exists (called at team login)")
     public ResponseEntity<Map<String, Object>> checkOrg(@PathVariable String orgId) {
-        boolean exists = isOrgRegistered(orgId);
-        return ResponseEntity.ok(Map.of("exists", exists));
+        return ResponseEntity.ok(Map.of("exists", authInnerClient.orgExists(orgId)));
     }
 
     // ── Helper ───────────────────────────────────────────────────────────────────
-
-    private boolean isOrgRegistered(String orgId) {
-        try {
-            orgService.requireOrgExists(orgId);
-            return true;
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
-    }
 
     private String extractToken(String authHeader) {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {

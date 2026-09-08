@@ -1,7 +1,7 @@
 package com.agentsystem.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.agentsystem.auth.service.CliKeyService;
+import com.agentsystem.auth.AuthInnerClient;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -42,7 +42,7 @@ public class CliSignatureFilter extends OncePerRequestFilter {
     public static final String REQUEST_SOURCE_ATTR = "requestSource";
     public static final String REQUEST_SOURCE_CLI  = "CLI";
 
-    private final CliKeyService cliKeyService;
+    private final AuthInnerClient authInnerClient;
     private final ObjectMapper  objectMapper;
 
     @Override
@@ -88,7 +88,7 @@ public class CliSignatureFilter extends OncePerRequestFilter {
             return;
         }
 
-        boolean valid = cliKeyService.verify(
+        boolean valid = authInnerClient.verifyCliSignature(
                 email,
                 signature,
                 cliVersion,

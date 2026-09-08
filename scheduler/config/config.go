@@ -7,17 +7,19 @@ import (
 )
 
 type Config struct {
-	Port          string
-	RedisAddr     string
-	RedisPassword string
-	DSN           string // MySQL connection string
-	BackendURL    string
-	ServiceKey    string
-	ValidateURL   string
+	Port           string
+	RedisAddr      string
+	RedisPassword  string
+	DSN            string // MySQL connection string
+	BackendURL     string
+	ServiceKey     string
+	ValidateURL    string
+	AuthServiceKey string // X-Auth-Key sent to auth-inner's /internal/validate
 }
 
 func Load() *Config {
 	backendURL := getEnv("BACKEND_URL", "http://localhost:8081")
+	authInnerURL := getEnv("AUTH_INNER_URL", "http://localhost:8086")
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
 		getEnv("MYSQL_USER", "ragagent"),
 		getSecret("MYSQL_PASSWORD", "ragagent"),
@@ -26,13 +28,14 @@ func Load() *Config {
 		getEnv("MYSQL_DB", "ragagent"),
 	)
 	return &Config{
-		Port:          getEnv("PORT", "8082"),
-		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),
-		RedisPassword: getSecret("REDIS_PASSWORD", ""),
-		DSN:           dsn,
-		BackendURL:    backendURL,
-		ServiceKey:    getSecret("SCHEDULER_SERVICE_KEY", "scheduler-secret-key"),
-		ValidateURL:   backendURL + "/api/v1/auth/validate",
+		Port:           getEnv("PORT", "8082"),
+		RedisAddr:      getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisPassword:  getSecret("REDIS_PASSWORD", ""),
+		DSN:            dsn,
+		BackendURL:     backendURL,
+		ServiceKey:     getSecret("SCHEDULER_SERVICE_KEY", "scheduler-secret-key"),
+		ValidateURL:    authInnerURL + "/internal/validate",
+		AuthServiceKey: getSecret("AUTH_SERVICE_KEY", "auth-secret-key"),
 	}
 }
 

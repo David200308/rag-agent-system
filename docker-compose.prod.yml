@@ -9,9 +9,12 @@
 #      echo "ragagent"                     > secrets/mysql_password
 #      echo "sk-..."                       > secrets/openai_api_key
 #      echo "$(openssl rand -base64 64)"   > secrets/auth_jwt_secret
+#      echo "$(openssl rand -base64 32)"   > secrets/auth_service_key
 #      echo "$(openssl rand -base64 32)"   > secrets/scheduler_service_key
 #      echo "$(openssl rand -base64 32)"   > secrets/storage_service_key
 #      echo "$(openssl rand -base64 32)"   > secrets/alert_service_key
+#      echo "$(openssl rand -base64 32)"   > secrets/finance_service_key
+#      echo "$(openssl rand -base64 32)"   > secrets/travel_service_key
 #      echo "..."                          > secrets/garage_access_key   # pre-seeded via `garage key import`
 #      echo "..."                          > secrets/garage_secret_key
 #      # ... (see full list below)
@@ -42,12 +45,18 @@ secrets:
     file: ./secrets/openrouter_api_key
   auth_jwt_secret:
     file: ./secrets/auth_jwt_secret
+  auth_service_key:
+    file: ./secrets/auth_service_key
   resend_api_key:
     file: ./secrets/resend_api_key
   resend_from_email:
     file: ./secrets/resend_from_email
   finnhub_api_key:
     file: ./secrets/finnhub_api_key
+  finance_service_key:
+    file: ./secrets/finance_service_key
+  travel_service_key:
+    file: ./secrets/travel_service_key
   scheduler_service_key:
     file: ./secrets/scheduler_service_key
   storage_service_key:
@@ -174,11 +183,11 @@ services:
       timeout: 5s
       retries: 10
 
-  # ── Image storage microservice (agent-system-storage-inner module) ───────────
+  # ── Image storage microservice (storage-inner module) ───────────
   storage:
     build:
       context: ./backend
-      dockerfile: agent-system-storage-inner/Dockerfile
+      dockerfile: storage-inner/Dockerfile
     container_name: agent-system-storage
     ports:
       - "8083:8083"
@@ -208,14 +217,115 @@ services:
       retries: 8
       start_period: 30s
 
-  # ── Notification consumer (agent-system-notification-consumer module) ────────
+  # ── Auth microservice (auth-inner module) ─────────────────────────────────────
+  # JWT mint/validate, OTP login+registration, WebAuthn passkeys, CLI Ed25519 key
+  # auth. Called by backend (AuthInnerClient) and directly by the Go scheduler.
+  auth-inner:
+    build:
+      context: ./backend
+      dockerfile: auth-inner/Dockerfile
+    container_name: agent-system-auth-inner
+    ports:
+      - "8086:8086"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    secrets:
+      - mysql_password
+      - auth_jwt_secret
+      - auth_service_key
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-ragagent}
+      MYSQL_USER: ${MYSQL_USER:-ragagent}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
+      AUTH_OTP_EXPIRY_MINUTES: ${AUTH_OTP_EXPIRY_MINUTES:-10}
+      AUTH_PASSKEY_RP_ID: ${AUTH_PASSKEY_RP_ID:-localhost}
+      AUTH_PASSKEY_RP_NAME: ${AUTH_PASSKEY_RP_NAME:-RAG Agent}
+      AUTH_PASSKEY_ORIGIN: ${AUTH_PASSKEY_ORIGIN:-http://localhost:3000}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8086/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+
+  # ── Financial portfolio microservice (finance-inner module) ──────────────────
+  # Cash/stocks/crypto/futures/cards/salary + live market data (Finnhub, Pyth,
+  # Hyperliquid, Jupiter, Lighter). Called by backend (FinanceInnerClient).
+  finance-inner:
+    build:
+      context: ./backend
+      dockerfile: finance-inner/Dockerfile
+    container_name: agent-system-finance-inner
+    ports:
+      - "8087:8087"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    secrets:
+      - mysql_password
+      - finnhub_api_key
+      - finance_service_key
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-ragagent}
+      MYSQL_USER: ${MYSQL_USER:-ragagent}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8087/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+
+  # ── Travel records microservice (travel-inner module) ─────────────────────────
+  # Trips, stops, expenses, and the per-trip chat-visibility opt-in. Called by
+  # backend (TravelInnerClient) for both the /api/v1/travel routes and TravelAgentTool.
+  travel-inner:
+    build:
+      context: ./backend
+      dockerfile: travel-inner/Dockerfile
+    container_name: agent-system-travel-inner
+    ports:
+      - "8088:8088"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    secrets:
+      - mysql_password
+      - travel_service_key
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-ragagent}
+      MYSQL_USER: ${MYSQL_USER:-ragagent}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8088/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+
+  # ── Notification consumer (notification-consumer module) ────────
   # Email today (Resend), consumed from Kafka; more channels (Telegram, push, etc.)
   # land here later as new @KafkaListener methods.
   notification-consumer:
     build:
       context: ./backend
-      dockerfile: agent-system-notification-consumer/Dockerfile
-    container_name: agent-system-notification-consumer
+      dockerfile: notification-consumer/Dockerfile
+    container_name: notification-consumer
     ports:
       - "8084:8084"
     restart: unless-stopped
@@ -250,9 +360,12 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
+      auth-inner:
+        condition: service_healthy
     secrets:
       - scheduler_service_key
       - mysql_password
+      - auth_service_key
     environment:
       PORT: 8082
       REDIS_ADDR: redis:6379
@@ -263,6 +376,9 @@ services:
       MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
       BACKEND_URL: http://backend:8081
       SCHEDULER_SERVICE_KEY_FILE: /run/secrets/scheduler_service_key
+      # ── Auth (JWT validation now lives in auth-inner, not backend) ─────────
+      AUTH_INNER_URL: http://auth-inner:8086
+      AUTH_SERVICE_KEY_FILE: /run/secrets/auth_service_key
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8082/health || exit 1"]
       interval: 10s
@@ -377,8 +493,9 @@ services:
       - openai_api_key
       - anthropic_api_key
       - openrouter_api_key
-      - auth_jwt_secret
-      - finnhub_api_key
+      - auth_service_key
+      - finance_service_key
+      - travel_service_key
       - scheduler_service_key
       - storage_service_key
       - alert_service_key
@@ -400,11 +517,17 @@ services:
       # ── Redis (rate limiting, sandbox tracking, fallback cache — shared with scheduler's Asynq queue)
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      # ── Image storage (agent-system-storage-inner, Garage-backed)
+      # ── Image storage (storage-inner, Garage-backed)
       STORAGE_URL: http://storage:8083
+      # ── Auth (JWT mint/validate, OTP, passkeys, CLI key auth all live in auth-inner)
+      AUTH_INNER_URL: http://auth-inner:8086
+      # ── Financial portfolio (finance-inner, Finnhub/Pyth/Hyperliquid/Jupiter/Lighter-backed)
+      FINANCE_INNER_URL: http://finance-inner:8087
+      # ── Travel (travel-inner, map tiles via CartoDB)
+      TRAVEL_INNER_URL: http://travel-inner:8088
       # ── Investment alerts (crypto/stock price, DeFi, prediction-market)
       ALERT_URL: http://investment-alert-task:8085
-      # ── Notifications (agent-system-notification-consumer, Resend-backed email via Kafka)
+      # ── Notifications (notification-consumer, Resend-backed email via Kafka)
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       # ── LLM
       LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
@@ -419,10 +542,8 @@ services:
       LOCAL_LLM_URL: ${LOCAL_LLM_URL:-http://host.docker.internal:11434}
       LOCAL_LLM_MODEL: ${LOCAL_LLM_MODEL:-llama3}
       LOCAL_EMBEDDING_MODEL: ${LOCAL_EMBEDDING_MODEL:-nomic-embed-text}
-      # ── Auth (non-secret flags)
+      # ── Auth (non-secret flags — JWT expiry/OTP expiry/passkey config moved to auth-inner)
       AUTH_ENABLED: ${AUTH_ENABLED:-true}
-      AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
-      AUTH_OTP_EXPIRY_MINUTES: ${AUTH_OTP_EXPIRY_MINUTES:-10}
       # ── Admin (comma-separated emails allowed to manage orgs system-wide)
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       # ── MCP transport auth (blank = /mcp/** closed; only set if you use MCP clients)
@@ -432,12 +553,8 @@ services:
       CLIENT_IDENTITY_ENABLED: ${CLIENT_IDENTITY_ENABLED:-false}
       CLIENT_IOS_SECRET: ${CLIENT_IOS_SECRET:-}
       CLIENT_WEB_SECRET: ${CLIENT_WEB_SECRET:-}
-      # ── Passkey (WebAuthn)
-      AUTH_PASSKEY_RP_ID: ${AUTH_PASSKEY_RP_ID:-localhost}
-      AUTH_PASSKEY_RP_NAME: ${AUTH_PASSKEY_RP_NAME:-RAG Agent}
-      AUTH_PASSKEY_ORIGIN: ${AUTH_PASSKEY_ORIGIN:-http://localhost:3000}
-      # ── Financial / Market data (FINNHUB_API_KEY comes from secrets)
-      # ── Travel (no secrets — records stored in MySQL, map tiles via CartoDB)
+      # ── Financial / Market data (moved to finance-inner; FINNHUB_API_KEY lives there now)
+      # ── Travel (moved to travel-inner; no other secrets — map tiles via CartoDB)
       # ── Distributed tracing (disabled — no OTEL collector in this stack)
       # To enable: add an OTEL collector service, then set:
       #   TRACING_SAMPLE_RATE=1.0

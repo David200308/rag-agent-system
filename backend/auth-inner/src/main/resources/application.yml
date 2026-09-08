@@ -1,0 +1,79 @@
+spring:
+  application:
+    name: auth-inner
+
+  config:
+    import:
+      - optional:classpath:application.local.yml
+
+  # ── MySQL — same shared database as agent-system-rest ─────────────────────────
+  # Owns cli_public_keys/passkey_credentials; scoped read/write access to the
+  # users/organizations/org_members tables owned by agent-system-rest.
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:ragagent}?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&useUnicode=true
+    username: ${MYSQL_USER:ragagent}
+    password: ${MYSQL_PASSWORD:ragagent}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none   # schema.sql manages the DDL for tables this module owns
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      continue-on-error: true   # tolerates "already exists" errors from CREATE TABLE IF NOT EXISTS races
+
+  # ── Redis — shared with agent-system-rest/scheduler (OTP codes, WebAuthn challenges) ──
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  # ── Kafka — OTP email dispatch, consumed by notification-consumer ──
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        # Keys here must stay in sync with notification-consumer's mapping —
+        # see that module's application.yml for why this exists (different FQCNs per side).
+        spring.json.type.mapping: otpRequested:com.agentsystem.auth.notification.NotificationClient$OtpRequestedEvent
+        max.block.ms: 5000
+
+server:
+  port: 8086
+
+# ── Auth (JWT + OTP + shared secret for internal callers) ────────────────────
+auth:
+  jwt-secret: ${AUTH_JWT_SECRET:changeme-use-a-long-random-base64-string-in-production}
+  jwt-expiry-hours: ${AUTH_JWT_EXPIRY_HOURS:24}
+  otp-expiry-minutes: ${AUTH_OTP_EXPIRY_MINUTES:10}
+  # Shared secret expected on X-Auth-Key from agent-system-rest and the Go scheduler.
+  service-key: ${AUTH_SERVICE_KEY:auth-secret-key}
+  passkey:
+    # Must match the domain serving the app (no port, no scheme).
+    # For local dev: localhost. For production: yourdomain.com
+    rp-id: ${AUTH_PASSKEY_RP_ID:localhost}
+    rp-name: ${AUTH_PASSKEY_RP_NAME:RAG Agent}
+    # Full origin including scheme and port.
+    # For local dev: http://localhost:3000. For production: https://yourdomain.com
+    origin: ${AUTH_PASSKEY_ORIGIN:http://localhost:3000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.agentsystem.auth: DEBUG

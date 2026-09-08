@@ -1,8 +1,7 @@
 package com.agentsystem.connector.tool;
 
 import com.agentsystem.agent.ToolCallBudget;
-import com.agentsystem.travel.dto.TravelRecordDto;
-import com.agentsystem.travel.service.TravelService;
+import com.agentsystem.travel.TravelInnerClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
@@ -29,8 +28,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TravelAgentTool {
 
-    private final TravelService  travelService;
-    private final ToolCallBudget toolCallBudget;
+    private final TravelInnerClient travelClient;
+    private final ToolCallBudget    toolCallBudget;
 
     private static final ThreadLocal<String> CURRENT_USER_UUID = new ThreadLocal<>();
 
@@ -54,7 +53,7 @@ public class TravelAgentTool {
         String uuid = CURRENT_USER_UUID.get();
         if (uuid == null || uuid.isBlank()) return "No travel records available.";
 
-        var visible = travelService.listChatVisible(uuid);
+        var visible = travelClient.listChatVisible(uuid);
         log.info("[TravelAgentTool] {} chat-visible trip(s) for user '{}'", visible.size(), uuid);
         if (visible.isEmpty()) {
             return "The user has no travel trips marked visible to chat.";
@@ -64,7 +63,7 @@ public class TravelAgentTool {
                 .collect(Collectors.joining("\n\n---\n\n"));
     }
 
-    private String formatRecord(TravelRecordDto r) {
+    private String formatRecord(TravelInnerClient.TravelRecord r) {
         StringBuilder sb = new StringBuilder();
         sb.append("Trip: ").append(r.title()).append("\n");
         sb.append("Dates: ").append(r.startDate()).append(" to ").append(r.endDate()).append("\n");

@@ -11,7 +11,7 @@ import (
 	"investment-alert-task/internal/config"
 )
 
-// TopicAlertTriggered must stay in sync with agent-system-notification-consumer's
+// TopicAlertTriggered must stay in sync with notification-consumer's
 // EmailEventListener.TOPIC_ALERT_TRIGGERED.
 const TopicAlertTriggered = "notifications.alert-triggered"
 
@@ -33,7 +33,7 @@ type TriggerPayload struct {
 	Message   string `json:"message"`
 }
 
-// alertTriggeredEvent mirrors agent-system-notification-consumer's
+// alertTriggeredEvent mirrors notification-consumer's
 // EmailEventListener.AlertTriggeredEvent record field-for-field (to, ruleType,
 // symbolOrProtocol, message).
 type alertTriggeredEvent struct {
@@ -72,7 +72,7 @@ func NewClient(cfg *config.Config, emails EmailResolver) *Client {
 }
 
 // Notify resolves the rule owner's email and publishes a fired-alert event directly to
-// Kafka for agent-system-notification-consumer to deliver.
+// Kafka for notification-consumer to deliver.
 func (c *Client) Notify(ctx context.Context, p TriggerPayload) error {
 	email, err := c.emails.GetEmailByOwnerUUID(p.OwnerUuid)
 	if err != nil {

@@ -279,6 +279,10 @@ if [ "$MODE" = "local" ]; then
   SCHEDULER_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
   echo -e "  ${DIM}Scheduler service key auto-generated.${NC}"
 
+  # ── Auth-inner service key ────────────────────────────────────────────────
+  AUTH_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
+  echo -e "  ${DIM}Auth-inner service key auto-generated.${NC}"
+
   # ── Image storage (Garage) ────────────────────────────────────────────────
   STORAGE_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
   GARAGE_RPC_SECRET="$(openssl rand -hex 32)"
@@ -300,6 +304,12 @@ if [ "$MODE" = "local" ]; then
   echo -e "  ${DIM}Leave blank to skip — stock prices will not be fetched.${NC}"
   FINNHUB_API_KEY=""
   prompt FINNHUB_API_KEY "Finnhub API key" "" true
+  FINANCE_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
+  echo -e "  ${DIM}Finance-inner service key auto-generated.${NC}"
+
+  # ── Travel-inner service key ──────────────────────────────────────────────
+  TRAVEL_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
+  echo -e "  ${DIM}Travel-inner service key auto-generated.${NC}"
 
   # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ──────────────
   header "Connectors (optional)"
@@ -396,6 +406,7 @@ AUTH_ENABLED=$AUTH_ENABLED
 AUTH_JWT_SECRET=$AUTH_JWT_SECRET
 AUTH_JWT_EXPIRY_HOURS=$AUTH_JWT_EXPIRY_HOURS
 AUTH_OTP_EXPIRY_MINUTES=$AUTH_OTP_EXPIRY_MINUTES
+AUTH_SERVICE_KEY=$AUTH_SERVICE_KEY
 
 # ── Client identity ────────────────────────────────────────────────────────────
 CLIENT_IDENTITY_ENABLED=$CLIENT_IDENTITY_ENABLED
@@ -414,10 +425,11 @@ RESEND_FROM_EMAIL=$RESEND_FROM_EMAIL
 
 # ── Financial / Market data ───────────────────────────────────────────────────
 FINNHUB_API_KEY=$FINNHUB_API_KEY
+FINANCE_SERVICE_KEY=$FINANCE_SERVICE_KEY
 
 # ── Travel ────────────────────────────────────────────────────────────────────
 # No API keys required — map tiles served by CartoDB (free, no account needed).
-# Travel records are stored in MySQL alongside financial data.
+TRAVEL_SERVICE_KEY=$TRAVEL_SERVICE_KEY
 
 # ── Weaviate ──────────────────────────────────────────────────────────────────
 WEAVIATE_API_KEY=$WEAVIATE_API_KEY
@@ -425,7 +437,7 @@ WEAVIATE_API_KEY=$WEAVIATE_API_KEY
 # ── Scheduler microservice ────────────────────────────────────────────────────
 SCHEDULER_SERVICE_KEY=$SCHEDULER_SERVICE_KEY
 
-# ── Image storage (Garage-backed, agent-system-storage-inner) ────────────────
+# ── Image storage (Garage-backed, storage-inner) ────────────────
 STORAGE_SERVICE_KEY=$STORAGE_SERVICE_KEY
 GARAGE_ACCESS_KEY=$GARAGE_ACCESS_KEY
 GARAGE_SECRET_KEY=$GARAGE_SECRET_KEY
@@ -810,6 +822,17 @@ else
     echo -e "  ${DIM}Scheduler service key auto-generated.${NC}"
   fi
 
+  # ── Auth-inner ─────────────────────────────────────────────────────────────
+  # Same first-setup-only guard as the scheduler key — rotating this would break
+  # backend and the Go scheduler's calls into auth-inner until both are restarted
+  # with the new key.
+  if ! has_secret auth_service_key; then
+    AUTH_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
+    write_secret auth_service_key "$AUTH_SERVICE_KEY"
+    echo ""
+    echo -e "  ${DIM}Auth-inner service key auto-generated.${NC}"
+  fi
+
   # ── Investment alerts ──────────────────────────────────────────────────────
   # Same first-setup-only guard as the scheduler key — rotating this would break
   # the running investment-alert-task service until it is restarted with the new key.
@@ -868,6 +891,26 @@ else
     write_secret finnhub_api_key "$FINNHUB_API_KEY"
   else
     echo -e "  ${DIM}Keeping existing Finnhub secret.${NC}"
+  fi
+
+  # ── Finance-inner ────────────────────────────────────────────────────────
+  # Same first-setup-only guard as the scheduler key — rotating this would break
+  # backend's calls into finance-inner until it is restarted with the new key.
+  if ! has_secret finance_service_key; then
+    FINANCE_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
+    write_secret finance_service_key "$FINANCE_SERVICE_KEY"
+    echo ""
+    echo -e "  ${DIM}Finance-inner service key auto-generated.${NC}"
+  fi
+
+  # ── Travel-inner ─────────────────────────────────────────────────────────
+  # Same first-setup-only guard as the scheduler key — rotating this would break
+  # backend's calls into travel-inner until it is restarted with the new key.
+  if ! has_secret travel_service_key; then
+    TRAVEL_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
+    write_secret travel_service_key "$TRAVEL_SERVICE_KEY"
+    echo ""
+    echo -e "  ${DIM}Travel-inner service key auto-generated.${NC}"
   fi
 
   # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ──────────────
@@ -1034,7 +1077,7 @@ AUTH_PASSKEY_RP_ID=$AUTH_PASSKEY_RP_ID
 AUTH_PASSKEY_RP_NAME=$AUTH_PASSKEY_RP_NAME
 AUTH_PASSKEY_ORIGIN=$AUTH_PASSKEY_ORIGIN
 
-# ── Image storage (Garage-backed, agent-system-storage-inner) ────────────────
+# ── Image storage (Garage-backed, storage-inner) ────────────────
 GARAGE_BUCKET=$GARAGE_BUCKET
 
 # ── Web fetch ─────────────────────────────────────────────────────────────────

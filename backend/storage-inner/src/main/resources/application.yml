@@ -1,6 +1,6 @@
 spring:
   application:
-    name: agent-system-storage-inner
+    name: storage-inner
 
   config:
     import:

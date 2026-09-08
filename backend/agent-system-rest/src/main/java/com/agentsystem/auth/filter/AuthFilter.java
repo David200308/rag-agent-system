@@ -1,9 +1,8 @@
 package com.agentsystem.auth.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.agentsystem.auth.AuthInnerClient;
 import com.agentsystem.auth.AuthProperties;
-import com.agentsystem.auth.service.AuthService;
-import com.agentsystem.user.service.UserAccountService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,6 +27,10 @@ import java.util.Map;
  *  - /mcp/**             (MCP SSE transport)
  *
  * Expects:  Authorization: Bearer <JWT>
+ *
+ * JWT validation itself now happens in auth-inner (single source of truth, shared with
+ * the Go scheduler and any future internal caller) — this filter just calls its
+ * /internal/validate endpoint via AuthInnerClient instead of validating locally.
  */
 @Slf4j
 @Component
@@ -35,10 +38,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthFilter extends OncePerRequestFilter {
 
-    private final AuthProperties     authProperties;
-    private final AuthService        authService;
-    private final UserAccountService userAccountService;
-    private final ObjectMapper       objectMapper;
+    private final AuthProperties  authProperties;
+    private final AuthInnerClient authInnerClient;
+    private final ObjectMapper    objectMapper;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -63,12 +65,8 @@ public class AuthFilter extends OncePerRequestFilter {
 
         String path  = request.getRequestURI();
         String token = extractToken(request);
-        var    claims = (token != null) ? authService.validateTokenFull(token) : null;
-        // Every table besides `users` still keys rows by plaintext email (Phase 2 will
-        // migrate them to user_uuid), so resolve email here — via the Redis-cached
-        // lookup — and keep populating the same "authenticatedEmail" attribute the
-        // rest of the app already reads, rather than requiring every call site to change.
-        String email = (claims != null) ? userAccountService.getEmailByUuid(claims.userUuid()) : null;
+        var    result = authInnerClient.validate(token);
+        String email  = result.valid() ? result.email() : null;
 
         // Connector routes are JWT-optional: a valid token sets the email so tokens
         // are stored/looked up under the real user, but the request is never blocked.
@@ -83,11 +81,11 @@ public class AuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (claims != null) {
-            request.setAttribute("authenticatedUserUuid", claims.userUuid());
+        if (result.valid()) {
+            request.setAttribute("authenticatedUserUuid", result.userUuid());
             request.setAttribute("authenticatedEmail", email);
-            request.setAttribute("authenticatedMode",  claims.mode());
-            request.setAttribute("authenticatedOrgId", claims.orgId());
+            request.setAttribute("authenticatedMode",  result.mode());
+            request.setAttribute("authenticatedOrgId", result.orgId());
         }
         chain.doFilter(request, response);
     }

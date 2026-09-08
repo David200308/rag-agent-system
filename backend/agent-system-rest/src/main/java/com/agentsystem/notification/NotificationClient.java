@@ -6,7 +6,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Publishes notification events consumed by agent-system-notification-consumer.
+ * Publishes notification events consumed by notification-consumer.
  * Topic names must stay in sync with that consumer's @KafkaListener topics.
  */
 @Component

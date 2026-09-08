@@ -1,9 +1,6 @@
 package com.agentsystem.auth.controller;
 
-import com.agentsystem.auth.service.AuthService;
-import com.agentsystem.auth.service.JwtService;
-import com.agentsystem.org.service.OrganizationService;
-import com.agentsystem.user.service.UserAccountService;
+import com.agentsystem.auth.AuthInnerClient;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -18,9 +15,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AuthControllerTest {
 
-    @Mock AuthService         authService;
-    @Mock OrganizationService orgService;
-    @Mock UserAccountService  userAccountService;
+    @Mock AuthInnerClient authInnerClient;
     @InjectMocks AuthController controller;
 
     // ── requestOtp ─────────────────────────────────────────────────────────────
@@ -40,7 +35,7 @@ class AuthControllerTest {
 
     @Test
     void requestOtp_success_returns200WithMessage() {
-        doNothing().when(authService).requestOtp("user@example.com");
+        doNothing().when(authInnerClient).requestLoginOtp("user@example.com");
         var resp = controller.requestOtp(Map.of("email", "user@example.com"));
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("message", "Code sent to user@example.com");
@@ -49,7 +44,7 @@ class AuthControllerTest {
     @Test
     void requestOtp_notWhitelisted_returns403() {
         doThrow(new IllegalArgumentException("not authorised"))
-                .when(authService).requestOtp("unknown@example.com");
+                .when(authInnerClient).requestLoginOtp("unknown@example.com");
         var resp = controller.requestOtp(Map.of("email", "unknown@example.com"));
         assertThat(resp.getStatusCode().value()).isEqualTo(403);
         assertThat(resp.getBody()).containsKey("error");
@@ -57,8 +52,8 @@ class AuthControllerTest {
 
     @Test
     void requestOtp_unexpectedException_returns500() {
-        doThrow(new RuntimeException("SMTP failure"))
-                .when(authService).requestOtp("user@example.com");
+        doThrow(new RuntimeException("auth-inner unreachable"))
+                .when(authInnerClient).requestLoginOtp("user@example.com");
         var resp = controller.requestOtp(Map.of("email", "user@example.com"));
         assertThat(resp.getStatusCode().value()).isEqualTo(500);
     }
@@ -79,7 +74,7 @@ class AuthControllerTest {
 
     @Test
     void verifyOtp_success_personalMode_returnsToken() {
-        when(authService.verifyOtp("user@example.com", "123456", "PERSONAL", null))
+        when(authInnerClient.verifyLoginOtp("user@example.com", "123456", "PERSONAL", null))
                 .thenReturn("signed-jwt");
         var resp = controller.verifyOtp(Map.of("email", "user@example.com", "code", "123456"));
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
@@ -88,7 +83,7 @@ class AuthControllerTest {
 
     @Test
     void verifyOtp_success_teamMode_returnsToken() {
-        when(authService.verifyOtp("user@example.com", "123456", "TEAM", "skyproton"))
+        when(authInnerClient.verifyLoginOtp("user@example.com", "123456", "TEAM", "skyproton"))
                 .thenReturn("team-jwt");
         var resp = controller.verifyOtp(Map.of(
                 "email", "user@example.com", "code", "123456",
@@ -99,7 +94,7 @@ class AuthControllerTest {
 
     @Test
     void verifyOtp_teamMode_notMember_returns401() {
-        when(authService.verifyOtp("user@example.com", "123456", "TEAM", "unknown-org"))
+        when(authInnerClient.verifyLoginOtp("user@example.com", "123456", "TEAM", "unknown-org"))
                 .thenThrow(new IllegalArgumentException("not a member"));
         var resp = controller.verifyOtp(Map.of(
                 "email", "user@example.com", "code", "123456",
@@ -109,7 +104,7 @@ class AuthControllerTest {
 
     @Test
     void verifyOtp_invalidCode_returns401() {
-        when(authService.verifyOtp("user@example.com", "000000", "PERSONAL", null))
+        when(authInnerClient.verifyLoginOtp("user@example.com", "000000", "PERSONAL", null))
                 .thenThrow(new IllegalArgumentException("Invalid or expired"));
         var resp = controller.verifyOtp(Map.of("email", "user@example.com", "code", "000000"));
         assertThat(resp.getStatusCode().value()).isEqualTo(401);
@@ -117,8 +112,8 @@ class AuthControllerTest {
 
     @Test
     void verifyOtp_unexpectedException_returns500() {
-        when(authService.verifyOtp(anyString(), anyString(), anyString(), any()))
-                .thenThrow(new RuntimeException("DB error"));
+        when(authInnerClient.verifyLoginOtp(anyString(), anyString(), anyString(), any()))
+                .thenThrow(new RuntimeException("auth-inner unreachable"));
         var resp = controller.verifyOtp(Map.of("email", "user@example.com", "code", "123456"));
         assertThat(resp.getStatusCode().value()).isEqualTo(500);
     }
@@ -136,9 +131,8 @@ class AuthControllerTest {
 
     @Test
     void validate_validBearerToken_returnsValidTrueWithEmailAndMode() {
-        when(authService.validateTokenFull("my-token"))
-                .thenReturn(new JwtService.TokenClaims("uuid-1", "PERSONAL", null));
-        when(userAccountService.getEmailByUuid("uuid-1")).thenReturn("user@example.com");
+        when(authInnerClient.validate("my-token"))
+                .thenReturn(new AuthInnerClient.ValidateResult(true, "uuid-1", "user@example.com", "PERSONAL", null));
         var resp = controller.validate("Bearer my-token");
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("valid", true);
@@ -148,9 +142,8 @@ class AuthControllerTest {
 
     @Test
     void validate_teamToken_returnsOrgId() {
-        when(authService.validateTokenFull("team-token"))
-                .thenReturn(new JwtService.TokenClaims("uuid-1", "TEAM", "skyproton"));
-        when(userAccountService.getEmailByUuid("uuid-1")).thenReturn("user@example.com");
+        when(authInnerClient.validate("team-token"))
+                .thenReturn(new AuthInnerClient.ValidateResult(true, "uuid-1", "user@example.com", "TEAM", "skyproton"));
         var resp = controller.validate("Bearer team-token");
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("mode", "TEAM");
@@ -159,7 +152,8 @@ class AuthControllerTest {
 
     @Test
     void validate_expiredToken_returnsValidFalse() {
-        // validateTokenFull returns null by default for unstubbed calls
+        when(authInnerClient.validate("expired-token"))
+                .thenReturn(new AuthInnerClient.ValidateResult(false, null, null, null, null));
         var resp = controller.validate("Bearer expired-token");
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("valid", false);
@@ -168,17 +162,74 @@ class AuthControllerTest {
 
     @Test
     void validate_noAuthHeader_returnsValidFalse() {
+        when(authInnerClient.validate(null))
+                .thenReturn(new AuthInnerClient.ValidateResult(false, null, null, null, null));
         var resp = controller.validate(null);
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("valid", false);
-        verifyNoInteractions(authService);
     }
 
     @Test
     void validate_nonBearerHeader_returnsValidFalse() {
+        when(authInnerClient.validate(null))
+                .thenReturn(new AuthInnerClient.ValidateResult(false, null, null, null, null));
         var resp = controller.validate("Basic dXNlcjpwYXNz");
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("valid", false);
-        verifyNoInteractions(authService);
+    }
+
+    // ── registerKey ────────────────────────────────────────────────────────────
+
+    @Test
+    void registerKey_noAuthHeader_returns401() {
+        when(authInnerClient.validate(null))
+                .thenReturn(new AuthInnerClient.ValidateResult(false, null, null, null, null));
+        var resp = controller.registerKey(Map.of("publicKey", "abc"), null);
+        assertThat(resp.getStatusCode().value()).isEqualTo(401);
+    }
+
+    @Test
+    void registerKey_missingPublicKey_returns400() {
+        when(authInnerClient.validate("my-token"))
+                .thenReturn(new AuthInnerClient.ValidateResult(true, "uuid-1", "user@example.com", "PERSONAL", null));
+        var resp = controller.registerKey(Map.of(), "Bearer my-token");
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+    }
+
+    @Test
+    void registerKey_success_returnsFingerprint() {
+        when(authInnerClient.validate("my-token"))
+                .thenReturn(new AuthInnerClient.ValidateResult(true, "uuid-1", "user@example.com", "PERSONAL", null));
+        when(authInnerClient.registerCliKey("user@example.com", "abc")).thenReturn("AbCdEfGh");
+        var resp = controller.registerKey(Map.of("publicKey", "abc"), "Bearer my-token");
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).containsEntry("fingerprint", "AbCdEfGh");
+    }
+
+    @Test
+    void registerKey_invalidKey_returns400() {
+        when(authInnerClient.validate("my-token"))
+                .thenReturn(new AuthInnerClient.ValidateResult(true, "uuid-1", "user@example.com", "PERSONAL", null));
+        when(authInnerClient.registerCliKey("user@example.com", "bad"))
+                .thenThrow(new IllegalArgumentException("Invalid Ed25519 public key"));
+        var resp = controller.registerKey(Map.of("publicKey", "bad"), "Bearer my-token");
+        assertThat(resp.getStatusCode().value()).isEqualTo(400);
+    }
+
+    // ── checkOrg ───────────────────────────────────────────────────────────────
+
+    @Test
+    void checkOrg_existingOrg_returnsTrue() {
+        when(authInnerClient.orgExists("skyproton")).thenReturn(true);
+        var resp = controller.checkOrg("skyproton");
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).containsEntry("exists", true);
+    }
+
+    @Test
+    void checkOrg_unknownOrg_returnsFalse() {
+        when(authInnerClient.orgExists("unknown")).thenReturn(false);
+        var resp = controller.checkOrg("unknown");
+        assertThat(resp.getBody()).containsEntry("exists", false);
     }
 }

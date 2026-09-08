@@ -1,20 +1,6 @@
 package com.agentsystem.financial.controller;
 
-import com.agentsystem.financial.service.FinancialService;
-
-import com.agentsystem.financial.dto.CardDto;
-import com.agentsystem.financial.dto.CashDepositDto;
-import com.agentsystem.financial.dto.CryptoInvestmentDto;
-import com.agentsystem.financial.dto.FutureInvestmentDto;
-import com.agentsystem.financial.dto.SalaryUsageRecordDto;
-import com.agentsystem.financial.dto.StockInvestmentDto;
-import com.agentsystem.financial.entity.Card;
-import com.agentsystem.financial.entity.CashDeposit;
-import com.agentsystem.financial.entity.CryptoInvestment;
-import com.agentsystem.financial.entity.FutureInvestment;
-import com.agentsystem.financial.entity.SalaryUsageRecord;
-import com.agentsystem.financial.entity.StockInvestment;
-import com.agentsystem.org.OrgContext;
+import com.agentsystem.financial.FinanceInnerClient;
 import com.agentsystem.user.service.UserPreferenceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,37 +12,43 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Thin proxy over finance-inner's internal API. Resolves ownerUuid (from the JWT, via
+ * AuthFilter's request attribute) and defaultCurrency (from user preferences) locally —
+ * finance-inner never needs to know about the user/org packages — then forwards to
+ * {@link FinanceInnerClient}.
+ */
 @RestController
 @RequestMapping("/api/v1/financial")
 @RequiredArgsConstructor
 @Tag(name = "Financial", description = "Financial portfolio management")
 public class FinancialController {
 
-    private final FinancialService      service;
+    private final FinanceInnerClient    client;
     private final UserPreferenceService prefService;
 
     // ── Cash Deposits ─────────────────────────────────────────────────────────
 
     @GetMapping("/deposits")
     @Operation(summary = "List cash deposits with amounts converted to the user's default currency")
-    public ResponseEntity<List<CashDepositDto>> listDeposits(HttpServletRequest req) {
-        return ResponseEntity.ok(service.listDeposits(ownerUuid(req), defaultCurrency(req)));
+    public ResponseEntity<List<Object>> listDeposits(HttpServletRequest req) {
+        return ResponseEntity.ok(client.listDeposits(ownerUuid(req), defaultCurrency(req)));
     }
 
     @PostMapping("/deposits")
     @Operation(summary = "Create a cash deposit")
-    public ResponseEntity<CashDeposit> createDeposit(
+    public ResponseEntity<Object> createDeposit(
             @RequestBody Map<String, Object> body, HttpServletRequest req) {
-        return ResponseEntity.status(201).body(service.createDeposit(ownerUuid(req), body));
+        return ResponseEntity.status(201).body(client.createDeposit(ownerUuid(req), body));
     }
 
     @PutMapping("/deposits/{id}")
-    public ResponseEntity<CashDeposit> updateDeposit(
+    public ResponseEntity<Object> updateDeposit(
             @PathVariable String id,
             @RequestBody Map<String, Object> body,
             HttpServletRequest req) {
         try {
-            return ResponseEntity.ok(service.updateDeposit(id, ownerUuid(req), body));
+            return ResponseEntity.ok(client.updateDeposit(id, ownerUuid(req), body));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
         }
@@ -65,7 +57,7 @@ public class FinancialController {
     @DeleteMapping("/deposits/{id}")
     public ResponseEntity<Void> deleteDeposit(@PathVariable String id, HttpServletRequest req) {
         try {
-            service.deleteDeposit(id, ownerUuid(req));
+            client.deleteDeposit(id, ownerUuid(req));
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
@@ -76,23 +68,23 @@ public class FinancialController {
 
     @GetMapping("/stocks")
     @Operation(summary = "List stocks with live prices and converted amounts")
-    public ResponseEntity<List<StockInvestmentDto>> listStocks(HttpServletRequest req) {
-        return ResponseEntity.ok(service.listStocks(ownerUuid(req), defaultCurrency(req)));
+    public ResponseEntity<List<Object>> listStocks(HttpServletRequest req) {
+        return ResponseEntity.ok(client.listStocks(ownerUuid(req), defaultCurrency(req)));
     }
 
     @PostMapping("/stocks")
-    public ResponseEntity<StockInvestment> createStock(
+    public ResponseEntity<Object> createStock(
             @RequestBody Map<String, Object> body, HttpServletRequest req) {
-        return ResponseEntity.status(201).body(service.createStock(ownerUuid(req), body));
+        return ResponseEntity.status(201).body(client.createStock(ownerUuid(req), body));
     }
 
     @PutMapping("/stocks/{id}")
-    public ResponseEntity<StockInvestment> updateStock(
+    public ResponseEntity<Object> updateStock(
             @PathVariable String id,
             @RequestBody Map<String, Object> body,
             HttpServletRequest req) {
         try {
-            return ResponseEntity.ok(service.updateStock(id, ownerUuid(req), body));
+            return ResponseEntity.ok(client.updateStock(id, ownerUuid(req), body));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
         }
@@ -101,7 +93,7 @@ public class FinancialController {
     @DeleteMapping("/stocks/{id}")
     public ResponseEntity<Void> deleteStock(@PathVariable String id, HttpServletRequest req) {
         try {
-            service.deleteStock(id, ownerUuid(req));
+            client.deleteStock(id, ownerUuid(req));
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
@@ -111,32 +103,30 @@ public class FinancialController {
     @GetMapping("/stocks/lookup")
     @Operation(summary = "Look up a stock ticker's company display name, for Add Stock form auto-fill")
     public ResponseEntity<Map<String, String>> lookupStock(@RequestParam String symbol) {
-        return service.lookupStockName(symbol)
-                .map(name -> ResponseEntity.ok(Map.of("name", name)))
-                .orElseGet(() -> ResponseEntity.ok(Map.of()));
+        return ResponseEntity.ok(client.lookupStock(symbol));
     }
 
     // ── Crypto ────────────────────────────────────────────────────────────────
 
     @GetMapping("/crypto")
     @Operation(summary = "List crypto investments with live prices and converted amounts")
-    public ResponseEntity<List<CryptoInvestmentDto>> listCrypto(HttpServletRequest req) {
-        return ResponseEntity.ok(service.listCrypto(ownerUuid(req), defaultCurrency(req)));
+    public ResponseEntity<List<Object>> listCrypto(HttpServletRequest req) {
+        return ResponseEntity.ok(client.listCrypto(ownerUuid(req), defaultCurrency(req)));
     }
 
     @PostMapping("/crypto")
-    public ResponseEntity<CryptoInvestment> createCrypto(
+    public ResponseEntity<Object> createCrypto(
             @RequestBody Map<String, Object> body, HttpServletRequest req) {
-        return ResponseEntity.status(201).body(service.createCrypto(ownerUuid(req), body));
+        return ResponseEntity.status(201).body(client.createCrypto(ownerUuid(req), body));
     }
 
     @PutMapping("/crypto/{id}")
-    public ResponseEntity<CryptoInvestment> updateCrypto(
+    public ResponseEntity<Object> updateCrypto(
             @PathVariable String id,
             @RequestBody Map<String, Object> body,
             HttpServletRequest req) {
         try {
-            return ResponseEntity.ok(service.updateCrypto(id, ownerUuid(req), body));
+            return ResponseEntity.ok(client.updateCrypto(id, ownerUuid(req), body));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
         }
@@ -145,7 +135,7 @@ public class FinancialController {
     @DeleteMapping("/crypto/{id}")
     public ResponseEntity<Void> deleteCrypto(@PathVariable String id, HttpServletRequest req) {
         try {
-            service.deleteCrypto(id, ownerUuid(req));
+            client.deleteCrypto(id, ownerUuid(req));
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
@@ -156,23 +146,23 @@ public class FinancialController {
 
     @GetMapping("/futures")
     @Operation(summary = "List futures positions (Security/CEX manual entries + live-tracked Hyperliquid DEX positions)")
-    public ResponseEntity<List<FutureInvestmentDto>> listFutures(HttpServletRequest req) {
-        return ResponseEntity.ok(service.listFutures(ownerUuid(req), defaultCurrency(req)));
+    public ResponseEntity<List<Object>> listFutures(HttpServletRequest req) {
+        return ResponseEntity.ok(client.listFutures(ownerUuid(req), defaultCurrency(req)));
     }
 
     @PostMapping("/futures")
-    public ResponseEntity<FutureInvestment> createFuture(
+    public ResponseEntity<Object> createFuture(
             @RequestBody Map<String, Object> body, HttpServletRequest req) {
-        return ResponseEntity.status(201).body(service.createFuture(ownerUuid(req), body));
+        return ResponseEntity.status(201).body(client.createFuture(ownerUuid(req), body));
     }
 
     @PutMapping("/futures/{id}")
-    public ResponseEntity<FutureInvestment> updateFuture(
+    public ResponseEntity<Object> updateFuture(
             @PathVariable String id,
             @RequestBody Map<String, Object> body,
             HttpServletRequest req) {
         try {
-            return ResponseEntity.ok(service.updateFuture(id, ownerUuid(req), body));
+            return ResponseEntity.ok(client.updateFuture(id, ownerUuid(req), body));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
         }
@@ -181,7 +171,7 @@ public class FinancialController {
     @DeleteMapping("/futures/{id}")
     public ResponseEntity<Void> deleteFuture(@PathVariable String id, HttpServletRequest req) {
         try {
-            service.deleteFuture(id, ownerUuid(req));
+            client.deleteFuture(id, ownerUuid(req));
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
@@ -192,24 +182,24 @@ public class FinancialController {
 
     @GetMapping("/cards")
     @Operation(summary = "List cards")
-    public ResponseEntity<List<CardDto>> listCards(HttpServletRequest req) {
-        return ResponseEntity.ok(service.listCards(ownerUuid(req)));
+    public ResponseEntity<List<Object>> listCards(HttpServletRequest req) {
+        return ResponseEntity.ok(client.listCards(ownerUuid(req)));
     }
 
     @PostMapping("/cards")
     @Operation(summary = "Create a card")
-    public ResponseEntity<Card> createCard(
+    public ResponseEntity<Object> createCard(
             @RequestBody Map<String, Object> body, HttpServletRequest req) {
-        return ResponseEntity.status(201).body(service.createCard(ownerUuid(req), body));
+        return ResponseEntity.status(201).body(client.createCard(ownerUuid(req), body));
     }
 
     @PutMapping("/cards/{id}")
-    public ResponseEntity<Card> updateCard(
+    public ResponseEntity<Object> updateCard(
             @PathVariable String id,
             @RequestBody Map<String, Object> body,
             HttpServletRequest req) {
         try {
-            return ResponseEntity.ok(service.updateCard(id, ownerUuid(req), body));
+            return ResponseEntity.ok(client.updateCard(id, ownerUuid(req), body));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
         }
@@ -218,7 +208,7 @@ public class FinancialController {
     @DeleteMapping("/cards/{id}")
     public ResponseEntity<Void> deleteCard(@PathVariable String id, HttpServletRequest req) {
         try {
-            service.deleteCard(id, ownerUuid(req));
+            client.deleteCard(id, ownerUuid(req));
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
@@ -229,24 +219,24 @@ public class FinancialController {
 
     @GetMapping("/salary")
     @Operation(summary = "List salary usage records")
-    public ResponseEntity<List<SalaryUsageRecordDto>> listSalary(HttpServletRequest req) {
-        return ResponseEntity.ok(service.listSalary(ownerUuid(req)));
+    public ResponseEntity<List<Object>> listSalary(HttpServletRequest req) {
+        return ResponseEntity.ok(client.listSalary(ownerUuid(req)));
     }
 
     @PostMapping("/salary")
     @Operation(summary = "Create a salary usage record")
-    public ResponseEntity<SalaryUsageRecord> createSalary(
+    public ResponseEntity<Object> createSalary(
             @RequestBody Map<String, Object> body, HttpServletRequest req) {
-        return ResponseEntity.status(201).body(service.createSalary(ownerUuid(req), body));
+        return ResponseEntity.status(201).body(client.createSalary(ownerUuid(req), body));
     }
 
     @PutMapping("/salary/{id}")
-    public ResponseEntity<SalaryUsageRecord> updateSalary(
+    public ResponseEntity<Object> updateSalary(
             @PathVariable String id,
             @RequestBody Map<String, Object> body,
             HttpServletRequest req) {
         try {
-            return ResponseEntity.ok(service.updateSalary(id, ownerUuid(req), body));
+            return ResponseEntity.ok(client.updateSalary(id, ownerUuid(req), body));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
         }
@@ -255,7 +245,7 @@ public class FinancialController {
     @DeleteMapping("/salary/{id}")
     public ResponseEntity<Void> deleteSalary(@PathVariable String id, HttpServletRequest req) {
         try {
-            service.deleteSalary(id, ownerUuid(req));
+            client.deleteSalary(id, ownerUuid(req));
             return ResponseEntity.noContent().build();
         } catch (SecurityException e) {
             return ResponseEntity.status(403).build();
@@ -267,7 +257,7 @@ public class FinancialController {
     @PostMapping("/prices/refresh")
     @Operation(summary = "Force-refresh live market prices for all of the user's symbols")
     public ResponseEntity<Map<String, String>> refreshPrices(HttpServletRequest req) {
-        service.refreshPrices(ownerUuid(req));
+        client.refreshPrices(ownerUuid(req));
         return ResponseEntity.ok(Map.of("status", "ok"));
     }
 
@@ -276,14 +266,6 @@ public class FinancialController {
     private String ownerUuid(HttpServletRequest req) {
         String uuid = (String) req.getAttribute("authenticatedUserUuid");
         return uuid != null ? uuid : "anonymous";
-    }
-
-    private ResponseEntity<Map<String, String>> requirePersonalMode(HttpServletRequest req) {
-        OrgContext ctx = OrgContext.from(req);
-        if (ctx.isTeam()) {
-            return ResponseEntity.status(403).body(Map.of("error", "Financial is not available in team mode."));
-        }
-        return null;
     }
 
     private String defaultCurrency(HttpServletRequest req) {

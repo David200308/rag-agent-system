@@ -7,12 +7,21 @@ on:
       - 'backend/agent-system-rest/src/**'
       - 'backend/agent-system-rest/pom.xml'
       - 'backend/agent-system-rest/Dockerfile'
-      - 'backend/agent-system-storage-inner/src/**'
-      - 'backend/agent-system-storage-inner/pom.xml'
-      - 'backend/agent-system-storage-inner/Dockerfile'
-      - 'backend/agent-system-notification-consumer/src/**'
-      - 'backend/agent-system-notification-consumer/pom.xml'
-      - 'backend/agent-system-notification-consumer/Dockerfile'
+      - 'backend/storage-inner/src/**'
+      - 'backend/storage-inner/pom.xml'
+      - 'backend/storage-inner/Dockerfile'
+      - 'backend/notification-consumer/src/**'
+      - 'backend/notification-consumer/pom.xml'
+      - 'backend/notification-consumer/Dockerfile'
+      - 'backend/auth-inner/src/**'
+      - 'backend/auth-inner/pom.xml'
+      - 'backend/auth-inner/Dockerfile'
+      - 'backend/finance-inner/src/**'
+      - 'backend/finance-inner/pom.xml'
+      - 'backend/finance-inner/Dockerfile'
+      - 'backend/travel-inner/src/**'
+      - 'backend/travel-inner/pom.xml'
+      - 'backend/travel-inner/Dockerfile'
       - 'backend/pom.xml'
       - 'backend/docker-entrypoint.sh'
       - '.github/workflows/backend-ci.yml'
@@ -22,12 +31,21 @@ on:
       - 'backend/agent-system-rest/src/**'
       - 'backend/agent-system-rest/pom.xml'
       - 'backend/agent-system-rest/Dockerfile'
-      - 'backend/agent-system-storage-inner/src/**'
-      - 'backend/agent-system-storage-inner/pom.xml'
-      - 'backend/agent-system-storage-inner/Dockerfile'
-      - 'backend/agent-system-notification-consumer/src/**'
-      - 'backend/agent-system-notification-consumer/pom.xml'
-      - 'backend/agent-system-notification-consumer/Dockerfile'
+      - 'backend/storage-inner/src/**'
+      - 'backend/storage-inner/pom.xml'
+      - 'backend/storage-inner/Dockerfile'
+      - 'backend/notification-consumer/src/**'
+      - 'backend/notification-consumer/pom.xml'
+      - 'backend/notification-consumer/Dockerfile'
+      - 'backend/auth-inner/src/**'
+      - 'backend/auth-inner/pom.xml'
+      - 'backend/auth-inner/Dockerfile'
+      - 'backend/finance-inner/src/**'
+      - 'backend/finance-inner/pom.xml'
+      - 'backend/finance-inner/Dockerfile'
+      - 'backend/travel-inner/src/**'
+      - 'backend/travel-inner/pom.xml'
+      - 'backend/travel-inner/Dockerfile'
       - 'backend/pom.xml'
       - 'backend/docker-entrypoint.sh'
   workflow_dispatch:
@@ -37,11 +55,14 @@ env:
   IMAGE_NAME_REST: ${{ github.repository }}/rag-agent-system-backend
   IMAGE_NAME_STORAGE: ${{ github.repository }}/rag-agent-system-storage-inner
   IMAGE_NAME_NOTIFICATION: ${{ github.repository }}/rag-agent-system-notification-consumer
+  IMAGE_NAME_AUTH: ${{ github.repository }}/rag-agent-system-auth-inner
+  IMAGE_NAME_FINANCE: ${{ github.repository }}/rag-agent-system-finance-inner
+  IMAGE_NAME_TRAVEL: ${{ github.repository }}/rag-agent-system-travel-inner
 
 jobs:
   # ── Test ────────────────────────────────────────────────────────────────────
   # Runs from the multi-module reactor root, so it builds/tests
-  # agent-system-rest, agent-system-storage-inner, and agent-system-notification-consumer in one pass.
+  # agent-system-rest, storage-inner, notification-consumer, auth-inner, finance-inner, and travel-inner in one pass.
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
@@ -72,8 +93,11 @@ jobs:
           name: test-reports
           path: |
             backend/agent-system-rest/target/surefire-reports/
-            backend/agent-system-storage-inner/target/surefire-reports/
-            backend/agent-system-notification-consumer/target/surefire-reports/
+            backend/storage-inner/target/surefire-reports/
+            backend/notification-consumer/target/surefire-reports/
+            backend/auth-inner/target/surefire-reports/
+            backend/finance-inner/target/surefire-reports/
+            backend/travel-inner/target/surefire-reports/
           retention-days: 7
 
       - name: Upload JaCoCo coverage report
@@ -187,7 +211,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./backend
-          file: ./backend/agent-system-storage-inner/Dockerfile
+          file: ./backend/storage-inner/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -236,7 +260,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./backend
-          file: ./backend/agent-system-notification-consumer/Dockerfile
+          file: ./backend/notification-consumer/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -245,3 +269,150 @@ jobs:
           sbom: false
           cache-from: type=gha,scope=backend-notification
           cache-to: type=gha,mode=max,scope=backend-notification
+
+  docker-auth:
+    name: Build & Push Auth Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: |
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_AUTH }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/auth-inner/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=backend-auth
+          cache-to: type=gha,mode=max,scope=backend-auth
+
+  docker-finance:
+    name: Build & Push Finance Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: |
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FINANCE }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/finance-inner/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=backend-finance
+          cache-to: type=gha,mode=max,scope=backend-finance
+
+  docker-travel:
+    name: Build & Push Travel Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: |
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_TRAVEL }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/travel-inner/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=backend-travel
+          cache-to: type=gha,mode=max,scope=backend-travel

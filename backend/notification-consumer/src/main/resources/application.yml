@@ -1,6 +1,6 @@
 spring:
   application:
-    name: agent-system-notification-consumer
+    name: notification-consumer
 
   config:
     import:

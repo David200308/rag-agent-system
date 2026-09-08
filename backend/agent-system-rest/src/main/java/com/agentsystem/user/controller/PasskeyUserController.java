@@ -1,8 +1,6 @@
 package com.agentsystem.user.controller;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.agentsystem.auth.service.PasskeyService;
+import com.agentsystem.auth.AuthInnerClient;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,7 +12,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 /**
- * Authenticated passkey management endpoints (requires JWT via AuthFilter).
+ * Authenticated passkey management endpoints (requires JWT via AuthFilter). Thin proxy
+ * over auth-inner's internal passkey API.
  *
  *  POST   /api/v1/user/passkey/register/begin   — start passkey setup
  *  POST   /api/v1/user/passkey/register/finish  — complete passkey setup
@@ -27,8 +26,7 @@ import java.util.Map;
 @Tag(name = "Passkey Management", description = "Passkey setup and removal for authenticated users")
 public class PasskeyUserController {
 
-    private final PasskeyService passkeyService;
-    private final ObjectMapper   objectMapper;
+    private final AuthInnerClient authInnerClient;
 
     @PostMapping("/register/begin")
     @Operation(summary = "Start passkey registration — returns WebAuthn creation options")
@@ -36,9 +34,7 @@ public class PasskeyUserController {
         String email = (String) req.getAttribute("authenticatedEmail");
         if (email == null) return ResponseEntity.status(401).build();
         try {
-            String optionsJson = passkeyService.startRegistration(email);
-            JsonNode node = objectMapper.readTree(optionsJson);
-            return ResponseEntity.ok(node);
+            return ResponseEntity.ok(authInnerClient.passkeyRegisterBegin(email));
         } catch (Exception e) {
             log.error("[PasskeyUserController] registerBegin error", e);
             return ResponseEntity.internalServerError().body(Map.of("error", "Failed to start registration"));
@@ -59,9 +55,9 @@ public class PasskeyUserController {
         }
         try {
             String responseJson = response instanceof String s ? s : toJson(response);
-            passkeyService.finishRegistration(email, responseJson);
+            authInnerClient.passkeyRegisterFinish(email, responseJson);
             return ResponseEntity.ok(Map.of("message", "Passkey registered successfully"));
-        } catch (IllegalArgumentException | IllegalStateException e) {
+        } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("[PasskeyUserController] registerFinish error", e);
@@ -74,13 +70,13 @@ public class PasskeyUserController {
     public ResponseEntity<Map<String, String>> deletePasskey(HttpServletRequest req) {
         String email = (String) req.getAttribute("authenticatedEmail");
         if (email == null) return ResponseEntity.status(401).build();
-        passkeyService.deletePasskeys(email);
+        authInnerClient.passkeyDelete(email);
         return ResponseEntity.ok(Map.of("message", "Passkey removed"));
     }
 
     private String toJson(Object obj) {
         try {
-            return objectMapper.writeValueAsString(obj);
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(obj);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

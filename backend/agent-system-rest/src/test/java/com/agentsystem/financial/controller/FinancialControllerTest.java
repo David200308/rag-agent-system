@@ -1,19 +1,7 @@
 package com.agentsystem.financial.controller;
 
-import com.agentsystem.financial.service.FinancialService;
+import com.agentsystem.financial.FinanceInnerClient;
 
-import com.agentsystem.financial.dto.CardDto;
-import com.agentsystem.financial.dto.CashDepositDto;
-import com.agentsystem.financial.dto.CryptoInvestmentDto;
-import com.agentsystem.financial.dto.FutureInvestmentDto;
-import com.agentsystem.financial.dto.SalaryUsageRecordDto;
-import com.agentsystem.financial.dto.StockInvestmentDto;
-import com.agentsystem.financial.entity.Card;
-import com.agentsystem.financial.entity.CashDeposit;
-import com.agentsystem.financial.entity.CryptoInvestment;
-import com.agentsystem.financial.entity.FutureInvestment;
-import com.agentsystem.financial.entity.SalaryUsageRecord;
-import com.agentsystem.financial.entity.StockInvestment;
 import com.agentsystem.user.entity.UserPreference;
 import com.agentsystem.user.service.UserPreferenceService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,7 +23,7 @@ import static org.mockito.Mockito.*;
 @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class FinancialControllerTest {
 
-    @Mock FinancialService      service;
+    @Mock FinanceInnerClient    client;
     @Mock UserPreferenceService prefService;
     @Mock HttpServletRequest    request;
     @InjectMocks FinancialController controller;
@@ -56,9 +44,9 @@ class FinancialControllerTest {
     void listDeposits_returnsOk() {
         stubUuid("user@test.com");
         when(prefService.getOrDefault("user@test.com")).thenReturn(prefWith("USD"));
-        when(service.listDeposits("user@test.com", "USD")).thenReturn(List.of());
+        when(client.listDeposits("user@test.com", "USD")).thenReturn(List.of());
 
-        ResponseEntity<List<CashDepositDto>> resp = controller.listDeposits(request);
+        ResponseEntity<List<Object>> resp = controller.listDeposits(request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
@@ -68,19 +56,19 @@ class FinancialControllerTest {
         stubUuid("user@test.com");
         UserPreference pref = new UserPreference(); // defaultCurrency is null
         when(prefService.getOrDefault("user@test.com")).thenReturn(pref);
-        when(service.listDeposits("user@test.com", "USD")).thenReturn(List.of());
+        when(client.listDeposits("user@test.com", "USD")).thenReturn(List.of());
 
         controller.listDeposits(request);
 
-        verify(service).listDeposits("user@test.com", "USD");
+        verify(client).listDeposits("user@test.com", "USD");
     }
 
     @Test
     void createDeposit_returns201() {
         stubUuid("user@test.com");
-        when(service.createDeposit(eq("user@test.com"), any())).thenReturn(new CashDeposit());
+        when(client.createDeposit(eq("user@test.com"), any())).thenReturn(Map.of("id", "d-1"));
 
-        ResponseEntity<CashDeposit> resp = controller.createDeposit(Map.of("amount", 100), request);
+        ResponseEntity<Object> resp = controller.createDeposit(Map.of("amount", 100), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(201);
     }
@@ -88,9 +76,9 @@ class FinancialControllerTest {
     @Test
     void updateDeposit_success_returns200() {
         stubUuid("user@test.com");
-        when(service.updateDeposit(eq("dep-1"), eq("user@test.com"), any())).thenReturn(new CashDeposit());
+        when(client.updateDeposit(eq("dep-1"), eq("user@test.com"), any())).thenReturn(Map.of("id", "dep-1"));
 
-        ResponseEntity<CashDeposit> resp = controller.updateDeposit("dep-1", Map.of(), request);
+        ResponseEntity<Object> resp = controller.updateDeposit("dep-1", Map.of(), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
@@ -98,10 +86,10 @@ class FinancialControllerTest {
     @Test
     void updateDeposit_securityException_returns403() {
         stubUuid("user@test.com");
-        when(service.updateDeposit(anyString(), anyString(), any()))
+        when(client.updateDeposit(anyString(), anyString(), any()))
                 .thenThrow(new SecurityException("not owner"));
 
-        ResponseEntity<CashDeposit> resp = controller.updateDeposit("dep-1", Map.of(), request);
+        ResponseEntity<Object> resp = controller.updateDeposit("dep-1", Map.of(), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(403);
     }
@@ -109,7 +97,7 @@ class FinancialControllerTest {
     @Test
     void deleteDeposit_success_returns204() {
         stubUuid("user@test.com");
-        doNothing().when(service).deleteDeposit("dep-1", "user@test.com");
+        doNothing().when(client).deleteDeposit("dep-1", "user@test.com");
 
         ResponseEntity<Void> resp = controller.deleteDeposit("dep-1", request);
 
@@ -119,7 +107,7 @@ class FinancialControllerTest {
     @Test
     void deleteDeposit_securityException_returns403() {
         stubUuid("user@test.com");
-        doThrow(new SecurityException("not owner")).when(service).deleteDeposit(anyString(), anyString());
+        doThrow(new SecurityException("not owner")).when(client).deleteDeposit(anyString(), anyString());
 
         ResponseEntity<Void> resp = controller.deleteDeposit("dep-1", request);
 
@@ -132,9 +120,9 @@ class FinancialControllerTest {
     void listStocks_returnsOk() {
         stubUuid("user@test.com");
         when(prefService.getOrDefault("user@test.com")).thenReturn(prefWith("HKD"));
-        when(service.listStocks("user@test.com", "HKD")).thenReturn(List.of());
+        when(client.listStocks("user@test.com", "HKD")).thenReturn(List.of());
 
-        ResponseEntity<List<StockInvestmentDto>> resp = controller.listStocks(request);
+        ResponseEntity<List<Object>> resp = controller.listStocks(request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
@@ -142,9 +130,9 @@ class FinancialControllerTest {
     @Test
     void createStock_returns201() {
         stubUuid("user@test.com");
-        when(service.createStock(eq("user@test.com"), any())).thenReturn(new StockInvestment());
+        when(client.createStock(eq("user@test.com"), any())).thenReturn(Map.of("symbol", "AAPL"));
 
-        ResponseEntity<StockInvestment> resp = controller.createStock(Map.of("symbol", "AAPL"), request);
+        ResponseEntity<Object> resp = controller.createStock(Map.of("symbol", "AAPL"), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(201);
     }
@@ -152,9 +140,9 @@ class FinancialControllerTest {
     @Test
     void updateStock_success_returns200() {
         stubUuid("user@test.com");
-        when(service.updateStock(eq("stk-1"), eq("user@test.com"), any())).thenReturn(new StockInvestment());
+        when(client.updateStock(eq("stk-1"), eq("user@test.com"), any())).thenReturn(Map.of("id", "stk-1"));
 
-        ResponseEntity<StockInvestment> resp = controller.updateStock("stk-1", Map.of(), request);
+        ResponseEntity<Object> resp = controller.updateStock("stk-1", Map.of(), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
@@ -162,10 +150,10 @@ class FinancialControllerTest {
     @Test
     void updateStock_securityException_returns403() {
         stubUuid("user@test.com");
-        when(service.updateStock(anyString(), anyString(), any()))
+        when(client.updateStock(anyString(), anyString(), any()))
                 .thenThrow(new SecurityException("not owner"));
 
-        ResponseEntity<StockInvestment> resp = controller.updateStock("stk-1", Map.of(), request);
+        ResponseEntity<Object> resp = controller.updateStock("stk-1", Map.of(), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(403);
     }
@@ -182,11 +170,21 @@ class FinancialControllerTest {
     @Test
     void deleteStock_securityException_returns403() {
         stubUuid("user@test.com");
-        doThrow(new SecurityException("not owner")).when(service).deleteStock(anyString(), anyString());
+        doThrow(new SecurityException("not owner")).when(client).deleteStock(anyString(), anyString());
 
         ResponseEntity<Void> resp = controller.deleteStock("stk-1", request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(403);
+    }
+
+    @Test
+    void lookupStock_returnsName() {
+        when(client.lookupStock("AAPL")).thenReturn(Map.of("name", "Apple Inc."));
+
+        ResponseEntity<Map<String, String>> resp = controller.lookupStock("AAPL");
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(resp.getBody()).containsEntry("name", "Apple Inc.");
     }
 
     // ── Crypto ────────────────────────────────────────────────────────────────
@@ -195,9 +193,9 @@ class FinancialControllerTest {
     void listCrypto_returnsOk() {
         stubUuid("user@test.com");
         when(prefService.getOrDefault("user@test.com")).thenReturn(prefWith("USD"));
-        when(service.listCrypto("user@test.com", "USD")).thenReturn(List.of());
+        when(client.listCrypto("user@test.com", "USD")).thenReturn(List.of());
 
-        ResponseEntity<List<CryptoInvestmentDto>> resp = controller.listCrypto(request);
+        ResponseEntity<List<Object>> resp = controller.listCrypto(request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
@@ -205,9 +203,9 @@ class FinancialControllerTest {
     @Test
     void createCrypto_returns201() {
         stubUuid("user@test.com");
-        when(service.createCrypto(eq("user@test.com"), any())).thenReturn(new CryptoInvestment());
+        when(client.createCrypto(eq("user@test.com"), any())).thenReturn(Map.of("symbol", "BTC"));
 
-        ResponseEntity<CryptoInvestment> resp = controller.createCrypto(Map.of("symbol", "BTC"), request);
+        ResponseEntity<Object> resp = controller.createCrypto(Map.of("symbol", "BTC"), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(201);
     }
@@ -215,9 +213,9 @@ class FinancialControllerTest {
     @Test
     void updateCrypto_success_returns200() {
         stubUuid("user@test.com");
-        when(service.updateCrypto(eq("cry-1"), eq("user@test.com"), any())).thenReturn(new CryptoInvestment());
+        when(client.updateCrypto(eq("cry-1"), eq("user@test.com"), any())).thenReturn(Map.of("id", "cry-1"));
 
-        ResponseEntity<CryptoInvestment> resp = controller.updateCrypto("cry-1", Map.of(), request);
+        ResponseEntity<Object> resp = controller.updateCrypto("cry-1", Map.of(), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
@@ -225,10 +223,10 @@ class FinancialControllerTest {
     @Test
     void updateCrypto_securityException_returns403() {
         stubUuid("user@test.com");
-        when(service.updateCrypto(anyString(), anyString(), any()))
+        when(client.updateCrypto(anyString(), anyString(), any()))
                 .thenThrow(new SecurityException("not owner"));
 
-        ResponseEntity<CryptoInvestment> resp = controller.updateCrypto("cry-1", Map.of(), request);
+        ResponseEntity<Object> resp = controller.updateCrypto("cry-1", Map.of(), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(403);
     }
@@ -245,7 +243,7 @@ class FinancialControllerTest {
     @Test
     void deleteCrypto_securityException_returns403() {
         stubUuid("user@test.com");
-        doThrow(new SecurityException("not owner")).when(service).deleteCrypto(anyString(), anyString());
+        doThrow(new SecurityException("not owner")).when(client).deleteCrypto(anyString(), anyString());
 
         ResponseEntity<Void> resp = controller.deleteCrypto("cry-1", request);
 
@@ -258,9 +256,9 @@ class FinancialControllerTest {
     void listFutures_returnsOk() {
         stubUuid("user@test.com");
         when(prefService.getOrDefault("user@test.com")).thenReturn(prefWith("USD"));
-        when(service.listFutures("user@test.com", "USD")).thenReturn(List.of());
+        when(client.listFutures("user@test.com", "USD")).thenReturn(List.of());
 
-        ResponseEntity<List<FutureInvestmentDto>> resp = controller.listFutures(request);
+        ResponseEntity<List<Object>> resp = controller.listFutures(request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
@@ -268,9 +266,9 @@ class FinancialControllerTest {
     @Test
     void createFuture_returns201() {
         stubUuid("user@test.com");
-        when(service.createFuture(eq("user@test.com"), any())).thenReturn(new FutureInvestment());
+        when(client.createFuture(eq("user@test.com"), any())).thenReturn(Map.of("exchangeKind", "SECURITY"));
 
-        ResponseEntity<FutureInvestment> resp = controller.createFuture(Map.of("exchangeKind", "SECURITY"), request);
+        ResponseEntity<Object> resp = controller.createFuture(Map.of("exchangeKind", "SECURITY"), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(201);
     }
@@ -278,9 +276,9 @@ class FinancialControllerTest {
     @Test
     void updateFuture_success_returns200() {
         stubUuid("user@test.com");
-        when(service.updateFuture(eq("fut-1"), eq("user@test.com"), any())).thenReturn(new FutureInvestment());
+        when(client.updateFuture(eq("fut-1"), eq("user@test.com"), any())).thenReturn(Map.of("id", "fut-1"));
 
-        ResponseEntity<FutureInvestment> resp = controller.updateFuture("fut-1", Map.of(), request);
+        ResponseEntity<Object> resp = controller.updateFuture("fut-1", Map.of(), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
@@ -288,10 +286,10 @@ class FinancialControllerTest {
     @Test
     void updateFuture_securityException_returns403() {
         stubUuid("user@test.com");
-        when(service.updateFuture(anyString(), anyString(), any()))
+        when(client.updateFuture(anyString(), anyString(), any()))
                 .thenThrow(new SecurityException("not owner"));
 
-        ResponseEntity<FutureInvestment> resp = controller.updateFuture("fut-1", Map.of(), request);
+        ResponseEntity<Object> resp = controller.updateFuture("fut-1", Map.of(), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(403);
     }
@@ -308,7 +306,7 @@ class FinancialControllerTest {
     @Test
     void deleteFuture_securityException_returns403() {
         stubUuid("user@test.com");
-        doThrow(new SecurityException("not owner")).when(service).deleteFuture(anyString(), anyString());
+        doThrow(new SecurityException("not owner")).when(client).deleteFuture(anyString(), anyString());
 
         ResponseEntity<Void> resp = controller.deleteFuture("fut-1", request);
 
@@ -320,9 +318,9 @@ class FinancialControllerTest {
     @Test
     void listCards_returnsOk() {
         stubUuid("user@test.com");
-        when(service.listCards("user@test.com")).thenReturn(List.of());
+        when(client.listCards("user@test.com")).thenReturn(List.of());
 
-        ResponseEntity<List<CardDto>> resp = controller.listCards(request);
+        ResponseEntity<List<Object>> resp = controller.listCards(request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
@@ -330,9 +328,9 @@ class FinancialControllerTest {
     @Test
     void createCard_returns201() {
         stubUuid("user@test.com");
-        when(service.createCard(eq("user@test.com"), any())).thenReturn(new Card());
+        when(client.createCard(eq("user@test.com"), any())).thenReturn(Map.of("name", "Visa"));
 
-        ResponseEntity<Card> resp = controller.createCard(Map.of("name", "Visa"), request);
+        ResponseEntity<Object> resp = controller.createCard(Map.of("name", "Visa"), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(201);
     }
@@ -340,9 +338,9 @@ class FinancialControllerTest {
     @Test
     void updateCard_success_returns200() {
         stubUuid("user@test.com");
-        when(service.updateCard(eq("card-1"), eq("user@test.com"), any())).thenReturn(new Card());
+        when(client.updateCard(eq("card-1"), eq("user@test.com"), any())).thenReturn(Map.of("id", "card-1"));
 
-        ResponseEntity<Card> resp = controller.updateCard("card-1", Map.of(), request);
+        ResponseEntity<Object> resp = controller.updateCard("card-1", Map.of(), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
@@ -350,10 +348,10 @@ class FinancialControllerTest {
     @Test
     void updateCard_securityException_returns403() {
         stubUuid("user@test.com");
-        when(service.updateCard(anyString(), anyString(), any()))
+        when(client.updateCard(anyString(), anyString(), any()))
                 .thenThrow(new SecurityException("not owner"));
 
-        ResponseEntity<Card> resp = controller.updateCard("card-1", Map.of(), request);
+        ResponseEntity<Object> resp = controller.updateCard("card-1", Map.of(), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(403);
     }
@@ -370,7 +368,7 @@ class FinancialControllerTest {
     @Test
     void deleteCard_securityException_returns403() {
         stubUuid("user@test.com");
-        doThrow(new SecurityException("not owner")).when(service).deleteCard(anyString(), anyString());
+        doThrow(new SecurityException("not owner")).when(client).deleteCard(anyString(), anyString());
 
         ResponseEntity<Void> resp = controller.deleteCard("card-1", request);
 
@@ -382,12 +380,11 @@ class FinancialControllerTest {
     @Test
     void listSalary_returnsOk() {
         stubUuid("user@test.com");
-        SalaryUsageRecordDto dto = new SalaryUsageRecordDto(
-                "s-1", "user@test.com", 2025, 6, "HK", "HKD",
-                null, null, null, null, null, null, null, null, null, null, null);
-        when(service.listSalary("user@test.com")).thenReturn(List.of(dto));
+        Map<String, Object> row = Map.of("id", "s-1", "ownerUuid", "user@test.com",
+                "year", 2025, "month", 6, "region", "HK", "currency", "HKD");
+        when(client.listSalary("user@test.com")).thenReturn(List.of(row));
 
-        ResponseEntity<List<SalaryUsageRecordDto>> resp = controller.listSalary(request);
+        ResponseEntity<List<Object>> resp = controller.listSalary(request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).hasSize(1);
@@ -396,25 +393,22 @@ class FinancialControllerTest {
     @Test
     void createSalary_returns201() {
         stubUuid("user@test.com");
-        SalaryUsageRecord record = new SalaryUsageRecord();
-        record.setId("s-2");
-        record.setOwnerUuid("user@test.com");
-        when(service.createSalary(eq("user@test.com"), any())).thenReturn(record);
+        Map<String, Object> record = Map.of("id", "s-2", "ownerUuid", "user@test.com");
+        when(client.createSalary(eq("user@test.com"), any())).thenReturn(record);
 
-        ResponseEntity<SalaryUsageRecord> resp = controller.createSalary(Map.of("year", 2025), request);
+        ResponseEntity<Object> resp = controller.createSalary(Map.of("year", 2025), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(201);
-        assertThat(resp.getBody().getId()).isEqualTo("s-2");
+        assertThat(resp.getBody()).isEqualTo(record);
     }
 
     @Test
     void updateSalary_ownerMatch_returns200() {
         stubUuid("user@test.com");
-        SalaryUsageRecord updated = new SalaryUsageRecord();
-        updated.setId("s-1");
-        when(service.updateSalary(eq("s-1"), eq("user@test.com"), any())).thenReturn(updated);
+        Map<String, Object> updated = Map.of("id", "s-1");
+        when(client.updateSalary(eq("s-1"), eq("user@test.com"), any())).thenReturn(updated);
 
-        ResponseEntity<SalaryUsageRecord> resp = controller.updateSalary("s-1", Map.of(), request);
+        ResponseEntity<Object> resp = controller.updateSalary("s-1", Map.of(), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
@@ -422,10 +416,10 @@ class FinancialControllerTest {
     @Test
     void updateSalary_wrongOwner_returns403() {
         stubUuid("other@test.com");
-        when(service.updateSalary(eq("s-1"), eq("other@test.com"), any()))
+        when(client.updateSalary(eq("s-1"), eq("other@test.com"), any()))
                 .thenThrow(new SecurityException("not owner"));
 
-        ResponseEntity<SalaryUsageRecord> resp = controller.updateSalary("s-1", Map.of(), request);
+        ResponseEntity<Object> resp = controller.updateSalary("s-1", Map.of(), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(403);
     }
@@ -437,13 +431,13 @@ class FinancialControllerTest {
         ResponseEntity<Void> resp = controller.deleteSalary("s-1", request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(204);
-        verify(service).deleteSalary("s-1", "user@test.com");
+        verify(client).deleteSalary("s-1", "user@test.com");
     }
 
     @Test
     void deleteSalary_wrongOwner_returns403() {
         stubUuid("other@test.com");
-        doThrow(new SecurityException("not owner")).when(service).deleteSalary("s-1", "other@test.com");
+        doThrow(new SecurityException("not owner")).when(client).deleteSalary("s-1", "other@test.com");
 
         ResponseEntity<Void> resp = controller.deleteSalary("s-1", request);
 
@@ -455,7 +449,7 @@ class FinancialControllerTest {
     @Test
     void refreshPrices_returnsOkWithStatus() {
         stubUuid("user@test.com");
-        doNothing().when(service).refreshPrices("user@test.com");
+        doNothing().when(client).refreshPrices("user@test.com");
 
         ResponseEntity<Map<String, String>> resp = controller.refreshPrices(request);
 
@@ -467,11 +461,11 @@ class FinancialControllerTest {
     void ownerUuid_noAttribute_usesAnonymous() {
         when(request.getAttribute("authenticatedUserUuid")).thenReturn(null);
         when(prefService.getOrDefault("anonymous")).thenReturn(prefWith("USD"));
-        when(service.listDeposits("anonymous", "USD")).thenReturn(List.of());
+        when(client.listDeposits("anonymous", "USD")).thenReturn(List.of());
 
-        ResponseEntity<List<CashDepositDto>> resp = controller.listDeposits(request);
+        ResponseEntity<List<Object>> resp = controller.listDeposits(request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
-        verify(service).listDeposits("anonymous", "USD");
+        verify(client).listDeposits("anonymous", "USD");
     }
 }

@@ -1,8 +1,7 @@
 package com.agentsystem.connector.tool;
 
 import com.agentsystem.agent.ToolCallBudget;
-import com.agentsystem.travel.dto.TravelRecordDto;
-import com.agentsystem.travel.service.TravelService;
+import com.agentsystem.travel.TravelInnerClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,7 +21,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class TravelAgentToolTest {
 
-    @Mock TravelService     travelService;
+    @Mock TravelInnerClient travelClient;
     @Mock ToolCallBudget    toolCallBudget;
     @InjectMocks TravelAgentTool tool;
 
@@ -36,9 +35,9 @@ class TravelAgentToolTest {
         tool.clearCurrentUserUuid();
     }
 
-    private TravelRecordDto dto(String title, List<Map<String, Object>> stops,
+    private TravelInnerClient.TravelRecord dto(String title, List<Map<String, Object>> stops,
                                  List<Map<String, Object>> expenses, String notes) {
-        return new TravelRecordDto("id-1", "user-1", title, "2026-06-27", "2026-07-01",
+        return new TravelInnerClient.TravelRecord("id-1", "user-1", title, "2026-06-27", "2026-07-01",
                 stops, expenses, notes, true, Instant.now(), Instant.now());
     }
 
@@ -60,7 +59,7 @@ class TravelAgentToolTest {
     @Test
     void getTravelRecords_noneVisible_saysSo() {
         tool.setCurrentUserUuid("user-1");
-        when(travelService.listChatVisible("user-1")).thenReturn(List.of());
+        when(travelClient.listChatVisible("user-1")).thenReturn(List.of());
 
         assertThat(tool.getTravelRecords()).isEqualTo("The user has no travel trips marked visible to chat.");
     }
@@ -85,7 +84,7 @@ class TravelAgentToolTest {
                 "itemExpenses", List.of(itemEntry),
                 "dateExpenses", List.of(dateGroup));
 
-        when(travelService.listChatVisible("user-1"))
+        when(travelClient.listChatVisible("user-1"))
                 .thenReturn(List.of(dto("2026 Japan", List.of(), List.of(expenseData), null)));
 
         String result = tool.getTravelRecords();
@@ -108,7 +107,7 @@ class TravelAgentToolTest {
                 "itemExpenses", List.of(entry),
                 "dateExpenses", List.of());
 
-        when(travelService.listChatVisible("user-1"))
+        when(travelClient.listChatVisible("user-1"))
                 .thenReturn(List.of(dto("Trip", List.of(), List.of(expenseData), null)));
 
         String result = tool.getTravelRecords();
@@ -123,7 +122,7 @@ class TravelAgentToolTest {
         tool.setCurrentUserUuid("user-1");
 
         Map<String, Object> legacyEntry = Map.of("category", "Flight", "amount", 1200, "currency", "USD");
-        when(travelService.listChatVisible("user-1"))
+        when(travelClient.listChatVisible("user-1"))
                 .thenReturn(List.of(dto("Trip", List.of(), List.of(legacyEntry), null)));
 
         String result = tool.getTravelRecords();
@@ -134,7 +133,7 @@ class TravelAgentToolTest {
     @Test
     void getTravelRecords_noExpenses_omitsExpenseSection() {
         tool.setCurrentUserUuid("user-1");
-        when(travelService.listChatVisible("user-1"))
+        when(travelClient.listChatVisible("user-1"))
                 .thenReturn(List.of(dto("Trip", List.of(), List.of(), null)));
 
         String result = tool.getTravelRecords();
@@ -149,7 +148,7 @@ class TravelAgentToolTest {
         tool.setCurrentUserUuid("user-1");
         List<Map<String, Object>> stops = List.of(
                 Map.of("city", "Hong Kong"), Map.of("city", "Tokyo"), Map.of("city", "Hong Kong"));
-        when(travelService.listChatVisible("user-1"))
+        when(travelClient.listChatVisible("user-1"))
                 .thenReturn(List.of(dto("2026 Japan", stops, List.of(), null)));
 
         String result = tool.getTravelRecords();
@@ -160,7 +159,7 @@ class TravelAgentToolTest {
     @Test
     void getTravelRecords_multipleTrips_joinsWithSeparator() {
         tool.setCurrentUserUuid("user-1");
-        when(travelService.listChatVisible("user-1")).thenReturn(List.of(
+        when(travelClient.listChatVisible("user-1")).thenReturn(List.of(
                 dto("Trip A", List.of(), List.of(), null),
                 dto("Trip B", List.of(), List.of(), null)));
 

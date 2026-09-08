@@ -26,7 +26,7 @@ public class SkillVersion {
     @Column(name = "version_number", nullable = false)
     private int versionNumber;
 
-    /** id of the object in agent-system-storage-inner holding this version's bytes. */
+    /** id of the object in storage-inner holding this version's bytes. */
     @Column(name = "object_id", nullable = false, length = 36)
     private String objectId;
 

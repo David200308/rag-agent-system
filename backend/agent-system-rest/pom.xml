@@ -6,7 +6,7 @@
 
     <parent>
         <groupId>com.agentsystem</groupId>
-        <artifactId>rag-agent-system</artifactId>
+        <artifactId>skyproton-agent-system</artifactId>
         <version>1.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
@@ -138,47 +138,9 @@
         </dependency>
 
         <!-- JJWT — stateless JWT for auth tokens (no session table needed) -->
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-api</artifactId>
-            <version>0.12.6</version>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-impl</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-jackson</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
-        </dependency>
-
-        <!-- Yubico WebAuthn server — passkey registration and authentication -->
-        <!--
-            yubico-util:2.5.3 depends on jackson-dataformat-cbor:2.18.5 whose POM
-            references jackson-databind:2.19.5-SNAPSHOT (non-existent). Excluding it
-            here prevents Maven from ever reading that POM; the stable version below
-            satisfies the runtime need.
-        -->
-        <dependency>
-            <groupId>com.yubico</groupId>
-            <artifactId>webauthn-server-core</artifactId>
-            <version>2.5.3</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.fasterxml.jackson.dataformat</groupId>
-                    <artifactId>jackson-dataformat-cbor</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.dataformat</groupId>
-            <artifactId>jackson-dataformat-cbor</artifactId>
-            <version>2.18.2</version>
-        </dependency>
+        <!-- JWT signing/passkey WebAuthn dependencies moved to the auth-inner module —
+             agent-system-rest now calls auth-inner over HTTP instead of doing this
+             in-process (see com.agentsystem.auth.AuthInnerClient). -->
 
         <!-- Rate limiting — Bucket4j token-bucket per user/IP, backed by Redis so limits are shared across backend instances -->
         <dependency>

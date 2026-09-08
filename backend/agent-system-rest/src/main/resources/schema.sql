@@ -232,7 +232,7 @@ CREATE TABLE IF NOT EXISTS skill_versions (
     id               VARCHAR(36)  PRIMARY KEY,
     skill_id         VARCHAR(36)  NOT NULL,
     version_number   INT          NOT NULL,
-    object_id        VARCHAR(36)  NOT NULL,   -- id returned by agent-system-storage-inner
+    object_id        VARCHAR(36)  NOT NULL,   -- id returned by storage-inner
     file_name        VARCHAR(255),
     file_type        VARCHAR(16),
     size_bytes       BIGINT       NOT NULL DEFAULT 0,
@@ -242,20 +242,6 @@ CREATE TABLE IF NOT EXISTS skill_versions (
     INDEX idx_skill_versions_skill (skill_id, version_number),
     CONSTRAINT fk_skill_versions_skill FOREIGN KEY (skill_id)
         REFERENCES skills(id) ON DELETE CASCADE
-);
-
--- ── WebAuthn / Passkey ───────────────────────────────────────────────────────
-
-CREATE TABLE IF NOT EXISTS passkey_credentials (
-    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_uuid      VARCHAR(36)  NOT NULL,
-    credential_id  VARCHAR(512) NOT NULL UNIQUE,
-    public_key_cose TEXT        NOT NULL,
-    sign_count     BIGINT       NOT NULL DEFAULT 0,
-    user_handle    VARCHAR(512) NOT NULL,
-    created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_pk_user_uuid   (user_uuid),
-    INDEX idx_pk_user_handle (user_handle)
 );
 
 -- ── External connector OAuth tokens ─────────────────────────────────────────
@@ -319,135 +305,18 @@ CREATE TABLE IF NOT EXISTS org_members (
     INDEX idx_om_email (email)
 );
 
--- ── CLI public keys ──────────────────────────────────────────────────────────
--- Stores one Ed25519 public key per user, registered by agent-cli at login.
--- Used by CliSignatureFilter to verify X-Cli-Signature on every CLI request.
-CREATE TABLE IF NOT EXISTS cli_public_keys (
-    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_uuid        VARCHAR(36)  NOT NULL UNIQUE,
-    public_key_base64 VARCHAR(64) NOT NULL,           -- Base64-encoded raw Ed25519 public key (44 chars)
-    fingerprint      VARCHAR(8)   NOT NULL,            -- first 8 chars of Base64, shown in `auth status`
-    registered_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_seen_at     TIMESTAMP    NULL
-);
+-- NOTE: cli_public_keys and passkey_credentials moved to the auth-inner microservice's
+-- own schema.sql — that module owns those tables now (still in this same shared
+-- database, just no longer created/managed from here).
 
--- ── Financial portfolio tables ────────────────────────────────────────────────
+-- NOTE: financial_cash_deposits, financial_stocks, financial_crypto, financial_futures,
+-- financial_cards, and salary_usage_records moved to the finance-inner microservice's
+-- own schema.sql — that module owns those tables now (still in this same shared
+-- database, just no longer created/managed from here).
 
-CREATE TABLE IF NOT EXISTS financial_cash_deposits (
-    id              VARCHAR(36)    PRIMARY KEY,
-    owner_uuid      VARCHAR(36)    NOT NULL,
-    platform        VARCHAR(255)   NOT NULL,
-    platform_type   VARCHAR(100)   NOT NULL,
-    country_region  VARCHAR(100),
-    deposit_type    VARCHAR(10)    NOT NULL,   -- FIXED | FLEX
-    currency        VARCHAR(10)    NOT NULL,
-    amount          DECIMAL(19,4)  NOT NULL,
-    created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_fin_dep_owner (owner_uuid)
-);
-
-CREATE TABLE IF NOT EXISTS financial_stocks (
-    id              VARCHAR(36)    PRIMARY KEY,
-    owner_uuid      VARCHAR(36)    NOT NULL,
-    broker          VARCHAR(255)   NOT NULL,
-    stock_type      VARCHAR(20)    NOT NULL,   -- US_STOCK | HK_STOCK | CN_STOCK | JP_STOCK | FR_STOCK
-    symbol          VARCHAR(20)    NOT NULL,
-    name            VARCHAR(255)   NOT NULL,
-    stock_amount    DECIMAL(19,4)  NOT NULL,
-    invest_amount   DECIMAL(19,4)  NOT NULL,
-    currency        VARCHAR(10)    NOT NULL,
-    fee             DECIMAL(19,4)  NOT NULL DEFAULT 0,
-    created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_fin_stk_owner (owner_uuid)
-);
-
-CREATE TABLE IF NOT EXISTS financial_crypto (
-    id              VARCHAR(36)    PRIMARY KEY,
-    owner_uuid      VARCHAR(36)    NOT NULL,
-    name            VARCHAR(255)   NOT NULL,
-    symbol          VARCHAR(30)    NOT NULL,
-    amount          DECIMAL(28,8)  NOT NULL,
-    invest_amount   DECIMAL(19,4)  NOT NULL,
-    currency        VARCHAR(10)    NOT NULL,
-    created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_fin_cry_owner (owner_uuid)
-);
-
-CREATE TABLE IF NOT EXISTS financial_futures (
-    id                  VARCHAR(36)    PRIMARY KEY,
-    owner_uuid          VARCHAR(36)    NOT NULL,
-    exchange_kind       VARCHAR(20)    NOT NULL,   -- SECURITY | CRYPTO_CEX | CRYPTO_DEX
-    exchange            VARCHAR(20)    NOT NULL,   -- IBKR | BINANCE | OKX | KRAKEN | HYPERLIQUID | JUPITER_PERPS | LIGHTER
-    symbol              VARCHAR(30),               -- null for CRYPTO_DEX (address-only row)
-    side                VARCHAR(5),                -- LONG | SHORT; null for CRYPTO_DEX
-    quantity            DECIMAL(28,8),              -- contracts/size; null for CRYPTO_DEX
-    entry_price         DECIMAL(19,4),              -- null for CRYPTO_DEX
-    leverage            DECIMAL(6,2),               -- optional, manual kinds only
-    currency            VARCHAR(10)    NOT NULL DEFAULT 'USD',
-    connection_address  VARCHAR(255),               -- wallet address; CRYPTO_DEX only
-    created_at          TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_fin_fut_owner (owner_uuid)
-);
-
-CREATE TABLE IF NOT EXISTS financial_cards (
-    id              VARCHAR(36)    PRIMARY KEY,
-    owner_uuid      VARCHAR(36)    NOT NULL,
-    bank            VARCHAR(255)   NOT NULL,
-    country_region  VARCHAR(100),
-    types           VARCHAR(50)    NOT NULL,   -- comma-separated: Credit,Debit,ATM
-    card_name       VARCHAR(255)   NOT NULL,
-    network         VARCHAR(20)    NOT NULL,   -- Mastercard | Visa | UnionPay | JCB | AMEX
-    expire_date     VARCHAR(7),                -- YYYY-MM format, nullable
-    credit_limit             DECIMAL(19,2),  -- nullable
-    credit_limit_currency    VARCHAR(10),    -- nullable; currency of the credit limit
-    shared_credit            TINYINT(1),    -- NULL=unknown, 1=shared pool, 0=dedicated
-    created_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_fin_card_owner (owner_uuid)
-);
-
-CREATE TABLE IF NOT EXISTS salary_usage_records (
-    id                           VARCHAR(36)   PRIMARY KEY,
-    owner_uuid                   VARCHAR(36)   NOT NULL,
-    year                         INT           NOT NULL,
-    month                        INT           NOT NULL,
-    region                       VARCHAR(100)  NOT NULL,
-    currency                     VARCHAR(10)   NOT NULL,
-    salary                       DECIMAL(19,2) NOT NULL DEFAULT 0,
-    bonus                        DECIMAL(19,2) NOT NULL DEFAULT 0,
-    retirement_saving_employee   DECIMAL(19,2) NOT NULL DEFAULT 0,
-    retirement_saving_employer   DECIMAL(19,2) NOT NULL DEFAULT 0,
-    tax                          DECIMAL(19,2) NOT NULL DEFAULT 0,
-    house_rent                   DECIMAL(19,2) NOT NULL DEFAULT 0,
-    living_expense               DECIMAL(19,2) NOT NULL DEFAULT 0,
-    other_expense                DECIMAL(19,2) NOT NULL DEFAULT 0,
-    total_expense                DECIMAL(19,2) NOT NULL DEFAULT 0,
-    created_at                   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at                   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_sal_owner (owner_uuid),
-    UNIQUE KEY uq_sal_owner_ym (owner_uuid, year, month)
-);
-
--- ── Travel records ────────────────────────────────────────────────────────────
-
-CREATE TABLE IF NOT EXISTS travel_records (
-    id            VARCHAR(36)   PRIMARY KEY,
-    owner_uuid    VARCHAR(36)   NOT NULL,
-    title         VARCHAR(255)  NOT NULL,
-    start_date    VARCHAR(10)   NOT NULL,   -- YYYY-MM-DD
-    end_date      VARCHAR(10)   NOT NULL,   -- YYYY-MM-DD
-    stops_json    TEXT,                     -- JSON array of stops
-    expenses_json TEXT,                     -- JSON array of expenses
-    notes         TEXT,
-    allow_chat    BOOLEAN       NOT NULL DEFAULT FALSE,  -- opt-in: expose this trip to the chat agent
-    created_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_travel_owner (owner_uuid)
-);
+-- NOTE: travel_records moved to the travel-inner microservice's own schema.sql —
+-- that module owns the table now (still in this same shared database, just no
+-- longer created/managed from here).
 
 -- ── Scheduled messages (managed by Go scheduler service via Asynq + Redis) ────
 CREATE TABLE IF NOT EXISTS scheduled_messages (

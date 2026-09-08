@@ -12,16 +12,19 @@
     </parent>
 
     <groupId>com.agentsystem</groupId>
-    <artifactId>rag-agent-system</artifactId>
+    <artifactId>skyproton-agent-system</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>rag-agent-system</name>
-    <description>RAG Agent System — multi-module aggregator (agent-system-rest, agent-system-storage-inner, agent-system-notification-consumer)</description>
+    <name>skyproton-agent-system</name>
+    <description>SkyProton Agent System — multi-module aggregator (agent-system-rest, storage-inner, notification-consumer, auth-inner, finance-inner)</description>
 
     <modules>
         <module>agent-system-rest</module>
-        <module>agent-system-storage-inner</module>
-        <module>agent-system-notification-consumer</module>
+        <module>storage-inner</module>
+        <module>notification-consumer</module>
+        <module>auth-inner</module>
+        <module>finance-inner</module>
+        <module>travel-inner</module>
     </modules>
 
     <properties>

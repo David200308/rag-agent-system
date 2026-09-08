@@ -1,7 +1,7 @@
 package com.agentsystem.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.agentsystem.auth.service.CliKeyService;
+import com.agentsystem.auth.AuthInnerClient;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -24,7 +24,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class CliSignatureFilterTest {
 
-    @Mock CliKeyService      cliKeyService;
+    @Mock AuthInnerClient    authInnerClient;
     @Mock HttpServletRequest  request;
     @Mock HttpServletResponse response;
     @Mock FilterChain         chain;
@@ -33,7 +33,7 @@ class CliSignatureFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new CliSignatureFilter(cliKeyService, new ObjectMapper());
+        filter = new CliSignatureFilter(authInnerClient, new ObjectMapper());
     }
 
     // ── shouldNotFilter ───────────────────────────────────────────────────────
@@ -160,7 +160,7 @@ class CliSignatureFilterTest {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@test.com");
         when(request.getMethod()).thenReturn("GET");
         when(request.getRequestURI()).thenReturn("/api/v1/agent/query");
-        when(cliKeyService.verify(anyString(), anyString(), anyString(), anyString(), anyString(), anyLong()))
+        when(authInnerClient.verifyCliSignature(anyString(), anyString(), anyString(), anyString(), anyString(), anyLong()))
                 .thenReturn(true);
 
         filter.doFilterInternal(request, response, chain);
@@ -178,7 +178,7 @@ class CliSignatureFilterTest {
         when(request.getAttribute("authenticatedEmail")).thenReturn("user@test.com");
         when(request.getMethod()).thenReturn("POST");
         when(request.getRequestURI()).thenReturn("/api/v1/agent/query");
-        when(cliKeyService.verify(anyString(), anyString(), anyString(), anyString(), anyString(), anyLong()))
+        when(authInnerClient.verifyCliSignature(anyString(), anyString(), anyString(), anyString(), anyString(), anyLong()))
                 .thenReturn(false);
 
         StringWriter sw = new StringWriter();
