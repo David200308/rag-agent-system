@@ -20,8 +20,20 @@
 #      # ... (see full list below)
 #      chmod 600 secrets/*
 #
-# 2. Run:
-#      docker compose -f docker-compose.prod.yml up -d --build
+# 2. Run one of:
+#
+#    a) Build every image from source on this machine:
+#         docker compose -f docker-compose.prod.yml up -d --build
+#
+#    b) Use pre-built images published by backend-ci.yml (faster — skips the
+#       in-container Maven build entirely). Pull + locally re-tag them first with
+#       ./1.sh [tag], THEN start without --build so Compose prefers the image
+#       it finds under the tag below over rebuilding it:
+#         ./1.sh
+#         docker compose -f docker-compose.prod.yml up -d
+#       --build always rebuilds regardless of a matching local image, so don't
+#       combine it with (b). IMAGE_TAG (default: latest) must match the tag you
+#       passed to 1.sh.
 #
 # Secret files live in ./secrets/ which is git-ignored.
 # Each file name (lowercased) maps to the env var of the same name (uppercased).
@@ -185,6 +197,7 @@ services:
 
   # ── Image storage microservice (storage-inner module) ───────────
   storage:
+    image: rag-agent-system-storage:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: storage-inner/Dockerfile
@@ -221,6 +234,7 @@ services:
   # JWT mint/validate, OTP login+registration, WebAuthn passkeys, CLI Ed25519 key
   # auth. Called by backend (AuthInnerClient) and directly by the Go scheduler.
   auth-inner:
+    image: rag-agent-system-auth:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: auth-inner/Dockerfile
@@ -263,6 +277,7 @@ services:
   # Cash/stocks/crypto/futures/cards/salary + live market data (Finnhub, Pyth,
   # Hyperliquid, Jupiter, Lighter). Called by backend (FinanceInnerClient).
   finance-inner:
+    image: rag-agent-system-finance:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: finance-inner/Dockerfile
@@ -293,6 +308,7 @@ services:
   # Trips, stops, expenses, and the per-trip chat-visibility opt-in. Called by
   # backend (TravelInnerClient) for both the /api/v1/travel routes and TravelAgentTool.
   travel-inner:
+    image: rag-agent-system-travel:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: travel-inner/Dockerfile
@@ -322,6 +338,7 @@ services:
   # Email today (Resend), consumed from Kafka; more channels (Telegram, push, etc.)
   # land here later as new @KafkaListener methods.
   notification-consumer:
+    image: rag-agent-system-notification-consumer:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: notification-consumer/Dockerfile
@@ -389,6 +406,7 @@ services:
   # ── Go investment-alert-task microservice (crypto/stock price, DeFi, and ────
   #    prediction-market alerts) ──────────────────────────────────────────────
   investment-alert-task:
+    image: rag-agent-system-investment-alert-task:${IMAGE_TAG:-latest}
     build:
       context: ./investment-alert-task
       dockerfile: Dockerfile
@@ -469,6 +487,7 @@ services:
   # ── Spring Boot backend (agent-system-rest module) ────────────────────────────
   # docker-entrypoint.sh reads /run/secrets/* → env vars before the JVM starts.
   backend:
+    image: rag-agent-system-backend:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: agent-system-rest/Dockerfile
@@ -583,6 +602,7 @@ services:
   # No secrets needed — the frontend only talks to the backend/scheduler, never
   # directly to any external API.
   frontend:
+    image: rag-agent-system-frontend:${IMAGE_TAG:-latest}
     build:
       context: ./frontend
       dockerfile: Dockerfile
