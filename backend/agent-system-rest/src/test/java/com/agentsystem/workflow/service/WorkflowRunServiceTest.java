@@ -1430,6 +1430,54 @@ class WorkflowRunServiceTest {
         assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.DONE);
     }
 
+    @Test
+    void executeRun_askUserOnlyTool_nudgesModelOnceWhenItAnswersDirectly() throws Exception {
+        Workflow workflow = new Workflow();
+        workflow.setId("wf-ask");
+        workflow.setName("Ask User Workflow");
+        workflow.setAgentPattern(Workflow.AgentPattern.ORCHESTRATOR);
+        workflow.setSelectedModel(null);
+
+        com.agentsystem.workflow.entity.WorkflowAgent mainAgent = new com.agentsystem.workflow.entity.WorkflowAgent();
+        mainAgent.setId(1L);
+        mainAgent.setName("User Feedback");
+        mainAgent.setRole(com.agentsystem.workflow.entity.WorkflowAgent.AgentRole.MAIN);
+
+        when(workflowService.findById("wf-ask")).thenReturn(java.util.Optional.of(workflow));
+        when(agentRepo.findByWorkflowIdOrderByOrderIndex("wf-ask")).thenReturn(List.of(mainAgent));
+        when(workflowService.parseTools(any())).thenReturn(List.of("ASK_USER"));
+        when(workflowService.parseSkillIds(any())).thenReturn(List.of());
+        when(sandboxService.createSandbox(any(), any())).thenReturn(null);
+        when(llmProperties.getDefaultModel()).thenReturn(null);
+        when(logRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(runRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        ChatClient.ChatClientRequestSpec promptSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.system(anyString())).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callSpec);
+        // First response answers directly instead of calling its only tool (the real-world bug
+        // report); second response — after the forced nudge — still skips it. Verifies the nudge
+        // fires exactly once and then gives up rather than looping forever.
+        when(callSpec.content())
+                .thenReturn("This looks great, 9/10!")
+                .thenReturn("Still no tool call.");
+
+        WorkflowRun run = new WorkflowRun("run-ask", "wf-ask", "owner@test.com", "Review the design");
+        executeRunDirectly(run);
+
+        assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.DONE);
+        assertThat(run.getFinalOutput()).isEqualTo("Still no tool call.");
+        verify(callSpec, times(2)).content();
+
+        ArgumentCaptor<WorkflowRunLog> logCaptor = ArgumentCaptor.forClass(WorkflowRunLog.class);
+        verify(logRepo, atLeastOnce()).save(logCaptor.capture());
+        assertThat(logCaptor.getAllValues())
+                .anyMatch(l -> l.getContent().contains("forcing a retry"));
+    }
+
     private void executeRunDirectly(WorkflowRun run) throws Exception {
         Method m = WorkflowRunServiceImpl.class.getDeclaredMethod("executeRun", WorkflowRun.class, List.class);
         m.setAccessible(true);

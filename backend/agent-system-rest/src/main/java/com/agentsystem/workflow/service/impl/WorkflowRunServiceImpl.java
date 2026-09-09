@@ -739,6 +739,16 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         emit(run.getId(), agent.getId(), agent.getName(), WorkflowRunLog.LogType.SYSTEM,
                 "Agent [" + agent.getName() + "] starting on: " + truncate(userInput, 200));
 
+        // If ASK_USER is this agent's ONLY tool, its entire job is to get a real answer via that
+        // tool — a first response with no tool call at all means it answered the question itself
+        // instead of asking. Force one corrective retry rather than silently accepting that as
+        // the final answer (models frequently ignore the ASK_USER system-prompt instructions
+        // otherwise, especially when their own name/role — e.g. "User Feedback" — tempts them to
+        // just answer directly).
+        List<String> agentToolNames = workflowService.parseTools(agent);
+        boolean askUserOnly = agentToolNames.size() == 1 && "ASK_USER".equalsIgnoreCase(agentToolNames.get(0));
+        boolean askUserNudged = false;
+
         for (int iter = 0; iter < MAX_REACT_ITERATIONS; iter++) {
             String context = buildContext(messages);
             String llmResponse = effectiveClient.prompt()
@@ -818,6 +828,20 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                 messages.add(Map.of("role", "assistant", "content", llmResponse));
                 messages.add(Map.of("role", "user", "content",
                         "Tool result (" + toolName + "):\n" + toolResult));
+                continue;
+            }
+
+            // No tool calls and no delegation. If ASK_USER is this agent's sole tool and it
+            // still didn't call it, nudge once before accepting the answer as final.
+            if (askUserOnly && !askUserNudged) {
+                askUserNudged = true;
+                emit(run.getId(), agent.getId(), agent.getName(), WorkflowRunLog.LogType.SYSTEM,
+                        "Agent's only tool is ASK_USER but it answered directly instead of calling it — forcing a retry.");
+                messages.add(Map.of("role", "assistant", "content", llmResponse));
+                messages.add(Map.of("role", "user", "content",
+                        "You did not call the ASK_USER tool. This agent's only job is to get the REAL "
+                        + "user's answer via ASK_USER — not to answer or critique it yourself. Call "
+                        + "ASK_USER now with your question, in the exact tool-call format, and nothing else."));
                 continue;
             }
 
