@@ -74,8 +74,11 @@
         <!--
             yubico-util:2.5.3 depends on jackson-dataformat-cbor:2.18.5 whose POM
             references jackson-databind:2.19.5-SNAPSHOT (non-existent). Excluding it
-            here prevents Maven from ever reading that POM; the stable version pinned
-            in the parent BOM satisfies the runtime need.
+            here prevents Maven from ever reading that broken POM; the explicit
+            dependency below re-adds the artifact at the version Spring Boot's parent
+            BOM manages instead, which is what webauthn-server-core actually needs on
+            the classpath at runtime (CBORFactory) — without it, passkey
+            register/authenticate calls fail with NoClassDefFoundError.
         -->
         <dependency>
             <groupId>com.yubico</groupId>
@@ -87,6 +90,10 @@
                     <artifactId>jackson-dataformat-cbor</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-cbor</artifactId>
         </dependency>
         <!-- Lombok -->
         <dependency>
