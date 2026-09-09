@@ -1123,8 +1123,15 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         if (hasAskUser) {
             sb.append("""
 
-                    To ask the user a question and wait for their reply, or to request a file from them,
-                    use the ASK_USER tool with JSON. The run pauses until they respond.
+                    ## Getting Input From The Real User
+                    If your task is to get feedback, an opinion, a decision, an answer, or a file
+                    FROM THE ACTUAL USER — not to produce that yourself — you MUST call the
+                    ASK_USER tool below and then STOP. This applies even if your role or name
+                    (e.g. "User Feedback", "Reviewer", "Approval") makes it tempting to just write
+                    the feedback/answer/decision yourself: do NOT role-play as the user, do NOT
+                    write your own critique/opinion/guess and present it as their answer. Only a
+                    real reply that comes back as this tool's result may be treated as the user's
+                    actual feedback/answer/decision.
                     <use_tool name="ASK_USER">
                     {"question":"Which region should I deploy to?","kind":"TEXT"}
                     </use_tool>
@@ -1133,8 +1140,9 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                     {"question":"Please upload the CSV to analyze","kind":"FILE"}
                     </use_tool>
 
-                    A TEXT answer comes back as the tool result. A FILE answer comes back as the sandbox
-                    path the uploaded file was written to — read it from there.
+                    The run pauses until a real person responds. A TEXT answer comes back as the
+                    tool result. A FILE answer comes back as the sandbox path the uploaded file
+                    was written to — read it from there.
                     """);
         }
 
