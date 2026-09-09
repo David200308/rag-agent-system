@@ -20,7 +20,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { Plus, Play, Save, History, Download, Upload, FileJson, CalendarClock, Bot, GitBranch, FlagOff, GitCommitHorizontal, RotateCcw } from "lucide-react";
+import { Plus, Play, Save, History, Download, Upload, FileJson, CalendarClock, Bot, GitBranch, FlagOff, GitCommitHorizontal, RotateCcw, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { PatternSelector } from "./PatternSelector";
 import { AgentConfigPanel } from "./AgentConfigPanel";
@@ -223,6 +223,8 @@ export function WorkflowBuilder({ workflow }: Props) {
   const [teamExecMode, setTeamExecMode] = useState<TeamExecMode | null>(workflow.teamExecMode);
   const [runId,          setRunId]          = useState<string | null>(null);
   const [runInput,       setRunInput]       = useState("");
+  const [runFiles,       setRunFiles]       = useState<File[]>([]);
+  const runFilesInputRef = useRef<HTMLInputElement>(null);
   const [showRunInput,      setShowRunInput]      = useState(false);
   const [showRunsPanel,     setShowRunsPanel]     = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -784,10 +786,11 @@ export function WorkflowBuilder({ workflow }: Props) {
 
   async function handleRun() {
     if (!runInput.trim()) return;
-    const { runId: id } = await startWorkflowRun(workflow.id, runInput, emailNotify);
+    const { runId: id } = await startWorkflowRun(workflow.id, runInput, emailNotify, runFiles);
     setRunId(id);
     setShowRunInput(false);
     setRunInput("");
+    setRunFiles([]);
     setShowRunsPanel(true);
   }
 
@@ -897,6 +900,42 @@ export function WorkflowBuilder({ workflow }: Props) {
               className="w-full rounded-md border border-[--color-border] bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white resize-none"
             />
 
+            {/* File attachments */}
+            <div className="mt-3 space-y-1.5">
+              <input
+                ref={runFilesInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={e => {
+                  const picked = Array.from(e.target.files ?? []);
+                  if (picked.length) setRunFiles(prev => [...prev, ...picked]);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                onClick={() => runFilesInputRef.current?.click()}
+                className="flex items-center gap-1.5 text-xs text-[--color-muted] hover:text-[--color-fg]"
+              >
+                <Paperclip className="h-3.5 w-3.5" /> Attach files
+              </button>
+              {runFiles.length > 0 && (
+                <ul className="space-y-1">
+                  {runFiles.map((f, i) => (
+                    <li key={`${f.name}-${i}`} className="flex items-center justify-between rounded-md border border-[--color-border] px-2 py-1 text-[11px]">
+                      <span className="truncate">{f.name}</span>
+                      <button
+                        onClick={() => setRunFiles(prev => prev.filter((_, idx) => idx !== i))}
+                        className="ml-2 shrink-0 text-[--color-muted] hover:text-red-500"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             {/* Notification preferences */}
             <div className="mt-4 rounded-md border border-[--color-border] divide-y divide-[--color-border]">
               <NotifyToggle
@@ -914,7 +953,7 @@ export function WorkflowBuilder({ workflow }: Props) {
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
-              <Button size="sm" variant="ghost" onClick={() => setShowRunInput(false)}>Cancel</Button>
+              <Button size="sm" variant="ghost" onClick={() => { setShowRunInput(false); setRunFiles([]); }}>Cancel</Button>
               <Button size="sm" onClick={handleRun} disabled={!runInput.trim()}>
                 <Play className="h-3.5 w-3.5 mr-1" /> Start Run
               </Button>

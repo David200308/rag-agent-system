@@ -1431,9 +1431,9 @@ class WorkflowRunServiceTest {
     }
 
     private void executeRunDirectly(WorkflowRun run) throws Exception {
-        Method m = WorkflowRunServiceImpl.class.getDeclaredMethod("executeRun", WorkflowRun.class);
+        Method m = WorkflowRunServiceImpl.class.getDeclaredMethod("executeRun", WorkflowRun.class, List.class);
         m.setAccessible(true);
-        m.invoke(service, run);
+        m.invoke(service, run, List.of());
     }
 
     // ── reflection helpers ────────────────────────────────────────────────────

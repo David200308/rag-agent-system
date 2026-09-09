@@ -229,10 +229,11 @@ export type AgentPattern = "ORCHESTRATOR" | "TEAM" | "GRAPH";
 export type TeamExecMode = "PARALLEL" | "SEQUENTIAL";
 export type AgentRole    = "MAIN" | "SUB" | "PEER";
 export type NodeKind     = "AGENT" | "CONDITION" | "END";
-export type RunStatus    = "PENDING" | "RUNNING" | "DONE" | "FAILED" | "CANCELLED";
+export type RunStatus    = "PENDING" | "RUNNING" | "AWAITING_INPUT" | "SUSPENDED" | "DONE" | "FAILED" | "CANCELLED";
 export type LogType      = "TOOL_CALL" | "TOOL_RESULT" | "LLM_RESPONSE" | "DELEGATION" | "ERROR" | "SYSTEM";
+export type PendingKind  = "TEXT" | "FILE";
 
-export const SANDBOX_TOOLS = ["BASH", "CURL", "GIT", "GREP", "PYTHON", "NODE", "SCHEDULE"] as const;
+export const SANDBOX_TOOLS = ["BASH", "CURL", "GIT", "GREP", "PYTHON", "NODE", "SCHEDULE", "ASK_USER"] as const;
 export type SandboxTool = typeof SANDBOX_TOOLS[number];
 
 export interface Workflow {
@@ -282,6 +283,8 @@ export interface WorkflowRun {
   sandboxContainer: string | null;
   finalOutput: string | null;
   workflowVersion: number | null;
+  pendingQuestion: string | null;
+  pendingKind: PendingKind | null;
   startedAt: string;
   finishedAt: string | null;
 }
@@ -314,6 +317,11 @@ export interface WorkflowRunEvent {
 export interface WorkflowDoneEvent {
   status: RunStatus;
   output: string;
+}
+
+export interface WorkflowQuestionEvent {
+  kind: PendingKind;
+  question: string;
 }
 
 // ── Skills ────────────────────────────────────────────────────────────────────

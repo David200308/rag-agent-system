@@ -3,6 +3,7 @@ package com.agentsystem.agent.controller;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.bsc.langgraph4j.RunnableConfig;
@@ -35,16 +36,21 @@ import com.agentsystem.org.OrgContext;
 import com.agentsystem.rag.service.DocumentIngestionService;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.AgentResponse;
+import com.agentsystem.schema.DocumentResult;
 import com.agentsystem.schema.UrlIngestionResult;
+import com.agentsystem.skill.service.SkillTextExtractor;
 import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.user.service.UserPreferenceService;
 import com.agentsystem.webfetch.entity.WebFetchWhitelist;
 import com.agentsystem.webfetch.service.WebFetchService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Valid;
+import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -73,6 +79,13 @@ public class AgentController {
     private final UserAccountService       userAccountService;
     private final LlmProperties            llmProperties;
     private final AgentMetrics             agentMetrics;
+    private final SkillTextExtractor       skillTextExtractor;
+    private final ObjectMapper             objectMapper;
+    private final Validator                validator;
+
+    private static final int MAX_QUERY_ATTACHMENTS = 3;
+    /** Extracted text past this length is truncated — keeps a chat attachment from blowing out the context window. */
+    private static final int MAX_ATTACHMENT_CHARS = 20_000;
 
     // ── Query ─────────────────────────────────────────────────────────────────
 
@@ -81,9 +94,56 @@ public class AgentController {
     @Operation(summary = "Run a query through the Agent System pipeline")
     public ResponseEntity<AgentResponse> query(@RequestBody @Valid AgentRequest request,
                                                HttpServletRequest httpRequest) {
+        return runQuery(request, List.of(), httpRequest);
+    }
+
+    @PostMapping(value = "/query", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+                                   produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Run a query through the Agent System pipeline with one-off file attachments "
+            + "(extracted via Tika and fed into this turn's context only — not saved to the knowledge base)")
+    public ResponseEntity<AgentResponse> queryWithFiles(
+            @RequestParam("request") String requestJson,
+            @RequestParam(value = "files", required = false) List<MultipartFile> files,
+            HttpServletRequest httpRequest) {
+
+        AgentRequest request;
+        try {
+            request = objectMapper.readValue(requestJson, AgentRequest.class);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+        Set<ConstraintViolation<AgentRequest>> violations = validator.validate(request);
+        if (!violations.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        List<DocumentResult> attachments = new java.util.ArrayList<>();
+        if (files != null) {
+            for (MultipartFile file : files.stream().limit(MAX_QUERY_ATTACHMENTS).toList()) {
+                try {
+                    String text = skillTextExtractor.extract(file.getBytes(), file.getOriginalFilename());
+                    if (text.length() > MAX_ATTACHMENT_CHARS) {
+                        text = text.substring(0, MAX_ATTACHMENT_CHARS) + "…(truncated)";
+                    }
+                    attachments.add(new DocumentResult(
+                            UUID.randomUUID().toString(), text, 1.0, file.getOriginalFilename(),
+                            Map.of("type", "chat-attachment")));
+                } catch (Exception e) {
+                    log.warn("[AgentController] Failed to extract text from attachment '{}': {}",
+                            file.getOriginalFilename(), e.getMessage());
+                }
+            }
+        }
+
+        return runQuery(request, attachments, httpRequest);
+    }
+
+    private ResponseEntity<AgentResponse> runQuery(AgentRequest request, List<DocumentResult> attachments,
+                                                    HttpServletRequest httpRequest) {
 
         String runId = UUID.randomUUID().toString();
-        log.info("[AgentController] Received query runId={} query='{}'", runId, request.query());
+        log.info("[AgentController] Received query runId={} query='{}' attachments={}",
+                runId, request.query(), attachments.size());
 
         OrgContext ctx = OrgContext.from(httpRequest);
 
@@ -99,6 +159,9 @@ public class AgentController {
             Map<String, Object> initData = new HashMap<>();
             initData.put("request", request);
             initData.put("runId", runId);
+            if (!attachments.isEmpty()) {
+                initData.put("documents", attachments);
+            }
             if (ctx.userUuid() != null) {
                 initData.put("userUuid", ctx.userUuid());
                 initData.put("orgId",    ctx.orgId());

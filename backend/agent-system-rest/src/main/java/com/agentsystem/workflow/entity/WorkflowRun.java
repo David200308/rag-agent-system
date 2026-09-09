@@ -14,7 +14,9 @@ import java.time.Instant;
 @NoArgsConstructor
 public class WorkflowRun {
 
-    public enum RunStatus { PENDING, RUNNING, DONE, FAILED, CANCELLED }
+    public enum RunStatus { PENDING, RUNNING, AWAITING_INPUT, SUSPENDED, DONE, FAILED, CANCELLED }
+
+    public enum PendingKind { TEXT, FILE }
 
     @Id
     @Column(length = 36)
@@ -46,6 +48,14 @@ public class WorkflowRun {
     /** Version number of the workflow (from workflow_versions) active when this run started; null if no version has ever been saved. */
     @Column(name = "workflow_version")
     private Integer workflowVersion;
+
+    /** Set while status=AWAITING_INPUT — the question an ASK_USER tool call is waiting on. */
+    @Column(name = "pending_question", columnDefinition = "TEXT")
+    private String pendingQuestion;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "pending_kind", length = 10)
+    private PendingKind pendingKind;
 
     @Column(name = "started_at", nullable = false, updatable = false)
     private Instant startedAt = Instant.now();

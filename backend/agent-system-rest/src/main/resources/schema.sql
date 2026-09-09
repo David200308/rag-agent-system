@@ -172,10 +172,12 @@ CREATE TABLE IF NOT EXISTS workflow_runs (
     owner_uuid        VARCHAR(36),                          -- nullable when auth is disabled
     org_id            VARCHAR(100),                          -- NULL = personal mode; non-null = org-scoped (team mode)
     user_input        TEXT         NOT NULL,
-    status            VARCHAR(20)  NOT NULL DEFAULT 'PENDING',  -- PENDING | RUNNING | DONE | FAILED
+    status            VARCHAR(20)  NOT NULL DEFAULT 'PENDING',  -- PENDING | RUNNING | AWAITING_INPUT | SUSPENDED | DONE | FAILED | CANCELLED
     sandbox_container VARCHAR(128),
     final_output      LONGTEXT,
     workflow_version  INT,                                   -- workflow_versions.version_number active at run start; NULL if never saved
+    pending_question  TEXT,                                  -- set while status=AWAITING_INPUT — the ASK_USER tool's question
+    pending_kind      VARCHAR(10),                            -- TEXT | FILE — what kind of answer the paused run is waiting for
     started_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     finished_at       TIMESTAMP,
     INDEX idx_wr_workflow (workflow_id),

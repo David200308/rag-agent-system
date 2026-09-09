@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { MessageSquare, Menu, Share2, CalendarClock } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { queryAgent, createWorkflow, fetchModels, fetchConversations, setConversationModel } from "@/lib/api";
+import { queryAgent, queryAgentWithFiles, createWorkflow, fetchModels, fetchConversations, setConversationModel } from "@/lib/api";
 import { useChatStore } from "@/store/chatStore";
 import { MessageBubble } from "./MessageBubble";
 import { MessageInput } from "./MessageInput";
@@ -70,7 +70,8 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
   };
 
   const mutation = useMutation({
-    mutationFn: (req: AgentRequest) => queryAgent(req),
+    mutationFn: ({ req, files }: { req: AgentRequest; files: File[] }) =>
+      files.length > 0 ? queryAgentWithFiles(req, files) : queryAgent(req),
     onSuccess: (response) => {
       // Capture the backend-assigned conversationId so subsequent turns link correctly
       const backendId = response.metadata?.conversationId;
@@ -109,6 +110,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
     useKnowledgeBase: boolean,
     useWebFetch: boolean,
     skillIds: string[],
+    files: File[],
   ) => {
     if (query.startsWith("/workflow")) {
       const kv = parseKV(query.slice("/workflow".length));
@@ -146,17 +148,23 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
       .filter((m) => m.role !== "error")
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
-    addMessage(conversationId, { role: "user", content: query });
+    const attachmentNote = files.length > 0
+      ? `\n\n📎 ${files.map((f) => f.name).join(", ")}`
+      : "";
+    addMessage(conversationId, { role: "user", content: query + attachmentNote });
 
     mutation.mutate({
-      query,
-      topK,
-      conversationHistory: history,
-      stream: false,
-      conversationId: conversation?.backendConversationId,
-      useKnowledgeBase,
-      useWebFetch,
-      skillIds: skillIds.length > 0 ? skillIds : undefined,
+      req: {
+        query,
+        topK,
+        conversationHistory: history,
+        stream: false,
+        conversationId: conversation?.backendConversationId,
+        useKnowledgeBase,
+        useWebFetch,
+        skillIds: skillIds.length > 0 ? skillIds : undefined,
+      },
+      files,
     });
   };
 

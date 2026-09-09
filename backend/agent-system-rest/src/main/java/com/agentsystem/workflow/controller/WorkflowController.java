@@ -228,7 +228,7 @@ public class WorkflowController {
         return ResponseEntity.ok(runService.getRuns(workflowId, page, size));
     }
 
-    @PostMapping("/{workflowId}/runs")
+    @PostMapping(value = "/{workflowId}/runs", consumes = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Start a new workflow run")
     public ResponseEntity<Map<String, String>> startRun(
             @PathVariable String workflowId,
@@ -243,6 +243,79 @@ public class WorkflowController {
         OrgContext ctx = OrgContext.from(req);
         String runId = runService.startRun(workflowId, userInput, ctx.email(), emailNotify);
         return ResponseEntity.ok(Map.of("runId", runId));
+    }
+
+    @PostMapping(value = "/{workflowId}/runs", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Start a new workflow run with file attachments")
+    public ResponseEntity<Map<String, String>> startRunWithFiles(
+            @PathVariable String workflowId,
+            @RequestParam("userInput") String userInput,
+            @RequestParam(value = "emailNotify", required = false, defaultValue = "false") boolean emailNotify,
+            @RequestParam(value = "files", required = false) List<org.springframework.web.multipart.MultipartFile> files,
+            HttpServletRequest req) {
+
+        if (userInput == null || userInput.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userInput required"));
+        }
+        OrgContext ctx = OrgContext.from(req);
+        String runId = runService.startRun(workflowId, userInput, ctx.email(), emailNotify,
+                files != null ? files : List.of());
+        return ResponseEntity.ok(Map.of("runId", runId));
+    }
+
+    @PostMapping("/runs/{runId}/answer")
+    @Operation(summary = "Answer a run paused on ASK_USER (kind=TEXT), resuming it")
+    public ResponseEntity<Void> answerRun(
+            @PathVariable String runId,
+            @RequestBody Map<String, Object> body,
+            HttpServletRequest req) {
+        String answer = (String) body.get("answer");
+        if (answer == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        try {
+            runService.answerRun(runId, answer, OrgContext.from(req).userUuid());
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(409).build();
+        }
+    }
+
+    @PostMapping(value = "/runs/{runId}/answer-file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Answer a run paused on ASK_USER (kind=FILE) with an uploaded file, resuming it")
+    public ResponseEntity<Void> answerRunFile(
+            @PathVariable String runId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            HttpServletRequest req) {
+        try {
+            runService.answerRunFile(runId, file, OrgContext.from(req).userUuid());
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(409).build();
+        }
+    }
+
+    @PostMapping("/runs/{runId}/recover")
+    @Operation(summary = "Wake a SUSPENDED run back up — resumes its sandbox and returns it to AWAITING_INPUT")
+    public ResponseEntity<Void> recoverRun(@PathVariable String runId, HttpServletRequest req) {
+        try {
+            runService.recoverRun(runId, OrgContext.from(req).userUuid());
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(409).build();
+        }
     }
 
     @GetMapping(value = "/runs/{runId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

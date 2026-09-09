@@ -33,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import org.springframework.data.domain.Page;
@@ -51,6 +52,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -74,6 +76,9 @@ import java.util.stream.Collectors;
 public class WorkflowRunServiceImpl implements WorkflowRunService {
 
     private static final int MAX_REACT_ITERATIONS = 12;
+
+    /** How long an ASK_USER tool call waits before the run is suspended to free its sandbox slot. */
+    private static final long ASK_USER_SUSPEND_AFTER_MINUTES = 10;
     private static final Pattern TOOL_PATTERN =
             Pattern.compile("<use_tool name=\"(\\w+)\">(.*?)</use_tool>", Pattern.DOTALL);
     private static final Pattern DELEGATE_PATTERN =
@@ -120,6 +125,19 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
     /** RunIds that received a stop request while still executing — checked when the run settles. */
     private final ConcurrentHashMap<String, Boolean> cancelledRuns = new ConcurrentHashMap<>();
 
+    /** Answers to in-flight ASK_USER tool calls, keyed by runId — completed by answerRun/answerRunFile. */
+    private final ConcurrentHashMap<String, CompletableFuture<AskAnswer>> pendingAnswers = new ConcurrentHashMap<>();
+
+    /**
+     * RunIds whose sandbox is currently suspended (docker-stopped, slot released) while
+     * waiting on an ASK_USER answer. Removing an entry is the single point of coordination
+     * between the explicit recoverRun() call and the ReAct loop's own resume-on-answer path —
+     * whichever removes it first is the one that actually resumes the sandbox.
+     */
+    private final ConcurrentHashMap<String, Boolean> suspendedRuns = new ConcurrentHashMap<>();
+
+    private record AskAnswer(String text, byte[] fileBytes, String fileName) {}
+
     private final ExecutorService asyncPool = Executors.newVirtualThreadPerTaskExecutor();
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -129,11 +147,23 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
      */
     @Override
     public String startRun(String workflowId, String userInput, String ownerEmail, boolean emailNotify) {
-        return startRunByUuid(workflowId, userInput, resolveUuid(ownerEmail), emailNotify);
+        return startRun(workflowId, userInput, ownerEmail, emailNotify, List.of());
+    }
+
+    @Override
+    public String startRun(String workflowId, String userInput, String ownerEmail, boolean emailNotify,
+                            List<MultipartFile> attachments) {
+        return startRunByUuid(workflowId, userInput, resolveUuid(ownerEmail), emailNotify, attachments);
     }
 
     @Override
     public String startRunByUuid(String workflowId, String userInput, String ownerUuid, boolean emailNotify) {
+        return startRunByUuid(workflowId, userInput, ownerUuid, emailNotify, List.of());
+    }
+
+    @Override
+    public String startRunByUuid(String workflowId, String userInput, String ownerUuid, boolean emailNotify,
+                                  List<MultipartFile> attachments) {
         WorkflowRun run = new WorkflowRun(UUID.randomUUID().toString(), workflowId, ownerUuid, userInput);
         run.setStatus(WorkflowRun.RunStatus.PENDING);
         run.setWorkflowVersion(workflowService.latestVersionNumber(workflowId).orElse(null));
@@ -141,11 +171,78 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         if (emailNotify && ownerUuid != null) {
             emailNotifyRuns.put(run.getId(), true);
         }
-        log.info("[WorkflowRun] Starting run {} for workflow {} (emailNotify={})", run.getId(), workflowId, emailNotify);
+        log.info("[WorkflowRun] Starting run {} for workflow {} (emailNotify={}, attachments={})",
+                run.getId(), workflowId, emailNotify, attachments.size());
 
-        Future<?> future = asyncPool.submit(() -> executeRun(run));
+        Future<?> future = asyncPool.submit(() -> executeRun(run, attachments));
         runningFutures.put(run.getId(), future);
         return run.getId();
+    }
+
+    @Override
+    public void answerRun(String runId, String answerText, String callerUuid) {
+        requireAwaitingInput(runId, callerUuid, WorkflowRun.PendingKind.TEXT);
+        CompletableFuture<AskAnswer> future = pendingAnswers.get(runId);
+        if (future == null) {
+            throw new IllegalStateException("Run is not currently awaiting input: " + runId);
+        }
+        future.complete(new AskAnswer(answerText, null, null));
+    }
+
+    @Override
+    public void answerRunFile(String runId, MultipartFile file, String callerUuid) {
+        requireAwaitingInput(runId, callerUuid, WorkflowRun.PendingKind.FILE);
+        CompletableFuture<AskAnswer> future = pendingAnswers.get(runId);
+        if (future == null) {
+            throw new IllegalStateException("Run is not currently awaiting input: " + runId);
+        }
+        try {
+            future.complete(new AskAnswer(null, file.getBytes(), file.getOriginalFilename()));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read uploaded file: " + e.getMessage(), e);
+        }
+    }
+
+    private WorkflowRun requireAwaitingInput(String runId, String callerUuid, WorkflowRun.PendingKind expectedKind) {
+        WorkflowRun run = runRepo.findById(runId)
+                .orElseThrow(() -> new IllegalArgumentException("Run not found: " + runId));
+        if (callerUuid != null && run.getOwnerUuid() != null && !callerUuid.equals(run.getOwnerUuid())) {
+            throw new SecurityException("Only the owner can answer this run.");
+        }
+        // A SUSPENDED run can still be answered directly (without an explicit recover click
+        // first) — handleAskUser() resumes the sandbox itself once the answer future completes.
+        boolean awaiting = run.getStatus() == WorkflowRun.RunStatus.AWAITING_INPUT
+                || run.getStatus() == WorkflowRun.RunStatus.SUSPENDED;
+        if (!awaiting || run.getPendingKind() != expectedKind) {
+            throw new IllegalStateException("Run is not awaiting a " + expectedKind + " answer: " + runId);
+        }
+        return run;
+    }
+
+    @Override
+    public void recoverRun(String runId, String callerUuid) {
+        WorkflowRun run = runRepo.findById(runId)
+                .orElseThrow(() -> new IllegalArgumentException("Run not found: " + runId));
+        if (callerUuid != null && run.getOwnerUuid() != null && !callerUuid.equals(run.getOwnerUuid())) {
+            throw new SecurityException("Only the owner can recover this run.");
+        }
+        if (run.getStatus() != WorkflowRun.RunStatus.SUSPENDED) {
+            throw new IllegalStateException("Run is not suspended: " + runId);
+        }
+
+        // Only the first remover actually resumes the sandbox — if the ReAct loop's own
+        // resume-on-answer path already won this race (the user answered without clicking
+        // Recover), there's nothing left for this call to do beyond the status flip below.
+        if (suspendedRuns.remove(runId) != null) {
+            sandboxService.resume(runId, run.getSandboxContainer());
+            emit(runId, null, null, WorkflowRunLog.LogType.SYSTEM, "Sandbox resumed by user.");
+        }
+
+        run.setStatus(WorkflowRun.RunStatus.AWAITING_INPUT);
+        runRepo.save(run);
+        pushRunEvent(runId, "question",
+                run.getPendingKind() != null ? run.getPendingKind().name() : "TEXT",
+                run.getPendingQuestion());
     }
 
     /**
@@ -167,15 +264,25 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                 for (WorkflowRunLog l : historical) {
                     pushLogEvent(emitter, l);
                 }
-                // If run already finished, close emitter
+                // If run already finished, close emitter; if paused on ASK_USER, replay the pending question.
                 runRepo.findById(runId).ifPresent(run -> {
                     if (run.getStatus() == WorkflowRun.RunStatus.DONE
-                            || run.getStatus() == WorkflowRun.RunStatus.FAILED) {
+                            || run.getStatus() == WorkflowRun.RunStatus.FAILED
+                            || run.getStatus() == WorkflowRun.RunStatus.CANCELLED) {
                         try {
                             emitter.send(SseEmitter.event().name("done")
                                     .data(Map.of("status", run.getStatus().name(),
                                                  "output", run.getFinalOutput() != null ? run.getFinalOutput() : "")));
                             emitter.complete();
+                        } catch (IOException ignored) {}
+                    } else if (run.getStatus() == WorkflowRun.RunStatus.AWAITING_INPUT
+                            || run.getStatus() == WorkflowRun.RunStatus.SUSPENDED) {
+                        try {
+                            emitter.send(SseEmitter.event()
+                                    .name(run.getStatus() == WorkflowRun.RunStatus.SUSPENDED ? "suspended" : "question")
+                                    .data(Map.of(
+                                            "kind", run.getPendingKind() != null ? run.getPendingKind().name() : "TEXT",
+                                            "question", run.getPendingQuestion() != null ? run.getPendingQuestion() : "")));
                         } catch (IOException ignored) {}
                     }
                 });
@@ -206,12 +313,20 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         if (callerUuid != null && run.getOwnerUuid() != null && !callerUuid.equals(run.getOwnerUuid())) {
             throw new SecurityException("Only the owner can stop this run.");
         }
-        if (run.getStatus() != WorkflowRun.RunStatus.RUNNING && run.getStatus() != WorkflowRun.RunStatus.PENDING) {
+        if (run.getStatus() != WorkflowRun.RunStatus.RUNNING && run.getStatus() != WorkflowRun.RunStatus.PENDING
+                && run.getStatus() != WorkflowRun.RunStatus.AWAITING_INPUT
+                && run.getStatus() != WorkflowRun.RunStatus.SUSPENDED) {
             return; // already terminal — nothing to do
         }
 
         cancelledRuns.put(runId, true);
         log.info("[WorkflowRun] Cancel requested for run {}", runId);
+
+        // Wake up a thread blocked in handleAskUser() waiting on a text/file answer, if any —
+        // its future.get() will then observe the interrupt below and unwind as cancelled.
+        CompletableFuture<AskAnswer> pending = pendingAnswers.get(runId);
+        if (pending != null) pending.cancel(false);
+        suspendedRuns.remove(runId);
 
         Future<?> future = runningFutures.get(runId);
         if (future != null) future.cancel(true);
@@ -235,7 +350,9 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         if (callerUuid != null && run.getOwnerUuid() != null && !callerUuid.equals(run.getOwnerUuid())) {
             throw new SecurityException("Only the owner can delete this run.");
         }
-        if (run.getStatus() == WorkflowRun.RunStatus.RUNNING || run.getStatus() == WorkflowRun.RunStatus.PENDING) {
+        if (run.getStatus() == WorkflowRun.RunStatus.RUNNING || run.getStatus() == WorkflowRun.RunStatus.PENDING
+                || run.getStatus() == WorkflowRun.RunStatus.AWAITING_INPUT
+                || run.getStatus() == WorkflowRun.RunStatus.SUSPENDED) {
             cancelRun(runId, callerUuid);
         }
         logRepo.deleteByRunId(runId);
@@ -245,7 +362,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
 
     // ── Execution engine ──────────────────────────────────────────────────────
 
-    private void executeRun(WorkflowRun run) {
+    private void executeRun(WorkflowRun run, List<MultipartFile> attachments) {
         Workflow workflow = workflowService.findById(run.getWorkflowId())
                 .orElseThrow(() -> new RuntimeException("Workflow not found: " + run.getWorkflowId()));
         List<WorkflowAgent> agents = agentRepo.findByWorkflowIdOrderByOrderIndex(run.getWorkflowId());
@@ -279,6 +396,10 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
             runRepo.save(run);
 
             emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "Sandbox ready.");
+
+            if (!attachments.isEmpty()) {
+                writeAttachments(run, containerId, attachments);
+            }
 
             // Resolve ChatClient: workflow model → configured DEFAULT_MODEL → raw provider
             String modelName = workflow.getSelectedModel();
@@ -339,6 +460,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
 
         } finally {
             runningFutures.remove(run.getId());
+            suspendedRuns.remove(run.getId());
             sandboxService.destroySandbox(containerId);
             maybeSendCompletionEmail(run, workflow.getName());
         }
@@ -673,6 +795,8 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
 
                 if ("SCHEDULE".equalsIgnoreCase(toolName)) {
                     toolResult = dispatchScheduleTool(run.getOwnerUuid(), command);
+                } else if ("ASK_USER".equalsIgnoreCase(toolName)) {
+                    toolResult = handleAskUser(run, containerId, command);
                 } else if (CONNECTOR_TOOL_NAMES.contains(toolName.toUpperCase())) {
                     toolResult = dispatchConnectorTool(toolName.toUpperCase(), command, run.getOwnerUuid(), run.getOrgId());
                 } else {
@@ -727,6 +851,149 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         emit(run.getId(), agent.getId(), agent.getName(), WorkflowRunLog.LogType.SYSTEM,
                 "Max iterations reached for agent [" + agent.getName() + "]");
         return lastMsg;
+    }
+
+    // ── ASK_USER / attachments ───────────────────────────────────────────────
+
+    /**
+     * Writes files uploaded when the run was started into the sandbox at /workspace/uploads/
+     * and folds their paths into the run's persisted user input so every agent that reads
+     * run.getUserInput() (orchestrator, team, graph) sees they're available.
+     */
+    private void writeAttachments(WorkflowRun run, String containerId, List<MultipartFile> attachments) {
+        StringBuilder note = new StringBuilder(run.getUserInput())
+                .append("\n\n[Attached files — available in the sandbox]:\n");
+        int written = 0;
+        for (MultipartFile file : attachments) {
+            String filename = sanitizeFileName(file.getOriginalFilename());
+            String path = "/workspace/uploads/" + filename;
+            try {
+                sandboxService.writeFile(containerId, path, file.getBytes());
+                note.append("- ").append(path).append("\n");
+                written++;
+            } catch (Exception e) {
+                emit(run.getId(), null, null, WorkflowRunLog.LogType.ERROR,
+                        "Failed to attach file " + filename + ": " + e.getMessage());
+            }
+        }
+        if (written > 0) {
+            run.setUserInput(note.toString());
+            runRepo.save(run);
+        }
+        emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM,
+                "Attached " + written + " file(s) to the run.");
+    }
+
+    /**
+     * Handles an ASK_USER tool call: pauses the run in AWAITING_INPUT, notifies any open SSE
+     * stream, and blocks this worker thread (a virtual thread — cheap to park) until
+     * answerRun/answerRunFile completes the matching future, or the run is cancelled.
+     *
+     * If nobody answers within ASK_USER_SUSPEND_AFTER_MINUTES, the sandbox is suspended
+     * (docker-stopped, concurrency slot released) so it stops burning resources while it
+     * waits — the run then shows as SUSPENDED until either the user answers directly or
+     * clicks Recover, both of which resume the sandbox before the ReAct loop continues.
+     */
+    private String handleAskUser(WorkflowRun run, String containerId, String json) {
+        String question;
+        WorkflowRun.PendingKind kind;
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(json);
+            question = node.path("question").asText(json);
+            kind = "FILE".equalsIgnoreCase(node.path("kind").asText("TEXT"))
+                    ? WorkflowRun.PendingKind.FILE : WorkflowRun.PendingKind.TEXT;
+        } catch (Exception e) {
+            question = json;
+            kind = WorkflowRun.PendingKind.TEXT;
+        }
+
+        CompletableFuture<AskAnswer> future = new CompletableFuture<>();
+        pendingAnswers.put(run.getId(), future);
+
+        run.setStatus(WorkflowRun.RunStatus.AWAITING_INPUT);
+        run.setPendingQuestion(question);
+        run.setPendingKind(kind);
+        runRepo.save(run);
+        pushRunEvent(run.getId(), "question", kind.name(), question);
+        emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM,
+                "Waiting for user " + (kind == WorkflowRun.PendingKind.FILE ? "file upload" : "input")
+                        + ": " + question);
+
+        AskAnswer answer;
+        try {
+            answer = future.get(ASK_USER_SUSPEND_AFTER_MINUTES, TimeUnit.MINUTES);
+        } catch (java.util.concurrent.TimeoutException e) {
+            suspendRun(run, containerId, question, kind);
+            try {
+                answer = future.get(); // no timeout — the sandbox is idle now, this can wait
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Run interrupted while suspended awaiting user input", ie);
+            } catch (java.util.concurrent.ExecutionException ee) {
+                throw new RuntimeException("Failed while awaiting user input", ee);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Run interrupted while awaiting user input", e);
+        } catch (java.util.concurrent.ExecutionException e) {
+            throw new RuntimeException("Failed while awaiting user input", e);
+        } finally {
+            pendingAnswers.remove(run.getId());
+        }
+
+        run.setStatus(WorkflowRun.RunStatus.RUNNING);
+        run.setPendingQuestion(null);
+        run.setPendingKind(null);
+        // Only the first remover actually resumes the sandbox — recoverRun() may have
+        // already won this race if the user clicked Recover before answering.
+        if (suspendedRuns.remove(run.getId()) != null) {
+            emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "Resuming sandbox…");
+            sandboxService.resume(run.getId(), containerId);
+            emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "Sandbox resumed.");
+        }
+        runRepo.save(run);
+
+        if (kind == WorkflowRun.PendingKind.FILE) {
+            String filename = sanitizeFileName(answer.fileName());
+            String path = "/workspace/uploads/" + filename;
+            sandboxService.writeFile(containerId, path, answer.fileBytes());
+            emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "User uploaded file: " + path);
+            return "User uploaded a file, available at: " + path;
+        }
+        emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "User answered: " + truncate(answer.text(), 200));
+        return answer.text();
+    }
+
+    /** Docker-stops the sandbox and releases its concurrency slot while a question goes unanswered. */
+    private void suspendRun(WorkflowRun run, String containerId, String question, WorkflowRun.PendingKind kind) {
+        suspendedRuns.put(run.getId(), true);
+        sandboxService.suspend(containerId);
+        run.setStatus(WorkflowRun.RunStatus.SUSPENDED);
+        runRepo.save(run);
+        pushRunEvent(run.getId(), "suspended", kind.name(), question);
+        emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM,
+                "No response for " + ASK_USER_SUSPEND_AFTER_MINUTES
+                        + " minutes — suspended the sandbox to free its slot. The workspace is preserved;"
+                        + " answering or clicking Recover will resume it.");
+    }
+
+    /** Strips directory components and unsafe characters so an uploaded filename is a safe sandbox path segment. */
+    private String sanitizeFileName(String name) {
+        if (name == null || name.isBlank()) return "upload-" + System.currentTimeMillis();
+        String base = name.replaceAll(".*[/\\\\]", "").replaceAll("[^A-Za-z0-9._-]", "_");
+        return base.isBlank() ? "upload-" + System.currentTimeMillis() : base;
+    }
+
+    private void pushRunEvent(String runId, String eventName, String kind, String question) {
+        SseEmitter emitter = emitters.get(runId);
+        if (emitter == null) return;
+        try {
+            emitter.send(SseEmitter.event().name(eventName)
+                    .data(Map.of("kind", kind, "question", question != null ? question : "")));
+        } catch (Exception e) {
+            emitters.remove(runId);
+        }
     }
 
     // ── Prompt building ───────────────────────────────────────────────────────
@@ -808,13 +1075,15 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         if (tools.isEmpty()) return "";
 
         boolean hasSchedule = tools.stream().anyMatch(t -> "SCHEDULE".equalsIgnoreCase(t));
+        boolean hasAskUser  = tools.stream().anyMatch(t -> "ASK_USER".equalsIgnoreCase(t));
 
         // Separate connector tools (CONNECTOR_*) from sandbox tools
         List<String> connectorIds = tools.stream()
                 .filter(t -> t.toUpperCase().startsWith("CONNECTOR_"))
                 .toList();
         List<String> sandboxTools = tools.stream()
-                .filter(t -> !"SCHEDULE".equalsIgnoreCase(t) && !t.toUpperCase().startsWith("CONNECTOR_"))
+                .filter(t -> !"SCHEDULE".equalsIgnoreCase(t) && !"ASK_USER".equalsIgnoreCase(t)
+                        && !t.toUpperCase().startsWith("CONNECTOR_"))
                 .map(String::toLowerCase)
                 .toList();
 
@@ -848,6 +1117,24 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                     </use_tool>
 
                     cron format: minute hour day month weekday (e.g. "0 9 * * 1-5" = Mon-Fri 9 AM UTC)
+                    """);
+        }
+
+        if (hasAskUser) {
+            sb.append("""
+
+                    To ask the user a question and wait for their reply, or to request a file from them,
+                    use the ASK_USER tool with JSON. The run pauses until they respond.
+                    <use_tool name="ASK_USER">
+                    {"question":"Which region should I deploy to?","kind":"TEXT"}
+                    </use_tool>
+
+                    <use_tool name="ASK_USER">
+                    {"question":"Please upload the CSV to analyze","kind":"FILE"}
+                    </use_tool>
+
+                    A TEXT answer comes back as the tool result. A FILE answer comes back as the sandbox
+                    path the uploaded file was written to — read it from there.
                     """);
         }
 

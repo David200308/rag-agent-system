@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, CircleDot, CheckCircle2, XCircle, Ban } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleDot, CheckCircle2, XCircle, Ban, HelpCircle, Paperclip, PauseCircle, PlayCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MarkdownContent } from "@/components/ui/MarkdownContent";
-import type { LogType, RunStatus, WorkflowRunLog } from "@/types/agent";
+import { Button } from "@/components/ui/Button";
+import { answerWorkflowRun, answerWorkflowRunFile, recoverWorkflowRun } from "@/lib/api";
+import type { LogType, RunStatus, WorkflowRunLog, WorkflowQuestionEvent } from "@/types/agent";
 
 interface Props {
   runId: string | null;
@@ -40,6 +42,13 @@ export function WorkflowRunViewer({ runId, onDone, initialStatus, fill }: Props)
   const [expanded, setExpanded] = useState(true);
   const bottomRef  = useRef<HTMLDivElement>(null);
 
+  // Human-in-the-loop: set when the run is paused on an ASK_USER tool call.
+  const [question,    setQuestion]    = useState<WorkflowQuestionEvent | null>(null);
+  const [answerText,  setAnswerText]  = useState("");
+  const [submitting,  setSubmitting]  = useState(false);
+  const [recovering,  setRecovering]  = useState(false);
+  const fileAnswerRef = useRef<HTMLInputElement>(null);
+
   // Keep onDone in a ref so it never appears in the SSE effect's dependency array.
   // Without this, every parent re-render produces a new function reference, which
   // tears down and restarts the SSE connection and causes the status to flicker
@@ -59,6 +68,8 @@ export function WorkflowRunViewer({ runId, onDone, initialStatus, fill }: Props)
     // Completed runs receive their status via initialStatus, so we avoid the flash.
     setStatus(s => s === "DONE" || s === "FAILED" || s === "CANCELLED" ? s : "RUNNING");
     setOutput(null);
+    setQuestion(null);
+    setAnswerText("");
 
     const es = new EventSource(`/api/workflow/runs/${runId}/stream`);
 
@@ -67,10 +78,23 @@ export function WorkflowRunViewer({ runId, onDone, initialStatus, fill }: Props)
       setLogs(prev => [...prev, data]);
     });
 
+    es.addEventListener("question", (e: MessageEvent) => {
+      const data = JSON.parse(e.data) as WorkflowQuestionEvent;
+      setQuestion(data);
+      setStatus("AWAITING_INPUT");
+    });
+
+    es.addEventListener("suspended", (e: MessageEvent) => {
+      const data = JSON.parse(e.data) as WorkflowQuestionEvent;
+      setQuestion(data);
+      setStatus("SUSPENDED");
+    });
+
     es.addEventListener("done", (e: MessageEvent) => {
       const data = JSON.parse(e.data) as { status: RunStatus; output: string };
       setStatus(data.status);
       setOutput(data.output);
+      setQuestion(null);
       onDoneRef.current?.(data.output, data.status);
       es.close();
     });
@@ -86,7 +110,43 @@ export function WorkflowRunViewer({ runId, onDone, initialStatus, fill }: Props)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs]);
+  }, [logs, question]);
+
+  async function submitTextAnswer() {
+    if (!runId || !answerText.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      await answerWorkflowRun(runId, answerText.trim());
+      setQuestion(null);
+      setAnswerText("");
+      setStatus("RUNNING");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitFileAnswer(file: File) {
+    if (!runId || submitting) return;
+    setSubmitting(true);
+    try {
+      await answerWorkflowRunFile(runId, file);
+      setQuestion(null);
+      setStatus("RUNNING");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleRecover() {
+    if (!runId || recovering) return;
+    setRecovering(true);
+    try {
+      await recoverWorkflowRun(runId);
+      setStatus("AWAITING_INPUT");
+    } finally {
+      setRecovering(false);
+    }
+  }
 
   if (!runId) return null;
 
@@ -97,6 +157,8 @@ export function WorkflowRunViewer({ runId, onDone, initialStatus, fill }: Props)
         <StatusIcon status={status} />
         <span className="text-xs font-medium">
           {status === "RUNNING" ? "Running…"
+            : status === "AWAITING_INPUT" ? "Waiting for input…"
+            : status === "SUSPENDED" ? "Suspended — sandbox stopped"
             : status === "DONE" ? "Done"
             : status === "FAILED" ? "Failed"
             : status === "CANCELLED" ? "Cancelled"
@@ -118,6 +180,63 @@ export function WorkflowRunViewer({ runId, onDone, initialStatus, fill }: Props)
           {logs.map((log, i) => (
             <LogEntry key={i} log={log} />
           ))}
+          {question && status === "SUSPENDED" && (
+            <div className="mt-3 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-3 space-y-2">
+              <p className="flex items-center gap-1.5 text-[10px] font-semibold text-[--color-muted]">
+                <PauseCircle className="h-3.5 w-3.5" /> Suspended — no response for a while
+              </p>
+              <p className="text-sm text-[--color-muted]">
+                The sandbox was stopped to free up resources; its workspace is preserved. The agent was asking:
+              </p>
+              <p className="text-sm italic">&ldquo;{question.question}&rdquo;</p>
+              <Button size="sm" onClick={handleRecover} disabled={recovering} className="flex items-center gap-1.5">
+                <PlayCircle className="h-3.5 w-3.5" />
+                {recovering ? "Recovering…" : "Recover"}
+              </Button>
+            </div>
+          )}
+          {question && status === "AWAITING_INPUT" && (
+            <div className="mt-3 rounded-lg border border-amber-400/60 bg-amber-500/10 p-3 space-y-2">
+              <p className="flex items-center gap-1.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                <HelpCircle className="h-3.5 w-3.5" /> Agent is asking
+              </p>
+              <p className="text-sm">{question.question}</p>
+              {question.kind === "FILE" ? (
+                <>
+                  <input
+                    ref={fileAnswerRef}
+                    type="file"
+                    className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) submitFileAnswer(f); }}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => fileAnswerRef.current?.click()}
+                    disabled={submitting}
+                    className="flex items-center gap-1.5"
+                  >
+                    <Paperclip className="h-3.5 w-3.5" />
+                    {submitting ? "Uploading…" : "Upload file"}
+                  </Button>
+                </>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={answerText}
+                    onChange={e => setAnswerText(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") submitTextAnswer(); }}
+                    disabled={submitting}
+                    placeholder="Type your answer…"
+                    className="flex-1 rounded-md border border-[--color-border] bg-transparent px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                  />
+                  <Button size="sm" onClick={submitTextAnswer} disabled={submitting || !answerText.trim()}>
+                    {submitting ? "Sending…" : "Send"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
           {status === "DONE" && output && (
             <div className="mt-3 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-3">
               <p className="text-[10px] font-semibold text-[--color-muted] mb-2">Final Output</p>
@@ -176,9 +295,11 @@ function LogEntry({ log }: { log: WorkflowRunLog }) {
 }
 
 function StatusIcon({ status }: { status: RunStatus | null }) {
-  if (status === "DONE")      return <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />;
-  if (status === "FAILED")    return <XCircle      className="h-3.5 w-3.5 text-red-500" />;
-  if (status === "CANCELLED") return <Ban          className="h-3.5 w-3.5 text-[--color-muted]" />;
-  if (status === "RUNNING")   return <CircleDot    className="h-3.5 w-3.5 text-blue-500 animate-pulse" />;
+  if (status === "DONE")           return <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />;
+  if (status === "FAILED")         return <XCircle      className="h-3.5 w-3.5 text-red-500" />;
+  if (status === "CANCELLED")      return <Ban          className="h-3.5 w-3.5 text-[--color-muted]" />;
+  if (status === "SUSPENDED")      return <PauseCircle  className="h-3.5 w-3.5 text-[--color-muted]" />;
+  if (status === "AWAITING_INPUT") return <HelpCircle   className="h-3.5 w-3.5 text-amber-500 animate-pulse" />;
+  if (status === "RUNNING")        return <CircleDot    className="h-3.5 w-3.5 text-blue-500 animate-pulse" />;
   return <CircleDot className="h-3.5 w-3.5 text-[--color-muted]" />;
 }

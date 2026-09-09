@@ -1,4 +1,4 @@
-import { request } from "@/lib/backend-client";
+import { request, backendFetch } from "@/lib/backend-client";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 
@@ -29,6 +29,22 @@ export async function GET(req: NextRequest, { params }: Ctx) {
 
 export async function POST(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
+
+  // File attachments arrive as multipart/form-data — forward as-is (rebuilt FormData
+  // so the runtime picks a fresh boundary) rather than through undici's JSON path.
+  if ((req.headers.get("content-type") ?? "").startsWith("multipart/form-data")) {
+    const incoming = await req.formData();
+    const out = new FormData();
+    for (const [key, value] of incoming.entries()) out.append(key, value);
+    const res = await backendFetch(`${BACKEND}/api/v1/workflow/${id}/runs`, {
+      method: "POST",
+      headers: await authHeader() as Record<string, string>,
+      body: out,
+    });
+    const resCt = res.headers.get("content-type") ?? "application/json";
+    return new Response(await res.text(), { status: res.status, headers: { "content-type": resCt } });
+  }
+
   const { statusCode, headers, body } = await request(
     `${BACKEND}/api/v1/workflow/${id}/runs`,
     { method: "POST", headers: { "content-type": "application/json", ...await authHeader() }, body: await req.text() },

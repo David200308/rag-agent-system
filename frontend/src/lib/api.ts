@@ -72,6 +72,17 @@ export async function queryAgent(payload: AgentRequest): Promise<AgentResponse> 
   return postJson<AgentResponse>("/api/agent/query", payload);
 }
 
+/**
+ * Same as queryAgent, but with one-off file attachments for this turn only —
+ * extracted server-side (Tika) and fed into context, never saved to the knowledge base.
+ */
+export async function queryAgentWithFiles(payload: AgentRequest, files: File[]): Promise<AgentResponse> {
+  const form = new FormData();
+  form.append("request", JSON.stringify(payload));
+  for (const f of files) form.append("files", f);
+  return postForm<AgentResponse>("/api/agent/query", form);
+}
+
 export async function fetchKnowledgeSources(): Promise<KnowledgeSourceEntry[]> {
   const res = await fetch("/api/agent/knowledge");
   if (!res.ok) return [];
@@ -468,8 +479,37 @@ export async function startWorkflowRun(
   workflowId: string,
   userInput: string,
   emailNotify = false,
+  files: File[] = [],
 ): Promise<{ runId: string }> {
-  return postJson<{ runId: string }>(`/api/workflow/${workflowId}/runs`, { userInput, emailNotify });
+  if (files.length === 0) {
+    return postJson<{ runId: string }>(`/api/workflow/${workflowId}/runs`, { userInput, emailNotify });
+  }
+  const form = new FormData();
+  form.append("userInput", userInput);
+  form.append("emailNotify", String(emailNotify));
+  for (const f of files) form.append("files", f);
+  return postForm<{ runId: string }>(`/api/workflow/${workflowId}/runs`, form);
+}
+
+/** Answers a run paused on ASK_USER (kind=TEXT), resuming it. */
+export async function answerWorkflowRun(runId: string, answer: string): Promise<void> {
+  await fetch(`/api/workflow/runs/${runId}/answer`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ answer }),
+  });
+}
+
+/** Answers a run paused on ASK_USER (kind=FILE) with an uploaded file, resuming it. */
+export async function answerWorkflowRunFile(runId: string, file: File): Promise<void> {
+  const form = new FormData();
+  form.append("file", file);
+  await fetch(`/api/workflow/runs/${runId}/answer-file`, { method: "POST", body: form });
+}
+
+/** Wakes a SUSPENDED run back up — resumes its sandbox and returns it to AWAITING_INPUT. */
+export async function recoverWorkflowRun(runId: string): Promise<void> {
+  await fetch(`/api/workflow/runs/${runId}/recover`, { method: "POST" });
 }
 
 export async function fetchConnectorStatus(): Promise<Record<string, boolean>> {

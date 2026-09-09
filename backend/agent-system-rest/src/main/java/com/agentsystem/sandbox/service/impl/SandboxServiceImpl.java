@@ -99,15 +99,25 @@ public class SandboxServiceImpl implements SandboxService {
 
     // ── Runtime state ─────────────────────────────────────────────────────────
 
-    private static final String SLOTS_SEMAPHORE_KEY   = "sandbox:slots";
-    private static final String ACTIVE_CONTAINERS_KEY  = "sandbox:active-containers";
-    private static final String KILLED_CONTAINERS_KEY  = "sandbox:killed-containers";
+    private static final String SLOTS_SEMAPHORE_KEY      = "sandbox:slots";
+    private static final String ACTIVE_CONTAINERS_KEY    = "sandbox:active-containers";
+    private static final String KILLED_CONTAINERS_KEY    = "sandbox:killed-containers";
+    private static final String SUSPENDED_CONTAINERS_KEY = "sandbox:suspended-containers";
 
     /** Cluster-wide concurrency cap — every backend instance shares the same Redis-backed permit pool. */
     private RSemaphore             slots;
     private BlockingQueue<String>  waitQueue;
     private final AtomicInteger    active  = new AtomicInteger(0);
     private final AtomicInteger    queued  = new AtomicInteger(0);
+
+    /**
+     * Container ids already torn down — guards destroySandbox() against being called twice
+     * for the same container (cancelRun() calls it directly, then the interrupted worker
+     * thread's own finally block calls it again once it unwinds), which would otherwise
+     * double-release its concurrency slot. In-process only, matching this run's other
+     * per-container coordination (active/queued counters) rather than the cluster-wide slots.
+     */
+    private final Set<String> destroyedContainers = ConcurrentHashMap.newKeySet();
 
     private ScheduledExecutorService watchdogExecutor;
 
@@ -234,6 +244,35 @@ public class SandboxServiceImpl implements SandboxService {
     }
 
     /**
+     * Writes bytes to a file at the given absolute path inside the container,
+     * creating parent directories as needed. No-op if the container is unavailable.
+     */
+    @Override
+    public void writeFile(String containerId, String path, byte[] content) {
+        if (containerId == null || containerId.isBlank()) return;
+
+        Path tmp = null;
+        try {
+            tmp = Files.createTempFile("sandbox-upload-", ".bin");
+            Files.write(tmp, content);
+
+            int lastSlash = path.lastIndexOf('/');
+            if (lastSlash > 0) {
+                runProcess(List.of("docker", "exec", containerId, "mkdir", "-p", path.substring(0, lastSlash)), 10);
+            }
+            runProcess(List.of("docker", "cp", tmp.toString(), containerId + ":" + path), 30);
+            log.debug("[Sandbox] Wrote {} bytes to {}:{}", content.length, shortId(containerId), path);
+        } catch (Exception e) {
+            log.warn("[Sandbox] writeFile failed for {}:{} — {}", shortId(containerId), path, e.getMessage());
+            throw new RuntimeException("Failed to write file into sandbox: " + e.getMessage(), e);
+        } finally {
+            if (tmp != null) {
+                try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
+            }
+        }
+    }
+
+    /**
      * Wipes /workspace and kills background processes so the container can be
      * reused for a chained task without leaving stale state.
      */
@@ -253,14 +292,28 @@ public class SandboxServiceImpl implements SandboxService {
 
     /**
      * Stops and removes the container, then releases the concurrency slot.
-     * Skips the docker rm if the watchdog already removed it.
+     * Skips the docker rm if the watchdog already removed it, and skips the slot
+     * release if it was already released by {@link #suspend} (avoids double-releasing
+     * a permit if a suspended run is later cancelled/deleted).
+     *
+     * Idempotent — callers can call this twice for the same container (e.g. cancelRun()
+     * destroys it directly while the interrupted worker thread's own finally block does
+     * the same once it unwinds) without double-releasing the concurrency slot.
      */
     @Override
     public void destroySandbox(String containerId) {
         if (containerId == null || containerId.isBlank()) return;
+
+        if (!destroyedContainers.add(containerId)) {
+            log.debug("[Sandbox] destroySandbox() called again for {} — already destroyed, skipping", shortId(containerId));
+            return;
+        }
+
         redisTemplate.opsForHash().delete(ACTIVE_CONTAINERS_KEY, containerId);
         Long killedRemoved = redisTemplate.opsForHash().delete(KILLED_CONTAINERS_KEY, containerId);
         boolean wasKilledByWatchdog = killedRemoved != null && killedRemoved > 0;
+        Long suspendedRemoved = redisTemplate.opsForHash().delete(SUSPENDED_CONTAINERS_KEY, containerId);
+        boolean wasSuspended = suspendedRemoved != null && suspendedRemoved > 0;
         if (!wasKilledByWatchdog) {
             try {
                 runProcess(List.of("docker", "rm", "-f", containerId), 15);
@@ -269,9 +322,69 @@ public class SandboxServiceImpl implements SandboxService {
                 log.warn("[Sandbox] Could not destroy container {}: {}", containerId, e.getMessage());
             }
         }
+        if (wasSuspended) {
+            log.info("[Sandbox] Destroyed suspended container {} — slot was already released, skipping", shortId(containerId));
+            return;
+        }
         slots.release();
         active.decrementAndGet();
         log.info("[Sandbox] Slot released — active={} queued={}", active.get(), queued.get());
+    }
+
+    /**
+     * Docker-stops (not removes) the container and releases its concurrency slot so other
+     * runs can use it — /workspace and the container object are kept intact for resume().
+     */
+    @Override
+    public void suspend(String containerId) {
+        if (containerId == null || containerId.isBlank()) return;
+        try {
+            runProcess(List.of("docker", "stop", "-t", "5", containerId), 15);
+            log.info("[Sandbox] Suspended (stopped) container {}", shortId(containerId));
+        } catch (Exception e) {
+            log.warn("[Sandbox] Failed to stop container {} on suspend: {}", shortId(containerId), e.getMessage());
+        }
+        // Drop it from active tracking so the watchdog stops polling a stopped container.
+        redisTemplate.opsForHash().delete(ACTIVE_CONTAINERS_KEY, containerId);
+        redisTemplate.<String, String>opsForHash().put(SUSPENDED_CONTAINERS_KEY, containerId, "1");
+        slots.release();
+        active.decrementAndGet();
+        log.info("[Sandbox] Slot released for suspended container {} — active={} queued={}",
+                shortId(containerId), active.get(), queued.get());
+    }
+
+    /**
+     * Reverses suspend(): re-acquires a concurrency slot (blocks if all slots are taken)
+     * and docker-starts the container again.
+     */
+    @Override
+    public void resume(String runId, String containerId) {
+        if (containerId == null || containerId.isBlank()) return;
+        Long removed = redisTemplate.opsForHash().delete(SUSPENDED_CONTAINERS_KEY, containerId);
+        if (removed == null || removed == 0) {
+            log.warn("[Sandbox] resume() called for container {} that isn't marked suspended — ignoring",
+                    shortId(containerId));
+            return;
+        }
+        try {
+            slots.acquire();
+        } catch (InterruptedException e) {
+            redisTemplate.<String, String>opsForHash().put(SUSPENDED_CONTAINERS_KEY, containerId, "1");
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted while waiting for a sandbox slot to resume", e);
+        }
+        active.incrementAndGet();
+        try {
+            runProcess(List.of("docker", "start", containerId), 30);
+            redisTemplate.<String, String>opsForHash().put(ACTIVE_CONTAINERS_KEY, containerId, runId);
+            log.info("[Sandbox] Resumed container {} for run {} — active={} queued={}",
+                    shortId(containerId), runId, active.get(), queued.get());
+        } catch (Exception e) {
+            slots.release();
+            active.decrementAndGet();
+            redisTemplate.<String, String>opsForHash().put(SUSPENDED_CONTAINERS_KEY, containerId, "1");
+            throw new RuntimeException("Failed to resume sandbox: " + e.getMessage(), e);
+        }
     }
 
     // ── Watchdog ──────────────────────────────────────────────────────────────

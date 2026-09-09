@@ -8,7 +8,7 @@ import {
   useMemo,
   type KeyboardEvent,
 } from "react";
-import { Send, Database, Globe, Zap, X, ChevronDown } from "lucide-react";
+import { Send, Database, Globe, Zap, X, ChevronDown, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { fetchSkills } from "@/lib/api";
@@ -19,6 +19,8 @@ import {
 } from "./SlashCommandMenu";
 import type { Skill } from "@/types/agent";
 
+const MAX_ATTACHMENTS = 3;
+
 interface MessageInputProps {
   onSend: (
     query: string,
@@ -26,8 +28,28 @@ interface MessageInputProps {
     useKnowledgeBase: boolean,
     useWebFetch: boolean,
     skillIds: string[],
+    files: File[],
   ) => void;
   disabled?: boolean;
+}
+
+// ── AttachmentChip ────────────────────────────────────────────────────────────
+
+function AttachmentChip({ file, onRemove }: { file: File; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-300">
+      <Paperclip className="h-3 w-3 shrink-0" />
+      <span className="max-w-[10rem] truncate">{file.name}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="ml-0.5 hover:text-red-500"
+        aria-label={`Remove attachment ${file.name}`}
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </span>
+  );
 }
 
 // ── ToggleChip ────────────────────────────────────────────────────────────────
@@ -187,6 +209,10 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
   const [selectedSkills, setSelectedSkills] = useState<Skill[]>([]);
   const [showSkillPicker, setShowSkillPicker] = useState(false);
 
+  // File attachments — this-turn-only, not saved to the knowledge base
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Slash command state
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashFilter, setSlashFilter] = useState("");
@@ -304,8 +330,10 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
       useKnowledgeBase,
       useWebFetch,
       selectedSkills.map((s) => s.id),
+      attachments,
     );
     setText("");
+    setAttachments([]);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
 
@@ -395,6 +423,45 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
               />
             )}
           </div>
+        </div>
+
+        <span className="hidden h-4 w-px bg-[--color-border] sm:block" />
+
+        {/* File attachments — this turn only, not saved to the knowledge base */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-[--color-muted]">Files:</span>
+
+          {attachments.map((file, i) => (
+            <AttachmentChip
+              key={`${file.name}-${i}`}
+              file={file}
+              onRemove={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+            />
+          ))}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const picked = Array.from(e.target.files ?? []);
+              if (picked.length) {
+                setAttachments((prev) => [...prev, ...picked].slice(0, MAX_ATTACHMENTS));
+              }
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={attachments.length >= MAX_ATTACHMENTS}
+            className="inline-flex items-center gap-1 rounded-full border border-[--color-border] px-2 py-0.5 text-xs font-medium text-[--color-muted] transition-colors hover:border-sky-400 hover:text-sky-600 disabled:opacity-40 disabled:hover:border-[--color-border] disabled:hover:text-[--color-muted]"
+            title={`Attach up to ${MAX_ATTACHMENTS} files (this reply only)`}
+          >
+            <Paperclip className="h-3 w-3" />
+            Attach
+          </button>
         </div>
       </div>
 

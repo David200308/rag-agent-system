@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { X, RefreshCw, CheckCircle2, XCircle, CircleDot, Clock, Ban, Square, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, RefreshCw, CheckCircle2, XCircle, CircleDot, Clock, Ban, Square, Trash2, ChevronLeft, ChevronRight, HelpCircle, PauseCircle } from "lucide-react";
 import { WorkflowRunViewer } from "./WorkflowRunViewer";
 import { fetchWorkflowRuns, stopWorkflowRun, deleteWorkflowRun } from "@/lib/api";
 import type { WorkflowRun } from "@/types/agent";
@@ -18,9 +18,11 @@ interface Props {
 function statusIcon(status: WorkflowRun["status"]) {
   if (status === "DONE")      return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />;
   if (status === "FAILED")    return <XCircle      className="h-3.5 w-3.5 text-red-500 shrink-0" />;
-  if (status === "CANCELLED") return <Ban          className="h-3.5 w-3.5 text-[--color-muted] shrink-0" />;
-  if (status === "RUNNING")   return <CircleDot    className="h-3.5 w-3.5 text-blue-500 animate-pulse shrink-0" />;
-  return                             <Clock        className="h-3.5 w-3.5 text-[--color-muted] shrink-0" />;
+  if (status === "CANCELLED")      return <Ban         className="h-3.5 w-3.5 text-[--color-muted] shrink-0" />;
+  if (status === "RUNNING")        return <CircleDot   className="h-3.5 w-3.5 text-blue-500 animate-pulse shrink-0" />;
+  if (status === "AWAITING_INPUT") return <HelpCircle  className="h-3.5 w-3.5 text-amber-500 animate-pulse shrink-0" />;
+  if (status === "SUSPENDED")      return <PauseCircle className="h-3.5 w-3.5 text-[--color-muted] shrink-0" />;
+  return                                   <Clock       className="h-3.5 w-3.5 text-[--color-muted] shrink-0" />;
 }
 
 function duration(run: WorkflowRun) {
@@ -155,7 +157,9 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
             <div className="flex items-center gap-2">
               {statusIcon(run.status)}
               <span className="text-[11px] font-semibold capitalize text-[--color-fg]">
-                {run.status.toLowerCase()}
+                {run.status === "AWAITING_INPUT" ? "waiting for input"
+                  : run.status === "SUSPENDED" ? "suspended"
+                  : run.status.toLowerCase()}
               </span>
               {run.workflowVersion != null && (
                 <span className="rounded-full border border-[--color-border] px-1.5 py-0 text-[9px] font-medium text-[--color-muted]">
@@ -163,7 +167,7 @@ export function WorkflowRunsPanel({ workflowId, liveRunId, onClose, onRunComplet
                 </span>
               )}
               <div className="ml-auto flex items-center gap-1.5">
-                {run.status === "RUNNING" && (
+                {(run.status === "RUNNING" || run.status === "AWAITING_INPUT" || run.status === "SUSPENDED") && (
                   <button
                     onClick={(e) => handleStop(e, run.id)}
                     className="rounded p-1 text-red-500 hover:bg-red-500/10"
