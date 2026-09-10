@@ -22,3 +22,20 @@ server:
   secret_key: "__SEARXNG_SECRET_KEY__"
   limiter: false
   image_proxy: false
+
+# Disable engines that don't work in this deployment:
+#   - ahmia, torch: .onion-only search engines, need a Tor proxy sidecar we don't run.
+#   - startpage: frequently CAPTCHA-blocks datacenter/cloud IPs and, on failure, self-
+#     suspends for an hour (suspended_time=3600) — every query in that window still
+#     pays its per-engine timeout for nothing. duckduckgo CAPTCHAs occasionally too but
+#     doesn't self-suspend, so it's left enabled.
+# `name:` must match the engine's default name exactly (see SearXNG's own
+# searx/settings.yml for the full default list) — entries here only override
+# those defaults, via use_default_settings' engines merge.
+engines:
+  - name: ahmia
+    disabled: true
+  - name: torch
+    disabled: true
+  - name: startpage
+    disabled: true

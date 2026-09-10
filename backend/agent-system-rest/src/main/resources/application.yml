@@ -246,8 +246,11 @@ resilience4j:
     instances:
       retrieval:
         timeout-duration: 5s
+      # 60s (was 30s) — generation can now chain multiple searchWeb tool calls
+      # (SearXNG round-trip + another LLM turn each) before the final answer,
+      # which routinely takes longer than a single completion did.
       llm:
-        timeout-duration: 30s
+        timeout-duration: 60s
 
 management:
   endpoints:
