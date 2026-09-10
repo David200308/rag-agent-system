@@ -55,6 +55,10 @@ secrets/*
 #    the generated rpc_secret/admin_token, never the template itself) ────────
 observability/garage/garage.toml
 
+# ── SearXNG config (rendered from settings.yml.template by setup.sh — contains
+#    the generated secret_key, never the template itself) ────────────────────
+searxng/settings.yml
+
 # ── Docker ────────────────────────────────────────────────────────────────────
 docker-compose.override.yml
 

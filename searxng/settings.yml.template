@@ -1,0 +1,24 @@
+# Self-hosted SearXNG instance used only by the backend's WebSearchAgentTool —
+# reachable on the docker-internal network only, never exposed as a public
+# search engine. json format is enabled here specifically so the backend can
+# query /search?format=json (SearXNG's own defaults disable json since public
+# instances shouldn't allow bulk scraping — doesn't apply to a private instance).
+#
+# Rendered into searxng/settings.yml by setup.sh (same __PLACEHOLDER__ + sed
+# pattern as observability/garage/garage.toml.template). The rendered file is
+# git-ignored since it embeds a real secret_key; this template is the only
+# copy that's committed.
+use_default_settings: true
+
+general:
+  instance_name: "agent-system-searxng"
+
+search:
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: "__SEARXNG_SECRET_KEY__"
+  limiter: false
+  image_proxy: false

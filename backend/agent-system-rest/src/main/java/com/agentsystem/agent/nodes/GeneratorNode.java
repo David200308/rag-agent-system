@@ -11,6 +11,7 @@ import com.agentsystem.connector.tool.GoogleSheetsAgentTool;
 import com.agentsystem.connector.tool.GoogleSlidesAgentTool;
 import com.agentsystem.connector.tool.TelegramAgentTool;
 import com.agentsystem.connector.tool.TravelAgentTool;
+import com.agentsystem.connector.tool.WebSearchAgentTool;
 import com.agentsystem.model.entity.ModelConfig;
 import com.agentsystem.model.service.ModelConfigService;
 import com.agentsystem.schema.AgentRequest;
@@ -53,6 +54,7 @@ public class GeneratorNode {
     private final GoogleCalendarAgentTool  googleCalendarTool;
     private final TelegramAgentTool        telegramTool;
     private final TravelAgentTool          travelTool;
+    private final WebSearchAgentTool       webSearchTool;
 
     private static final String SYSTEM_PROMPT = """
             You are a helpful, accurate AI assistant with access to Google Workspace, Google Calendar, and Telegram \
@@ -85,6 +87,13 @@ public class GeneratorNode {
             Investment price alerts (crypto/stock) are managed only from the Financial section of the \
             app UI, not via chat — if the user asks to set up a price alert, tell them to use the \
             bell/alert icon next to the symbol in the Financial section.
+
+            WEB SEARCH TOOL:
+            - searchWeb: call this for any question needing current or external information
+              that isn't in the knowledge base and for which the user hasn't already given
+              you a specific URL (if they have, use that URL's content directly instead of
+              searching). Returns top results with title, URL, and snippet — ground your
+              answer in them and cite each source inline as [Source: <url>].
 
             TRAVEL TOOL:
             - getTravelRecords: call this for ANY question about the user's trips, travel \
@@ -180,7 +189,7 @@ public class GeneratorNode {
         try {
             ToolCallbackProvider tools = MethodToolCallbackProvider.builder()
                     .toolObjects(googleDocsTool, googleSheetsTool, googleSlidesTool,
-                                 googleCalendarTool, telegramTool, travelTool)
+                                 googleCalendarTool, telegramTool, travelTool, webSearchTool)
                     .build();
 
             answer = generationService.generate(effectiveClient, SYSTEM_PROMPT, userPrompt, tools,

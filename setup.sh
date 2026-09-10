@@ -298,6 +298,12 @@ if [ "$MODE" = "local" ]; then
   echo -e "  ${DIM}Storage service key + Garage credentials auto-generated.${NC}"
   echo -e "  ${DIM}Garage config rendered: observability/garage/garage.toml${NC}"
 
+  # ── Web search (self-hosted SearXNG) ──────────────────────────────────────
+  SEARXNG_SECRET_KEY="$(openssl rand -hex 32)"
+  sed -e "s|__SEARXNG_SECRET_KEY__|$SEARXNG_SECRET_KEY|" \
+      "$SCRIPT_DIR/searxng/settings.yml.template" > "$SCRIPT_DIR/searxng/settings.yml"
+  echo -e "  ${DIM}SearXNG config rendered: searxng/settings.yml${NC}"
+
   # ── Financial / Market data ───────────────────────────────────────────────
   header "Financial — Finnhub (optional)"
   echo -e "  ${DIM}Used for live stock prices. Get a free key at https://finnhub.io/register${NC}"
@@ -447,6 +453,11 @@ GARAGE_BUCKET=$GARAGE_BUCKET
 WEB_FETCH_ENABLED=true
 WEB_FETCH_TIMEOUT=10
 WEB_FETCH_MAX_CHARS=50000
+
+# ── Web search (self-hosted SearXNG — free, no API key, no query cap) ────────
+WEB_SEARCH_ENABLED=true
+WEB_SEARCH_TIMEOUT=10
+WEB_SEARCH_MAX_RESULTS=5
 
 # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ───────────────
 # Google:   https://console.cloud.google.com/apis/credentials
@@ -876,6 +887,20 @@ else
       "$SCRIPT_DIR/observability/garage/garage.toml.template" > "$SCRIPT_DIR/observability/garage/garage.toml"
   echo -e "  ${DIM}Garage config rendered: observability/garage/garage.toml${NC}"
 
+  # ── Web search (self-hosted SearXNG) ──────────────────────────────────────
+  # Same first-setup-only guard as Garage's rpc_secret — searxng_secret_key isn't
+  # mounted as a Docker secret (SearXNG has no env-var override for it); it's
+  # persisted here only so re-runs can re-render the same searxng/settings.yml.
+  if ! has_secret searxng_secret_key; then
+    SEARXNG_SECRET_KEY="$(openssl rand -hex 32)"
+    write_secret searxng_secret_key "$SEARXNG_SECRET_KEY"
+  else
+    SEARXNG_SECRET_KEY="$(read_secret searxng_secret_key)"
+  fi
+  sed -e "s|__SEARXNG_SECRET_KEY__|$SEARXNG_SECRET_KEY|" \
+      "$SCRIPT_DIR/searxng/settings.yml.template" > "$SCRIPT_DIR/searxng/settings.yml"
+  echo -e "  ${DIM}SearXNG config rendered: searxng/settings.yml${NC}"
+
   # ── Financial / Market data ───────────────────────────────────────────────
   header "Financial — Finnhub (optional)"
   UPDATE_FH=true
@@ -1084,6 +1109,11 @@ GARAGE_BUCKET=$GARAGE_BUCKET
 WEB_FETCH_ENABLED=true
 WEB_FETCH_TIMEOUT=10
 WEB_FETCH_MAX_CHARS=50000
+
+# ── Web search (self-hosted SearXNG — free, no API key, no query cap) ────────
+WEB_SEARCH_ENABLED=true
+WEB_SEARCH_TIMEOUT=10
+WEB_SEARCH_MAX_RESULTS=5
 
 # ── Connectors (credentials come from secrets; TELEGRAM_BOT_USERNAME is non-secret)
 # Telegram webhook registration: POST https://api.telegram.org/bot<TOKEN>/setWebhook?url=<BACKEND_URL>/api/v1/connectors/telegram/webhook

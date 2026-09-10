@@ -177,6 +177,23 @@ services:
       timeout: 3s
       retries: 10
 
+  # ── SearXNG (self-hosted metasearch — free, no API key, no query cap) ────────
+  # Aggregates Google/Bing/DuckDuckGo/etc. Queried by WebSearchAgentTool via its
+  # JSON API (format=json, enabled in searxng/settings.yml).
+  searxng:
+    image: searxng/searxng:latest
+    container_name: agent-system-searxng
+    ports:
+      - "8090:8080"
+    restart: unless-stopped
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   # ── Garage (S3-compatible object storage for images) ──────────────────────────
   # garage.toml is rendered from observability/garage/garage.toml.template by
   # setup.sh (embeds the generated rpc_secret/admin_token). S3 API (3900) and
@@ -583,6 +600,11 @@ services:
       WEB_FETCH_ENABLED: ${WEB_FETCH_ENABLED:-true}
       WEB_FETCH_TIMEOUT: ${WEB_FETCH_TIMEOUT:-10}
       WEB_FETCH_MAX_CHARS: ${WEB_FETCH_MAX_CHARS:-50000}
+      # ── Web search (self-hosted SearXNG — free, no API key)
+      WEB_SEARCH_ENABLED: ${WEB_SEARCH_ENABLED:-true}
+      WEB_SEARCH_URL: http://searxng:8080
+      WEB_SEARCH_TIMEOUT: ${WEB_SEARCH_TIMEOUT:-10}
+      WEB_SEARCH_MAX_RESULTS: ${WEB_SEARCH_MAX_RESULTS:-5}
       # ── Connectors (credentials come from secrets; TELEGRAM_BOT_USERNAME is non-secret)
       CONNECTOR_CALLBACK_BASE_URL: ${CONNECTOR_CALLBACK_BASE_URL:-http://localhost:3000}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}

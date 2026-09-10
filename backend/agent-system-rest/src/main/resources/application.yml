@@ -195,6 +195,16 @@ web-fetch:
   timeout-seconds: ${WEB_FETCH_TIMEOUT:10}
   max-content-length-chars: ${WEB_FETCH_MAX_CHARS:50000}
 
+# ── Web-search feature ───────────────────────────────────────────────────────
+# Real, open-ended web search (as opposed to web-fetch, which only fetches
+# specific already-known URLs). Backed by a self-hosted SearXNG instance —
+# free, no API key, no query cap. See docker-compose.yml's `searxng` service.
+web-search:
+  enabled: ${WEB_SEARCH_ENABLED:true}
+  base-url: ${WEB_SEARCH_URL:http://searxng:8080}
+  timeout-seconds: ${WEB_SEARCH_TIMEOUT:10}
+  max-results: ${WEB_SEARCH_MAX_RESULTS:5}
+
 server:
   port: 8081
 

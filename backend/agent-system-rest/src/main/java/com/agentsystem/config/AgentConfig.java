@@ -19,7 +19,7 @@ import io.swagger.v3.oas.models.info.Info;
  * the single bean that selects openai / anthropic / openrouter at startup.
  */
 @Configuration
-@EnableConfigurationProperties({LlmProperties.class, WebFetchProperties.class})
+@EnableConfigurationProperties({LlmProperties.class, WebFetchProperties.class, WebSearchProperties.class})
 public class AgentConfig {
 
     /**
