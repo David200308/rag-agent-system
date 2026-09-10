@@ -8,7 +8,7 @@ import {
   useMemo,
   type KeyboardEvent,
 } from "react";
-import { Send, Database, Globe, Zap, X, ChevronDown, Paperclip } from "lucide-react";
+import { Send, Square, Database, Globe, Zap, X, ChevronDown, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { fetchSkills } from "@/lib/api";
@@ -31,6 +31,8 @@ interface MessageInputProps {
     files: File[],
   ) => void;
   disabled?: boolean;
+  /** Called when the user clicks Stop while a request for this conversation is pending. */
+  onStop?: () => void;
 }
 
 // ── AttachmentChip ────────────────────────────────────────────────────────────
@@ -198,7 +200,7 @@ function SkillPickerDropdown({
 
 // ── MessageInput (root) ───────────────────────────────────────────────────────
 
-export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
+export function MessageInput({ onSend, disabled = false, onStop }: MessageInputProps) {
   const [text, setText] = useState("");
   const [topK, setTopK] = useState(5);
   const [useKnowledgeBase, setUseKnowledgeBase] = useState(true);
@@ -493,13 +495,19 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
             )}
           />
           <div className="flex shrink-0 items-center gap-1">
-            <Button
-              size="icon"
-              onClick={submit}
-              disabled={!text.trim() || disabled}
-            >
-              <Send className="h-4 w-4" strokeWidth={2.5} />
-            </Button>
+            {disabled && onStop ? (
+              <Button size="icon" onClick={onStop} title="Stop generating">
+                <Square className="h-4 w-4" strokeWidth={2.5} />
+              </Button>
+            ) : (
+              <Button
+                size="icon"
+                onClick={submit}
+                disabled={!text.trim() || disabled}
+              >
+                <Send className="h-4 w-4" strokeWidth={2.5} />
+              </Button>
+            )}
           </div>
         </div>
       </div>

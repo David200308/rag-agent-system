@@ -34,12 +34,15 @@ public class FallbackNode {
     private final FallbackService fallbackService;
 
     public Map<String, Object> process(AgentState state) {
+        long start = System.currentTimeMillis();
+
         AgentRequest request = state.request().orElseThrow();
         String reason = state.fallbackReason().orElse("Unknown reason");
 
         log.warn("[FallbackNode] Activating fallback — reason: {}", reason);
 
-        String answer = fallbackService.resolveFallback(request.query(), reason, state.selectedModelDisplayName());
+        String answer = fallbackService.resolveFallback(
+                request.query(), reason, state.selectedModelDisplayName(), request.conversationHistory());
 
         AgentResponse response = new AgentResponse(
                 answer,
@@ -50,7 +53,7 @@ public class FallbackNode {
                 new AgentResponse.RunMetadata(
                         state.runId().orElse(UUID.randomUUID().toString()),
                         Instant.now(),
-                        0L,
+                        System.currentTimeMillis() - start,
                         0,
                         "fallback",
                         null   // conversationId injected by AgentController after persistence

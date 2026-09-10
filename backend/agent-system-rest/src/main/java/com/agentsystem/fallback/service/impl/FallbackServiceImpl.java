@@ -6,6 +6,7 @@ import com.agentsystem.config.ChatModelFactory;
 import com.agentsystem.config.FallbackProperties;
 import com.agentsystem.model.entity.ModelConfig;
 import com.agentsystem.model.service.ModelConfigService;
+import com.agentsystem.schema.AgentRequest;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +15,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -46,22 +48,28 @@ public class FallbackServiceImpl implements FallbackService {
      * Entry point called by {@link com.agentsystem.agent.nodes.FallbackNode}.
      */
     @Override
-    public String resolveFallback(String query, String reason, Optional<String> selectedModelDisplayName) {
+    public String resolveFallback(String query, String reason, Optional<String> selectedModelDisplayName,
+                                   List<AgentRequest.ConversationTurn> history) {
         log.warn("[FallbackService] Resolving fallback for: '{}', reason: {}", query, reason);
 
-        // 1. Check cache
-        String cached = redisTemplate.opsForValue().get(CACHE_KEY_PREFIX + normalise(query));
-        if (cached != null) {
-            log.info("[FallbackService] Cache hit for query");
-            return "(Cached) " + cached;
+        // 1. Check cache — only for a query with no conversation context, since a cached
+        // answer is generic and can't reflect a specific conversation's history.
+        boolean hasHistory = history != null && !history.isEmpty();
+        if (!hasHistory) {
+            String cached = redisTemplate.opsForValue().get(CACHE_KEY_PREFIX + normalise(query));
+            if (cached != null) {
+                log.info("[FallbackService] Cache hit for query");
+                return "(Cached) " + cached;
+            }
         }
 
         // 2. Try LLM direct answer with circuit-breaker
-        return tryDirectAnswer(query, reason, selectedModelDisplayName);
+        return tryDirectAnswer(query, reason, selectedModelDisplayName, history);
     }
 
     @CircuitBreaker(name = "llm", fallbackMethod = "staticFallback")
-    public String tryDirectAnswer(String query, String reason, Optional<String> selectedModelDisplayName) {
+    public String tryDirectAnswer(String query, String reason, Optional<String> selectedModelDisplayName,
+                                   List<AgentRequest.ConversationTurn> history) {
         log.info("[FallbackService] Attempting direct LLM answer");
 
         ModelConfig selectedConfig = selectedModelDisplayName
@@ -78,19 +86,36 @@ public class FallbackServiceImpl implements FallbackService {
                         of your knowledge. If you cannot answer reliably, say so clearly.
                         Do NOT make up facts.
                         """)
-                .user("Question: " + query)
+                .user(buildUserPrompt(query, history))
                 .call()
                 .content();
 
-        // Cache for future fallback hits
-        redisTemplate.opsForValue().set(CACHE_KEY_PREFIX + normalise(query), answer, cacheTtl());
+        // Cache for future fallback hits — only when the answer has no conversation-specific
+        // context baked in, so it's safe to reuse for a different conversation later.
+        if (history == null || history.isEmpty()) {
+            redisTemplate.opsForValue().set(CACHE_KEY_PREFIX + normalise(query), answer, cacheTtl());
+        }
         return answer;
     }
 
     /** Resilience4j fallback — LLM circuit-breaker is open. */
-    public String staticFallback(String query, String reason, Optional<String> selectedModelDisplayName, Throwable ex) {
+    public String staticFallback(String query, String reason, Optional<String> selectedModelDisplayName,
+                                  List<AgentRequest.ConversationTurn> history, Throwable ex) {
         log.error("[FallbackService] LLM unavailable, serving static fallback: {}", ex.getMessage());
         return STATIC_FALLBACK;
+    }
+
+    private String buildUserPrompt(String query, List<AgentRequest.ConversationTurn> history) {
+        if (history == null || history.isEmpty()) {
+            return "Question: " + query;
+        }
+        StringBuilder sb = new StringBuilder("## Conversation History\n");
+        for (AgentRequest.ConversationTurn turn : history) {
+            sb.append("**").append("user".equals(turn.role()) ? "User" : "Assistant").append(":** ");
+            sb.append(turn.content()).append("\n\n");
+        }
+        sb.append("## Current Question\n").append(query);
+        return sb.toString();
     }
 
     /** Cache a known good answer manually (e.g. from admin endpoint). */

@@ -33,6 +33,7 @@ function parseKV(text: string): Record<string, string> {
 export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps) {
   const router = useRouter();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [showShare, setShowShare] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const { conversations, addMessage, setBackendConversationId } = useChatStore();
@@ -69,20 +70,37 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
     }
   };
 
+  // Variables captured at dispatch time (not via closure) so that if the user
+  // switches to a different conversation before this call resolves, the result
+  // still lands on the conversation that actually asked — never the one
+  // currently on screen.
+  interface SendVariables {
+    req: AgentRequest;
+    files: File[];
+    conversationId: string;
+    backendConversationId: string | undefined;
+    convModel: string | null;
+  }
+
   const mutation = useMutation({
-    mutationFn: ({ req, files }: { req: AgentRequest; files: File[] }) =>
-      files.length > 0 ? queryAgentWithFiles(req, files) : queryAgent(req),
-    onSuccess: (response) => {
+    mutationFn: ({ req, files }: SendVariables) => {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      return files.length > 0
+        ? queryAgentWithFiles(req, files, controller.signal)
+        : queryAgent(req, controller.signal);
+    },
+    onSuccess: (response, variables) => {
       // Capture the backend-assigned conversationId so subsequent turns link correctly
       const backendId = response.metadata?.conversationId;
-      if (backendId && !conversation?.backendConversationId) {
-        setBackendConversationId(conversationId, backendId);
+      if (backendId && !variables.backendConversationId) {
+        setBackendConversationId(variables.conversationId, backendId);
         // Persist any model the user selected before the first message was sent
-        if (convModel) {
-          setConversationModel(backendId, convModel).catch(() => {});
+        if (variables.convModel) {
+          setConversationModel(backendId, variables.convModel).catch(() => {});
         }
       }
-      addMessage(conversationId, {
+      addMessage(variables.conversationId, {
         role: "assistant",
         content: response.answer,
         sources: response.sources,
@@ -91,13 +109,24 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
         metadata: response.metadata,
       });
     },
-    onError: (err: Error) => {
-      addMessage(conversationId, {
+    onError: (err: Error, variables) => {
+      if (err.name === "AbortError") return; // user-initiated stop, not a failure
+      addMessage(variables.conversationId, {
         role: "error",
         content: `Request failed: ${err.message}`,
       });
     },
   });
+
+  // Only true when the in-flight request belongs to *this* conversation —
+  // switching tabs while a request is pending elsewhere must not show
+  // "Thinking…" or a disabled input here.
+  const isPendingHere =
+    mutation.isPending && mutation.variables?.conversationId === conversationId;
+
+  const handleStop = () => {
+    abortControllerRef.current?.abort();
+  };
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -165,6 +194,9 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
         skillIds: skillIds.length > 0 ? skillIds : undefined,
       },
       files,
+      conversationId,
+      backendConversationId: conversation?.backendConversationId,
+      convModel,
     });
   };
 
@@ -191,7 +223,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
             models={models}
             value={convModel}
             onChange={handleModelChange}
-            disabled={modelSaving || mutation.isPending}
+            disabled={modelSaving || isPendingHere}
           />
         )}
         {backendId && (
@@ -236,7 +268,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
               <MessageBubble key={msg.id} message={msg} />
             ))}
 
-            {mutation.isPending && (
+            {isPendingHere && (
               <div className="flex items-center gap-2 text-sm text-[--color-muted]">
                 <Spinner className="h-4 w-4" />
                 Thinking…
@@ -248,7 +280,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
       </div>
 
       {/* Input */}
-      <MessageInput onSend={handleSend} disabled={mutation.isPending} />
+      <MessageInput onSend={handleSend} disabled={isPendingHere} onStop={handleStop} />
     </div>
   );
 }

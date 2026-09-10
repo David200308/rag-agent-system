@@ -44,11 +44,12 @@ import type {
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
 
-async function postJson<T>(url: string, body: unknown): Promise<T> {
+async function postJson<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
   if (!res.ok) {
     const text = await res.text();
@@ -57,8 +58,8 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function postForm<T>(url: string, form: FormData): Promise<T> {
-  const res = await fetch(url, { method: "POST", body: form });
+async function postForm<T>(url: string, form: FormData, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(url, { method: "POST", body: form, signal });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`${res.status} ${res.statusText}: ${text}`);
@@ -68,19 +69,19 @@ async function postForm<T>(url: string, form: FormData): Promise<T> {
 
 // ── Raw API functions ─────────────────────────────────────────────────────────
 
-export async function queryAgent(payload: AgentRequest): Promise<AgentResponse> {
-  return postJson<AgentResponse>("/api/agent/query", payload);
+export async function queryAgent(payload: AgentRequest, signal?: AbortSignal): Promise<AgentResponse> {
+  return postJson<AgentResponse>("/api/agent/query", payload, signal);
 }
 
 /**
  * Same as queryAgent, but with one-off file attachments for this turn only —
  * extracted server-side (Tika) and fed into context, never saved to the knowledge base.
  */
-export async function queryAgentWithFiles(payload: AgentRequest, files: File[]): Promise<AgentResponse> {
+export async function queryAgentWithFiles(payload: AgentRequest, files: File[], signal?: AbortSignal): Promise<AgentResponse> {
   const form = new FormData();
   form.append("request", JSON.stringify(payload));
   for (const f of files) form.append("files", f);
-  return postForm<AgentResponse>("/api/agent/query", form);
+  return postForm<AgentResponse>("/api/agent/query", form, signal);
 }
 
 export async function fetchKnowledgeSources(): Promise<KnowledgeSourceEntry[]> {

@@ -14,7 +14,10 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import com.agentsystem.schema.AgentRequest;
+
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,7 +58,7 @@ class FallbackServiceTest {
     void resolveFallback_cacheHit_returnsCachedAnswerWithPrefix() {
         fallbackService.cacheAnswer("hello world", "Hi there!");
 
-        String result = fallbackService.resolveFallback("hello world", "out-of-scope", Optional.empty());
+        String result = fallbackService.resolveFallback("hello world", "out-of-scope", Optional.empty(), List.of());
 
         assertThat(result).startsWith("(Cached) ");
         assertThat(result).contains("Hi there!");
@@ -65,7 +69,7 @@ class FallbackServiceTest {
         fallbackService.cacheAnswer("  hello world  ", "Hi!");
 
         // normalise() trims + lowercases the key
-        String result = fallbackService.resolveFallback("HELLO WORLD", "reason", Optional.empty());
+        String result = fallbackService.resolveFallback("HELLO WORLD", "reason", Optional.empty(), List.of());
 
         assertThat(result).startsWith("(Cached)");
     }
@@ -87,7 +91,7 @@ class FallbackServiceTest {
         when(requestSpec.call()).thenReturn(callSpec);
         when(callSpec.content()).thenReturn("Direct answer");
 
-        fallbackService.tryDirectAnswer("ttl direct query", "no cache", Optional.empty());
+        fallbackService.tryDirectAnswer("ttl direct query", "no cache", Optional.empty(), List.of());
 
         verify(valueOperations).set(eq("fallback:answer-cache:ttl direct query"), eq("Direct answer"),
                 eq(Duration.ofMinutes(60)));
@@ -98,7 +102,7 @@ class FallbackServiceTest {
         fallbackService.cacheAnswer("key query", "First");
         fallbackService.cacheAnswer("key query", "Second");
 
-        String result = fallbackService.resolveFallback("key query", "reason", Optional.empty());
+        String result = fallbackService.resolveFallback("key query", "reason", Optional.empty(), List.of());
 
         assertThat(result).contains("Second");
         assertThat(result).doesNotContain("First");
@@ -109,7 +113,7 @@ class FallbackServiceTest {
     @Test
     void staticFallback_alwaysReturnsStaticMessage() {
         String result = fallbackService.staticFallback(
-                "any query", "LLM circuit open", Optional.empty(),
+                "any query", "LLM circuit open", Optional.empty(), List.of(),
                 new RuntimeException("breaker tripped"));
 
         assertThat(result).contains("unable to answer");
@@ -118,7 +122,7 @@ class FallbackServiceTest {
     @Test
     void staticFallback_withSelectedModel_stillReturnsStaticMessage() {
         String result = fallbackService.staticFallback(
-                "any query", "timeout", Optional.of("gpt-4"),
+                "any query", "timeout", Optional.of("gpt-4"), List.of(),
                 new RuntimeException("connection refused"));
 
         assertThat(result).contains("unable to answer");
@@ -136,9 +140,52 @@ class FallbackServiceTest {
         when(requestSpec.call()).thenReturn(callSpec);
         when(callSpec.content()).thenReturn("Direct LLM answer");
 
-        String result = fallbackService.tryDirectAnswer("test query", "no cache", Optional.empty());
+        String result = fallbackService.tryDirectAnswer("test query", "no cache", Optional.empty(), List.of());
 
         assertThat(result).isEqualTo("Direct LLM answer");
+    }
+
+    @Test
+    void tryDirectAnswer_withHistory_includesHistoryInUserPrompt() {
+        ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(requestSpec.call()).thenReturn(callSpec);
+        when(callSpec.content()).thenReturn("Follow-up answer");
+
+        List<AgentRequest.ConversationTurn> history = List.of(
+                new AgentRequest.ConversationTurn("user", "Generate an HTML page for me"),
+                new AgentRequest.ConversationTurn("assistant", "<html>...</html>"));
+
+        fallbackService.tryDirectAnswer("update it", "ambiguous query", Optional.empty(), history);
+
+        verify(requestSpec).user(argThat((String prompt) ->
+                prompt.contains("Conversation History")
+                        && prompt.contains("Generate an HTML page for me")
+                        && prompt.contains("update it")));
+    }
+
+    @Test
+    void resolveFallback_withHistory_skipsCacheEvenOnHit() {
+        fallbackService.cacheAnswer("update it", "Generic cached answer");
+
+        ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec callSpec = mock(ChatClient.CallResponseSpec.class);
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(requestSpec.call()).thenReturn(callSpec);
+        when(callSpec.content()).thenReturn("Context-aware answer");
+
+        List<AgentRequest.ConversationTurn> history =
+                List.of(new AgentRequest.ConversationTurn("user", "Generate an HTML page for me"));
+
+        String result = fallbackService.resolveFallback("update it", "ambiguous query", Optional.empty(), history);
+
+        assertThat(result).isEqualTo("Context-aware answer");
+        assertThat(result).doesNotContain("Generic cached answer");
     }
 
     @Test
@@ -152,10 +199,10 @@ class FallbackServiceTest {
         when(callSpec.content()).thenReturn("Cached Direct Answer");
 
         // First call populates the cache
-        fallbackService.tryDirectAnswer("unique query xyz", "no cache", Optional.empty());
+        fallbackService.tryDirectAnswer("unique query xyz", "no cache", Optional.empty(), List.of());
 
         // Second call via resolveFallback should return cached result
-        String cached = fallbackService.resolveFallback("unique query xyz", "reason", Optional.empty());
+        String cached = fallbackService.resolveFallback("unique query xyz", "reason", Optional.empty(), List.of());
 
         assertThat(cached).startsWith("(Cached) ");
         assertThat(cached).contains("Cached Direct Answer");

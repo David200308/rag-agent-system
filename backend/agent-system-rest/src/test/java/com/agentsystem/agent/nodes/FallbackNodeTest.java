@@ -10,12 +10,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,7 +37,7 @@ class FallbackNodeTest {
                 "fallbackReason", "out-of-scope",
                 "runId",          "run-abc"
         ));
-        when(fallbackService.resolveFallback(eq("what is 2+2?"), eq("out-of-scope"), any(Optional.class)))
+        when(fallbackService.resolveFallback(eq("what is 2+2?"), eq("out-of-scope"), any(Optional.class), any()))
                 .thenReturn("I cannot answer this.");
 
         Map<String, Object> result = fallbackNode.process(state);
@@ -53,7 +55,7 @@ class FallbackNodeTest {
                 "request", request("query"),
                 "runId",   "my-run-id-123"
         ));
-        when(fallbackService.resolveFallback(any(), any(), any())).thenReturn("Sorry");
+        when(fallbackService.resolveFallback(any(), any(), any(), any())).thenReturn("Sorry");
 
         Map<String, Object> result = fallbackNode.process(state);
 
@@ -64,7 +66,7 @@ class FallbackNodeTest {
     @Test
     void process_noRunId_generatesRandomRunId() {
         AgentState state = new AgentState(Map.of("request", request("query")));
-        when(fallbackService.resolveFallback(any(), any(), any())).thenReturn("Sorry");
+        when(fallbackService.resolveFallback(any(), any(), any(), any())).thenReturn("Sorry");
 
         Map<String, Object> result = fallbackNode.process(state);
 
@@ -75,7 +77,7 @@ class FallbackNodeTest {
     @Test
     void process_routeDecisionIsFallback() {
         AgentState state = new AgentState(Map.of("request", request("query")));
-        when(fallbackService.resolveFallback(any(), any(), any())).thenReturn("Sorry");
+        when(fallbackService.resolveFallback(any(), any(), any(), any())).thenReturn("Sorry");
 
         Map<String, Object> result = fallbackNode.process(state);
 
@@ -84,9 +86,28 @@ class FallbackNodeTest {
     }
 
     @Test
+    void process_forwardsConversationHistoryToFallbackService() {
+        List<AgentRequest.ConversationTurn> history = List.of(
+                new AgentRequest.ConversationTurn("user", "Generate an HTML page for me"),
+                new AgentRequest.ConversationTurn("assistant", "<html>...</html>"));
+        AgentRequest requestWithHistory =
+                new AgentRequest("update it", null, null, history, false, null, null, null, null);
+        AgentState state = new AgentState(Map.of(
+                "request",        requestWithHistory,
+                "fallbackReason", "ambiguous query"
+        ));
+        when(fallbackService.resolveFallback(any(), any(), any(), any())).thenReturn("Updated.");
+
+        fallbackNode.process(state);
+
+        verify(fallbackService).resolveFallback(
+                eq("update it"), eq("ambiguous query"), any(Optional.class), eq(history));
+    }
+
+    @Test
     void process_noSources() {
         AgentState state = new AgentState(Map.of("request", request("query")));
-        when(fallbackService.resolveFallback(any(), any(), any())).thenReturn("No sources");
+        when(fallbackService.resolveFallback(any(), any(), any(), any())).thenReturn("No sources");
 
         Map<String, Object> result = fallbackNode.process(state);
 
