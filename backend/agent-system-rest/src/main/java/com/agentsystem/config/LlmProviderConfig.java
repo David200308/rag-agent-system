@@ -1,5 +1,6 @@
 package com.agentsystem.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
@@ -13,6 +14,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.web.client.RestClient;
 
 /**
  * Creates exactly one {@link ChatModel} bean — selected by {@code llm.provider}.
@@ -39,26 +41,36 @@ public class LlmProviderConfig {
 
     @Bean
     @Primary
-    public ChatModel chatModel(LlmProperties props) {
+    public ChatModel chatModel(LlmProperties props, ObjectMapper objectMapper) {
         String provider = props.getProvider();
         log.info("[LlmProviderConfig] Configuring ChatModel for provider: {}", provider);
 
         return switch (provider.toLowerCase()) {
             case "anthropic"  -> buildAnthropic(props.getAnthropic());
-            case "openrouter" -> buildOpenRouter(props.getOpenrouter());
-            case "local"      -> buildLocal(props.getLocal());
-            case "deepseek"   -> buildDeepSeek(props.getDeepseek());
-            default           -> buildOpenAi(props.getOpenai());
+            case "openrouter" -> buildOpenRouter(props.getOpenrouter(), objectMapper);
+            case "local"      -> buildLocal(props.getLocal(), objectMapper);
+            case "deepseek"   -> buildDeepSeek(props.getDeepseek(), objectMapper);
+            default           -> buildOpenAi(props.getOpenai(), objectMapper);
         };
+    }
+
+    /**
+     * A fresh {@link RestClient.Builder} per call — OpenAiApi.Builder may mutate the
+     * builder it's given (base URL, default headers, message converters), so a shared
+     * instance risks one provider's config leaking into another's.
+     */
+    private RestClient.Builder toolCallSafeRestClientBuilder(ObjectMapper objectMapper) {
+        return RestClient.builder().requestInterceptor(new ToolCallArgumentsNormalizingInterceptor(objectMapper));
     }
 
     // ── OpenAI ──────────────────────────────────────────────────────────────
 
-    private ChatModel buildOpenAi(LlmProperties.OpenAiProps p) {
+    private ChatModel buildOpenAi(LlmProperties.OpenAiProps p, ObjectMapper objectMapper) {
         log.info("[LlmProviderConfig] OpenAI model={}", p.getModel());
         var api = OpenAiApi.builder()
                 .baseUrl(p.getBaseUrl())
                 .apiKey(p.getApiKey())
+                .restClientBuilder(toolCallSafeRestClientBuilder(objectMapper))
                 .build();
         var options = OpenAiChatOptions.builder()
                 .model(p.getModel())
@@ -84,7 +96,7 @@ public class LlmProviderConfig {
 
     // ── OpenRouter (OpenAI-compatible endpoint) ───────────────────────────────
 
-    private ChatModel buildOpenRouter(LlmProperties.OpenRouterProps p) {
+    private ChatModel buildOpenRouter(LlmProperties.OpenRouterProps p, ObjectMapper objectMapper) {
         log.info("[LlmProviderConfig] OpenRouter model={}", p.getModel());
 
         // OpenRouter requires two additional HTTP headers for attribution / analytics.
@@ -101,6 +113,7 @@ public class LlmProviderConfig {
                 .baseUrl(baseUrl)
                 .apiKey(p.getApiKey())
                 .headers(extraHeaders)
+                .restClientBuilder(toolCallSafeRestClientBuilder(objectMapper))
                 .build();
 
         var options = OpenAiChatOptions.builder()
@@ -113,13 +126,14 @@ public class LlmProviderConfig {
 
     // ── DeepSeek (OpenAI-compatible endpoint) ────────────────────────────────
 
-    private ChatModel buildDeepSeek(LlmProperties.DeepSeekProps p) {
+    private ChatModel buildDeepSeek(LlmProperties.DeepSeekProps p, ObjectMapper objectMapper) {
         log.info("[LlmProviderConfig] DeepSeek model={}", p.getModel());
         // DeepSeek's base URL already ends with /v1 — strip it to avoid double /v1.
         String baseUrl = p.getBaseUrl().replaceAll("/v1$", "");
         var api = OpenAiApi.builder()
                 .baseUrl(baseUrl)
                 .apiKey(p.getApiKey())
+                .restClientBuilder(toolCallSafeRestClientBuilder(objectMapper))
                 .build();
         var options = OpenAiChatOptions.builder()
                 .model(p.getModel())
@@ -131,11 +145,12 @@ public class LlmProviderConfig {
     // ── Local LLM (Ollama / LM Studio / llama.cpp) ───────────────────────────
     // These servers expose an OpenAI-compatible /v1 endpoint with no auth needed.
 
-    private ChatModel buildLocal(LlmProperties.LocalProps p) {
+    private ChatModel buildLocal(LlmProperties.LocalProps p, ObjectMapper objectMapper) {
         log.info("[LlmProviderConfig] Local LLM baseUrl={} model={}", p.getBaseUrl(), p.getModel());
         var api = OpenAiApi.builder()
                 .baseUrl(p.getBaseUrl())
                 .apiKey("local")   // key unused but must be non-null
+                .restClientBuilder(toolCallSafeRestClientBuilder(objectMapper))
                 .build();
         var options = OpenAiChatOptions.builder()
                 .model(p.getModel())

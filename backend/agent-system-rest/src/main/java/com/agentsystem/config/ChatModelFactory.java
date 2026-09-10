@@ -1,6 +1,7 @@
 package com.agentsystem.config;
 
 import com.agentsystem.model.entity.ModelConfig;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
@@ -12,6 +13,7 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.web.client.RestClient;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,10 +31,22 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ChatModelFactory {
 
     private final LlmProperties props;
+    private final ToolCallArgumentsNormalizingInterceptor toolCallArgumentsInterceptor;
     private final ConcurrentHashMap<String, ChatModel> cache = new ConcurrentHashMap<>();
 
-    public ChatModelFactory(LlmProperties props) {
+    public ChatModelFactory(LlmProperties props, ObjectMapper objectMapper) {
         this.props = props;
+        this.toolCallArgumentsInterceptor = new ToolCallArgumentsNormalizingInterceptor(objectMapper);
+    }
+
+    /**
+     * A fresh {@link RestClient.Builder} per call — OpenAiApi.Builder may mutate the
+     * builder it's given (base URL, default headers, message converters), so a shared
+     * instance risks one provider's config leaking into another's. Only the (stateless)
+     * interceptor itself is reused.
+     */
+    private RestClient.Builder toolCallSafeRestClientBuilder() {
+        return RestClient.builder().requestInterceptor(toolCallArgumentsInterceptor);
     }
 
     public ChatClient buildChatClient(ModelConfig config) {
@@ -61,6 +75,7 @@ public class ChatModelFactory {
         var api = OpenAiApi.builder()
                 .baseUrl(p.getBaseUrl())
                 .apiKey(p.getApiKey())
+                .restClientBuilder(toolCallSafeRestClientBuilder())
                 .build();
         var options = OpenAiChatOptions.builder()
                 .model(modelId)
@@ -92,6 +107,7 @@ public class ChatModelFactory {
                 .baseUrl(baseUrl)
                 .apiKey(p.getApiKey())
                 .headers(extraHeaders)
+                .restClientBuilder(toolCallSafeRestClientBuilder())
                 .build();
         var options = OpenAiChatOptions.builder()
                 .model(modelId)
@@ -106,6 +122,7 @@ public class ChatModelFactory {
         var api = OpenAiApi.builder()
                 .baseUrl(baseUrl)
                 .apiKey(p.getApiKey())
+                .restClientBuilder(toolCallSafeRestClientBuilder())
                 .build();
         var options = OpenAiChatOptions.builder()
                 .model(modelId)
@@ -119,6 +136,7 @@ public class ChatModelFactory {
         var api = OpenAiApi.builder()
                 .baseUrl(p.getBaseUrl())
                 .apiKey("local")
+                .restClientBuilder(toolCallSafeRestClientBuilder())
                 .build();
         var options = OpenAiChatOptions.builder()
                 .model(modelId)

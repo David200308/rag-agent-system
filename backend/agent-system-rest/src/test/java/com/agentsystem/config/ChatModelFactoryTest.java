@@ -1,6 +1,7 @@
 package com.agentsystem.config;
 
 import com.agentsystem.model.entity.ModelConfig;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -36,7 +37,7 @@ class ChatModelFactoryTest {
         props.getLocal().setBaseUrl("http://localhost:11434");
         props.getLocal().setModel("llama3");
 
-        factory = new ChatModelFactory(props);
+        factory = new ChatModelFactory(props, new ObjectMapper());
     }
 
     private ModelConfig config(String name, String platform, String modelId) {

@@ -1,5 +1,6 @@
 package com.agentsystem.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
@@ -12,11 +13,13 @@ class LlmProviderConfigTest {
 
     LlmProperties    props;
     LlmProviderConfig config;
+    ObjectMapper     objectMapper;
 
     @BeforeEach
     void setUp() {
         props  = new LlmProperties();
         config = new LlmProviderConfig();
+        objectMapper = new ObjectMapper();
 
         // Set minimal valid values for all providers
         props.getOpenai().setApiKey("sk-test");
@@ -45,7 +48,7 @@ class LlmProviderConfigTest {
     @Test
     void chatModel_openai_returnsOpenAiChatModel() {
         props.setProvider("openai");
-        ChatModel model = config.chatModel(props);
+        ChatModel model = config.chatModel(props, objectMapper);
         assertThat(model).isNotNull();
         assertThat(model).isInstanceOf(OpenAiChatModel.class);
     }
@@ -53,7 +56,7 @@ class LlmProviderConfigTest {
     @Test
     void chatModel_anthropic_returnsAnthropicChatModel() {
         props.setProvider("anthropic");
-        ChatModel model = config.chatModel(props);
+        ChatModel model = config.chatModel(props, objectMapper);
         assertThat(model).isNotNull();
         assertThat(model).isInstanceOf(AnthropicChatModel.class);
     }
@@ -61,7 +64,7 @@ class LlmProviderConfigTest {
     @Test
     void chatModel_openrouter_returnsOpenAiChatModel() {
         props.setProvider("openrouter");
-        ChatModel model = config.chatModel(props);
+        ChatModel model = config.chatModel(props, objectMapper);
         assertThat(model).isNotNull();
         assertThat(model).isInstanceOf(OpenAiChatModel.class);
     }
@@ -69,7 +72,7 @@ class LlmProviderConfigTest {
     @Test
     void chatModel_deepseek_returnsOpenAiChatModel() {
         props.setProvider("deepseek");
-        ChatModel model = config.chatModel(props);
+        ChatModel model = config.chatModel(props, objectMapper);
         assertThat(model).isNotNull();
         assertThat(model).isInstanceOf(OpenAiChatModel.class);
     }
@@ -77,7 +80,7 @@ class LlmProviderConfigTest {
     @Test
     void chatModel_local_returnsOpenAiChatModel() {
         props.setProvider("local");
-        ChatModel model = config.chatModel(props);
+        ChatModel model = config.chatModel(props, objectMapper);
         assertThat(model).isNotNull();
         assertThat(model).isInstanceOf(OpenAiChatModel.class);
     }
@@ -85,7 +88,7 @@ class LlmProviderConfigTest {
     @Test
     void chatModel_unknownProvider_fallsBackToOpenAi() {
         props.setProvider("unknown-provider");
-        ChatModel model = config.chatModel(props);
+        ChatModel model = config.chatModel(props, objectMapper);
         assertThat(model).isNotNull();
         assertThat(model).isInstanceOf(OpenAiChatModel.class);
     }
@@ -93,7 +96,7 @@ class LlmProviderConfigTest {
     @Test
     void chatModel_caseInsensitive_anthropic() {
         props.setProvider("ANTHROPIC");
-        ChatModel model = config.chatModel(props);
+        ChatModel model = config.chatModel(props, objectMapper);
         assertThat(model).isInstanceOf(AnthropicChatModel.class);
     }
 
@@ -101,7 +104,7 @@ class LlmProviderConfigTest {
     void chatModel_openrouter_stripsTrailingV1() {
         props.setProvider("openrouter");
         props.getOpenrouter().setBaseUrl("https://openrouter.ai/api/v1");
-        ChatModel model = config.chatModel(props);
+        ChatModel model = config.chatModel(props, objectMapper);
         assertThat(model).isNotNull();
     }
 
@@ -109,7 +112,7 @@ class LlmProviderConfigTest {
     void chatModel_deepseek_stripsTrailingV1() {
         props.setProvider("deepseek");
         props.getDeepseek().setBaseUrl("https://api.deepseek.com/v1");
-        ChatModel model = config.chatModel(props);
+        ChatModel model = config.chatModel(props, objectMapper);
         assertThat(model).isNotNull();
     }
 }
