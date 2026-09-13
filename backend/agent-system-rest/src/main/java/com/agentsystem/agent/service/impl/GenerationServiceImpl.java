@@ -7,6 +7,7 @@ import io.github.resilience4j.retry.annotation.Retry;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.stereotype.Service;
 
@@ -48,16 +49,48 @@ public class GenerationServiceImpl implements GenerationService {
         return CompletableFuture.supplyAsync(() -> {
             contextSetup.run();
             try {
-                return client.prompt()
-                        .system(systemPrompt)
-                        .user(userPrompt)
-                        .toolCallbacks(tools)
-                        .call()
-                        .content();
+                try {
+                    return client.prompt()
+                            .system(systemPrompt)
+                            .user(userPrompt)
+                            .toolCallbacks(tools)
+                            .call()
+                            .content();
+                } catch (Exception ex) {
+                    if (!isOpenRouterNoToolEndpoint(ex)) {
+                        throw ex;
+                    }
+                    // OpenRouter filtered every provider endpoint out for lacking tool-calling
+                    // support (e.g. meta-llama/llama-4-scout) — retry once without tools rather
+                    // than failing the whole request / tripping the circuit breaker.
+                    log.warn("[GenerationService] Model has no tool-compatible OpenRouter endpoint; "
+                            + "retrying without tools");
+                    return client.prompt()
+                            .system(systemPrompt)
+                            .user(userPrompt)
+                            .call()
+                            .content();
+                }
             } finally {
                 contextCleanup.run();
             }
         }, asyncPool);
+    }
+
+    /**
+     * Detects OpenRouter's "no endpoints found" 404, which fires when the requested model has no
+     * provider endpoint supporting tool-calling and a non-empty {@code tools} array was sent.
+     * Spring AI's default {@code ResponseErrorHandler} collapses the HTTP response into a plain
+     * {@link NonTransientAiException} with no status-code accessor, so detection has to match the
+     * "{status} - {body}" message format it builds (confirmed against the OpenRouter error body:
+     * {@code 404 - {"error":{"message":"No endpoints found for ...","code":404,...}}}).
+     */
+    private static boolean isOpenRouterNoToolEndpoint(Exception ex) {
+        String msg = ex.getMessage();
+        return ex instanceof NonTransientAiException
+                && msg != null
+                && msg.startsWith("404 - ")
+                && msg.contains("No endpoints found");
     }
 
     /**

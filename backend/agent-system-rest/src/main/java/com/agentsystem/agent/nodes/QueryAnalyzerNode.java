@@ -87,7 +87,7 @@ public class QueryAnalyzerNode {
                 .call()
                 .content();
 
-        QueryAnalysis analysis = converter.convert(rawResponse);
+        QueryAnalysis analysis = converter.convert(extractJson(rawResponse));
         log.info("[QueryAnalyzerNode] Route={} confidence={} refinedQuery={}",
                 analysis.route(), analysis.routeConfidence(), analysis.refinedQuery());
 
@@ -95,5 +95,17 @@ public class QueryAnalyzerNode {
                 "queryAnalysis", analysis,
                 "route", analysis.route().name()
         );
+    }
+
+    /**
+     * Some reasoning models (e.g. Qwen's "thinking" checkpoints on OpenRouter) prepend a plain-prose
+     * reasoning trace ahead of the JSON payload without any {@code <think>} tag or code fence, which
+     * Spring AI's {@link BeanOutputConverter} cleaner doesn't recognise and can't strip. Trim the
+     * response down to the outermost {@code {...}} object so the converter always gets pure JSON.
+     */
+    private static String extractJson(String text) {
+        int start = text.indexOf('{');
+        int end = text.lastIndexOf('}');
+        return (start >= 0 && end > start) ? text.substring(start, end + 1) : text;
     }
 }
