@@ -167,8 +167,23 @@ public class AgentController {
                 initData.put("orgId",    ctx.orgId());
                 initData.put("mode",     ctx.mode());
             }
-            // Model priority: conversation → user default → configured DEFAULT_MODEL → raw provider
-            String selectedModel = conversationService.getConversationModel(conversationId);
+            // Model priority: this request's explicit choice → conversation → user default →
+            // configured DEFAULT_MODEL → raw provider. The request-body value takes priority (and is
+            // persisted below) so a model switch applies starting with THIS message rather than only
+            // from the next turn once the separate PATCH /conversations/{id}/model call lands — the
+            // frontend fires that PATCH asynchronously and it can otherwise still be in flight (or,
+            // for a brand-new conversation, not even possible yet) when this request arrives.
+            String selectedModel = request.selectedModel();
+            if (selectedModel != null && !selectedModel.isBlank()) {
+                try {
+                    conversationService.setConversationModel(conversationId, ctx.userUuid(), selectedModel);
+                } catch (SecurityException | IllegalArgumentException e) {
+                    log.warn("[AgentController] Could not persist selectedModel for conversationId={}: {}",
+                            conversationId, e.getMessage());
+                }
+            } else {
+                selectedModel = conversationService.getConversationModel(conversationId);
+            }
             if (selectedModel == null && ctx.userUuid() != null) {
                 selectedModel = userPreferenceService.getSelectedModel(ctx.userUuid());
             }

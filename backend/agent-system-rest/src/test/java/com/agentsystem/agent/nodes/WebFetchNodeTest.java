@@ -44,7 +44,7 @@ class WebFetchNodeTest {
     private static AgentRequest request(String query, List<String> fetchUrls,
                                         boolean webFetch, boolean kb) {
         return new AgentRequest(query, null, null, null, false, null,
-                fetchUrls, kb, webFetch);
+                fetchUrls, kb, webFetch, null);
     }
 
     private static DocumentResult doc(String url) {

@@ -693,7 +693,7 @@ class AgentControllerTest {
     void query_graphThrowsException_returns500() {
         stubRequest("user@test.com");
 
-        AgentRequest agentReq = new AgentRequest("What is Java?", null, null, null, false, null, null, null, null);
+        AgentRequest agentReq = new AgentRequest("What is Java?", null, null, null, false, null, null, null, null, null);
 
         when(conversationService.resolveConversation(nullable(String.class), any(OrgContext.class))).thenReturn("conv-1");
         when(conversationService.getConversationModel("conv-1")).thenReturn(null);

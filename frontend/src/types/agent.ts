@@ -24,6 +24,8 @@ export interface AgentRequest {
   useKnowledgeBase?: boolean;
   useWebFetch?: boolean;
   skillIds?: string[];
+  /** Model display name to use for this turn — takes priority over the conversation's stored model. */
+  selectedModel?: string | null;
 }
 
 export interface SourceDocument {

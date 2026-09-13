@@ -63,7 +63,7 @@ class GeneratorNodeTest {
     }
 
     private static AgentRequest request() {
-        return new AgentRequest("question?", null, 5, null, false, null, null, true, null);
+        return new AgentRequest("question?", null, 5, null, false, null, null, true, null, null);
     }
 
     private static QueryAnalysis analysis() {

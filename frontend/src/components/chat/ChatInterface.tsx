@@ -192,6 +192,10 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
         useKnowledgeBase,
         useWebFetch,
         skillIds: skillIds.length > 0 ? skillIds : undefined,
+        // Sent inline (not just via the separate setConversationModel PATCH below) so a model
+        // switch applies starting with THIS message — the PATCH can still be in flight, or for a
+        // brand-new conversation not even possible yet, when this request reaches the backend.
+        selectedModel: convModel,
       },
       files,
       conversationId,

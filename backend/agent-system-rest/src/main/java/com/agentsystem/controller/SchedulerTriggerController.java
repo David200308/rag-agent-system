@@ -98,7 +98,8 @@ public class SchedulerTriggerController {
                     conversationId,
                     List.of(),
                     body.useKnowledgeBase(),
-                    body.useWebFetch()
+                    body.useWebFetch(),
+                    null
             );
 
             Map<String, Object> initData = new HashMap<>();
