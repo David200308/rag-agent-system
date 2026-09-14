@@ -184,20 +184,8 @@ sandbox:
   cpu-load-threshold: ${SANDBOX_CPU_THRESHOLD:0.90}       # reject if CPU > 90%
   free-memory-threshold: ${SANDBOX_MEM_THRESHOLD:0.10}    # reject if free RAM < 10%
 
-# ── Web-fetch feature ────────────────────────────────────────────────────────
-# Controls the ability for agent queries to include live web page content.
-# The domain whitelist is managed entirely via the database:
-#   POST   /api/v1/agent/web-fetch/whitelist  {"domain": "example.com"}
-#   DELETE /api/v1/agent/web-fetch/whitelist/{domain}
-#   GET    /api/v1/agent/web-fetch/whitelist
-web-fetch:
-  enabled: ${WEB_FETCH_ENABLED:true}
-  timeout-seconds: ${WEB_FETCH_TIMEOUT:10}
-  max-content-length-chars: ${WEB_FETCH_MAX_CHARS:50000}
-
 # ── Web-search feature ───────────────────────────────────────────────────────
-# Real, open-ended web search (as opposed to web-fetch, which only fetches
-# specific already-known URLs). Backed by a self-hosted SearXNG instance —
+# Real, open-ended web search. Backed by a self-hosted SearXNG instance —
 # free, no API key, no query cap. See docker-compose.yml's `searxng` service.
 web-search:
   enabled: ${WEB_SEARCH_ENABLED:true}

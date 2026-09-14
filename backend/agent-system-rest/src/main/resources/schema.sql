@@ -89,15 +89,6 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     UNIQUE KEY uq_up_user_uuid (user_uuid)
 );
 
-CREATE TABLE IF NOT EXISTS web_fetch_whitelist (
-    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
-    domain        VARCHAR(253) NOT NULL,
-    added_by_uuid VARCHAR(36),                  -- nullable when auth is disabled
-    org_id        VARCHAR(100),                   -- NULL = personal mode; non-null = org-scoped (team mode)
-    created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_wfw_domain_user (domain, added_by_uuid)
-);
-
 CREATE TABLE IF NOT EXISTS conversation_messages (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
     conversation_id VARCHAR(36) NOT NULL,
@@ -331,8 +322,8 @@ CREATE TABLE IF NOT EXISTS scheduled_messages (
     cron_expr          VARCHAR(100) NOT NULL,              -- e.g. "0 8 * * 1"
     timezone           VARCHAR(100) NOT NULL DEFAULT 'UTC',
     top_k              INT          NOT NULL DEFAULT 5,
-    use_knowledge_base BOOLEAN      NOT NULL DEFAULT TRUE,
-    use_web_fetch      BOOLEAN      NOT NULL DEFAULT TRUE,
+    use_knowledge_base BOOLEAN      NOT NULL DEFAULT FALSE,
+    use_web_search     BOOLEAN      NOT NULL DEFAULT FALSE,
     enabled            BOOLEAN      NOT NULL DEFAULT TRUE,
     created_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

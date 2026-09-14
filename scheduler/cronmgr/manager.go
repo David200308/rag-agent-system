@@ -93,7 +93,7 @@ func buildTask(sc *model.Schedule) (*asynq.Task, error) {
 		WorkflowInput:    sc.WorkflowInput,
 		TopK:             sc.TopK,
 		UseKnowledgeBase: sc.UseKnowledgeBase,
-		UseWebFetch:      sc.UseWebFetch,
+		UseWebSearch:     sc.UseWebSearch,
 	})
 }
 

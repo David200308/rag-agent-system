@@ -31,8 +31,20 @@ public interface ConversationService {
      */
     List<AgentRequest.ConversationTurn> loadHistory(String conversationId);
 
-    /** Return all raw messages for a conversation (for the /history endpoint). */
+    /**
+     * Return all raw messages for a conversation, without any ownership check.
+     * Only call this after the caller's access has already been established some other
+     * way (e.g. a validated share token) — for the owner-facing history endpoint use
+     * {@link #getMessages(String, String)} instead.
+     */
     List<ConversationMessage> getMessages(String conversationId);
+
+    /**
+     * Return all messages for a conversation, but only to its owner.
+     * Throws IllegalArgumentException if the conversation doesn't exist, or
+     * SecurityException if callerUuid isn't the owner.
+     */
+    List<ConversationMessage> getMessages(String conversationId, String callerUuid);
 
     /** Return non-archived conversations for a user in the correct mode context. */
     List<Conversation> listConversations(OrgContext ctx);
@@ -105,8 +117,8 @@ public interface ConversationService {
      * Validate that callerUuid may access the share.
      *
      * Rules:
-     *  - EVERYONE  → callerUuid must not be null (login required)
-     *  - WHITELIST → callerUuid must appear in the share's whitelist
+     *  - EVERYONE  → anonymous access is allowed (callerUuid may be null)
+     *  - WHITELIST → callerUuid must be non-null and appear in the share's whitelist
      *
      * Returns the validated share, or throws SecurityException / IllegalArgumentException.
      */

@@ -31,18 +31,14 @@ import com.agentsystem.conversation.service.ConversationService;
 import com.agentsystem.knowledge.dto.KnowledgeSourceView;
 import com.agentsystem.knowledge.entity.KnowledgeSource;
 import com.agentsystem.knowledge.service.KnowledgeSourceService;
-import com.agentsystem.mcp.service.McpConnectorService;
 import com.agentsystem.org.OrgContext;
 import com.agentsystem.rag.service.DocumentIngestionService;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.AgentResponse;
 import com.agentsystem.schema.DocumentResult;
-import com.agentsystem.schema.UrlIngestionResult;
 import com.agentsystem.skill.service.SkillTextExtractor;
 import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.user.service.UserPreferenceService;
-import com.agentsystem.webfetch.entity.WebFetchWhitelist;
-import com.agentsystem.webfetch.service.WebFetchService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -71,10 +67,8 @@ public class AgentController {
 
     private final AgentSystemGraph            agentGraph;
     private final DocumentIngestionService ingestionService;
-    private final McpConnectorService      mcpConnectorService;
     private final ConversationService      conversationService;
     private final KnowledgeSourceService   knowledgeSourceService;
-    private final WebFetchService          webFetchService;
     private final UserPreferenceService    userPreferenceService;
     private final UserAccountService       userAccountService;
     private final LlmProperties            llmProperties;
@@ -178,8 +172,12 @@ public class AgentController {
                 try {
                     conversationService.setConversationModel(conversationId, ctx.userUuid(), selectedModel);
                 } catch (SecurityException | IllegalArgumentException e) {
-                    log.warn("[AgentController] Could not persist selectedModel for conversationId={}: {}",
+                    // Ownership check failed (or conversation is bogus) — the caller isn't allowed to
+                    // choose the model here at all, so fall back to the conversation's own stored model
+                    // instead of quietly honoring the rejected value for this turn.
+                    log.warn("[AgentController] Rejected selectedModel for conversationId={}: {}",
                             conversationId, e.getMessage());
+                    selectedModel = conversationService.getConversationModel(conversationId);
                 }
             } else {
                 selectedModel = conversationService.getConversationModel(conversationId);
@@ -296,10 +294,19 @@ public class AgentController {
     }
 
     @GetMapping("/conversations/{conversationId}")
-    @Operation(summary = "Retrieve the full message history for a conversation")
+    @Operation(summary = "Retrieve the full message history for a conversation (owner only)")
     public ResponseEntity<List<ConversationMessage>> conversationHistory(
-            @PathVariable String conversationId) {
-        List<ConversationMessage> messages = conversationService.getMessages(conversationId);
+            @PathVariable String conversationId,
+            HttpServletRequest httpRequest) {
+        String userUuid = (String) httpRequest.getAttribute("authenticatedUserUuid");
+        List<ConversationMessage> messages;
+        try {
+            messages = conversationService.getMessages(conversationId, userUuid);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
         if (messages.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -441,24 +448,6 @@ public class AgentController {
         ));
     }
 
-    @PostMapping("/ingest/url")
-    @Operation(summary = "Fetch a URL and ingest its content into Weaviate")
-    public ResponseEntity<UrlIngestionResult> ingestUrl(
-            @RequestBody Map<String, String> body,
-            HttpServletRequest httpRequest) {
-
-        String url      = body.get("url");
-        String category = body.get("category");
-        OrgContext ctx  = OrgContext.from(httpRequest);
-
-        if (url == null || url.isBlank()) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        UrlIngestionResult result = mcpConnectorService.fetchAndIngest(url, category, ctx);
-        return ResponseEntity.ok(result);
-    }
-
     @PostMapping("/ingest/text")
     @Operation(summary = "Ingest plain text directly into Weaviate")
     public ResponseEntity<Map<String, Object>> ingestText(
@@ -558,43 +547,6 @@ public class AgentController {
             return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
-    }
-
-    // ── Web-fetch whitelist ───────────────────────────────────────────────────
-
-    @GetMapping("/web-fetch/whitelist")
-    @Operation(summary = "List whitelisted domains for web fetch")
-    public ResponseEntity<List<WebFetchWhitelist>> listWebFetchWhitelist(HttpServletRequest httpRequest) {
-        return ResponseEntity.ok(webFetchService.listWhitelist(OrgContext.from(httpRequest)));
-    }
-
-    @PostMapping("/web-fetch/whitelist")
-    @Operation(summary = "Add a domain to the web-fetch whitelist")
-    public ResponseEntity<WebFetchWhitelist> addWebFetchDomain(
-            @RequestBody Map<String, String> body,
-            HttpServletRequest httpRequest) {
-
-        String domain = body.get("domain");
-        if (domain == null || domain.isBlank()) {
-            return ResponseEntity.badRequest().build();
-        }
-        try {
-            return ResponseEntity.ok(webFetchService.addDomain(domain, OrgContext.from(httpRequest)));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
-        }
-    }
-
-    @DeleteMapping("/web-fetch/whitelist/{domain}")
-    @Operation(summary = "Remove a domain from the web-fetch whitelist")
-    public ResponseEntity<Void> removeWebFetchDomain(@PathVariable String domain,
-                                                      HttpServletRequest httpRequest) {
-        try {
-            webFetchService.removeDomain(domain, OrgContext.from(httpRequest));
-            return ResponseEntity.noContent().build();
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.notFound().build();
         }
     }
 

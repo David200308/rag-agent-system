@@ -102,7 +102,6 @@ Each JWT is scoped to a mode. The backend enforces isolation at every data layer
 | Knowledge base      | Per-user      | Shared across org       |
 | Workflows           | Per-user      | Shared across org       |
 | Skills              | Per-user      | Shared across org       |
-| Web-fetch whitelist | Per-user      | Shared across org       |
 | Connector tokens    | Per-user      | Per-user, scoped to org |
 | Financial portfolio | Per-user      | Hidden in team mode     |
 

@@ -3,8 +3,7 @@ package com.agentsystem.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Configuration for the web-search feature (real, open-ended web search — not to be
- * confused with web-fetch, which only fetches specific already-known URLs).
+ * Configuration for the web-search feature (real, open-ended web search).
  *
  * Backed by a self-hosted SearXNG instance (free, no API key, no query cap) — see
  * docker-compose.yml's {@code searxng} service and searxng/settings.yml.

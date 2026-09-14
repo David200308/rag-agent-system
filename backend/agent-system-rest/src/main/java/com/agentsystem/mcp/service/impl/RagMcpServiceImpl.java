@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import com.agentsystem.config.McpProperties;
 import com.agentsystem.knowledge.entity.KnowledgeSource;
 import com.agentsystem.knowledge.service.KnowledgeSourceService;
-import com.agentsystem.mcp.service.McpConnectorService;
 import com.agentsystem.mcp.service.RagMcpService;
 import com.agentsystem.rag.service.RetrievalService;
 import com.agentsystem.schema.DocumentResult;
@@ -29,7 +28,6 @@ import lombok.extern.slf4j.Slf4j;
  *
  * Available tools:
  *   - search_knowledge  — semantic search over the Weaviate knowledge base
- *   - ingest_url        — fetch a URL and add its content to the knowledge base
  */
 @Slf4j
 @Service
@@ -37,7 +35,6 @@ import lombok.extern.slf4j.Slf4j;
 public class RagMcpServiceImpl implements RagMcpService {
 
     private final RetrievalService      retrievalService;
-    private final McpConnectorService   mcpConnectorService;
     private final KnowledgeSourceService knowledgeSourceService;
     private final McpProperties         mcpProperties;
 
@@ -79,23 +76,5 @@ public class RagMcpServiceImpl implements RagMcpService {
                         "Source: %s (score=%.2f)\n%s",
                         r.source(), r.score(), r.content()))
                 .collect(Collectors.joining("\n\n---\n\n"));
-    }
-
-    /**
-     * Fetch a web page and ingest its content into the Weaviate knowledge base.
-     *
-     * @param url      the page URL to fetch (http or https)
-     * @param category optional category label for metadata filtering
-     */
-    @Tool(description = "Fetch a URL and add its text content to the RAG knowledge base so it can be queried later.")
-    @Override
-    public String ingestUrl(String url, String category) {
-        log.info("[RagMcpService] MCP tool ingestUrl url='{}' category='{}'", url, category);
-        // Scoped to mcp.email so the URL is checked against that identity's whitelist
-        // (McpConnectorService.fetchAndIngest) instead of the global whitelist.
-        var result = mcpConnectorService.fetchAndIngest(url, category, mcpProperties.email());
-        return String.format(
-                "Ingested '%s' from %s — %d chunks added to knowledge base.",
-                result.title(), result.url(), result.chunkCount());
     }
 }

@@ -2,7 +2,9 @@ package com.agentsystem.model.controller;
 
 import com.agentsystem.model.entity.ModelConfig;
 import com.agentsystem.model.service.ModelConfigService;
+import com.agentsystem.org.service.OrganizationService;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -20,7 +22,10 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class ModelConfigControllerTest {
 
-    @Mock ModelConfigService service;
+    @Mock ModelConfigService  service;
+    @Mock OrganizationService organizationService;
+    @Mock HttpServletRequest  request;
+
     @InjectMocks ModelConfigController controller;
 
     private ModelConfig model(String name) {
@@ -30,6 +35,18 @@ class ModelConfigControllerTest {
         m.setModelId("gpt-4");
         m.setEnabled(true);
         return m;
+    }
+
+    private void stubAdmin(String email) {
+        when(request.getAttribute("authenticatedEmail")).thenReturn(email);
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
+    }
+
+    private void stubNotAdmin(String email) {
+        when(request.getAttribute("authenticatedEmail")).thenReturn(email);
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
+        doThrow(new SecurityException("Admin access required."))
+                .when(organizationService).requireSystemAdmin(email);
     }
 
     // ── listEnabled ───────────────────────────────────────────────────────────
@@ -71,47 +88,67 @@ class ModelConfigControllerTest {
 
     @Test
     void create_validBody_returns200() {
+        stubAdmin("admin@test.com");
         when(service.create("GPT-4", "openai", "gpt-4")).thenReturn(model("GPT-4"));
 
-        var resp = controller.create(Map.of("displayName", "GPT-4", "platform", "openai", "modelId", "gpt-4"));
+        var resp = controller.create(
+                Map.of("displayName", "GPT-4", "platform", "openai", "modelId", "gpt-4"), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
 
     @Test
+    void create_callerNotAdmin_returns403() {
+        stubNotAdmin("stranger@test.com");
+
+        var resp = controller.create(
+                Map.of("displayName", "GPT-4", "platform", "openai", "modelId", "gpt-4"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+        verify(service, never()).create(any(), any(), any());
+    }
+
+    @Test
     void create_missingDisplayName_returns400() {
-        var resp = controller.create(Map.of("platform", "openai", "modelId", "gpt-4"));
+        stubAdmin("admin@test.com");
+        var resp = controller.create(Map.of("platform", "openai", "modelId", "gpt-4"), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(400);
     }
 
     @Test
     void create_blankDisplayName_returns400() {
-        var resp = controller.create(Map.of("displayName", "  ", "platform", "openai", "modelId", "gpt-4"));
+        stubAdmin("admin@test.com");
+        var resp = controller.create(
+                Map.of("displayName", "  ", "platform", "openai", "modelId", "gpt-4"), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(400);
     }
 
     @Test
     void create_missingPlatform_returns400() {
-        var resp = controller.create(Map.of("displayName", "GPT-4", "modelId", "gpt-4"));
+        stubAdmin("admin@test.com");
+        var resp = controller.create(Map.of("displayName", "GPT-4", "modelId", "gpt-4"), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(400);
     }
 
     @Test
     void create_missingModelId_returns400() {
-        var resp = controller.create(Map.of("displayName", "GPT-4", "platform", "openai"));
+        stubAdmin("admin@test.com");
+        var resp = controller.create(Map.of("displayName", "GPT-4", "platform", "openai"), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(400);
     }
 
     @Test
     void create_duplicate_returns400() {
+        stubAdmin("admin@test.com");
         when(service.create(anyString(), anyString(), anyString()))
                 .thenThrow(new IllegalArgumentException("already exists"));
 
-        var resp = controller.create(Map.of("displayName", "GPT-4", "platform", "openai", "modelId", "gpt-4"));
+        var resp = controller.create(
+                Map.of("displayName", "GPT-4", "platform", "openai", "modelId", "gpt-4"), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(400);
     }
@@ -120,43 +157,60 @@ class ModelConfigControllerTest {
 
     @Test
     void update_validBody_returns200() {
+        stubAdmin("admin@test.com");
         when(service.update("GPT-4", "openai", "gpt-4o", true)).thenReturn(model("GPT-4"));
 
-        var resp = controller.update("GPT-4", Map.of("platform", "openai", "modelId", "gpt-4o", "enabled", true));
+        var resp = controller.update("GPT-4",
+                Map.of("platform", "openai", "modelId", "gpt-4o", "enabled", true), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
 
     @Test
+    void update_callerNotAdmin_returns403() {
+        stubNotAdmin("stranger@test.com");
+
+        var resp = controller.update("GPT-4",
+                Map.of("platform", "openai", "modelId", "gpt-4o"), request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+        verify(service, never()).update(any(), any(), any(), anyBoolean());
+    }
+
+    @Test
     void update_missingPlatform_returns400() {
-        var resp = controller.update("GPT-4", Map.of("modelId", "gpt-4o"));
+        stubAdmin("admin@test.com");
+        var resp = controller.update("GPT-4", Map.of("modelId", "gpt-4o"), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(400);
     }
 
     @Test
     void update_blankModelId_returns400() {
-        var resp = controller.update("GPT-4", Map.of("platform", "openai", "modelId", ""));
+        stubAdmin("admin@test.com");
+        var resp = controller.update("GPT-4", Map.of("platform", "openai", "modelId", ""), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(400);
     }
 
     @Test
     void update_notFound_returns404() {
+        stubAdmin("admin@test.com");
         when(service.update(anyString(), anyString(), anyString(), anyBoolean()))
                 .thenThrow(new IllegalArgumentException("not found"));
 
-        var resp = controller.update("Unknown", Map.of("platform", "openai", "modelId", "gpt-4"));
+        var resp = controller.update("Unknown", Map.of("platform", "openai", "modelId", "gpt-4"), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(404);
     }
 
     @Test
     void update_enabledDefaultsToTrue_whenNotProvided() {
+        stubAdmin("admin@test.com");
         when(service.update("GPT-4", "openai", "gpt-4", true)).thenReturn(model("GPT-4"));
 
         // body has no "enabled" key → defaults to true
-        var resp = controller.update("GPT-4", Map.of("platform", "openai", "modelId", "gpt-4"));
+        var resp = controller.update("GPT-4", Map.of("platform", "openai", "modelId", "gpt-4"), request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         verify(service).update("GPT-4", "openai", "gpt-4", true);
@@ -166,18 +220,30 @@ class ModelConfigControllerTest {
 
     @Test
     void delete_success_returns204() {
+        stubAdmin("admin@test.com");
         doNothing().when(service).delete("GPT-4");
 
-        ResponseEntity<Void> resp = controller.delete("GPT-4");
+        ResponseEntity<?> resp = controller.delete("GPT-4", request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(204);
     }
 
     @Test
+    void delete_callerNotAdmin_returns403() {
+        stubNotAdmin("stranger@test.com");
+
+        ResponseEntity<?> resp = controller.delete("GPT-4", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+        verify(service, never()).delete(any());
+    }
+
+    @Test
     void delete_notFound_returns404() {
+        stubAdmin("admin@test.com");
         doThrow(new IllegalArgumentException("not found")).when(service).delete("Unknown");
 
-        ResponseEntity<Void> resp = controller.delete("Unknown");
+        ResponseEntity<?> resp = controller.delete("Unknown", request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(404);
     }

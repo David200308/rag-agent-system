@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import {
   Upload, Trash2, FileText, CheckCircle2, XCircle,
   RefreshCw, Zap, Eye, X, ChevronRight, File, Folder, Clock, Ban,
-  History, UploadCloud,
+  History, UploadCloud, Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -459,6 +459,7 @@ function ManagePanel({
 }) {
   const [previewing, setPreviewing] = useState<Skill | null>(null);
   const [historyFor, setHistoryFor] = useState<Skill | null>(null);
+  const [search, setSearch] = useState("");
 
   async function handleDelete(id: string) {
     await deleteSkill(id);
@@ -481,10 +482,30 @@ function ManagePanel({
     );
   }
 
+  const filtered = skills.filter((s) =>
+    s.name.toLowerCase().includes(search.toLowerCase()),
+  );
+
   return (
     <>
+      <div className="relative mb-3">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[--color-muted] pointer-events-none" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search skills…"
+          className="w-full rounded-lg border border-[--color-border] bg-transparent pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+        />
+      </div>
+
+      {filtered.length === 0 && (
+        <p className="py-8 text-center text-sm text-[--color-muted]">
+          No skills match &ldquo;{search}&rdquo;
+        </p>
+      )}
+
       <div className="space-y-2">
-        {skills.map((skill) => (
+        {filtered.map((skill) => (
           <div
             key={skill.id}
             className="flex items-center gap-3 rounded-md border border-[--color-border] px-3 py-2.5"

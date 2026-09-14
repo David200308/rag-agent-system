@@ -94,10 +94,25 @@ public class ConversationServiceImpl implements ConversationService {
                 .toList();
     }
 
-    /** Return all raw messages for a conversation (for the /history endpoint). */
+    /** Return all raw messages for a conversation, without any ownership check. */
     @Transactional(readOnly = true)
     @Override
     public List<ConversationMessage> getMessages(String conversationId) {
+        return messageRepo.findByConversationIdOrderByCreatedAtAsc(conversationId);
+    }
+
+    /**
+     * Return all messages for a conversation (owner only).
+     */
+    @Transactional(readOnly = true)
+    @Override
+    public List<ConversationMessage> getMessages(String conversationId, String callerUuid) {
+        Conversation conv = conversationRepo.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException("Conversation not found: " + conversationId));
+        if (callerUuid != null && conv.getUserUuid() != null
+                && !conv.getUserUuid().equals(callerUuid)) {
+            throw new SecurityException("Only the owner can view this conversation.");
+        }
         return messageRepo.findByConversationIdOrderByCreatedAtAsc(conversationId);
     }
 

@@ -16,7 +16,7 @@ func TestNewTriggerTask_TypeAndPayload(t *testing.T) {
 		Message:          "daily report",
 		TopK:             5,
 		UseKnowledgeBase: true,
-		UseWebFetch:      false,
+		UseWebSearch:     true,
 	}
 
 	task, err := NewTriggerTask(p)
@@ -43,6 +43,9 @@ func TestNewTriggerTask_TypeAndPayload(t *testing.T) {
 	}
 	if decoded.UseKnowledgeBase != p.UseKnowledgeBase {
 		t.Errorf("UseKnowledgeBase = %v, want %v", decoded.UseKnowledgeBase, p.UseKnowledgeBase)
+	}
+	if decoded.UseWebSearch != p.UseWebSearch {
+		t.Errorf("UseWebSearch = %v, want %v", decoded.UseWebSearch, p.UseWebSearch)
 	}
 }
 

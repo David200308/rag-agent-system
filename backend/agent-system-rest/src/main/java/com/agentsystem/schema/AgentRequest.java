@@ -51,18 +51,13 @@ public record AgentRequest(
                 + "Omit to start a new conversation; include to continue an existing one.")
         String conversationId,
 
-        @Schema(description = "Optional list of URLs to fetch and include as context. "
-                + "Each URL must match a domain in the web-fetch whitelist.")
-        @jakarta.validation.constraints.Size(max = 5, message = "At most 5 URLs may be fetched per request")
-        List<String> fetchUrls,
-
         @Schema(description = "Whether to search the knowledge base for this request. "
-                + "Defaults to true. Set false to answer from LLM knowledge (or fetched URLs) only.")
+                + "Defaults to true. Set false to answer from LLM knowledge only.")
         Boolean useKnowledgeBase,
 
-        @Schema(description = "Whether to fetch the provided URLs for this request. "
-                + "Defaults to true. Set false to ignore fetchUrls even if supplied.")
-        Boolean useWebFetch,
+        @Schema(description = "Whether the assistant may use the web-search tool for this request. "
+                + "Defaults to false — the caller must opt in.")
+        Boolean useWebSearch,
 
         @Schema(description = "Optional model display name to use for this turn (and persist to the "
                 + "conversation going forward). Takes priority over the conversation's/user's stored "
@@ -84,9 +79,9 @@ public record AgentRequest(
         return useKnowledgeBase == null || useKnowledgeBase;
     }
 
-    /** Returns true unless explicitly disabled. */
-    public boolean isWebFetchEnabled() {
-        return useWebFetch == null || useWebFetch;
+    /** Returns false unless explicitly enabled — the caller must opt in. */
+    public boolean isWebSearchEnabled() {
+        return Boolean.TRUE.equals(useWebSearch);
     }
 
     @Schema(description = "A single turn in the conversation history")

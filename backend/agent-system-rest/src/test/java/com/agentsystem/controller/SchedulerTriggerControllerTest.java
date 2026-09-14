@@ -226,13 +226,13 @@ class SchedulerTriggerControllerTest {
     @Test
     void triggerRequest_record_fields() {
         var req = new SchedulerTriggerController.TriggerRequest(
-                "user-uuid-1", "conv-1", "Hello?", 5, true, false);
+                "user-uuid-1", "conv-1", "Hello?", 5, true, true);
         assertThat(req.userUuid()).isEqualTo("user-uuid-1");
         assertThat(req.conversationId()).isEqualTo("conv-1");
         assertThat(req.message()).isEqualTo("Hello?");
         assertThat(req.topK()).isEqualTo(5);
         assertThat(req.useKnowledgeBase()).isTrue();
-        assertThat(req.useWebFetch()).isFalse();
+        assertThat(req.useWebSearch()).isTrue();
     }
 
     @Test

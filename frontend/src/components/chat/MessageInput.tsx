@@ -8,7 +8,7 @@ import {
   useMemo,
   type KeyboardEvent,
 } from "react";
-import { Send, Square, Database, Globe, Zap, X, ChevronDown, Paperclip } from "lucide-react";
+import { Send, Square, Database, Globe, Zap, X, ChevronDown, Paperclip, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { fetchSkills } from "@/lib/api";
@@ -26,7 +26,7 @@ interface MessageInputProps {
     query: string,
     topK: number,
     useKnowledgeBase: boolean,
-    useWebFetch: boolean,
+    useWebSearch: boolean,
     skillIds: string[],
     files: File[],
   ) => void;
@@ -123,6 +123,7 @@ function SkillPickerDropdown({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [filter, setFilter] = useState("");
 
   useEffect(() => {
     function handle(e: MouseEvent) {
@@ -131,6 +132,10 @@ function SkillPickerDropdown({
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
   }, [onClose]);
+
+  const filtered = skills.filter((s) =>
+    s.name.toLowerCase().includes(filter.toLowerCase()),
+  );
 
   return (
     <div
@@ -145,8 +150,24 @@ function SkillPickerDropdown({
           No skills uploaded yet.
         </p>
       ) : (
+        <>
+          <div className="relative px-2 pb-1.5">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-3 w-3 text-[--color-muted] pointer-events-none" />
+            <input
+              autoFocus
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Search skills…"
+              className="w-full rounded-md border border-[--color-border] bg-transparent py-1 pl-7 pr-2 text-xs focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
+            />
+          </div>
+          {filtered.length === 0 ? (
+            <p className="px-3 pb-3 text-xs text-[--color-muted]">
+              No skills match &ldquo;{filter}&rdquo;
+            </p>
+          ) : (
         <div className="max-h-52 overflow-y-auto">
-          {skills.map((skill) => {
+          {filtered.map((skill) => {
             const checked = selected.has(skill.id);
             return (
               <button
@@ -193,6 +214,8 @@ function SkillPickerDropdown({
             );
           })}
         </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -203,8 +226,8 @@ function SkillPickerDropdown({
 export function MessageInput({ onSend, disabled = false, onStop }: MessageInputProps) {
   const [text, setText] = useState("");
   const [topK, setTopK] = useState(5);
-  const [useKnowledgeBase, setUseKnowledgeBase] = useState(true);
-  const [useWebFetch, setUseWebFetch] = useState(true);
+  const [useKnowledgeBase, setUseKnowledgeBase] = useState(false);
+  const [useWebSearch, setUseWebSearch] = useState(false);
 
   // Skills state
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
@@ -282,6 +305,11 @@ export function MessageInput({ onSend, disabled = false, onStop }: MessageInputP
         setUseKnowledgeBase((v) => !v);
         setText("");
         if (textareaRef.current) textareaRef.current.style.height = "auto";
+      } else if (item.id === "websearch") {
+        // Toggle web search
+        setUseWebSearch((v) => !v);
+        setText("");
+        if (textareaRef.current) textareaRef.current.style.height = "auto";
       }
     },
     [selectedIds],
@@ -330,7 +358,7 @@ export function MessageInput({ onSend, disabled = false, onStop }: MessageInputP
       trimmed,
       topK,
       useKnowledgeBase,
-      useWebFetch,
+      useWebSearch,
       selectedSkills.map((s) => s.id),
       attachments,
     );
@@ -352,21 +380,6 @@ export function MessageInput({ onSend, disabled = false, onStop }: MessageInputP
     <div className="border-t border-[--color-border] bg-[--color-surface] p-4">
       {/* Controls row */}
       <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 text-sm">
-        {/* Top-K */}
-        <label className="flex items-center gap-2 text-[--color-muted]">
-          Top-K
-          <input
-            type="number"
-            min={1}
-            max={20}
-            value={topK}
-            onChange={(e) => setTopK(Number(e.target.value))}
-            className="w-14 rounded border border-[--color-border] bg-[--color-surface] px-2 py-0.5 text-center text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
-          />
-        </label>
-
-        <span className="hidden h-4 w-px bg-[--color-border] sm:block" />
-
         {/* Source toggles */}
         <div className="flex items-center gap-2">
           <span className="text-xs text-[--color-muted]">Sources:</span>
@@ -378,11 +391,29 @@ export function MessageInput({ onSend, disabled = false, onStop }: MessageInputP
           />
           <ToggleChip
             icon={<Globe className="h-3 w-3" />}
-            label="Web Fetch"
-            active={useWebFetch}
-            onToggle={() => setUseWebFetch((v) => !v)}
+            label="Web Search"
+            active={useWebSearch}
+            onToggle={() => setUseWebSearch((v) => !v)}
           />
         </div>
+
+        {/* Top-K — only meaningful (and shown) when Knowledge Base is enabled */}
+        {useKnowledgeBase && (
+          <>
+            <span className="hidden h-4 w-px bg-[--color-border] sm:block" />
+            <label className="flex items-center gap-2 text-[--color-muted]">
+              Top-K
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={topK}
+                onChange={(e) => setTopK(Number(e.target.value))}
+                className="w-14 rounded border border-[--color-border] bg-[--color-surface] px-2 py-0.5 text-center text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
+              />
+            </label>
+          </>
+        )}
 
         <span className="hidden h-4 w-px bg-[--color-border] sm:block" />
 
@@ -479,7 +510,7 @@ export function MessageInput({ onSend, disabled = false, onStop }: MessageInputP
           />
         )}
 
-        <div className="flex items-end gap-2 rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 focus-within:border-gray-900 dark:focus-within:border-gray-100">
+        <div className="flex items-center gap-2 rounded-xl border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 focus-within:border-gray-900 dark:focus-within:border-gray-100">
           <textarea
             ref={textareaRef}
             value={text}

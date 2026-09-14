@@ -165,6 +165,40 @@ class ConversationServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    // ── getMessages(conversationId, callerUuid) ───────────────────────────────
+
+    @Test
+    void getMessages_ownerCanRead() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+        ConversationMessage msg = new ConversationMessage();
+        when(messageRepo.findByConversationIdOrderByCreatedAtAsc("c1")).thenReturn(List.of(msg));
+
+        List<ConversationMessage> result = conversationService.getMessages("c1", "owner@test.com");
+
+        assertThat(result).containsExactly(msg);
+    }
+
+    @Test
+    void getMessages_nonOwnerThrowsSecurityException() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+
+        assertThatThrownBy(() ->
+                conversationService.getMessages("c1", "other@test.com"))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Only the owner");
+    }
+
+    @Test
+    void getMessages_unknownConversation_throwsIllegalArgument() {
+        when(conversationRepo.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                conversationService.getMessages("missing", "user@test.com"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     // ── deleteConversation ────────────────────────────────────────────────────
 
     @Test

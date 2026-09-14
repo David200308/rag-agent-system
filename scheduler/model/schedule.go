@@ -16,7 +16,7 @@ type Schedule struct {
 	Timezone         string     `json:"timezone"`
 	TopK             int        `json:"topK"`
 	UseKnowledgeBase bool       `json:"useKnowledgeBase"`
-	UseWebFetch      bool       `json:"useWebFetch"`
+	UseWebSearch     bool       `json:"useWebSearch"`
 	Enabled          bool       `json:"enabled"`
 	NextRunAt        *time.Time `json:"nextRunAt,omitempty"`
 	LastRunAt        *time.Time `json:"lastRunAt,omitempty"`
@@ -46,7 +46,7 @@ type CreateRequest struct {
 	Timezone         string `json:"timezone"` // IANA name, e.g. "America/New_York". Defaults to "UTC".
 	TopK             int    `json:"topK"`
 	UseKnowledgeBase bool   `json:"useKnowledgeBase"`
-	UseWebFetch      bool   `json:"useWebFetch"`
+	UseWebSearch     bool   `json:"useWebSearch"`
 }
 
 // UpdateRequest is the body for PATCH /schedules/{id}.
@@ -60,7 +60,7 @@ type UpdateRequest struct {
 	Timezone         *string `json:"timezone"`
 	TopK             *int    `json:"topK"`
 	UseKnowledgeBase *bool   `json:"useKnowledgeBase"`
-	UseWebFetch      *bool   `json:"useWebFetch"`
+	UseWebSearch     *bool   `json:"useWebSearch"`
 	Enabled          *bool   `json:"enabled"`
 }
 
@@ -76,7 +76,7 @@ type InternalCreateRequest struct {
 	Timezone         string `json:"timezone"`
 	TopK             int    `json:"topK"`
 	UseKnowledgeBase bool   `json:"useKnowledgeBase"`
-	UseWebFetch      bool   `json:"useWebFetch"`
+	UseWebSearch     bool   `json:"useWebSearch"`
 }
 
 // BuildCronExpr assembles a 5-field cron expression. Blank fields default to "*".

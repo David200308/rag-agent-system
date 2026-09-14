@@ -41,7 +41,7 @@ class QueryAnalyzerNodeTest {
 
     private AgentState stateWithQuery(String query) {
         AgentRequest request = new AgentRequest(
-                query, null, 5, List.of(), false, null, List.of(), true, false, null);
+                query, null, 5, List.of(), false, null, true, null, null);
         Map<String, Object> data = Map.of("request", request);
         return new AgentState(data);
     }
@@ -104,7 +104,7 @@ class QueryAnalyzerNodeTest {
     @Test
     void process_withSelectedModel_usesModelFactoryClient() {
         Map<String, Object> data = Map.of(
-                "request", new AgentRequest("query", null, 5, List.of(), false, null, List.of(), true, false, null),
+                "request", new AgentRequest("query", null, 5, List.of(), false, null, true, null, null),
                 "selectedModelDisplayName", "GPT-4"
         );
         AgentState state = new AgentState(data);
@@ -148,7 +148,7 @@ class QueryAnalyzerNodeTest {
     @Test
     void process_disabledModel_fallsBackToDefaultClient() {
         Map<String, Object> data = Map.of(
-                "request", new AgentRequest("query", null, 5, List.of(), false, null, List.of(), true, false, null),
+                "request", new AgentRequest("query", null, 5, List.of(), false, null, true, null, null),
                 "selectedModelDisplayName", "Disabled-Model"
         );
         AgentState state = new AgentState(data);

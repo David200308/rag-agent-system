@@ -21,7 +21,7 @@ import java.util.Map;
  * Gates the MCP SSE transport (/mcp/**). AuthFilter, ClientIdentityFilter, and
  * RateLimitFilter all exempt /mcp/ because the MCP protocol carries no per-request
  * JWT — without a filter here, /mcp/sse is reachable by anyone with network access
- * and search_knowledge/ingest_url run with no access control whatsoever.
+ * and search_knowledge would run with no access control whatsoever.
  *
  * Requires "Authorization: Bearer <mcp.api-key>" on every MCP request. An unset
  * mcp.api-key keeps /mcp/** fully closed rather than fully open.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { GitFork, Database, Zap } from "lucide-react";
+import { GitFork, Database, Globe, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Skill } from "@/types/agent";
 
@@ -17,6 +17,12 @@ const BUILTINS = [
     label: "knowledge",
     description: "Toggle knowledge base on/off",
     icon: <Database className="h-3.5 w-3.5" />,
+  },
+  {
+    id: "websearch",
+    label: "websearch",
+    description: "Toggle web search on/off",
+    icon: <Globe className="h-3.5 w-3.5" />,
   },
 ] as const;
 

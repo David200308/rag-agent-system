@@ -127,8 +127,8 @@ export function ScheduleModal({ conversationId, onClose }: ScheduleModalProps) {
   const [cron, setCron] = useState<CronFields>({ m: "0", h: "8", d: "*", mo: "*", w: "*" });
   const [timezone, setTimezone] = useState("UTC");
   const [topK, setTopK] = useState(5);
-  const [useKb, setUseKb] = useState(true);
-  const [useWf, setUseWf] = useState(true);
+  const [useKb, setUseKb] = useState(false);
+  const [useWebSearch, setUseWebSearch] = useState(false);
 
   // ── Expanded run history per schedule ──────────────────────────────────────
   const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
@@ -168,7 +168,7 @@ export function ScheduleModal({ conversationId, onClose }: ScheduleModalProps) {
       timezone,
       topK,
       useKnowledgeBase: useKb,
-      useWebFetch:      useWf,
+      useWebSearch,
     });
   };
 
@@ -382,8 +382,8 @@ export function ScheduleModal({ conversationId, onClose }: ScheduleModalProps) {
                   Knowledge Base
                 </label>
                 <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={useWf} onChange={(e) => setUseWf(e.target.checked)} />
-                  Web Fetch
+                  <input type="checkbox" checked={useWebSearch} onChange={(e) => setUseWebSearch(e.target.checked)} />
+                  Web Search
                 </label>
               </div>
 

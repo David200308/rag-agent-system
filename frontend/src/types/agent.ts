@@ -20,9 +20,8 @@ export interface AgentRequest {
   conversationHistory?: ConversationTurn[];
   stream: boolean;
   conversationId?: string;
-  fetchUrls?: string[];
   useKnowledgeBase?: boolean;
-  useWebFetch?: boolean;
+  useWebSearch?: boolean;
   skillIds?: string[];
   /** Model display name to use for this turn — takes priority over the conversation's stored model. */
   selectedModel?: string | null;
@@ -152,7 +151,7 @@ export interface ScheduledMessage {
   timezone: string;     // IANA timezone name, e.g. "America/New_York"
   topK: number;
   useKnowledgeBase: boolean;
-  useWebFetch: boolean;
+  useWebSearch: boolean;
   enabled: boolean;
   nextRunAt: string | null;   // ISO-8601, computed by Temporal
   lastRunAt: string | null;   // ISO-8601, from most recent execution
@@ -177,7 +176,7 @@ export interface CreateScheduleRequest {
   timezone?: string;    // defaults to "UTC" if omitted
   topK: number;
   useKnowledgeBase: boolean;
-  useWebFetch: boolean;
+  useWebSearch: boolean;
 }
 
 export interface UpdateScheduleRequest {
@@ -190,7 +189,7 @@ export interface UpdateScheduleRequest {
   timezone?: string;
   topK?: number;
   useKnowledgeBase?: boolean;
-  useWebFetch?: boolean;
+  useWebSearch?: boolean;
   enabled?: boolean;
 }
 
@@ -216,13 +215,6 @@ export interface CreateWorkflowScheduleRequest {
   cronMonth: string;
   cronWeekday: string;
   timezone?: string;
-}
-
-export interface WebFetchWhitelistEntry {
-  id: number;
-  domain: string;
-  addedBy: string | null;
-  createdAt: string;
 }
 
 // ── Workflow engine types ──────────────────────────────────────────────────
@@ -358,12 +350,5 @@ export interface IngestionResult {
   status: string;
   filename?: string;
   source?: string;
-  chunkCount: number;
-}
-
-export interface UrlIngestionResult {
-  status: string;
-  url: string;
-  title: string;
   chunkCount: number;
 }

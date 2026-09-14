@@ -88,13 +88,6 @@ public class GeneratorNode {
             app UI, not via chat — if the user asks to set up a price alert, tell them to use the \
             bell/alert icon next to the symbol in the Financial section.
 
-            WEB SEARCH TOOL:
-            - searchWeb: call this for any question needing current or external information
-              that isn't in the knowledge base and for which the user hasn't already given
-              you a specific URL (if they have, use that URL's content directly instead of
-              searching). Returns top results with title, URL, and snippet — ground your
-              answer in them and cite each source inline as [Source: <url>].
-
             TRAVEL TOOL:
             - getTravelRecords: call this for ANY question about the user's trips, travel \
             history, itinerary, flights, or travel expenses/notes/route. You have no way of \
@@ -127,6 +120,17 @@ public class GeneratorNode {
             - Use Markdown tables when comparing or summarising structured data.
             - NEVER wrap your answer in JSON, code fences, or any structured data format
               unless the user explicitly asks for JSON or code output.
+            """;
+
+    /** Appended to {@link #SYSTEM_PROMPT} only when the caller opted into web search for this request. */
+    private static final String WEB_SEARCH_ADDENDUM = """
+
+            WEB SEARCH TOOL:
+            - searchWeb: call this for any question needing current or external information
+              that isn't in the knowledge base and for which the user hasn't already given
+              you a specific URL (if they have, use that URL's content directly instead of
+              searching). Returns top results with title, URL, and snippet — ground your
+              answer in them and cite each source inline as [Source: <url>].
             """;
 
     public Map<String, Object> process(AgentState state) {
@@ -187,12 +191,19 @@ public class GeneratorNode {
         toolCallBudget.reset();
         String answer;
         try {
+            List<Object> toolObjects = new java.util.ArrayList<>(List.of(
+                    googleDocsTool, googleSheetsTool, googleSlidesTool,
+                    googleCalendarTool, telegramTool, travelTool));
+            String systemPrompt = SYSTEM_PROMPT;
+            if (request.isWebSearchEnabled()) {
+                toolObjects.add(webSearchTool);
+                systemPrompt = systemPrompt + WEB_SEARCH_ADDENDUM;
+            }
             ToolCallbackProvider tools = MethodToolCallbackProvider.builder()
-                    .toolObjects(googleDocsTool, googleSheetsTool, googleSlidesTool,
-                                 googleCalendarTool, telegramTool, travelTool, webSearchTool)
+                    .toolObjects(toolObjects.toArray())
                     .build();
 
-            answer = generationService.generate(effectiveClient, SYSTEM_PROMPT, userPrompt, tools,
+            answer = generationService.generate(effectiveClient, systemPrompt, userPrompt, tools,
                     primeToolContext, clearToolContext).join();
         } finally {
             toolCallBudget.clear();

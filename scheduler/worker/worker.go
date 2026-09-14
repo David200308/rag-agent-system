@@ -33,7 +33,7 @@ type TriggerPayload struct {
 	WorkflowInput    string `json:"workflowInput,omitempty"`
 	TopK             int    `json:"topK"`
 	UseKnowledgeBase bool   `json:"useKnowledgeBase"`
-	UseWebFetch      bool   `json:"useWebFetch"`
+	UseWebSearch     bool   `json:"useWebSearch"`
 }
 
 func NewTriggerTask(p TriggerPayload) (*asynq.Task, error) {
@@ -95,8 +95,8 @@ func callChatBackend(ctx context.Context, backendURL, serviceKey, idempotencyKey
 		Message          string `json:"message"`
 		TopK             int    `json:"topK"`
 		UseKnowledgeBase bool   `json:"useKnowledgeBase"`
-		UseWebFetch      bool   `json:"useWebFetch"`
-	}{p.UserUuid, p.ConversationID, p.Message, p.TopK, p.UseKnowledgeBase, p.UseWebFetch})
+		UseWebSearch     bool   `json:"useWebSearch"`
+	}{p.UserUuid, p.ConversationID, p.Message, p.TopK, p.UseKnowledgeBase, p.UseWebSearch})
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}

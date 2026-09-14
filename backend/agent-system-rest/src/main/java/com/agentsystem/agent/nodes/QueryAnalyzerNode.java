@@ -12,6 +12,8 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -87,25 +89,80 @@ public class QueryAnalyzerNode {
                 .call()
                 .content();
 
-        QueryAnalysis analysis = converter.convert(extractJson(rawResponse));
+        QueryAnalysis analysis = parseAnalysis(converter, rawResponse);
         log.info("[QueryAnalyzerNode] Route={} confidence={} refinedQuery={}",
                 analysis.route(), analysis.routeConfidence(), analysis.refinedQuery());
 
+        // If the caller disabled KB search for this request, force DIRECT so
+        // RetrievalNode is bypassed entirely, regardless of what the LLM decided.
+        String route = analysis.route().name();
+        if (!request.isKnowledgeBaseEnabled() && QueryAnalysis.Route.RETRIEVE.name().equals(route)) {
+            log.info("[QueryAnalyzerNode] Knowledge base disabled — routing DIRECT");
+            route = QueryAnalysis.Route.DIRECT.name();
+        }
+
         return Map.of(
                 "queryAnalysis", analysis,
-                "route", analysis.route().name()
+                "route", route
         );
     }
 
     /**
-     * Some reasoning models (e.g. Qwen's "thinking" checkpoints on OpenRouter) prepend a plain-prose
-     * reasoning trace ahead of the JSON payload without any {@code <think>} tag or code fence, which
-     * Spring AI's {@link BeanOutputConverter} cleaner doesn't recognise and can't strip. Trim the
-     * response down to the outermost {@code {...}} object so the converter always gets pure JSON.
+     * Some reasoning models (e.g. Qwen's "thinking" checkpoints on OpenRouter) pad their response
+     * with plain-prose reasoning that Spring AI's {@link BeanOutputConverter} cleaner can't strip —
+     * it only recognises {@code <think>} tags or fenced code blocks. Worse, that prose can itself
+     * discuss the JSON schema (mentioning "$schema", "required", or literal "{ ... }" placeholders),
+     * so naively slicing between the first "{" and the last "}" can grab a bogus fragment instead of
+     * the real answer. Extract every balanced, string-aware top-level JSON object in the text and
+     * try each — starting with the last, since the real answer is typically emitted after any
+     * reasoning preamble — until one actually parses.
      */
-    private static String extractJson(String text) {
-        int start = text.indexOf('{');
-        int end = text.lastIndexOf('}');
-        return (start >= 0 && end > start) ? text.substring(start, end + 1) : text;
+    private static QueryAnalysis parseAnalysis(BeanOutputConverter<QueryAnalysis> converter, String rawResponse) {
+        List<String> candidates = extractJsonObjects(rawResponse);
+        for (int i = candidates.size() - 1; i >= 0; i--) {
+            try {
+                return converter.convert(candidates.get(i));
+            } catch (RuntimeException ignored) {
+                // try the next candidate — see method javadoc for why more than one may exist
+            }
+        }
+        return converter.convert(rawResponse);
+        // Falls through to the original text (and its original exception) when no candidate parses
+        // or none were found, so the failure message still reflects what the model actually sent.
+    }
+
+    /** Finds every balanced {@code {...}} substring at brace-depth 0, ignoring braces inside string literals. */
+    private static List<String> extractJsonObjects(String text) {
+        List<String> results = new ArrayList<>();
+        int depth = 0;
+        int start = -1;
+        boolean inString = false;
+        boolean escape = false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (inString) {
+                if (escape) {
+                    escape = false;
+                } else if (c == '\\') {
+                    escape = true;
+                } else if (c == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (c == '"') {
+                inString = true;
+            } else if (c == '{') {
+                if (depth == 0) start = i;
+                depth++;
+            } else if (c == '}' && depth > 0) {
+                depth--;
+                if (depth == 0 && start >= 0) {
+                    results.add(text.substring(start, i + 1));
+                    start = -1;
+                }
+            }
+        }
+        return results;
     }
 }

@@ -29,8 +29,6 @@ import type {
   Skill,
   SkillVersion,
   UpdateScheduleRequest,
-  UrlIngestionResult,
-  WebFetchWhitelistEntry,
   ScheduleRun,
   WorkflowSchedule,
   CreateWorkflowScheduleRequest,
@@ -166,13 +164,6 @@ export async function ingestText(
   return postJson<IngestionResult>("/api/agent/ingest-text", { text, source, replace: String(replace) });
 }
 
-export async function ingestUrl(
-  url: string,
-  category?: string,
-): Promise<UrlIngestionResult> {
-  return postJson<UrlIngestionResult>("/api/agent/ingest-url", { url, category });
-}
-
 // ── Share link ────────────────────────────────────────────────────────────────
 
 export async function createShare(
@@ -204,22 +195,6 @@ export async function fetchSharedConversation(token: string): Promise<ShareMetaR
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`${res.status}`);
   return res.json() as Promise<ShareMetaResponse>;
-}
-
-// ── Web-fetch whitelist ───────────────────────────────────────────────────────
-
-export async function fetchWebFetchWhitelist(): Promise<WebFetchWhitelistEntry[]> {
-  const res = await fetch("/api/agent/web-fetch/whitelist");
-  if (!res.ok) return [];
-  return res.json() as Promise<WebFetchWhitelistEntry[]>;
-}
-
-export async function addWebFetchDomain(domain: string): Promise<WebFetchWhitelistEntry> {
-  return postJson<WebFetchWhitelistEntry>("/api/agent/web-fetch/whitelist", { domain });
-}
-
-export async function removeWebFetchDomain(domain: string): Promise<void> {
-  await fetch(`/api/agent/web-fetch/whitelist/${encodeURIComponent(domain)}`, { method: "DELETE" });
 }
 
 // ── Scheduled messages ────────────────────────────────────────────────────────
@@ -625,15 +600,3 @@ export function ingestTextMutationOptions(): MutationOptions<
   };
 }
 
-/**
- * mutationOptions factory for URL ingestion.
- */
-export function ingestUrlMutationOptions(): MutationOptions<
-  UrlIngestionResult,
-  Error,
-  { url: string; category?: string }
-> {
-  return {
-    mutationFn: ({ url, category }) => ingestUrl(url, category),
-  };
-}

@@ -137,7 +137,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
     query: string,
     topK: number,
     useKnowledgeBase: boolean,
-    useWebFetch: boolean,
+    useWebSearch: boolean,
     skillIds: string[],
     files: File[],
   ) => {
@@ -190,7 +190,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
         stream: false,
         conversationId: conversation?.backendConversationId,
         useKnowledgeBase,
-        useWebFetch,
+        useWebSearch,
         skillIds: skillIds.length > 0 ? skillIds : undefined,
         // Sent inline (not just via the separate setConversationModel PATCH below) so a model
         // switch applies starting with THIS message — the PATCH can still be in flight, or for a

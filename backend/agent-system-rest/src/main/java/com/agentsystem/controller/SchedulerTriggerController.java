@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -53,7 +52,7 @@ public class SchedulerTriggerController {
             String  message,
             int     topK,
             boolean useKnowledgeBase,
-            boolean useWebFetch
+            boolean useWebSearch
     ) {}
 
     @PostMapping(value = "/trigger",
@@ -96,9 +95,8 @@ public class SchedulerTriggerController {
                     conversationService.loadHistory(conversationId),
                     false,
                     conversationId,
-                    List.of(),
                     body.useKnowledgeBase(),
-                    body.useWebFetch(),
+                    body.useWebSearch(),
                     null
             );
 

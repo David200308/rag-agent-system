@@ -26,6 +26,11 @@ import java.util.Map;
  *  - /swagger-ui/**
  *  - /mcp/**             (MCP SSE transport)
  *
+ * /api/v1/share/** is JWT-optional rather than exempt: a share link must be readable
+ * anonymously (EVERYONE access), but a WHITELIST-restricted share needs to know who the
+ * caller actually is, so a present token is still validated and its identity attached —
+ * the request just isn't blocked when no token is given. Same pattern as connector routes.
+ *
  * Expects:  Authorization: Bearer <JWT>
  *
  * JWT validation itself now happens in auth-inner (single source of truth, shared with
@@ -48,7 +53,6 @@ public class AuthFilter extends OncePerRequestFilter {
 
         String path = request.getRequestURI();
         return path.startsWith("/api/v1/auth/")
-            || path.startsWith("/api/v1/share/")
             || path.startsWith("/api/v1/scheduler/")         // service-key auth, not JWT
             || path.matches(".*/connectors/[^/]+/exchange")  // server-to-server OAuth exchange
             || path.startsWith("/actuator/")
@@ -68,11 +72,13 @@ public class AuthFilter extends OncePerRequestFilter {
         var    result = authInnerClient.validate(token);
         String email  = result.valid() ? result.email() : null;
 
-        // Connector routes are JWT-optional: a valid token sets the email so tokens
-        // are stored/looked up under the real user, but the request is never blocked.
+        // Connector and share routes are JWT-optional: a valid token sets the identity
+        // (for connectors: which user to store/look up tokens under; for shares: who to
+        // check against a WHITELIST) but the request is never blocked for lacking one.
         boolean isConnectorPath = path.startsWith("/api/v1/connectors/");
+        boolean isSharePath     = path.startsWith("/api/v1/share/");
 
-        if (email == null && !isConnectorPath) {
+        if (email == null && !isConnectorPath && !isSharePath) {
             log.warn("[AuthFilter] Rejected unauthenticated request to {}", path);
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json");

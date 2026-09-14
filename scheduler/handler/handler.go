@@ -182,7 +182,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			Timezone:         req.Timezone,
 			TopK:             req.TopK,
 			UseKnowledgeBase: req.UseKnowledgeBase,
-			UseWebFetch:      req.UseWebFetch,
+			UseWebSearch:     req.UseWebSearch,
 			Enabled:          true,
 			CreatedAt:        time.Now().UTC(),
 		}
@@ -242,8 +242,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		if req.UseKnowledgeBase != nil {
 			sc.UseKnowledgeBase = *req.UseKnowledgeBase
 		}
-		if req.UseWebFetch != nil {
-			sc.UseWebFetch = *req.UseWebFetch
+		if req.UseWebSearch != nil {
+			sc.UseWebSearch = *req.UseWebSearch
 		}
 		if req.Enabled != nil {
 			sc.Enabled = *req.Enabled
@@ -405,7 +405,7 @@ func (h *Handler) InternalCreate(w http.ResponseWriter, r *http.Request) {
 			Timezone:         req.Timezone,
 			TopK:             req.TopK,
 			UseKnowledgeBase: req.UseKnowledgeBase,
-			UseWebFetch:      req.UseWebFetch,
+			UseWebSearch:     req.UseWebSearch,
 			Enabled:          true,
 			CreatedAt:        time.Now().UTC(),
 		}

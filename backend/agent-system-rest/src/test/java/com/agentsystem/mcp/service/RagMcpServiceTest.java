@@ -7,7 +7,6 @@ import com.agentsystem.knowledge.service.KnowledgeSourceService;
 import com.agentsystem.knowledge.entity.KnowledgeSource;
 import com.agentsystem.rag.service.RetrievalService;
 import com.agentsystem.schema.DocumentResult;
-import com.agentsystem.schema.UrlIngestionResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,7 +25,6 @@ import static org.mockito.Mockito.when;
 class RagMcpServiceTest {
 
     @Mock RetrievalService       retrievalService;
-    @Mock McpConnectorService    mcpConnectorService;
     @Mock KnowledgeSourceService knowledgeSourceService;
 
     RagMcpServiceImpl service;
@@ -34,7 +32,7 @@ class RagMcpServiceTest {
     @BeforeEach
     void setUp() {
         // Default: mcp.email unset — search_knowledge must deny all sources.
-        service = new RagMcpServiceImpl(retrievalService, mcpConnectorService, knowledgeSourceService,
+        service = new RagMcpServiceImpl(retrievalService, knowledgeSourceService,
                 new McpProperties("test-key", null));
     }
 
@@ -56,7 +54,7 @@ class RagMcpServiceTest {
 
     @Test
     void searchKnowledge_emailConfigured_scopesToAccessibleSources() {
-        service = new RagMcpServiceImpl(retrievalService, mcpConnectorService, knowledgeSourceService,
+        service = new RagMcpServiceImpl(retrievalService, knowledgeSourceService,
                 new McpProperties("test-key", "mcp-bot@test.com"));
         KnowledgeSource ks = new KnowledgeSource("java.pdf", "java.pdf", null, 3, "mcp-bot@test.com", null);
         when(knowledgeSourceService.listAccessible("mcp-bot@test.com")).thenReturn(List.of(ks));
@@ -117,7 +115,7 @@ class RagMcpServiceTest {
 
     @Test
     void searchKnowledge_multipleResults_separatedByDivider() {
-        service = new RagMcpServiceImpl(retrievalService, mcpConnectorService, knowledgeSourceService,
+        service = new RagMcpServiceImpl(retrievalService, knowledgeSourceService,
                 new McpProperties("test-key", "mcp-bot@test.com"));
         when(knowledgeSourceService.listAccessible("mcp-bot@test.com"))
                 .thenReturn(List.of(
@@ -133,42 +131,5 @@ class RagMcpServiceTest {
         assertThat(result).contains("a.pdf");
         assertThat(result).contains("b.pdf");
         assertThat(result).contains("---");
-    }
-
-    // ── ingestUrl ─────────────────────────────────────────────────────────────
-
-    @Test
-    void ingestUrl_returnsFormattedMessage() {
-        when(mcpConnectorService.fetchAndIngest("https://example.com", "docs", (String) null))
-                .thenReturn(new UrlIngestionResult("ingested", "https://example.com", "Example Page", 5));
-
-        String result = service.ingestUrl("https://example.com", "docs");
-
-        assertThat(result).contains("Example Page");
-        assertThat(result).contains("https://example.com");
-        assertThat(result).contains("5");
-        assertThat(result).contains("chunks added");
-    }
-
-    @Test
-    void ingestUrl_noCategory_passes() {
-        when(mcpConnectorService.fetchAndIngest("https://example.com", null, (String) null))
-                .thenReturn(new UrlIngestionResult("ingested", "https://example.com", "Title", 3));
-
-        String result = service.ingestUrl("https://example.com", null);
-
-        assertThat(result).contains("3");
-    }
-
-    @Test
-    void ingestUrl_emailConfigured_scopesToThatIdentity() {
-        service = new RagMcpServiceImpl(retrievalService, mcpConnectorService, knowledgeSourceService,
-                new McpProperties("test-key", "mcp-bot@test.com"));
-        when(mcpConnectorService.fetchAndIngest("https://example.com", "docs", "mcp-bot@test.com"))
-                .thenReturn(new UrlIngestionResult("ingested", "https://example.com", "Example Page", 5));
-
-        String result = service.ingestUrl("https://example.com", "docs");
-
-        assertThat(result).contains("Example Page");
     }
 }

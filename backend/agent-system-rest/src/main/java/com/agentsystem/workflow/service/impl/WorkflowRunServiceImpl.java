@@ -13,11 +13,9 @@ import com.agentsystem.connector.service.TelegramService;
 import com.agentsystem.model.service.ModelConfigService;
 import com.agentsystem.notification.NotificationClient;
 import com.agentsystem.sandbox.service.SandboxService;
-import com.agentsystem.org.OrgContext;
 import com.agentsystem.skill.service.SkillService;
 import com.agentsystem.user.entity.User;
 import com.agentsystem.user.service.UserAccountService;
-import com.agentsystem.webfetch.service.WebFetchService;
 import com.agentsystem.workflow.entity.Workflow;
 import com.agentsystem.workflow.entity.WorkflowAgent;
 import com.agentsystem.workflow.entity.WorkflowEdge;
@@ -83,8 +81,6 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
             Pattern.compile("<use_tool name=\"(\\w+)\">(.*?)</use_tool>", Pattern.DOTALL);
     private static final Pattern DELEGATE_PATTERN =
             Pattern.compile("<delegate to=\"([^\"]+)\">(.*?)</delegate>", Pattern.DOTALL);
-    private static final Pattern HTTP_URL_PATTERN =
-            Pattern.compile("https?://[^\\s\"'\\\\]+");
 
     private final WorkflowRunRepository    runRepo;
     private final WorkflowRunLogRepository logRepo;
@@ -92,7 +88,6 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
     private final WorkflowEdgeRepository   edgeRepo;
     private final WorkflowService          workflowService;
     private final SandboxService           sandboxService;
-    private final WebFetchService          webFetchService;
     private final SkillService             skillService;
     private final ChatClient               chatClient;
     private final ChatModelFactory         chatModelFactory;
@@ -810,15 +805,6 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                 } else if (CONNECTOR_TOOL_NAMES.contains(toolName.toUpperCase())) {
                     toolResult = dispatchConnectorTool(toolName.toUpperCase(), command, run.getOwnerUuid(), run.getOrgId());
                 } else {
-                    String blocked = validateNetworkCommand(command, run.getOwnerUuid());
-                    if (blocked != null) {
-                        emit(run.getId(), agent.getId(), agent.getName(),
-                                WorkflowRunLog.LogType.TOOL_RESULT, blocked);
-                        messages.add(Map.of("role", "assistant", "content", llmResponse));
-                        messages.add(Map.of("role", "user", "content",
-                                "Tool result (" + toolName + "):\n" + blocked));
-                        continue;
-                    }
                     toolResult = sandboxService.exec(containerId, command);
                 }
 
@@ -1035,8 +1021,8 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                         node.path("cron").asText("0 9 * * *"),
                         node.path("timezone").asText("UTC"),
                         node.path("topK").asInt(5),
-                        node.path("useKnowledgeBase").asBoolean(true),
-                        node.path("useWebFetch").asBoolean(false)
+                        node.path("useKnowledgeBase").asBoolean(false),
+                        node.path("useWebSearch").asBoolean(false)
                 );
                 case "list" -> workflowScheduleClient.listSchedules(
                         ownerUuid,
@@ -1129,7 +1115,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
 
                     To create, list, or delete scheduled messages use the SCHEDULE tool with JSON:
                     <use_tool name="SCHEDULE">
-                    {"action":"create","conversationId":"<id>","message":"<text>","cron":"0 9 * * 1-5","timezone":"UTC","topK":5,"useKnowledgeBase":true,"useWebFetch":false}
+                    {"action":"create","conversationId":"<id>","message":"<text>","cron":"0 9 * * 1-5","timezone":"UTC","topK":5,"useKnowledgeBase":true,"useWebSearch":false}
                     </use_tool>
 
                     <use_tool name="SCHEDULE">
@@ -1316,33 +1302,6 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
 
     private String truncate(String s, int max) {
         return s != null && s.length() > max ? s.substring(0, max) + "…" : String.valueOf(s);
-    }
-
-    /**
-     * Returns a block message if the command contains curl/wget targeting a domain not in
-     * the owner's whitelist. Returns null if the command is allowed.
-     */
-    private String validateNetworkCommand(String command, String ownerUuid) {
-        if (!command.contains("curl") && !command.contains("wget")) {
-            return null;
-        }
-        List<String> urls = new ArrayList<>();
-        Matcher m = HTTP_URL_PATTERN.matcher(command);
-        while (m.find()) {
-            urls.add(m.group().replaceAll("[.,;)\\]]+$", ""));
-        }
-        if (urls.isEmpty()) {
-            return "[Blocked: curl/wget without a recognizable URL is not permitted]";
-        }
-        OrgContext ownerCtx = new OrgContext(ownerUuid, null, "PERSONAL", null);
-        for (String url : urls) {
-            if (!webFetchService.isUrlAllowed(url, ownerCtx)) {
-                String host = url.replaceAll("^https?://([^/?#]+).*", "$1");
-                return "[Blocked: domain '" + host + "' is not in your web-fetch whitelist. "
-                        + "Add it in Settings → Web Fetch before using it in a workflow.]";
-            }
-        }
-        return null;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────

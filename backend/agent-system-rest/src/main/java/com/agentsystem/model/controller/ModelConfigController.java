@@ -2,9 +2,12 @@ package com.agentsystem.model.controller;
 
 import com.agentsystem.model.entity.ModelConfig;
 import com.agentsystem.model.service.ModelConfigService;
+import com.agentsystem.org.OrgContext;
+import com.agentsystem.org.service.OrganizationService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,9 +20,9 @@ import java.util.Map;
  *
  * GET  /api/v1/models       — list enabled models (for users to choose from)
  * GET  /api/v1/models/all   — list all models including disabled (admin)
- * POST /api/v1/models       — create a model config
- * PUT  /api/v1/models/{displayName} — update a model config
- * DELETE /api/v1/models/{displayName} — delete a model config
+ * POST /api/v1/models       — create a model config (admin only)
+ * PUT  /api/v1/models/{displayName} — update a model config (admin only)
+ * DELETE /api/v1/models/{displayName} — delete a model config (admin only)
  */
 @RestController
 @RequestMapping("/api/v1/models")
@@ -28,6 +31,7 @@ import java.util.Map;
 public class ModelConfigController {
 
     private final ModelConfigService service;
+    private final OrganizationService organizationService;
 
     @GetMapping
     @Operation(summary = "List all enabled models available for selection")
@@ -42,8 +46,13 @@ public class ModelConfigController {
     }
 
     @PostMapping
-    @Operation(summary = "Create a new model configuration")
-    public ResponseEntity<?> create(@RequestBody Map<String, Object> body) {
+    @Operation(summary = "Create a new model configuration (admin only)")
+    public ResponseEntity<?> create(@RequestBody Map<String, Object> body, HttpServletRequest httpRequest) {
+        try {
+            organizationService.requireSystemAdmin(OrgContext.from(httpRequest).email());
+        } catch (SecurityException e) {
+            return forbidden(e.getMessage());
+        }
         String displayName = (String) body.get("displayName");
         String platform    = (String) body.get("platform");
         String modelId     = (String) body.get("modelId");
@@ -62,9 +71,15 @@ public class ModelConfigController {
     }
 
     @PutMapping("/{displayName}")
-    @Operation(summary = "Update an existing model configuration")
+    @Operation(summary = "Update an existing model configuration (admin only)")
     public ResponseEntity<?> update(@PathVariable String displayName,
-                                    @RequestBody Map<String, Object> body) {
+                                    @RequestBody Map<String, Object> body,
+                                    HttpServletRequest httpRequest) {
+        try {
+            organizationService.requireSystemAdmin(OrgContext.from(httpRequest).email());
+        } catch (SecurityException e) {
+            return forbidden(e.getMessage());
+        }
         String platform = (String) body.get("platform");
         String modelId  = (String) body.get("modelId");
         boolean enabled = body.get("enabled") instanceof Boolean b ? b : true;
@@ -81,13 +96,22 @@ public class ModelConfigController {
     }
 
     @DeleteMapping("/{displayName}")
-    @Operation(summary = "Delete a model configuration")
-    public ResponseEntity<Void> delete(@PathVariable String displayName) {
+    @Operation(summary = "Delete a model configuration (admin only)")
+    public ResponseEntity<?> delete(@PathVariable String displayName, HttpServletRequest httpRequest) {
+        try {
+            organizationService.requireSystemAdmin(OrgContext.from(httpRequest).email());
+        } catch (SecurityException e) {
+            return forbidden(e.getMessage());
+        }
         try {
             service.delete(displayName);
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    private ResponseEntity<Map<String, String>> forbidden(String msg) {
+        return ResponseEntity.status(403).body(Map.of("error", msg));
     }
 }

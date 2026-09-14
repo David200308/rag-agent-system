@@ -13,14 +13,10 @@ import com.agentsystem.knowledge.service.KnowledgeSourceService;
 import com.agentsystem.knowledge.entity.KnowledgeSource;
 import com.agentsystem.knowledge.entity.KnowledgeSourceShare;
 import com.agentsystem.user.service.UserAccountService;
-import com.agentsystem.mcp.service.McpConnectorService;
 import com.agentsystem.rag.service.DocumentIngestionService;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.AgentResponse;
-import com.agentsystem.schema.UrlIngestionResult;
 import com.agentsystem.user.service.UserPreferenceService;
-import com.agentsystem.webfetch.service.WebFetchService;
-import com.agentsystem.webfetch.entity.WebFetchWhitelist;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,10 +41,8 @@ class AgentControllerTest {
 
     @Mock AgentSystemGraph          agentGraph;
     @Mock DocumentIngestionService ingestionService;
-    @Mock McpConnectorService    mcpConnectorService;
     @Mock ConversationService    conversationService;
     @Mock KnowledgeSourceService knowledgeSourceService;
-    @Mock WebFetchService        webFetchService;
     @Mock UserPreferenceService  userPreferenceService;
     @Mock UserAccountService     userAccountService;
     @Mock LlmProperties          llmProperties;
@@ -113,19 +107,43 @@ class AgentControllerTest {
 
     @Test
     void conversationHistory_found_returns200() {
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("owner-uuid");
         ConversationMessage msg = new ConversationMessage();
-        when(conversationService.getMessages("conv-1")).thenReturn(List.of(msg));
+        when(conversationService.getMessages("conv-1", "owner-uuid")).thenReturn(List.of(msg));
 
-        ResponseEntity<List<ConversationMessage>> resp = controller.conversationHistory("conv-1");
+        ResponseEntity<List<ConversationMessage>> resp = controller.conversationHistory("conv-1", request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
     }
 
     @Test
     void conversationHistory_empty_returns404() {
-        when(conversationService.getMessages("conv-1")).thenReturn(List.of());
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("owner-uuid");
+        when(conversationService.getMessages("conv-1", "owner-uuid")).thenReturn(List.of());
 
-        ResponseEntity<List<ConversationMessage>> resp = controller.conversationHistory("conv-1");
+        ResponseEntity<List<ConversationMessage>> resp = controller.conversationHistory("conv-1", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(404);
+    }
+
+    @Test
+    void conversationHistory_notOwner_returns403() {
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("stranger-uuid");
+        when(conversationService.getMessages("conv-1", "stranger-uuid"))
+                .thenThrow(new SecurityException("Only the owner can view this conversation."));
+
+        ResponseEntity<List<ConversationMessage>> resp = controller.conversationHistory("conv-1", request);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(403);
+    }
+
+    @Test
+    void conversationHistory_unknownConversation_returns404() {
+        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("owner-uuid");
+        when(conversationService.getMessages("missing", "owner-uuid"))
+                .thenThrow(new IllegalArgumentException("Conversation not found: missing"));
+
+        ResponseEntity<List<ConversationMessage>> resp = controller.conversationHistory("missing", request);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(404);
     }
@@ -488,113 +506,6 @@ class AgentControllerTest {
         assertThat(resp.getStatusCode().value()).isEqualTo(403);
     }
 
-    // ── listWebFetchWhitelist ──────────────────────────────────────────────────
-
-    @Test
-    void listWebFetchWhitelist_returnsWhitelist() {
-        stubRequest("user@example.com");
-        WebFetchWhitelist entry = new WebFetchWhitelist();
-        when(webFetchService.listWhitelist(any(OrgContext.class))).thenReturn(List.of(entry));
-
-        var resp = controller.listWebFetchWhitelist(request);
-
-        assertThat(resp.getStatusCode().value()).isEqualTo(200);
-        assertThat(resp.getBody()).hasSize(1);
-    }
-
-    // ── addWebFetchDomain ──────────────────────────────────────────────────────
-
-    @Test
-    void addWebFetchDomain_blankDomain_returns400() {
-        var resp = controller.addWebFetchDomain(Map.of("domain", " "), request);
-        assertThat(resp.getStatusCode().value()).isEqualTo(400);
-    }
-
-    @Test
-    void addWebFetchDomain_missingDomain_returns400() {
-        var resp = controller.addWebFetchDomain(Map.of(), request);
-        assertThat(resp.getStatusCode().value()).isEqualTo(400);
-    }
-
-    @Test
-    void addWebFetchDomain_success_returns200() {
-        stubRequest("user@example.com");
-        WebFetchWhitelist entry = new WebFetchWhitelist();
-        when(webFetchService.addDomain(eq("example.com"), any(OrgContext.class))).thenReturn(entry);
-
-        var resp = controller.addWebFetchDomain(Map.of("domain", "example.com"), request);
-
-        assertThat(resp.getStatusCode().value()).isEqualTo(200);
-    }
-
-    @Test
-    void addWebFetchDomain_duplicate_returns400() {
-        stubRequest("user@example.com");
-        when(webFetchService.addDomain(anyString(), any(OrgContext.class)))
-                .thenThrow(new IllegalArgumentException("already exists"));
-
-        var resp = controller.addWebFetchDomain(Map.of("domain", "example.com"), request);
-
-        assertThat(resp.getStatusCode().value()).isEqualTo(400);
-    }
-
-    // ── removeWebFetchDomain ───────────────────────────────────────────────────
-
-    @Test
-    void removeWebFetchDomain_success_returns204() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
-        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
-
-        ResponseEntity<Void> resp = controller.removeWebFetchDomain("example.com", request);
-
-        assertThat(resp.getStatusCode().value()).isEqualTo(204);
-    }
-
-    @Test
-    void removeWebFetchDomain_notFound_returns404() {
-        stubRequest("user@example.com");
-        doThrow(new IllegalArgumentException("not found"))
-                .when(webFetchService).removeDomain(eq("example.com"), any(OrgContext.class));
-
-        ResponseEntity<Void> resp = controller.removeWebFetchDomain("example.com", request);
-
-        assertThat(resp.getStatusCode().value()).isEqualTo(404);
-    }
-
-    // ── ingestUrl ─────────────────────────────────────────────────────────────
-
-    @Test
-    void ingestUrl_blankUrl_returns400() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
-        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
-
-        var resp = controller.ingestUrl(Map.of("url", " "), request);
-
-        assertThat(resp.getStatusCode().value()).isEqualTo(400);
-    }
-
-    @Test
-    void ingestUrl_missingUrl_returns400() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
-        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
-
-        var resp = controller.ingestUrl(Map.of(), request);
-
-        assertThat(resp.getStatusCode().value()).isEqualTo(400);
-    }
-
-    @Test
-    void ingestUrl_success_returns200() {
-        when(request.getAttribute("authenticatedEmail")).thenReturn("user@example.com");
-        lenient().when(request.getAttribute("authenticatedUserUuid")).thenReturn("test-uuid");
-        UrlIngestionResult result = new UrlIngestionResult("ingested", "https://example.com", "Example", 3);
-        when(mcpConnectorService.fetchAndIngest(anyString(), any(), any(OrgContext.class))).thenReturn(result);
-
-        var resp = controller.ingestUrl(Map.of("url", "https://example.com"), request);
-
-        assertThat(resp.getStatusCode().value()).isEqualTo(200);
-    }
-
     // ── ingestText ────────────────────────────────────────────────────────────
 
     @Test
@@ -693,7 +604,7 @@ class AgentControllerTest {
     void query_graphThrowsException_returns500() {
         stubRequest("user@test.com");
 
-        AgentRequest agentReq = new AgentRequest("What is Java?", null, null, null, false, null, null, null, null, null);
+        AgentRequest agentReq = new AgentRequest("What is Java?", null, null, null, false, null, null, null, null);
 
         when(conversationService.resolveConversation(nullable(String.class), any(OrgContext.class))).thenReturn("conv-1");
         when(conversationService.getConversationModel("conv-1")).thenReturn(null);
@@ -764,27 +675,6 @@ class AgentControllerTest {
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).containsEntry("status", "ingested");
         assertThat(resp.getBody()).containsEntry("chunkCount", 4);
-    }
-
-    // ── ingestUrl ─────────────────────────────────────────────────────────────
-
-    @Test
-    void ingestUrl_emptyUrl_returns400() {
-        ResponseEntity<UrlIngestionResult> resp = controller.ingestUrl(Map.of("url", ""), request);
-        assertThat(resp.getStatusCode().value()).isEqualTo(400);
-    }
-
-    @Test
-    void ingestUrl_validUrl_returns200() {
-        stubRequest("user@test.com");
-        UrlIngestionResult result = new UrlIngestionResult("ok", "https://example.com", "Example Title", 5);
-        when(mcpConnectorService.fetchAndIngest(eq("https://example.com"), isNull(), any(OrgContext.class))).thenReturn(result);
-
-        ResponseEntity<UrlIngestionResult> resp = controller.ingestUrl(
-                Map.of("url", "https://example.com"), request);
-
-        assertThat(resp.getStatusCode().value()).isEqualTo(200);
-        assertThat(resp.getBody().chunkCount()).isEqualTo(5);
     }
 
     // ── Reflection helpers ────────────────────────────────────────────────────

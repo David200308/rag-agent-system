@@ -13,9 +13,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * Spring AI tool: real, open-ended web search — distinct from the URL whitelist-based
- * web-fetch feature, which only fetches a specific already-known URL. Backed by a
- * self-hosted SearXNG instance (free, no API key, no query cap).
+ * Spring AI tool: real, open-ended web search. Backed by a self-hosted SearXNG
+ * instance (free, no API key, no query cap).
  */
 @Slf4j
 @Component

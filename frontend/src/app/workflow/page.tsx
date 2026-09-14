@@ -22,6 +22,14 @@ import { cn } from "@/lib/utils";
 import { useWorkflowSidebar } from "./WorkflowSidebarContext";
 
 type ViewMode = "list" | "grid";
+type PatternFilter = "ALL" | AgentPattern;
+
+const PATTERN_FILTERS: { id: PatternFilter; label: string }[] = [
+  { id: "ALL",          label: "All" },
+  { id: "ORCHESTRATOR", label: "Orchestrator" },
+  { id: "TEAM",         label: "Team" },
+  { id: "GRAPH",        label: "Graph" },
+];
 
 export default function WorkflowListPage() {
   const router = useRouter();
@@ -34,12 +42,13 @@ export default function WorkflowListPage() {
   const [newMode,    setNewMode]    = useState<TeamExecMode | null>(null);
   const [search,     setSearch]     = useState("");
   const [viewMode,   setViewMode]   = useState<ViewMode>("list");
+  const [patternFilter, setPatternFilter] = useState<PatternFilter>("ALL");
 
   useEffect(() => { fetchWorkflows().then(setWorkflows); }, []);
 
-  const filtered = workflows.filter(wf =>
-    wf.name.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filtered = workflows
+    .filter(wf => patternFilter === "ALL" || wf.agentPattern === patternFilter)
+    .filter(wf => wf.name.toLowerCase().includes(search.toLowerCase()));
 
   async function handleCreate() {
     if (!newName.trim()) return;
@@ -166,6 +175,26 @@ export default function WorkflowListPage() {
           </div>
         )}
 
+        {/* Pattern filter chips */}
+        {workflows.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center gap-1.5">
+            {PATTERN_FILTERS.map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setPatternFilter(id)}
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                  patternFilter === id
+                    ? "border-gray-900 bg-gray-900 text-white dark:border-gray-100 dark:bg-gray-100 dark:text-black"
+                    : "border-[--color-border] text-[--color-muted] hover:border-gray-400 hover:text-inherit",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Empty states */}
         {workflows.length === 0 && !showNew && (
           <div className="rounded-xl border border-dashed border-[--color-border] py-16 text-center text-[--color-muted]">
@@ -176,7 +205,11 @@ export default function WorkflowListPage() {
 
         {workflows.length > 0 && filtered.length === 0 && (
           <div className="rounded-xl border border-dashed border-[--color-border] py-12 text-center text-[--color-muted]">
-            <p className="text-sm">No workflows match &ldquo;{search}&rdquo;</p>
+            <p className="text-sm">
+              {search
+                ? <>No workflows match &ldquo;{search}&rdquo;</>
+                : "No workflows match this filter"}
+            </p>
           </div>
         )}
 

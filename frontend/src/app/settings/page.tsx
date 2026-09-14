@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sun, Globe, Trash2, Plus, User, Shield, Clock, KeyRound, Menu, Bot } from "lucide-react";
+import { Sun, Trash2, User, Shield, Clock, KeyRound, Menu, Bot } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useTimezone } from "@/hooks/useTimezone";
 import { Button } from "@/components/ui/Button";
@@ -11,13 +11,10 @@ import { ResizableLayout } from "@/components/layout/ResizableLayout";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { useChatStore } from "@/store/chatStore";
 import {
-  fetchWebFetchWhitelist,
-  addWebFetchDomain,
-  removeWebFetchDomain,
   fetchModels,
   setUserDefaultModel,
 } from "@/lib/api";
-import type { ModelConfig, WebFetchWhitelistEntry } from "@/types/agent";
+import type { ModelConfig } from "@/types/agent";
 import { cn } from "@/lib/utils";
 import { startRegistration } from "@simplewebauthn/browser";
 import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
@@ -158,45 +155,6 @@ export default function SettingsPage() {
       await setUserDefaultModel(displayName);
     } finally {
       setModelSaving(false);
-    }
-  };
-
-  // ── Web-fetch whitelist ───────────────────────────────────────────────────────
-  const [whitelist, setWhitelist]   = useState<WebFetchWhitelistEntry[]>([]);
-  const [wlLoading, setWlLoading]   = useState(true);
-  const [newDomain, setNewDomain]   = useState("");
-  const [addError, setAddError]     = useState<string | null>(null);
-  const [addLoading, setAddLoading] = useState(false);
-
-  useEffect(() => {
-    fetchWebFetchWhitelist()
-      .then(setWhitelist)
-      .finally(() => setWlLoading(false));
-  }, []);
-
-  const handleAddDomain = async () => {
-    const domain = newDomain.trim();
-    if (!domain) return;
-    setAddLoading(true);
-    setAddError(null);
-    try {
-      const entry = await addWebFetchDomain(domain);
-      setWhitelist((prev) => [...prev, entry].sort((a, b) => a.domain.localeCompare(b.domain)));
-      setNewDomain("");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setAddError(`Failed to add domain: ${msg}`);
-    } finally {
-      setAddLoading(false);
-    }
-  };
-
-  const handleRemoveDomain = async (domain: string) => {
-    try {
-      await removeWebFetchDomain(domain);
-      setWhitelist((prev) => prev.filter((e) => e.domain !== domain));
-    } catch {
-      /* ignore */
     }
   };
 
@@ -385,69 +343,6 @@ export default function SettingsPage() {
               <p className="mt-2 text-xs text-[--color-muted]">
                 No models configured. Ask your admin to add model configs.
               </p>
-            )}
-          </SectionCard>
-
-          {/* ── Web-fetch whitelist ───────────────────────────────────────── */}
-          <SectionCard title="Web Fetch Whitelist" icon={<Globe className="h-4 w-4" />}>
-            <p className="mb-4 text-xs text-[--color-muted]">
-              Only these domains can be fetched when using the Web Fetch source toggle in chat.
-              Subdomains are automatically included (e.g. adding <code>example.com</code> also
-              allows <code>www.example.com</code>).
-            </p>
-
-            {/* Add domain form */}
-            <div className="flex gap-2 mb-4">
-              <input
-                type="text"
-                placeholder="example.com"
-                value={newDomain}
-                onChange={(e) => setNewDomain(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleAddDomain(); }}
-                className="flex-1 rounded-lg border border-[--color-border] bg-[--color-surface-raised] px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 dark:focus:ring-gray-100"
-              />
-              <Button size="sm" onClick={handleAddDomain} loading={addLoading}>
-                <Plus className="h-3.5 w-3.5" />
-                Add
-              </Button>
-            </div>
-            {addError && <p className="mb-3 text-xs text-red-500">{addError}</p>}
-
-            {/* Domain list */}
-            {wlLoading ? (
-              <div className="flex justify-center py-4">
-                <Spinner className="h-5 w-5" />
-              </div>
-            ) : whitelist.length === 0 ? (
-              <p className="text-center text-xs text-[--color-muted] py-3">
-                No domains whitelisted yet.
-              </p>
-            ) : (
-              <ul className="divide-y divide-[--color-border] rounded-lg border border-[--color-border]">
-                {whitelist.map((entry) => (
-                  <li
-                    key={entry.domain}
-                    className="flex items-center justify-between px-3 py-2.5"
-                  >
-                    <div>
-                      <p className="text-sm font-mono">{entry.domain}</p>
-                      {entry.addedBy && (
-                        <p className="text-[10px] text-[--color-muted]">
-                          Added by {entry.addedBy}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveDomain(entry.domain)}
-                      className="rounded p-1 text-[--color-muted] hover:bg-red-500/10 hover:text-red-400 transition-colors"
-                      title="Remove"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
             )}
           </SectionCard>
         </div>

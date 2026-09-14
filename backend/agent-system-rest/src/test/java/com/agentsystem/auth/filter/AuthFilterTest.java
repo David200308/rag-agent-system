@@ -18,6 +18,7 @@ import java.io.StringWriter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,9 +55,11 @@ class AuthFilterTest {
     }
 
     @Test
-    void shouldNotFilter_sharePath_true() {
+    void shouldNotFilter_sharePath_false() {
+        // Share routes are JWT-optional (see doFilterInternal_sharePath_* tests below),
+        // not fully exempt — the filter must still run to attach identity when a token is present.
         when(request.getRequestURI()).thenReturn("/api/v1/share/abc123");
-        assertThat(filterEnabled.shouldNotFilter(request)).isTrue();
+        assertThat(filterEnabled.shouldNotFilter(request)).isFalse();
     }
 
     @Test
@@ -189,5 +192,33 @@ class AuthFilterTest {
         verify(request).setAttribute("authenticatedEmail", "user@example.com");
         verify(request).setAttribute("authenticatedMode", "PERSONAL");
         verify(chain).doFilter(request, response);
+    }
+
+    @Test
+    void doFilterInternal_sharePath_noToken_allowsThrough() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/v1/share/tok-abc");
+        when(request.getHeader("Authorization")).thenReturn(null);
+        when(authInnerClient.validate(null))
+                .thenReturn(new AuthInnerClient.ValidateResult(false, null, null, null, null));
+
+        filterEnabled.doFilterInternal(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+        verify(response, never()).setStatus(anyInt());
+        verify(request, never()).setAttribute(eq("authenticatedUserUuid"), any());
+    }
+
+    @Test
+    void doFilterInternal_sharePath_validToken_setsAllAttributesAndAllows() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/v1/share/tok-abc");
+        when(request.getHeader("Authorization")).thenReturn("Bearer valid-token");
+        when(authInnerClient.validate("valid-token")).thenReturn(personal(USER_UUID, "user@example.com"));
+
+        filterEnabled.doFilterInternal(request, response, chain);
+
+        verify(request).setAttribute("authenticatedUserUuid", USER_UUID);
+        verify(request).setAttribute("authenticatedEmail", "user@example.com");
+        verify(chain).doFilter(request, response);
+        verify(response, never()).setStatus(anyInt());
     }
 }

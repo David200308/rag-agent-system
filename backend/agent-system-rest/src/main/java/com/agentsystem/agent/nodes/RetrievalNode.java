@@ -40,7 +40,7 @@ public class RetrievalNode {
         QueryAnalysis analysis = state.queryAnalysis().orElseThrow();
 
         // Safety guard: knowledge base search was disabled per-request.
-        // WebFetchNode should have already rerouted to DIRECT, but guard here too.
+        // QueryAnalyzerNode should have already rerouted to DIRECT, but guard here too.
         if (!request.isKnowledgeBaseEnabled()) {
             log.info("[RetrievalNode] Knowledge base disabled for this request — skipping");
             return Map.of();

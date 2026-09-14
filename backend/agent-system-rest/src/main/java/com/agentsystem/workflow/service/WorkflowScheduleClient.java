@@ -31,7 +31,7 @@ public class WorkflowScheduleClient {
     /** Create a schedule on behalf of ownerUuid. Returns a human-readable result string. */
     public String createSchedule(String ownerUuid, String conversationId, String message,
                                   String cronExpr, String timezone, int topK,
-                                  boolean useKnowledgeBase, boolean useWebFetch) {
+                                  boolean useKnowledgeBase, boolean useWebSearch) {
         try {
             Map<String, Object> body = new HashMap<>();
             body.put("ownerUuid",       ownerUuid);
@@ -41,7 +41,7 @@ public class WorkflowScheduleClient {
             body.put("timezone",         timezone.isBlank()  ? "UTC"       : timezone);
             body.put("topK",             topK > 0 ? topK : 5);
             body.put("useKnowledgeBase", useKnowledgeBase);
-            body.put("useWebFetch",      useWebFetch);
+            body.put("useWebSearch",     useWebSearch);
 
             String response = restClient.post()
                     .uri("/internal/schedules")

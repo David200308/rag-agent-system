@@ -6,6 +6,7 @@ import com.agentsystem.conversation.entity.ConversationShare;
 import com.agentsystem.user.service.UserAccountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -36,13 +37,17 @@ public class ShareController {
         List<ConversationMessage> messages
     ) {}
 
-    // ── GET /{token} — read share metadata + messages (no auth required) ──────
+    // ── GET /{token} — read share metadata + messages ──────────────────────────
+    // Anonymous access is allowed (EVERYONE shares), but AuthFilter still validates a
+    // token when one is presented so WHITELIST shares can check the caller's identity.
 
     @GetMapping("/{token}")
-    @Operation(summary = "Read share metadata and messages (public, no auth required)")
-    public ResponseEntity<ShareMetaResponse> readShared(@PathVariable String token) {
+    @Operation(summary = "Read share metadata and messages (anonymous for EVERYONE shares; "
+            + "requires the caller to be on the whitelist for WHITELIST shares)")
+    public ResponseEntity<?> readShared(@PathVariable String token, HttpServletRequest httpRequest) {
+        String callerUuid = (String) httpRequest.getAttribute("authenticatedUserUuid");
         try {
-            ConversationShare share = conversationService.getShareByToken(token);
+            ConversationShare share = conversationService.validateShareAccess(token, callerUuid);
             List<ConversationMessage> messages =
                     conversationService.getMessages(share.getConversationId());
             return ResponseEntity.ok(new ShareMetaResponse(
@@ -52,6 +57,8 @@ public class ShareController {
                 share.getExpiresAt() != null ? share.getExpiresAt().toString() : null,
                 messages
             ));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(java.util.Map.of("error", e.getMessage()));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
         }

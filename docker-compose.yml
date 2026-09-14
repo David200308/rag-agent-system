@@ -132,10 +132,6 @@ services:
       # ── Travel (travel-inner, map tiles via CartoDB — no API keys)
       TRAVEL_INNER_URL: http://travel-inner:8088
       TRAVEL_SERVICE_KEY: ${TRAVEL_SERVICE_KEY:-travel-secret-key}
-      # ── Web fetch
-      WEB_FETCH_ENABLED: ${WEB_FETCH_ENABLED:-true}
-      WEB_FETCH_TIMEOUT: ${WEB_FETCH_TIMEOUT:-10}
-      WEB_FETCH_MAX_CHARS: ${WEB_FETCH_MAX_CHARS:-50000}
       # ── Web search (self-hosted SearXNG — free, no API key)
       WEB_SEARCH_ENABLED: ${WEB_SEARCH_ENABLED:-true}
       WEB_SEARCH_URL: http://searxng:8080

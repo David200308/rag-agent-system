@@ -596,10 +596,6 @@ services:
       #   TRACING_SAMPLE_RATE=1.0
       #   OTEL_EXPORTER_OTLP_ENDPOINT=http://<collector>:4318/v1/traces
       TRACING_SAMPLE_RATE: "0.0"
-      # ── Web fetch
-      WEB_FETCH_ENABLED: ${WEB_FETCH_ENABLED:-true}
-      WEB_FETCH_TIMEOUT: ${WEB_FETCH_TIMEOUT:-10}
-      WEB_FETCH_MAX_CHARS: ${WEB_FETCH_MAX_CHARS:-50000}
       # ── Web search (self-hosted SearXNG — free, no API key)
       WEB_SEARCH_ENABLED: ${WEB_SEARCH_ENABLED:-true}
       WEB_SEARCH_URL: http://searxng:8080

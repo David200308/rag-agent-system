@@ -4,7 +4,6 @@ import com.agentsystem.agent.nodes.FallbackNode;
 import com.agentsystem.agent.nodes.GeneratorNode;
 import com.agentsystem.agent.nodes.QueryAnalyzerNode;
 import com.agentsystem.agent.nodes.RetrievalNode;
-import com.agentsystem.agent.nodes.WebFetchNode;
 import com.agentsystem.agent.state.AgentState;
 import com.agentsystem.schema.QueryAnalysis;
 import lombok.extern.slf4j.Slf4j;
@@ -25,11 +24,10 @@ import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
  * <pre>
  *   START
  *     └─► analyzeQuery
- *               └─► webFetch  (no-op when fetchUrls is empty)
- *                       ├─[RETRIEVE]─► retrieve ─[docs found]──► generate
- *                       │                        └[no docs]───► fallback ─► END
- *                       ├─[DIRECT]───────────────────────────► generate
- *                       └─[FALLBACK]──────────────────────────► fallback ─► END
+ *               ├─[RETRIEVE]─► retrieve ─[docs found]──► generate
+ *               │                        └[no docs]───► fallback ─► END
+ *               ├─[DIRECT]───────────────────────────► generate
+ *               └─[FALLBACK]──────────────────────────► fallback ─► END
  *
  *   generate ─[succeeded]─► END
  *            └[LLM circuit open / retries exhausted]─► fallback ─► END
@@ -43,7 +41,6 @@ import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 public class AgentSystemGraph {
 
     private static final String NODE_ANALYZE    = "analyzeQuery";
-    private static final String NODE_WEB_FETCH  = "webFetch";
     private static final String NODE_RETRIEVE   = "retrieve";
     private static final String NODE_GENERATE   = "generate";
     private static final String NODE_FALLBACK   = "fallback";
@@ -51,7 +48,6 @@ public class AgentSystemGraph {
     private final CompiledGraph<AgentState> compiledGraph;
 
     public AgentSystemGraph(QueryAnalyzerNode analyzerNode,
-                         WebFetchNode      webFetchNode,
                          RetrievalNode     retrievalNode,
                          GeneratorNode     generatorNode,
                          FallbackNode      fallbackNode) throws Exception {
@@ -60,7 +56,6 @@ public class AgentSystemGraph {
 
             // ── Nodes ──────────────────────────────────────────────────────
             .addNode(NODE_ANALYZE,   node_async(analyzerNode::process))
-            .addNode(NODE_WEB_FETCH, node_async(webFetchNode::process))
             .addNode(NODE_RETRIEVE,  node_async(retrievalNode::process))
             .addNode(NODE_GENERATE,  node_async(generatorNode::process))
             .addNode(NODE_FALLBACK,  node_async(fallbackNode::process))
@@ -68,12 +63,9 @@ public class AgentSystemGraph {
             // ── Edges ──────────────────────────────────────────────────────
             .addEdge(START, NODE_ANALYZE)
 
-            // After analysis: always pass through webFetch (no-op when fetchUrls empty)
-            .addEdge(NODE_ANALYZE, NODE_WEB_FETCH)
-
-            // After webFetch: route based on QueryAnalysis.Route (may be updated by webFetch)
+            // After analysis: route based on QueryAnalysis.Route
             .addConditionalEdges(
-                NODE_WEB_FETCH,
+                NODE_ANALYZE,
                 state -> CompletableFuture.completedFuture(state.route()),
                 java.util.Map.of(
                     QueryAnalysis.Route.RETRIEVE.name(), NODE_RETRIEVE,

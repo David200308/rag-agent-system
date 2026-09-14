@@ -63,7 +63,7 @@ class GeneratorNodeTest {
     }
 
     private static AgentRequest request() {
-        return new AgentRequest("question?", null, 5, null, false, null, null, true, null, null);
+        return new AgentRequest("question?", null, 5, null, false, null, true, null, null);
     }
 
     private static QueryAnalysis analysis() {
@@ -94,6 +94,50 @@ class GeneratorNodeTest {
         assertThat(response.answer()).isEqualTo("The answer.");
         verify(toolCallBudget).reset();
         verify(toolCallBudget).clear();
+    }
+
+    // ── process — web search is opt-in ────────────────────────────────────────
+
+    @Test
+    void process_webSearchNotRequested_systemPromptExcludesWebSearchTool() {
+        ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
+        when(generationService.generate(any(), systemPromptCaptor.capture(), any(), any(), any(), any()))
+                .thenReturn(CompletableFuture.completedFuture("The answer."));
+        when(llmProperties.getProvider()).thenReturn("openai");
+        LlmProperties.OpenAiProps openAiProps = new LlmProperties.OpenAiProps();
+        openAiProps.setModel("gpt-4o-mini");
+        when(llmProperties.getOpenai()).thenReturn(openAiProps);
+
+        AgentRequest noWebSearch = new AgentRequest("question?", null, 5, null, false, null, true, null, null);
+        AgentState state = new AgentState(Map.of(
+                "request",       noWebSearch,
+                "queryAnalysis", analysis()
+        ));
+
+        node.process(state);
+
+        assertThat(systemPromptCaptor.getValue()).doesNotContain("searchWeb");
+    }
+
+    @Test
+    void process_webSearchRequested_systemPromptIncludesWebSearchTool() {
+        ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
+        when(generationService.generate(any(), systemPromptCaptor.capture(), any(), any(), any(), any()))
+                .thenReturn(CompletableFuture.completedFuture("The answer."));
+        when(llmProperties.getProvider()).thenReturn("openai");
+        LlmProperties.OpenAiProps openAiProps = new LlmProperties.OpenAiProps();
+        openAiProps.setModel("gpt-4o-mini");
+        when(llmProperties.getOpenai()).thenReturn(openAiProps);
+
+        AgentRequest withWebSearch = new AgentRequest("question?", null, 5, null, false, null, true, true, null);
+        AgentState state = new AgentState(Map.of(
+                "request",       withWebSearch,
+                "queryAnalysis", analysis()
+        ));
+
+        node.process(state);
+
+        assertThat(systemPromptCaptor.getValue()).contains("searchWeb");
     }
 
     // ── process — tool context must be primed/cleared on the worker thread ────

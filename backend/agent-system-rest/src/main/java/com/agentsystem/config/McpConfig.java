@@ -35,7 +35,7 @@ public class McpConfig {
                 .build();
     }
 
-    /** Shared RestClient.Builder for URL fetching in McpConnectorService. */
+    /** Shared RestClient.Builder for connector services (Telegram, Google Docs/Sheets/Slides, etc.). */
     @Bean
     public RestClient.Builder restClientBuilder() {
         return RestClient.builder();
