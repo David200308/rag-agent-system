@@ -254,6 +254,9 @@ struct FinancialView: View {
         }
     }
 
+    /// Deposits always shows; Stocks/Crypto/Futures only appear once they hold a position,
+    /// so empty modules don't clutter the overview. The section chips above still link to
+    /// every module, which is how the first position gets added.
     private var modulesList: some View {
         ThemeCard(padding: 6) {
             VStack(spacing: 0) {
@@ -263,35 +266,45 @@ struct FinancialView: View {
                               subtitle: "\(store.deposits.count) accounts",
                               trailing: maskedMoney(store.depositsTotal, currency: store.depositsCurrency, hidden: isBalanceHidden))
                 }
-                Divider().overlay(Theme.hairline).padding(.leading, 68)
 
-                NavigationLink { FinanceMarketsView(store: store, initialTab: 0) } label: {
-                    moduleRow(icon: "chart.bar.fill",
-                              title: "Stocks",
-                              subtitle: "\(store.stocks.count) positions",
-                              trailing: maskedMoney(store.stocksValue, currency: store.stocksCurrency, hidden: isBalanceHidden),
-                              pnl: store.stocks.isEmpty ? nil : store.stocksPnlPercent)
+                if !store.stocks.isEmpty {
+                    moduleDivider
+                    NavigationLink { FinanceMarketsView(store: store, initialTab: 0) } label: {
+                        moduleRow(icon: "chart.bar.fill",
+                                  title: "Stocks",
+                                  subtitle: "\(store.stocks.count) positions",
+                                  trailing: maskedMoney(store.stocksValue, currency: store.stocksCurrency, hidden: isBalanceHidden),
+                                  pnl: store.stocksPnlPercent)
+                    }
                 }
-                Divider().overlay(Theme.hairline).padding(.leading, 68)
 
-                NavigationLink { FinanceMarketsView(store: store, initialTab: 1) } label: {
-                    moduleRow(icon: "hexagon.fill",
-                              title: "Crypto",
-                              subtitle: "\(store.crypto.count) assets",
-                              trailing: maskedMoney(store.cryptoValue, currency: store.cryptoCurrency, hidden: isBalanceHidden),
-                              pnl: store.crypto.isEmpty ? nil : store.cryptoPnlPercent)
+                if !store.crypto.isEmpty {
+                    moduleDivider
+                    NavigationLink { FinanceMarketsView(store: store, initialTab: 1) } label: {
+                        moduleRow(icon: "hexagon.fill",
+                                  title: "Crypto",
+                                  subtitle: "\(store.crypto.count) assets",
+                                  trailing: maskedMoney(store.cryptoValue, currency: store.cryptoCurrency, hidden: isBalanceHidden),
+                                  pnl: store.cryptoPnlPercent)
+                    }
                 }
-                Divider().overlay(Theme.hairline).padding(.leading, 68)
 
-                NavigationLink { FinanceFuturesView(store: store) } label: {
-                    moduleRow(icon: "bolt.fill",
-                              title: "Futures",
-                              subtitle: "\(store.futures.count) open",
-                              trailing: maskedMoney(store.futuresOpenPnl, currency: store.futuresCurrency, hidden: isBalanceHidden),
-                              trailingTint: store.futures.isEmpty ? nil : (store.futuresOpenPnl >= 0 ? Theme.positive : Theme.negative))
+                if !store.futures.isEmpty {
+                    moduleDivider
+                    NavigationLink { FinanceFuturesView(store: store) } label: {
+                        moduleRow(icon: "bolt.fill",
+                                  title: "Futures",
+                                  subtitle: "\(store.futures.count) open",
+                                  trailing: maskedMoney(store.futuresOpenPnl, currency: store.futuresCurrency, hidden: isBalanceHidden),
+                                  trailingTint: store.futuresOpenPnl >= 0 ? Theme.positive : Theme.negative)
+                    }
                 }
             }
         }
+    }
+
+    private var moduleDivider: some View {
+        Divider().overlay(Theme.hairline).padding(.leading, 68)
     }
 
     private func moduleRow(icon: String, title: String, subtitle: String, trailing: String,
@@ -352,6 +365,25 @@ func formatNum(_ v: Double) -> String {
     v.truncatingRemainder(dividingBy: 1) == 0
         ? String(format: "%.0f", v)
         : String(format: "%.4f", v)
+}
+
+/// Per-unit price formatting — mirrors the web app's `formatPrice` (types/financial.ts).
+func formatPrice(_ v: Double) -> String {
+    if v >= 1000 {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.locale = Locale(identifier: "en_US")
+        f.maximumFractionDigits = 2
+        return f.string(from: NSNumber(value: v)) ?? String(format: "%.2f", v)
+    }
+    if v >= 1 { return String(format: "%.4f", v) }
+    return String(format: "%.4g", v)
+}
+
+func maskedPrice(_ v: Double, currency: String?, hidden: Bool) -> String {
+    let price = hidden ? "••••" : formatPrice(v)
+    guard let currency, !currency.isEmpty else { return price }
+    return "\(price) \(currency)"
 }
 
 func stockTypeBadgeLabel(_ stockType: String) -> String {

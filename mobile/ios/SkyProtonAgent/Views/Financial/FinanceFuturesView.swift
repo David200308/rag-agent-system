@@ -23,7 +23,7 @@ struct FinanceFuturesView: View {
             VStack(alignment: .leading, spacing: 16) {
                 summaryCard
 
-                HStack(spacing: 8) {
+                ThemeChipRow {
                     ForEach(["All", "Auto-tracked", "Manual"], id: \.self) { opt in
                         ThemeChip(label: opt, isActive: sourceFilter == opt) { sourceFilter = opt }
                     }
@@ -178,48 +178,47 @@ private struct FutureFormView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Market") {
-                    Picker("Type", selection: $exchangeKind) {
-                        Text("Security").tag("SECURITY")
-                        Text("Crypto (CEX)").tag("CRYPTO_CEX")
-                    }
-                    .pickerStyle(.segmented)
-                    if exchangeKind == "CRYPTO_CEX" {
-                        Picker("Exchange", selection: $exchange) {
-                            ForEach(cexExchanges, id: \.self) { Text($0.capitalized).tag($0) }
-                        }
-                    }
-                    TextField("Symbol (e.g. AAPL, BTCUSDT)", text: $symbol).autocapitalization(.allCharacters)
-                    Picker("Side", selection: $side) {
-                        ForEach(futureSides, id: \.self) { Text($0.capitalized).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                }
-                Section("Position") {
-                    TextField("Quantity", text: $quantity).keyboardType(.decimalPad)
-                    TextField("Entry price", text: $entryPrice).keyboardType(.decimalPad)
-                    TextField("Leverage (optional)", text: $leverage).keyboardType(.decimalPad)
-                    Picker("Currency", selection: $currency) {
-                        ForEach(commonCurrencies, id: \.self) { Text($0).tag($0) }
+        FormSheet(
+            editing == nil ? "New future" : "Edit future",
+            subtitle: "Manually tracked futures position",
+            primaryLabel: editing == nil ? "Add position" : "Save changes",
+            isPrimaryEnabled: isValid, isSaving: isSaving, errorMessage: errorMessage,
+            onPrimary: { Task { await save() } }
+        ) {
+            FormSection("Market") {
+                FormChoiceRow("Type") {
+                    FormSegmented(options: manualFutureKinds, selection: $exchangeKind) {
+                        $0 == "SECURITY" ? "Security" : "Crypto (CEX)"
                     }
                 }
-                if let errorMessage {
-                    Section { Text(errorMessage).font(.caption).foregroundStyle(.red) }
+                if exchangeKind == "CRYPTO_CEX" {
+                    FormDivider()
+                    FormChoiceRow("Exchange") {
+                        FormChips(options: cexExchanges, selection: $exchange) { $0.capitalized }
+                    }
+                }
+                FormDivider()
+                FormField(label: "Symbol", text: $symbol, placeholder: "e.g. AAPL, BTCUSDT",
+                          capitalization: .characters)
+                FormDivider()
+                FormChoiceRow("Side") {
+                    FormSegmented(options: futureSides, selection: $side,
+                                  accent: { $0 == "LONG" ? Theme.positive : Theme.negative }) { $0.capitalized }
                 }
             }
-            .navigationTitle(editing == nil ? "Add Future" : "Edit Future")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    if isSaving { ProgressView() } else {
-                        Button("Save") { Task { await save() } }.disabled(!isValid)
-                    }
+            FormSection("Position") {
+                FormNumberRow(label: "Quantity", text: $quantity)
+                FormDivider()
+                FormNumberRow(label: "Entry price", text: $entryPrice, placeholder: "0.00")
+                FormDivider()
+                FormNumberRow(label: "Leverage", text: $leverage, placeholder: "Optional", unit: "×")
+                FormDivider()
+                FormRow("Currency") {
+                    FormMenuPicker(options: commonCurrencies, selection: $currency) { $0 }
                 }
             }
         }
+        .animation(.easeOut(duration: 0.2), value: exchangeKind)
         .onAppear(perform: populate)
     }
 

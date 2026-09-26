@@ -37,6 +37,7 @@
 		AA000100000000000000002B /* AlertModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000002B /* AlertModels.swift */; };
 		AA000100000000000000002C /* PriceAlertSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000002C /* PriceAlertSheet.swift */; };
 		AA000100000000000000002D /* TravelAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000002D /* TravelAnalysisView.swift */; };
+		AA000100000000000000002E /* FormKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000002E /* FormKit.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -72,6 +73,7 @@
 		AA000200000000000000002B /* AlertModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertModels.swift; sourceTree = "<group>"; };
 		AA000200000000000000002C /* PriceAlertSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertSheet.swift; sourceTree = "<group>"; };
 		AA000200000000000000002D /* TravelAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TravelAnalysisView.swift; sourceTree = "<group>"; };
+		AA000200000000000000002E /* FormKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormKit.swift; sourceTree = "<group>"; };
 		AA00FF000000000000000001 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Configs/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		AA00FF000000000000000002 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Configs/Release.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -164,6 +166,7 @@
 				AA0002000000000000000026 /* FinanceSalaryView.swift */,
 				AA0002000000000000000027 /* SwipeToDeleteRow.swift */,
 				AA0002000000000000000028 /* ComboField.swift */,
+				AA000200000000000000002E /* FormKit.swift */,
 				AA0002000000000000000029 /* SymbolIcon.swift */,
 				AA000200000000000000002C /* PriceAlertSheet.swift */,
 			);
@@ -235,7 +238,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1540;
-				LastUpgradeCheck = 1540;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					AA0005000000000000000001 = {
 						CreatedOnToolsVersion = 15.4;
@@ -300,6 +303,7 @@
 				AA0001000000000000000026 /* FinanceSalaryView.swift in Sources */,
 				AA0001000000000000000027 /* SwipeToDeleteRow.swift in Sources */,
 				AA0001000000000000000028 /* ComboField.swift in Sources */,
+				AA000100000000000000002E /* FormKit.swift in Sources */,
 				AA0001000000000000000029 /* SymbolIcon.swift in Sources */,
 				AA000100000000000000002A /* TravelMapKit.swift in Sources */,
 				AA000100000000000000002B /* AlertModels.swift in Sources */,
@@ -336,6 +340,7 @@
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
 				CLANG_WARN_OBJC_IMPLICIT_RETAIN_CYCLE = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
@@ -347,6 +352,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = M8V55585XA;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -369,6 +375,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -399,6 +406,7 @@
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
 				CLANG_WARN_OBJC_IMPLICIT_RETAIN_CYCLE = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
@@ -410,6 +418,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = M8V55585XA;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -424,6 +433,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -437,7 +447,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = M8V55585XA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SkyProtonAgent/Info.plist;
@@ -463,7 +472,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = M8V55585XA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SkyProtonAgent/Info.plist;

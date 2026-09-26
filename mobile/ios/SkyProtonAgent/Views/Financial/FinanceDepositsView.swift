@@ -31,7 +31,7 @@ struct FinanceDepositsView: View {
                         }
                     }
                     if availableCurrencies.count > 2 {
-                        HStack(spacing: 8) {
+                        ThemeChipRow {
                             ForEach(availableCurrencies, id: \.self) { c in
                                 ThemeChip(label: c, isActive: currencyFilter == c) { currencyFilter = c }
                             }
@@ -111,41 +111,32 @@ private struct DepositFormView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Account") {
-                    ComboField(placeholder: "Platform (e.g. HSBC, DBS)", text: $platform,
-                               suggestions: Array(Set(store.deposits.map(\.platform))).sorted())
-                    ComboField(placeholder: "Platform type (e.g. Bank, Brokerage)", text: $platformType,
-                               suggestions: Array(Set(store.deposits.map(\.platformType))).sorted())
-                    ComboField(placeholder: "Country / region", text: $countryRegion,
-                               suggestions: Array(Set(store.deposits.compactMap {
-                                   let v = $0.countryRegion?.trimmingCharacters(in: .whitespaces)
-                                   return (v?.isEmpty ?? true) ? nil : v
-                               })).sorted())
-                }
-                Section("Amount") {
-                    Picker("Fixed / Flex", selection: $depositType) {
-                        ForEach(depositTypes, id: \.self) { Text($0).tag($0) }
-                    }
-                    Picker("Currency", selection: $currency) {
-                        ForEach(commonCurrencies, id: \.self) { Text($0).tag($0) }
-                    }
-                    TextField("Amount", text: $amount).keyboardType(.decimalPad)
-                }
-                if let errorMessage {
-                    Section { Text(errorMessage).font(.caption).foregroundStyle(.red) }
+        FormSheet(
+            editing == nil ? "New deposit" : "Edit deposit",
+            subtitle: "Cash held at a bank or platform",
+            primaryLabel: editing == nil ? "Add deposit" : "Save changes",
+            isPrimaryEnabled: isValid, isSaving: isSaving, errorMessage: errorMessage,
+            onPrimary: { Task { await save() } }
+        ) {
+            FormSection {
+                FormAmountHero(label: "Amount", amount: $amount, currency: $currency)
+                FormDivider()
+                FormChoiceRow("Term") {
+                    FormSegmented(options: depositTypes, selection: $depositType) { $0.capitalized }
                 }
             }
-            .navigationTitle(editing == nil ? "Add Deposit" : "Edit Deposit")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    if isSaving { ProgressView() } else {
-                        Button("Save") { Task { await save() } }.disabled(!isValid)
-                    }
-                }
+            FormSection("Account") {
+                ComboField(label: "Platform", placeholder: "e.g. HSBC, DBS", text: $platform,
+                           suggestions: Array(Set(store.deposits.map(\.platform))).sorted())
+                FormDivider()
+                ComboField(label: "Platform type", placeholder: "e.g. Bank, Brokerage", text: $platformType,
+                           suggestions: Array(Set(store.deposits.map(\.platformType))).sorted())
+                FormDivider()
+                ComboField(label: "Country / region", placeholder: "Optional", text: $countryRegion,
+                           suggestions: Array(Set(store.deposits.compactMap {
+                               let v = $0.countryRegion?.trimmingCharacters(in: .whitespaces)
+                               return (v?.isEmpty ?? true) ? nil : v
+                           })).sorted())
             }
         }
         .onAppear(perform: populate)

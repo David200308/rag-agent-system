@@ -118,6 +118,8 @@ struct ThemeChip: View {
         Button(action: action) {
             Text(label)
                 .font(.system(size: 13, weight: .medium))
+                .lineLimit(1)
+                .fixedSize()
                 .padding(.horizontal, 13).padding(.vertical, 7)
                 .background(isActive ? accent : Theme.surface)
                 .foregroundStyle(isActive ? Color.white : Theme.inkSoft)
@@ -130,6 +132,19 @@ struct ThemeChip: View {
     }
 }
 
+/// A row of filter chips that scrolls sideways when it outgrows the screen, instead of
+/// squeezing each chip until its label wraps.
+struct ThemeChipRow<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) { content }
+        }
+        .scrollClipDisabled()
+    }
+}
+
 /// A chip-styled label with no interaction of its own — use this (not `ThemeChip`) as the
 /// `label:` of a `NavigationLink`. `ThemeChip` is itself a `Button`, and nesting a button inside
 /// a NavigationLink's label makes the inner button swallow the tap so navigation never fires.
@@ -139,6 +154,8 @@ struct NavChipLabel: View {
     var body: some View {
         Text(label)
             .font(.system(size: 13, weight: .medium))
+            .lineLimit(1)
+            .fixedSize()
             .padding(.horizontal, 13).padding(.vertical, 7)
             .background(Theme.surface)
             .foregroundStyle(Theme.inkSoft)

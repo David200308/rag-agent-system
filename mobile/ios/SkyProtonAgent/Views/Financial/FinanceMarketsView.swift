@@ -18,6 +18,7 @@ private struct StockGroup: Identifiable {
     let currency: String
     let avgPrice: Double?
     let currentPrice: Double?
+    let priceCurrency: String?
     let convertedInvestAmount: Double
     let convertedCurrentValue: Double?
     let convertedCurrency: String
@@ -49,7 +50,7 @@ private func groupStocksBySymbol(_ rows: [StockInvestment]) -> [StockGroup] {
             symbol: symbol, name: first.name, stockType: first.stockType, logoUrl: first.logoUrl, rows: group,
             stockAmount: stockAmount, investAmount: investAmount, fee: fee, currency: first.currency,
             avgPrice: stockAmount > 0 ? (investAmount + fee) / stockAmount : nil,
-            currentPrice: first.currentPrice,
+            currentPrice: first.currentPrice, priceCurrency: first.priceCurrency,
             convertedInvestAmount: convertedInvestAmount, convertedCurrentValue: convertedCurrentValue,
             convertedCurrency: first.convertedCurrency, pnlPercent: pnlPercent
         )
@@ -128,7 +129,7 @@ struct FinanceMarketsView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     summaryCard
                     if initialTab == 0 {
-                        HStack(spacing: 8) {
+                        ThemeChipRow {
                             ForEach(availableMarkets, id: \.self) { m in
                                 ThemeChip(label: m, isActive: marketFilter == m) { marketFilter = m }
                             }
@@ -196,28 +197,16 @@ struct FinanceMarketsView: View {
             Button("Cancel", role: .cancel) { pendingDeleteCrypto = nil }
         }
         .sheet(isPresented: $showFilter) {
-            NavigationStack {
-                Form {
+            FormSheet("Filter", primaryLabel: "Show results", onPrimary: { showFilter = false }) {
+                FormSection {
                     if initialTab == 0 {
-                        Section("Market") {
-                            Picker("Market", selection: $marketFilter) {
-                                ForEach(availableMarkets, id: \.self) { Text($0).tag($0) }
-                            }
-                            .pickerStyle(.segmented)
+                        FormChoiceRow("Market") {
+                            FormChips(options: availableMarkets, selection: $marketFilter) { $0 }
                         }
+                        FormDivider()
                     }
-                    Section("Performance") {
-                        Picker("P&L", selection: $pnlFilter) {
-                            ForEach(PnLFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                }
-                .navigationTitle("Filter")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { showFilter = false }
+                    FormChoiceRow("Performance") {
+                        FormSegmented(options: PnLFilter.allCases, selection: $pnlFilter) { $0.rawValue }
                     }
                 }
             }
@@ -274,13 +263,16 @@ struct FinanceMarketsView: View {
                                         Text(c.name).font(.caption).foregroundStyle(Theme.inkSoft)
                                     }
                                     Text("\(formatNum(c.amount)) coins").font(.caption2).foregroundStyle(Theme.inkFaint)
+                                    avgCostLabel(c.amount > 0 ? c.investAmount / c.amount : nil, currency: c.currency)
                                 }
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 3) {
                                     Text(c.convertedCurrentValue.map { maskedMoney($0, currency: c.convertedCurrency, hidden: isBalanceHidden) } ?? "—")
                                         .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.ink)
+                                    currentPriceLabel(c.currentPrice, currency: "USD")
                                     if let pnl = c.pnlPercent { PnLBadge(pnl: pnl) }
                                 }
+                                .fixedSize()
                             }
                             .padding(.horizontal, 12).padding(.vertical, 12)
                             .contentShape(Rectangle())
@@ -296,6 +288,30 @@ struct FinanceMarketsView: View {
         }
     }
 
+    /// Live per-unit price under the position value — "—" until the price refresh fills it in.
+    private func currentPriceLabel(_ price: Double?, currency: String?) -> some View {
+        Text(price.map { maskedPrice($0, currency: currency, hidden: isBalanceHidden) } ?? "Price —")
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(Theme.inkSoft)
+            .lineLimit(1)
+    }
+
+    /// Average cost per share including fees, same as the web table.
+    private func avgCost(_ s: StockInvestment) -> Double? {
+        s.stockAmount > 0 ? (s.investAmount + s.fee) / s.stockAmount : nil
+    }
+
+    /// Own line under shares/broker so a long price never truncates the broker name.
+    @ViewBuilder
+    private func avgCostLabel(_ avg: Double?, currency: String) -> some View {
+        if let avg {
+            Text("Avg \(maskedPrice(avg, currency: currency, hidden: isBalanceHidden))")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(Theme.inkFaint)
+                .lineLimit(1)
+        }
+    }
+
     /// One stock row. `indented` is used for a broker sub-row inside an expanded group —
     /// no bell action there (alerts are per-symbol, already on the group header) and it
     /// shows the broker instead of the symbol/name, which the group header already shows.
@@ -308,8 +324,9 @@ struct FinanceMarketsView: View {
                 if indented {
                     Text("↳").foregroundStyle(Theme.inkFaint)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(s.broker).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.inkSoft)
+                        Text(s.broker).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.inkSoft).lineLimit(1)
                         Text("\(formatNum(s.stockAmount)) sh").font(.caption2).foregroundStyle(Theme.inkFaint)
+                        avgCostLabel(avgCost(s), currency: s.currency)
                     }
                 } else {
                     SymbolIcon(logoUrl: s.logoUrl, symbol: s.symbol)
@@ -321,7 +338,8 @@ struct FinanceMarketsView: View {
                         }
                         Text(s.name).font(.caption).foregroundStyle(Theme.inkSoft).lineLimit(1)
                         Text("\(formatNum(s.stockAmount)) sh · \(s.broker)")
-                            .font(.caption2).foregroundStyle(Theme.inkFaint)
+                            .font(.caption2).foregroundStyle(Theme.inkFaint).lineLimit(1)
+                        avgCostLabel(avgCost(s), currency: s.currency)
                     }
                 }
                 Spacer()
@@ -329,8 +347,10 @@ struct FinanceMarketsView: View {
                     Text(s.convertedCurrentValue.map { maskedMoney($0, currency: s.convertedCurrency, hidden: isBalanceHidden) } ?? "—")
                         .font(.system(size: indented ? 13 : 15, weight: .semibold))
                         .foregroundStyle(indented ? Theme.inkSoft : Theme.ink)
+                    if !indented { currentPriceLabel(s.currentPrice, currency: s.priceCurrency ?? s.currency) }
                     if let pnl = s.pnlPercent { PnLBadge(pnl: pnl) }
                 }
+                .fixedSize()
             }
             .padding(.horizontal, 12).padding(.vertical, indented ? 10 : 12)
             .padding(.leading, indented ? 22 : 0)
@@ -360,13 +380,16 @@ struct FinanceMarketsView: View {
                 Text(group.name).font(.caption).foregroundStyle(Theme.inkSoft).lineLimit(1)
                 Text("\(formatNum(group.stockAmount)) sh · \(group.rows.count) brokers")
                     .font(.caption2).foregroundStyle(Theme.inkFaint)
+                avgCostLabel(group.avgPrice, currency: group.currency)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 3) {
                 Text(group.convertedCurrentValue.map { maskedMoney($0, currency: group.convertedCurrency, hidden: isBalanceHidden) } ?? "—")
                     .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.ink)
+                currentPriceLabel(group.currentPrice, currency: group.priceCurrency ?? group.currency)
                 if let pnl = group.pnlPercent { PnLBadge(pnl: pnl) }
             }
+            .fixedSize()
             Button {
                 alertTarget = (group.symbol, "STOCK")
             } label: {
@@ -408,38 +431,32 @@ private struct StockFormView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Position") {
-                    Picker("Market", selection: $stockType) {
-                        ForEach(stockTypes, id: \.self) { Text(stockTypeLabels[$0] ?? $0).tag($0) }
-                    }
-                    TextField("Symbol (e.g. AAPL, 0700.HK)", text: $symbol).autocapitalization(.allCharacters)
-                    TextField("Company name (e.g. Apple Inc.)", text: $name)
-                    ComboField(placeholder: "Broker (e.g. Interactive Brokers, Futu)", text: $broker,
-                               suggestions: Array(Set(store.stocks.map(\.broker))).sorted())
+        FormSheet(
+            editing == nil ? "New stock" : "Edit stock",
+            subtitle: "Shares held with a broker",
+            primaryLabel: editing == nil ? "Add position" : "Save changes",
+            isPrimaryEnabled: isValid, isSaving: isSaving, errorMessage: errorMessage,
+            onPrimary: { Task { await save() } }
+        ) {
+            FormSection("Position") {
+                FormChoiceRow("Market") {
+                    FormChips(options: stockTypes, selection: $stockType) { stockTypeLabels[$0] ?? $0 }
                 }
-                Section("Cost basis") {
-                    TextField("Shares", text: $stockAmount).keyboardType(.decimalPad)
-                    Picker("Currency", selection: $currency) {
-                        ForEach(commonCurrencies, id: \.self) { Text($0).tag($0) }
-                    }
-                    TextField("Amount invested", text: $investAmount).keyboardType(.decimalPad)
-                    TextField("Fee (optional)", text: $fee).keyboardType(.decimalPad)
-                }
-                if let errorMessage {
-                    Section { Text(errorMessage).font(.caption).foregroundStyle(.red) }
-                }
+                FormDivider()
+                FormField(label: "Symbol", text: $symbol, placeholder: "e.g. AAPL, 0700.HK",
+                          capitalization: .characters)
+                FormDivider()
+                FormField(label: "Company name", text: $name, placeholder: "e.g. Apple Inc.")
+                FormDivider()
+                ComboField(label: "Broker", placeholder: "e.g. Interactive Brokers, Futu", text: $broker,
+                           suggestions: Array(Set(store.stocks.map(\.broker))).sorted())
             }
-            .navigationTitle(editing == nil ? "Add Stock" : "Edit Stock")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    if isSaving { ProgressView() } else {
-                        Button("Save") { Task { await save() } }.disabled(!isValid)
-                    }
-                }
+            FormSection("Cost basis") {
+                FormAmountHero(label: "Amount invested", amount: $investAmount, currency: $currency)
+                FormDivider()
+                FormNumberRow(label: "Shares", text: $stockAmount)
+                FormDivider()
+                FormNumberRow(label: "Fee", text: $fee, placeholder: "Optional")
             }
         }
         .onAppear(perform: populate)
@@ -499,32 +516,22 @@ private struct CryptoFormView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Position") {
-                    TextField("Symbol (e.g. BTC)", text: $symbol).autocapitalization(.allCharacters)
-                    TextField("Name (e.g. Bitcoin)", text: $name)
-                }
-                Section("Cost basis") {
-                    TextField("Coins/tokens held", text: $amount).keyboardType(.decimalPad)
-                    Picker("Currency", selection: $currency) {
-                        ForEach(commonCurrencies, id: \.self) { Text($0).tag($0) }
-                    }
-                    TextField("Amount invested", text: $investAmount).keyboardType(.decimalPad)
-                }
-                if let errorMessage {
-                    Section { Text(errorMessage).font(.caption).foregroundStyle(.red) }
-                }
+        FormSheet(
+            editing == nil ? "New crypto" : "Edit crypto",
+            subtitle: "Coins or tokens you hold",
+            primaryLabel: editing == nil ? "Add position" : "Save changes",
+            isPrimaryEnabled: isValid, isSaving: isSaving, errorMessage: errorMessage,
+            onPrimary: { Task { await save() } }
+        ) {
+            FormSection("Asset") {
+                FormField(label: "Symbol", text: $symbol, placeholder: "e.g. BTC", capitalization: .characters)
+                FormDivider()
+                FormField(label: "Name", text: $name, placeholder: "e.g. Bitcoin")
             }
-            .navigationTitle(editing == nil ? "Add Crypto" : "Edit Crypto")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    if isSaving { ProgressView() } else {
-                        Button("Save") { Task { await save() } }.disabled(!isValid)
-                    }
-                }
+            FormSection("Cost basis") {
+                FormAmountHero(label: "Amount invested", amount: $investAmount, currency: $currency)
+                FormDivider()
+                FormNumberRow(label: "Coins / tokens held", text: $amount)
             }
         }
         .onAppear(perform: populate)

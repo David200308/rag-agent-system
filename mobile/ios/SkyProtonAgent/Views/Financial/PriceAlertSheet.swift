@@ -5,7 +5,6 @@ import SwiftUI
 struct PriceAlertSheet: View {
     let symbol: String
     let assetType: String  // "CRYPTO" | "STOCK"
-    @Environment(\.dismiss) private var dismiss
 
     @State private var alerts: [PriceAlert] = []
     @State private var isLoading = false
@@ -27,126 +26,170 @@ struct PriceAlertSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if isLoading && alerts.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    Form {
-                        if let loadError {
-                            Section { Text(loadError).font(.caption).foregroundStyle(.red) }
-                        }
-                        if alerts.isEmpty && !showForm {
-                            Section {
-                                Text("No alerts set for \(symbol) yet.")
-                                    .foregroundStyle(Theme.inkFaint)
-                                    .frame(maxWidth: .infinity)
-                            }
-                        } else if !alerts.isEmpty {
-                            Section("Existing alerts") {
-                                ForEach(alerts) { alert in
-                                    alertRow(alert)
-                                }
-                            }
-                        }
-
-                        if showForm {
-                            Section(editingAlert == nil ? "New alert" : "Edit alert") {
-                                Picker("Direction", selection: $direction) {
-                                    ForEach(alertDirections, id: \.self) { d in
-                                        Text("\(d)  \(alertDirectionLabels[d] ?? "")").tag(d)
-                                    }
-                                }
-                                TextField("Threshold", text: $threshold)
-                                    .keyboardType(.decimalPad)
-                                Picker("Frequency", selection: $freqUnit) {
-                                    ForEach(alertFrequencyUnits, id: \.self) { u in
-                                        Text(alertFrequencyUnitLabels[u] ?? u).tag(u)
-                                    }
-                                }
-                                if needsFreqNumber {
-                                    Stepper("Every \(freqNumber) \(freqUnit == "HOUR" ? "hour(s)" : "day(s)")",
-                                            value: Binding(
-                                                get: { Int(freqNumber) ?? 1 },
-                                                set: { freqNumber = String(max(1, $0)) }
-                                            ), in: 1...999)
-                                }
-                                if let saveError {
-                                    Text(saveError).font(.caption).foregroundStyle(.red)
-                                }
-                                HStack {
-                                    Button("Cancel") { closeForm() }
-                                    Spacer()
-                                    if isSaving {
-                                        ProgressView()
-                                    } else {
-                                        Button(editingAlert == nil ? "Save Alert" : "Update Alert") {
-                                            Task { await save() }
-                                        }
-                                        .disabled(!isValid)
-                                    }
-                                }
-                            }
-                        } else {
-                            Section {
-                                Button {
-                                    startCreate()
-                                } label: {
-                                    Label("Add Alert", systemImage: "plus")
-                                }
-                            }
-                        }
+        FormSheet(
+            "Price alerts",
+            subtitle: "Get notified when \(symbol) crosses a price",
+            primaryLabel: showForm ? (editingAlert == nil ? "Save alert" : "Update alert") : "New alert",
+            isPrimaryEnabled: !showForm || isValid,
+            isSaving: isSaving,
+            errorMessage: loadError,
+            onPrimary: {
+                if showForm { Task { await save() } } else { startCreate() }
+            }
+        ) {
+            if isLoading && alerts.isEmpty {
+                ProgressView().frame(maxWidth: .infinity).padding(.vertical, 40)
+            } else if alerts.isEmpty && !showForm {
+                emptyState
+            } else if !alerts.isEmpty {
+                FormSection("Active on \(symbol)") {
+                    ForEach(Array(alerts.enumerated()), id: \.element.id) { idx, alert in
+                        alertRow(alert)
+                        if idx < alerts.count - 1 { FormDivider() }
                     }
                 }
             }
-            .navigationTitle("Alerts — \(symbol)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
-            }
-            .confirmationDialog(
-                "Delete this alert?",
-                isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-                titleVisibility: .visible
-            ) {
-                Button("Delete", role: .destructive) {
-                    if let a = pendingDelete { Task { await delete(a) } }
-                    pendingDelete = nil
+
+            if showForm {
+                FormSection(
+                    editingAlert == nil ? "New alert" : "Edit alert",
+                    trailing: AnyView(
+                        Button("Cancel") { closeForm() }
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.inkSoft)
+                    )
+                ) {
+                    FormChoiceRow("When price is") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            FormSegmented(options: alertDirections, selection: $direction) { directionSymbol($0) }
+                            Text(alertDirectionLabels[direction] ?? "")
+                                .font(.caption)
+                                .foregroundStyle(Theme.inkFaint)
+                        }
+                    }
+                    FormDivider()
+                    FormAmountHero(label: "Threshold", amount: $threshold, placeholder: "0.00")
+                    FormDivider()
+                    FormChoiceRow("Repeat") {
+                        FormSegmented(options: alertFrequencyUnits, selection: $freqUnit) { frequencyShortLabel($0) }
+                    }
+                    if needsFreqNumber {
+                        FormDivider()
+                        FormRow(freqUnit == "HOUR" ? "Every N hours" : "Every N days") {
+                            FormStepper(
+                                value: Binding(
+                                    get: { Int(freqNumber) ?? 1 },
+                                    set: { freqNumber = String(max(1, $0)) }
+                                ),
+                                range: 1...999,
+                                format: { "\($0)\(freqUnit == "HOUR" ? "h" : "d")" }
+                            )
+                        }
+                    }
+                    if let saveError {
+                        FormDivider()
+                        Text(saveError)
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.negative)
+                            .formRowPadding()
+                    }
                 }
-                Button("Cancel", role: .cancel) { pendingDelete = nil }
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
+        }
+        .animation(.easeOut(duration: 0.2), value: showForm)
+        .animation(.easeOut(duration: 0.2), value: needsFreqNumber)
+        .confirmationDialog(
+            "Delete this alert?",
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let a = pendingDelete { Task { await delete(a) } }
+                pendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
         }
         .task { await load() }
     }
 
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "bell.badge")
+                .font(.system(size: 26))
+                .foregroundStyle(Theme.inkSoft)
+                .frame(width: 60, height: 60)
+                .background(Theme.chipFill)
+                .clipShape(Circle())
+            Text("No alerts yet").font(Theme.serif(20)).foregroundStyle(Theme.ink)
+            Text("Create one to be notified when \(symbol) moves past a price you choose.")
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.inkFaint)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+        .padding(.horizontal, 20)
+        .background(Theme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.hairline, lineWidth: 1))
+    }
+
     private func alertRow(_ alert: PriceAlert) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("\(alert.symbol) \(alert.direction) \(formatNum(alert.threshold))")
-                    .font(.subheadline.weight(.medium))
+        HStack(spacing: 12) {
+            Image(systemName: alert.enabled ? "bell.fill" : "bell.slash")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(alert.enabled ? Theme.positive : Theme.inkFaint)
+                .frame(width: 34, height: 34)
+                .background(alert.enabled ? Theme.positiveSoft : Theme.chipFill)
+                .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(directionSymbol(alert.direction)) \(formatNum(alert.threshold))")
+                    .font(Theme.serif(19))
                     .foregroundStyle(alert.enabled ? Theme.ink : Theme.inkFaint)
                 Text(formatAlertFrequency(alert.frequency))
                     .font(.caption)
                     .foregroundStyle(Theme.inkFaint)
             }
             Spacer()
-            Button {
-                Task { await toggleEnabled(alert) }
+            Toggle("", isOn: Binding(
+                get: { alert.enabled },
+                set: { _ in Task { await toggleEnabled(alert) } }
+            ))
+            .labelsHidden()
+            .tint(Theme.positive)
+            Menu {
+                Button { startEdit(alert) } label: { Label("Edit", systemImage: "pencil") }
+                Button(role: .destructive) { pendingDelete = alert } label: { Label("Delete", systemImage: "trash") }
             } label: {
-                Image(systemName: alert.enabled ? "bell.fill" : "bell.slash")
-                    .foregroundStyle(alert.enabled ? Theme.positive : Theme.inkFaint)
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.inkSoft)
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            Button { startEdit(alert) } label: {
-                Image(systemName: "pencil").foregroundStyle(Theme.inkSoft)
-            }
-            .buttonStyle(.plain)
-            .padding(.leading, 6)
-            Button { pendingDelete = alert } label: {
-                Image(systemName: "trash").foregroundStyle(.red)
-            }
-            .buttonStyle(.plain)
-            .padding(.leading, 6)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+        .onTapGesture { startEdit(alert) }
+    }
+
+    private func directionSymbol(_ d: String) -> String {
+        switch d {
+        case ">=": return "≥"
+        case "<=": return "≤"
+        default:   return d
+        }
+    }
+
+    private func frequencyShortLabel(_ unit: String) -> String {
+        switch unit {
+        case "HOUR":  return "Hourly"
+        case "DAY":   return "Daily"
+        case "ONCE":  return "Once"
+        case "NEVER": return "Never"
+        default:      return unit
         }
     }
 

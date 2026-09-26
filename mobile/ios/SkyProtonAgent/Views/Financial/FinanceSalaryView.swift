@@ -77,6 +77,10 @@ struct FinanceSalaryView: View {
 
 private struct SalaryChartView: View {
     let records: [SalaryUsageRecord]
+    @State private var selectedLabel: String?
+
+    /// How many months fit on screen at once — the rest is reached by swiping sideways.
+    private let visibleMonths = 6
 
     private struct Point: Identifiable {
         let id = UUID()
@@ -85,31 +89,85 @@ private struct SalaryChartView: View {
         let series: String
     }
 
+    private var ascending: [SalaryUsageRecord] {
+        records.sorted { ($0.year, $0.month) < ($1.year, $1.month) }
+    }
+
+    /// "Mar ’26" — short enough that axis labels don't truncate to "2…".
+    private func label(_ r: SalaryUsageRecord) -> String {
+        "\(Calendar.current.shortMonthSymbols[r.month - 1]) ’\(String(format: "%02d", r.year % 100))"
+    }
+
     private var chartData: [Point] {
-        records
-            .sorted { ($0.year, $0.month) < ($1.year, $1.month) }
-            .flatMap { r -> [Point] in
-                let ym = "\(r.year)/\(String(format: "%02d", r.month))"
-                return [
-                    Point(label: ym, value: r.salary + r.bonus, series: "Salary + Bonus"),
-                    Point(label: ym, value: r.totalExpense,      series: "Total Expense"),
-                ]
-            }
+        ascending.flatMap { r -> [Point] in
+            let ym = label(r)
+            return [
+                Point(label: ym, value: r.salary + r.bonus, series: "Salary + Bonus"),
+                Point(label: ym, value: r.totalExpense,      series: "Total Expense"),
+            ]
+        }
+    }
+
+    private var selectedRecord: SalaryUsageRecord? {
+        guard let selectedLabel else { return nil }
+        return ascending.first { label($0) == selectedLabel }
     }
 
     var body: some View {
+        let months = ascending
         VStack(alignment: .leading, spacing: 8) {
-            Text("Salary & Expense Trend").font(.caption).foregroundStyle(Theme.inkSoft)
-            Chart(chartData) { point in
-                LineMark(x: .value("Month", point.label), y: .value("Amount", point.value))
-                    .foregroundStyle(by: .value("Series", point.series))
-                    .symbol(by: .value("Series", point.series))
-                    .interpolationMethod(.catmullRom)
+            HStack {
+                Text("Salary & Expense Trend").font(.caption).foregroundStyle(Theme.inkSoft)
+                Spacer()
+                if months.count > visibleMonths {
+                    Label("Swipe", systemImage: "hand.draw").font(.caption2).foregroundStyle(Theme.inkFaint)
+                }
             }
-            .chartForegroundStyleScale(["Salary + Bonus": Theme.graphite, "Total Expense": Theme.travel])
+            Chart {
+                ForEach(chartData) { point in
+                    LineMark(x: .value("Month", point.label), y: .value("Amount", point.value))
+                        .foregroundStyle(by: .value("Series", point.series))
+                        .symbol(by: .value("Series", point.series))
+                        .interpolationMethod(.catmullRom)
+                }
+                if let r = selectedRecord {
+                    RuleMark(x: .value("Month", label(r)))
+                        .foregroundStyle(Theme.inkFaint.opacity(0.6))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        .annotation(position: .top, spacing: 4,
+                                    overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
+                            selectionCallout(r)
+                        }
+                }
+            }
+            .chartForegroundStyleScale(["Salary + Bonus": Theme.ink, "Total Expense": Theme.travel])
             .chartLegend(position: .bottom, alignment: .center)
-            .frame(height: 200)
+            .chartScrollableAxes(.horizontal)
+            .chartXVisibleDomain(length: min(visibleMonths, max(months.count, 1)))
+            .chartScrollPosition(initialX: months.count > visibleMonths ? label(months[months.count - visibleMonths]) : (months.first.map(label) ?? ""))
+            .chartXSelection(value: $selectedLabel)
+            .frame(height: 220)
+            .sensoryFeedback(.selection, trigger: selectedLabel)
         }
+    }
+
+    private func selectionCallout(_ r: SalaryUsageRecord) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label(r)).font(.caption2.weight(.semibold)).foregroundStyle(Theme.inkSoft)
+            HStack(spacing: 4) {
+                Circle().fill(Theme.ink).frame(width: 6, height: 6)
+                Text(formatMoney(r.salary + r.bonus, currency: r.currency)).font(.caption.weight(.semibold).monospacedDigit())
+            }
+            HStack(spacing: 4) {
+                Circle().fill(Theme.travel).frame(width: 6, height: 6)
+                Text(formatMoney(r.totalExpense, currency: r.currency)).font(.caption.weight(.semibold).monospacedDigit())
+            }
+        }
+        .foregroundStyle(Theme.ink)
+        .padding(8)
+        .background(Theme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
     }
 }
 
@@ -230,72 +288,59 @@ private struct SalaryFormView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Period") {
-                    Stepper("Year: \(String(year))", value: $year, in: 2000...2100)
-                    Picker("Month", selection: $month) {
-                        ForEach(1...12, id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
-                    }
-                    ComboField(placeholder: "Region (e.g. Hong Kong SAR, Singapore)", text: $region,
-                               suggestions: Array(Set(store.salaryRecords.map(\.region))).sorted())
-                    Picker("Currency", selection: $currency) {
-                        ForEach(commonCurrencies, id: \.self) { Text($0).tag($0) }
-                    }
-                }
-                Section("Income") {
-                    labeledField("Salary (excl. retirement)", $salary)
-                    labeledField("Bonus", $bonus)
-                    labeledField("Retirement saving — employee", $retirementSavingEmployee)
-                    labeledField("Retirement saving — employer", $retirementSavingEmployer)
-                }
-                Section("Expenses") {
-                    labeledField("Tax", $tax)
-                    labeledField("House rent", $houseRent)
-                    labeledField("Living expense", $livingExpense)
-                    labeledField("Other expense", $otherExpense)
-                    HStack {
-                        Text("Total expense").foregroundStyle(Theme.inkSoft)
-                        Spacer()
-                        Text(formatMoney(totalExpense, currency: currency)).foregroundStyle(Theme.ink)
-                    }
-                }
-                if editing != nil {
-                    Section {
-                        Button("Delete record", role: .destructive) { showDeleteConfirm = true }
-                    }
-                }
-                if let errorMessage {
-                    Section { Text(errorMessage).font(.caption).foregroundStyle(.red) }
+        FormSheet(
+            editing == nil ? "New salary record" : "Edit salary record",
+            subtitle: "Monthly income and spending",
+            primaryLabel: editing == nil ? "Add record" : "Save changes",
+            isPrimaryEnabled: isValid, isSaving: isSaving, errorMessage: errorMessage,
+            onPrimary: { Task { await save() } }
+        ) {
+            FormSection("Period") {
+                FormPeriodRow(label: "Month", year: $year, month: $month)
+                FormDivider()
+                ComboField(label: "Region", placeholder: "e.g. Hong Kong SAR, Singapore", text: $region,
+                           suggestions: Array(Set(store.salaryRecords.map(\.region))).sorted())
+                FormDivider()
+                FormRow("Currency") {
+                    FormMenuPicker(options: commonCurrencies, selection: $currency) { $0 }
                 }
             }
-            .navigationTitle(editing == nil ? "Add Salary Record" : "Edit Salary Record")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    if isSaving { ProgressView() } else {
-                        Button("Save") { Task { await save() } }.disabled(!isValid)
-                    }
+            FormSection("Income") {
+                FormAmountHero(label: "Salary (excl. retirement)", amount: $salary)
+                FormDivider()
+                FormNumberRow(label: "Bonus", text: $bonus)
+                FormDivider()
+                FormNumberRow(label: "Retirement · employee", text: $retirementSavingEmployee)
+                FormDivider()
+                FormNumberRow(label: "Retirement · employer", text: $retirementSavingEmployer)
+            }
+            FormSection("Expenses", footer: "Tax is tracked separately and not counted in total expense.") {
+                FormNumberRow(label: "Tax", text: $tax)
+                FormDivider()
+                FormNumberRow(label: "House rent", text: $houseRent)
+                FormDivider()
+                FormNumberRow(label: "Living expense", text: $livingExpense)
+                FormDivider()
+                FormNumberRow(label: "Other expense", text: $otherExpense)
+                FormDivider()
+                FormRow("Total expense") {
+                    Text(formatMoney(totalExpense, currency: currency))
+                        .font(Theme.serif(20))
+                        .foregroundStyle(Theme.ink)
+                        .contentTransition(.numericText())
+                        .animation(.snappy, value: totalExpense)
                 }
+                .background(Theme.chipFill.opacity(0.5))
             }
-            .confirmationDialog("Delete this salary record?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-                Button("Delete", role: .destructive) { Task { await delete() } }
-                Button("Cancel", role: .cancel) {}
+            if editing != nil {
+                FormDestructiveButton(label: "Delete record") { showDeleteConfirm = true }
             }
+        }
+        .confirmationDialog("Delete this salary record?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { Task { await delete() } }
+            Button("Cancel", role: .cancel) {}
         }
         .onAppear(perform: populate)
-    }
-
-    private func labeledField(_ label: String, _ text: Binding<String>) -> some View {
-        HStack {
-            Text(label).foregroundStyle(Theme.inkSoft)
-            Spacer()
-            TextField("0", text: text)
-                .keyboardType(.decimalPad)
-                .multilineTextAlignment(.trailing)
-                .frame(maxWidth: 120)
-        }
     }
 
     private func populate() {

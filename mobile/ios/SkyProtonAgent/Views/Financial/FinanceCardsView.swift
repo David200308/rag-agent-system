@@ -17,7 +17,7 @@ struct FinanceCardsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if availableNetworks.count > 2 {
-                    HStack(spacing: 8) {
+                    ThemeChipRow {
                         ForEach(availableNetworks, id: \.self) { n in
                             ThemeChip(label: n, isActive: networkFilter == n) { networkFilter = n }
                         }
@@ -120,64 +120,51 @@ private struct CardFormView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Card") {
-                    TextField("Card name (e.g. Sapphire Reserve)", text: $cardName)
-                    ComboField(placeholder: "Bank (e.g. HSBC, DBS, Citi)", text: $bank,
-                               suggestions: Array(Set(store.cards.map(\.bank))).sorted())
-                    TextField("Country / region", text: $countryRegion)
-                    Picker("Network", selection: $network) {
-                        ForEach(cardNetworks, id: \.self) { Text($0).tag($0) }
-                    }
+        FormSheet(
+            editing == nil ? "New card" : "Edit card",
+            subtitle: "Credit, debit or ATM card",
+            primaryLabel: editing == nil ? "Add card" : "Save changes",
+            isPrimaryEnabled: isValid, isSaving: isSaving, errorMessage: errorMessage,
+            onPrimary: { Task { await save() } }
+        ) {
+            FormSection("Card") {
+                FormField(label: "Card name", text: $cardName, placeholder: "e.g. Sapphire Reserve")
+                FormDivider()
+                ComboField(label: "Bank", placeholder: "e.g. HSBC, DBS, Citi", text: $bank,
+                           suggestions: Array(Set(store.cards.map(\.bank))).sorted())
+                FormDivider()
+                FormField(label: "Country / region", text: $countryRegion, placeholder: "Optional")
+            }
+            FormSection("Details") {
+                FormChoiceRow("Network") {
+                    FormChips(options: cardNetworks, selection: $network) { $0 }
                 }
-                Section("Type") {
-                    ForEach(cardTypes, id: \.self) { t in
-                        Button {
-                            if types.contains(t) { types.remove(t) } else { types.insert(t) }
-                        } label: {
-                            HStack {
-                                Text(t).foregroundStyle(Theme.ink)
-                                Spacer()
-                                if types.contains(t) { Image(systemName: "checkmark").foregroundStyle(Theme.ink) }
+                FormDivider()
+                FormChoiceRow("Type") {
+                    FormChips(options: cardTypes, selection: $types) { $0 }
+                }
+                FormDivider()
+                FormPeriodRow(label: "Expires", year: $expireYear, month: $expireMonth)
+            }
+            if types.contains("Credit") {
+                FormSection("Credit limit") {
+                    FormAmountHero(label: "Limit", amount: $creditLimit, currency: $creditLimitCurrency,
+                                   placeholder: "Unknown")
+                    FormDivider()
+                    FormChoiceRow("Credit line") {
+                        FormSegmented(options: [true, false, nil] as [Bool?], selection: $sharedCredit) {
+                            switch $0 {
+                            case true?: return "Shared"
+                            case false?: return "Dedicated"
+                            case nil: return "Unknown"
                             }
                         }
                     }
                 }
-                Section("Expiry") {
-                    Stepper("Year: \(String(expireYear))", value: $expireYear, in: 2000...2100)
-                    Picker("Month", selection: $expireMonth) {
-                        ForEach(1...12, id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
-                    }
-                }
-                if types.contains("Credit") {
-                    Section("Credit limit") {
-                        TextField("Amount (leave blank if unknown)", text: $creditLimit).keyboardType(.decimalPad)
-                        Picker("Currency", selection: $creditLimitCurrency) {
-                            ForEach(commonCurrencies, id: \.self) { Text($0).tag($0) }
-                        }
-                        Picker("Shared credit", selection: $sharedCredit) {
-                            Text("Shared").tag(true as Bool?)
-                            Text("Dedicated").tag(false as Bool?)
-                            Text("Unknown").tag(nil as Bool?)
-                        }
-                    }
-                }
-                if let errorMessage {
-                    Section { Text(errorMessage).font(.caption).foregroundStyle(.red) }
-                }
-            }
-            .navigationTitle(editing == nil ? "Add Card" : "Edit Card")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    if isSaving { ProgressView() } else {
-                        Button("Save") { Task { await save() } }.disabled(!isValid)
-                    }
-                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .animation(.easeOut(duration: 0.2), value: types.contains("Credit"))
         .onAppear(perform: populate)
     }
 
