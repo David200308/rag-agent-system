@@ -27,7 +27,7 @@ class FallbackNodeTest {
     @InjectMocks FallbackNode fallbackNode;
 
     private static AgentRequest request(String query) {
-        return new AgentRequest(query, null, null, null, false, null, null, null, null);
+        return new AgentRequest(query, null, null, null, false, null, null, null, null, null);
     }
 
     @Test
@@ -91,7 +91,7 @@ class FallbackNodeTest {
                 new AgentRequest.ConversationTurn("user", "Generate an HTML page for me"),
                 new AgentRequest.ConversationTurn("assistant", "<html>...</html>"));
         AgentRequest requestWithHistory =
-                new AgentRequest("update it", null, null, history, false, null, null, null, null);
+                new AgentRequest("update it", null, null, history, false, null, null, null, null, null);
         AgentState state = new AgentState(Map.of(
                 "request",        requestWithHistory,
                 "fallbackReason", "ambiguous query"

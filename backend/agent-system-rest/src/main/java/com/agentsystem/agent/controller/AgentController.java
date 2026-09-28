@@ -193,6 +193,25 @@ public class AgentController {
                 initData.put("selectedModelDisplayName", selectedModel);
             }
 
+            // Sandbox: same "this turn's explicit choice takes priority and is persisted" pattern
+            // as selectedModel above — but with no user/system default to fall back to, since a
+            // sandbox is optional and only ever exists because the caller explicitly launched one.
+            String sandboxId = request.sandboxId();
+            if (sandboxId != null && !sandboxId.isBlank()) {
+                try {
+                    conversationService.setConversationSandbox(conversationId, ctx.userUuid(), sandboxId);
+                } catch (SecurityException | IllegalArgumentException e) {
+                    log.warn("[AgentController] Rejected sandboxId for conversationId={}: {}",
+                            conversationId, e.getMessage());
+                    sandboxId = conversationService.getConversationSandbox(conversationId);
+                }
+            } else {
+                sandboxId = conversationService.getConversationSandbox(conversationId);
+            }
+            if (sandboxId != null) {
+                initData.put("selectedSandboxId", sandboxId);
+            }
+
             // Invoke the compiled LangGraph
             var result = agentGraph.getGraph()
                     .invoke(initData, RunnableConfig.builder().build());
@@ -253,6 +272,27 @@ public class AgentController {
             return ResponseEntity.ok(Map.of(
                     "conversationId", conv.getId(),
                     "selectedModel", conv.getSelectedModel() != null ? conv.getSelectedModel() : ""
+            ));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @PatchMapping("/conversations/{conversationId}/sandbox")
+    @Operation(summary = "Set the persistent sandbox for a conversation (owner only). Pass null to clear it — sandbox is optional.")
+    public ResponseEntity<Map<String, Object>> setConversationSandbox(
+            @PathVariable String conversationId,
+            @RequestBody Map<String, String> body,
+            HttpServletRequest httpRequest) {
+        String userUuid = (String) httpRequest.getAttribute("authenticatedUserUuid");
+        String sandboxId = body.get("selectedSandboxId");
+        try {
+            var conv = conversationService.setConversationSandbox(conversationId, userUuid, sandboxId);
+            return ResponseEntity.ok(Map.of(
+                    "conversationId", conv.getId(),
+                    "selectedSandboxId", conv.getSelectedSandboxId() != null ? conv.getSelectedSandboxId() : ""
             ));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));

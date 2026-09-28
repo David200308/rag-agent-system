@@ -9,6 +9,8 @@ import com.agentsystem.conversation.repository.ConversationMessageRepository;
 import com.agentsystem.conversation.repository.ConversationRepository;
 import com.agentsystem.conversation.repository.ConversationShareRepository;
 import com.agentsystem.org.OrgContext;
+import com.agentsystem.sandbox.entity.PersistentSandbox;
+import com.agentsystem.sandbox.repository.PersistentSandboxRepository;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.user.entity.User;
 import com.agentsystem.user.service.UserAccountService;
@@ -38,6 +40,7 @@ public class ConversationServiceImpl implements ConversationService {
     private final ConversationMessageRepository messageRepo;
     private final ConversationShareRepository   shareRepo;
     private final UserAccountService            userAccountService;
+    private final PersistentSandboxRepository   sandboxRepo;
 
     /**
      * Resolve or create a conversation (org-context aware).
@@ -173,6 +176,42 @@ public class ConversationServiceImpl implements ConversationService {
     public String getConversationModel(String conversationId) {
         return conversationRepo.findById(conversationId)
                 .map(Conversation::getSelectedModel)
+                .orElse(null);
+    }
+
+    /**
+     * Set or clear the persistent sandbox for a conversation (owner only). Also verifies the
+     * sandbox itself belongs to callerUuid — a sandbox is strictly personal, so a chat turn can
+     * never reuse someone else's, even in team mode.
+     */
+    @Transactional
+    @Override
+    public Conversation setConversationSandbox(String conversationId, String callerUuid, String sandboxId) {
+        Conversation conv = conversationRepo.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException("Conversation not found: " + conversationId));
+        if (callerUuid != null && conv.getUserUuid() != null
+                && !conv.getUserUuid().equals(callerUuid)) {
+            throw new SecurityException("Only the owner can change the sandbox for this conversation.");
+        }
+        if (sandboxId == null || sandboxId.isBlank()) {
+            conv.setSelectedSandboxId(null);
+        } else {
+            PersistentSandbox sandbox = sandboxRepo.findById(sandboxId)
+                    .orElseThrow(() -> new IllegalArgumentException("Sandbox not found: " + sandboxId));
+            if (!sandbox.getOwnerUuid().equals(callerUuid)) {
+                throw new SecurityException("Not the owner of this sandbox.");
+            }
+            conv.setSelectedSandboxId(sandboxId);
+        }
+        return conversationRepo.save(conv);
+    }
+
+    /** Get the selected persistent sandbox id for a conversation, or null if none is set. */
+    @Transactional(readOnly = true)
+    @Override
+    public String getConversationSandbox(String conversationId) {
+        return conversationRepo.findById(conversationId)
+                .map(Conversation::getSelectedSandboxId)
                 .orElse(null);
     }
 

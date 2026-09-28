@@ -63,7 +63,14 @@ public record AgentRequest(
                 + "conversation going forward). Takes priority over the conversation's/user's stored "
                 + "model — lets the caller switch models and have it apply starting with THIS message, "
                 + "rather than only from the next turn once a separate 'set model' call lands.")
-        String selectedModel
+        String selectedModel,
+
+        @Schema(description = "Optional id of one of the caller's own persistent sandboxes (launched from "
+                + "the Sandbox Management page) to let the assistant run shell commands in for this turn "
+                + "(and persist to the conversation going forward). Never launches a new sandbox — the "
+                + "caller must have already launched one. Optional: omit or leave null for no sandbox "
+                + "access at all, which is the default.")
+        String sandboxId
 
 ) implements Serializable {
 

@@ -97,6 +97,7 @@ public class SchedulerTriggerController {
                     conversationId,
                     body.useKnowledgeBase(),
                     body.useWebSearch(),
+                    null,
                     null
             );
 

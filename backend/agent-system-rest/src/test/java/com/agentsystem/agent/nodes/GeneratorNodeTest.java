@@ -9,6 +9,7 @@ import com.agentsystem.connector.tool.GoogleCalendarAgentTool;
 import com.agentsystem.connector.tool.GoogleDocsAgentTool;
 import com.agentsystem.connector.tool.GoogleSheetsAgentTool;
 import com.agentsystem.connector.tool.GoogleSlidesAgentTool;
+import com.agentsystem.connector.tool.SandboxAgentTool;
 import com.agentsystem.connector.tool.TelegramAgentTool;
 import com.agentsystem.connector.tool.TravelAgentTool;
 import com.agentsystem.connector.tool.WebSearchAgentTool;
@@ -51,6 +52,7 @@ class GeneratorNodeTest {
     @Mock TelegramAgentTool        telegramTool;
     @Mock TravelAgentTool          travelTool;
     @Mock WebSearchAgentTool       webSearchTool;
+    @Mock SandboxAgentTool         sandboxTool;
 
     GeneratorNode node;
 
@@ -59,11 +61,11 @@ class GeneratorNodeTest {
         node = new GeneratorNode(chatClient, llmProperties, modelConfigService, chatModelFactory,
                 generationService, toolCallBudget,
                 googleDocsTool, googleSheetsTool, googleSlidesTool, googleCalendarTool, telegramTool,
-                travelTool, webSearchTool);
+                travelTool, webSearchTool, sandboxTool);
     }
 
     private static AgentRequest request() {
-        return new AgentRequest("question?", null, 5, null, false, null, true, null, null);
+        return new AgentRequest("question?", null, 5, null, false, null, true, null, null, null);
     }
 
     private static QueryAnalysis analysis() {
@@ -108,7 +110,7 @@ class GeneratorNodeTest {
         openAiProps.setModel("gpt-4o-mini");
         when(llmProperties.getOpenai()).thenReturn(openAiProps);
 
-        AgentRequest noWebSearch = new AgentRequest("question?", null, 5, null, false, null, true, null, null);
+        AgentRequest noWebSearch = new AgentRequest("question?", null, 5, null, false, null, true, null, null, null);
         AgentState state = new AgentState(Map.of(
                 "request",       noWebSearch,
                 "queryAnalysis", analysis()
@@ -129,7 +131,7 @@ class GeneratorNodeTest {
         openAiProps.setModel("gpt-4o-mini");
         when(llmProperties.getOpenai()).thenReturn(openAiProps);
 
-        AgentRequest withWebSearch = new AgentRequest("question?", null, 5, null, false, null, true, true, null);
+        AgentRequest withWebSearch = new AgentRequest("question?", null, 5, null, false, null, true, true, null, null);
         AgentState state = new AgentState(Map.of(
                 "request",       withWebSearch,
                 "queryAnalysis", analysis()

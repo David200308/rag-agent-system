@@ -32,6 +32,10 @@ public class Conversation {
     @Column(name = "selected_model", length = 100)
     private String selectedModel;
 
+    /** Persistent sandbox this conversation's chat turns may use; null = no sandbox (default, optional). */
+    @Column(name = "selected_sandbox_id", length = 36)
+    private String selectedSandboxId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 

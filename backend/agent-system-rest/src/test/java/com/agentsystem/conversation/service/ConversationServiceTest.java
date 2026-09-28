@@ -9,6 +9,8 @@ import com.agentsystem.conversation.repository.ConversationMessageRepository;
 import com.agentsystem.conversation.repository.ConversationRepository;
 import com.agentsystem.conversation.repository.ConversationShareRepository;
 import com.agentsystem.org.OrgContext;
+import com.agentsystem.sandbox.entity.PersistentSandbox;
+import com.agentsystem.sandbox.repository.PersistentSandboxRepository;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.user.entity.User;
 import com.agentsystem.user.entity.UserStatus;
@@ -36,6 +38,7 @@ class ConversationServiceTest {
     @Mock ConversationMessageRepository messageRepo;
     @Mock ConversationShareRepository   shareRepo;
     @Mock UserAccountService            userAccountService;
+    @Mock PersistentSandboxRepository   sandboxRepo;
 
     @InjectMocks ConversationServiceImpl conversationService;
 
@@ -376,6 +379,85 @@ class ConversationServiceTest {
         when(conversationRepo.findById("missing")).thenReturn(Optional.empty());
 
         assertThat(conversationService.getConversationModel("missing")).isNull();
+    }
+
+    // ── setConversationSandbox ───────────────────────────────────────────────
+
+    @Test
+    void setConversationSandbox_ownerSetsSandbox_thatTheyOwn() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        PersistentSandbox sandbox = new PersistentSandbox("sb1", "owner@test.com", "my-sandbox", false);
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+        when(sandboxRepo.findById("sb1")).thenReturn(Optional.of(sandbox));
+        when(conversationRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        Conversation result = conversationService.setConversationSandbox("c1", "owner@test.com", "sb1");
+
+        assertThat(result.getSelectedSandboxId()).isEqualTo("sb1");
+    }
+
+    @Test
+    void setConversationSandbox_nullSandboxId_clearsSandbox() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        conv.setSelectedSandboxId("sb1");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+        when(conversationRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        Conversation result = conversationService.setConversationSandbox("c1", "owner@test.com", null);
+
+        assertThat(result.getSelectedSandboxId()).isNull();
+    }
+
+    @Test
+    void setConversationSandbox_nonOwnerOfConversation_throwsSecurityException() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+
+        assertThatThrownBy(() ->
+                conversationService.setConversationSandbox("c1", "other@test.com", "sb1"))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test
+    void setConversationSandbox_sandboxOwnedBySomeoneElse_throwsSecurityException() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        PersistentSandbox sandbox = new PersistentSandbox("sb1", "someone-else", "their-sandbox", false);
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+        when(sandboxRepo.findById("sb1")).thenReturn(Optional.of(sandbox));
+
+        assertThatThrownBy(() ->
+                conversationService.setConversationSandbox("c1", "owner@test.com", "sb1"))
+                .isInstanceOf(SecurityException.class);
+    }
+
+    @Test
+    void setConversationSandbox_sandboxNotFound_throwsIllegalArgument() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+        when(sandboxRepo.findById("missing-sb")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                conversationService.setConversationSandbox("c1", "owner@test.com", "missing-sb"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ── getConversationSandbox ────────────────────────────────────────────────
+
+    @Test
+    void getConversationSandbox_returnsStoredSandboxId() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        conv.setSelectedSandboxId("sb1");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+
+        assertThat(conversationService.getConversationSandbox("c1")).isEqualTo("sb1");
+    }
+
+    @Test
+    void getConversationSandbox_noneSet_returnsNull() {
+        Conversation conv = new Conversation("c1", "owner@test.com");
+        when(conversationRepo.findById("c1")).thenReturn(Optional.of(conv));
+
+        assertThat(conversationService.getConversationSandbox("c1")).isNull();
     }
 
     // ── listConversations ─────────────────────────────────────────────────────

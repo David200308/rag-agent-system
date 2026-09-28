@@ -32,7 +32,7 @@ class RetrievalNodeTest {
     @InjectMocks RetrievalNode   retrievalNode;
 
     private static AgentRequest request(boolean kbEnabled) {
-        return new AgentRequest("question?", null, 5, null, false, null, kbEnabled, null, null);
+        return new AgentRequest("question?", null, 5, null, false, null, kbEnabled, null, null, null);
     }
 
     private static QueryAnalysis analysis() {

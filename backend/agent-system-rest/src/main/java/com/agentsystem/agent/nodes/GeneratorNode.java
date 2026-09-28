@@ -9,6 +9,7 @@ import com.agentsystem.connector.tool.GoogleCalendarAgentTool;
 import com.agentsystem.connector.tool.GoogleDocsAgentTool;
 import com.agentsystem.connector.tool.GoogleSheetsAgentTool;
 import com.agentsystem.connector.tool.GoogleSlidesAgentTool;
+import com.agentsystem.connector.tool.SandboxAgentTool;
 import com.agentsystem.connector.tool.TelegramAgentTool;
 import com.agentsystem.connector.tool.TravelAgentTool;
 import com.agentsystem.connector.tool.WebSearchAgentTool;
@@ -55,6 +56,7 @@ public class GeneratorNode {
     private final TelegramAgentTool        telegramTool;
     private final TravelAgentTool          travelTool;
     private final WebSearchAgentTool       webSearchTool;
+    private final SandboxAgentTool         sandboxTool;
 
     private static final String SYSTEM_PROMPT = """
             You are a helpful, accurate AI assistant with access to Google Workspace, Google Calendar, and Telegram \
@@ -133,6 +135,17 @@ public class GeneratorNode {
               answer in them and cite each source inline as [Source: <url>].
             """;
 
+    /** Appended to {@link #SYSTEM_PROMPT} only when the caller attached a persistent sandbox for this request. */
+    private static final String SANDBOX_ADDENDUM = """
+
+            SANDBOX TOOL:
+            - execInSandbox: call this when the user asks you to run a shell command, execute a
+              script, check a file, or otherwise interact with the sandbox they've attached to
+              this conversation. Returns the command's raw output — summarize or quote it for
+              the user rather than re-running it speculatively. Do not call it for questions
+              that don't require actually running something.
+            """;
+
     public Map<String, Object> process(AgentState state) {
         long start = System.currentTimeMillis();
 
@@ -144,6 +157,7 @@ public class GeneratorNode {
         String userUuid         = state.userUuid().orElse(null);
         String orgId            = state.orgId().orElse(null);
         String shareOwnerEmail  = state.shareOwnerEmail().orElse(null);
+        String sandboxId        = state.selectedSandboxId().orElse(null);
 
         ModelConfig selectedConfig = state.selectedModelDisplayName()
                 .flatMap(modelConfigService::findByDisplayName)
@@ -172,6 +186,8 @@ public class GeneratorNode {
             telegramTool.setCurrentOrgId(orgId);
             telegramTool.setShareOwnerEmail(shareOwnerEmail);
             travelTool.setCurrentUserUuid(userUuid);
+            sandboxTool.setCurrentUserUuid(userUuid);
+            sandboxTool.setCurrentSandboxId(sandboxId);
         };
         Runnable clearToolContext = () -> {
             googleDocsTool.clearCurrentUserUuid();
@@ -186,6 +202,8 @@ public class GeneratorNode {
             telegramTool.clearCurrentOrgId();
             telegramTool.clearShareOwnerEmail();
             travelTool.clearCurrentUserUuid();
+            sandboxTool.clearCurrentUserUuid();
+            sandboxTool.clearCurrentSandboxId();
         };
 
         toolCallBudget.reset();
@@ -198,6 +216,10 @@ public class GeneratorNode {
             if (request.isWebSearchEnabled()) {
                 toolObjects.add(webSearchTool);
                 systemPrompt = systemPrompt + WEB_SEARCH_ADDENDUM;
+            }
+            if (sandboxId != null && !sandboxId.isBlank()) {
+                toolObjects.add(sandboxTool);
+                systemPrompt = systemPrompt + SANDBOX_ADDENDUM;
             }
             ToolCallbackProvider tools = MethodToolCallbackProvider.builder()
                     .toolObjects(toolObjects.toArray())

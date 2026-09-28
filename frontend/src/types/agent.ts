@@ -25,6 +25,8 @@ export interface AgentRequest {
   skillIds?: string[];
   /** Model display name to use for this turn — takes priority over the conversation's stored model. */
   selectedModel?: string | null;
+  /** Id of one of the caller's own persistent sandboxes to let the assistant run shell commands in for this turn — takes priority over the conversation's stored sandbox. Optional; omit/null for no sandbox access (default). */
+  sandboxId?: string | null;
 }
 
 export interface SourceDocument {
@@ -105,6 +107,7 @@ export interface BackendConversation {
   userEmail: string | null;
   archived: boolean;
   selectedModel: string | null;
+  selectedSandboxId: string | null;
   createdAt: string;
   updatedAt: string;
 }

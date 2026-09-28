@@ -4,16 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { MessageSquare, Menu, Share2, CalendarClock } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { queryAgent, queryAgentWithFiles, createWorkflow, fetchModels, fetchConversations, setConversationModel } from "@/lib/api";
+import {
+  queryAgent, queryAgentWithFiles, createWorkflow, fetchModels, fetchConversations,
+  setConversationModel, fetchSandboxes, setConversationSandbox,
+} from "@/lib/api";
 import { useChatStore } from "@/store/chatStore";
 import { MessageBubble } from "./MessageBubble";
 import { MessageInput } from "./MessageInput";
 import { ShareModal } from "./ShareModal";
 import { ScheduleModal } from "./ScheduleModal";
 import { ModelSelector } from "@/components/ui/ModelSelector";
+import { SandboxSelector } from "@/components/ui/SandboxSelector";
 import { Spinner } from "@/components/ui/Spinner";
 import { Button } from "@/components/ui/Button";
-import type { AgentRequest, AgentPattern, ModelConfig, TeamExecMode } from "@/types/agent";
+import type { AgentRequest, AgentPattern, ModelConfig, PersistentSandbox, TeamExecMode } from "@/types/agent";
 
 interface ChatInterfaceProps {
   conversationId: string;
@@ -43,8 +47,13 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
   const [convModel, setConvModel]   = useState<string | null>(null);
   const [modelSaving, setModelSaving] = useState(false);
 
+  const [sandboxes, setSandboxes]     = useState<PersistentSandbox[]>([]);
+  const [convSandbox, setConvSandbox] = useState<string | null>(null);
+  const [sandboxSaving, setSandboxSaving] = useState(false);
+
   useEffect(() => {
     fetchModels().then(setModels).catch(() => {});
+    fetchSandboxes().then(setSandboxes).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -54,6 +63,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
       .then((list) => {
         const found = list.find((c) => c.id === backendId);
         if (found?.selectedModel) setConvModel(found.selectedModel);
+        if (found?.selectedSandboxId) setConvSandbox(found.selectedSandboxId);
       })
       .catch(() => {});
   }, [conversation?.backendConversationId]);
@@ -70,6 +80,18 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
     }
   };
 
+  const handleSandboxChange = async (sandboxId: string | null) => {
+    const backendId = conversation?.backendConversationId;
+    setConvSandbox(sandboxId);
+    if (!backendId) return; // will be saved to backend after first message creates the conversation
+    setSandboxSaving(true);
+    try {
+      await setConversationSandbox(backendId, sandboxId);
+    } finally {
+      setSandboxSaving(false);
+    }
+  };
+
   // Variables captured at dispatch time (not via closure) so that if the user
   // switches to a different conversation before this call resolves, the result
   // still lands on the conversation that actually asked — never the one
@@ -80,6 +102,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
     conversationId: string;
     backendConversationId: string | undefined;
     convModel: string | null;
+    convSandbox: string | null;
   }
 
   const mutation = useMutation({
@@ -95,9 +118,12 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
       const backendId = response.metadata?.conversationId;
       if (backendId && !variables.backendConversationId) {
         setBackendConversationId(variables.conversationId, backendId);
-        // Persist any model the user selected before the first message was sent
+        // Persist any model/sandbox the user selected before the first message was sent
         if (variables.convModel) {
           setConversationModel(backendId, variables.convModel).catch(() => {});
+        }
+        if (variables.convSandbox) {
+          setConversationSandbox(backendId, variables.convSandbox).catch(() => {});
         }
       }
       addMessage(variables.conversationId, {
@@ -196,11 +222,13 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
         // switch applies starting with THIS message — the PATCH can still be in flight, or for a
         // brand-new conversation not even possible yet, when this request reaches the backend.
         selectedModel: convModel,
+        sandboxId: convSandbox,
       },
       files,
       conversationId,
       backendConversationId: conversation?.backendConversationId,
       convModel,
+      convSandbox,
     });
   };
 
@@ -228,6 +256,14 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
             value={convModel}
             onChange={handleModelChange}
             disabled={modelSaving || isPendingHere}
+          />
+        )}
+        {sandboxes.length > 0 && (
+          <SandboxSelector
+            sandboxes={sandboxes}
+            value={convSandbox}
+            onChange={handleSandboxChange}
+            disabled={sandboxSaving || isPendingHere}
           />
         )}
         {backendId && (

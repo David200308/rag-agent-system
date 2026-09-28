@@ -36,7 +36,8 @@ public class AgentState extends org.bsc.langgraph4j.state.AgentState {
         Map.entry("userUuid",                 Channels.<String>base((cur, upd) -> upd)),
         Map.entry("orgId",                    Channels.<String>base((cur, upd) -> upd)),
         Map.entry("shareOwnerEmail",          Channels.<String>base((cur, upd) -> upd)),
-        Map.entry("selectedModelDisplayName", Channels.<String>base((cur, upd) -> upd))
+        Map.entry("selectedModelDisplayName", Channels.<String>base((cur, upd) -> upd)),
+        Map.entry("selectedSandboxId",        Channels.<String>base((cur, upd) -> upd))
     );
 
     public AgentState(Map<String, Object> initData) {
@@ -92,5 +93,9 @@ public class AgentState extends org.bsc.langgraph4j.state.AgentState {
 
     public Optional<String> selectedModelDisplayName() {
         return value("selectedModelDisplayName");
+    }
+
+    public Optional<String> selectedSandboxId() {
+        return value("selectedSandboxId");
     }
 }

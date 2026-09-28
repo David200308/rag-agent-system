@@ -68,6 +68,19 @@ public interface ConversationService {
     String getConversationModel(String conversationId);
 
     /**
+     * Set or clear the persistent sandbox a conversation's chat turns may use (owner only).
+     * Pass null sandboxId to clear it (no sandbox — the default). Optional: a conversation
+     * never needs one set.
+     *
+     * @throws SecurityException if callerUuid doesn't own the conversation, or doesn't own the sandbox
+     * @throws IllegalArgumentException if the conversation or sandbox doesn't exist
+     */
+    Conversation setConversationSandbox(String conversationId, String callerUuid, String sandboxId);
+
+    /** Get the selected persistent sandbox id for a conversation, or null if none is set. */
+    String getConversationSandbox(String conversationId);
+
+    /**
      * Archive or unarchive a conversation.
      * Only the owner may change archive state.
      */

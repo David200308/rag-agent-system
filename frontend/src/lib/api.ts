@@ -321,6 +321,18 @@ export async function setConversationModel(
   });
 }
 
+/** Sets (or clears, with null) the persistent sandbox a conversation's chat turns may use — must be one of the caller's own sandboxes, already launched from the Sandboxes page. Optional; a conversation never needs one. */
+export async function setConversationSandbox(
+  conversationId: string,
+  sandboxId: string | null,
+): Promise<void> {
+  await fetch(`/api/agent/conversations/${conversationId}/sandbox`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ selectedSandboxId: sandboxId }),
+  });
+}
+
 export async function setWorkflowModel(
   workflowId: string,
   displayName: string | null,
