@@ -4,6 +4,7 @@ import com.agentsystem.workflow.service.impl.WorkflowServiceImpl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.agentsystem.org.OrgContext;
+import com.agentsystem.sandbox.repository.PersistentSandboxRepository;
 import com.agentsystem.user.entity.User;
 import com.agentsystem.user.entity.UserStatus;
 import com.agentsystem.user.service.UserAccountService;
@@ -37,12 +38,13 @@ class WorkflowServiceTest {
     @Mock WorkflowEdgeRepository    edgeRepo;
     @Mock WorkflowVersionRepository versionRepo;
     @Mock UserAccountService        userAccountService;
+    @Mock PersistentSandboxRepository sandboxRepo;
 
     WorkflowServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new WorkflowServiceImpl(workflowRepo, agentRepo, edgeRepo, versionRepo, new ObjectMapper(), userAccountService);
+        service = new WorkflowServiceImpl(workflowRepo, agentRepo, edgeRepo, versionRepo, new ObjectMapper(), userAccountService, sandboxRepo);
         // Resolve every email used across this file to a uuid equal to itself, for simplicity.
         // lenient() since not every test triggers every resolution.
         for (String email : List.of("owner@test.com", "other@test.com", "intruder@test.com",

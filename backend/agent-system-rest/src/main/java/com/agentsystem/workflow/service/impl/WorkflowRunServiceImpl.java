@@ -12,6 +12,8 @@ import com.agentsystem.connector.service.GoogleSlidesService;
 import com.agentsystem.connector.service.TelegramService;
 import com.agentsystem.model.service.ModelConfigService;
 import com.agentsystem.notification.NotificationClient;
+import com.agentsystem.sandbox.entity.PersistentSandbox;
+import com.agentsystem.sandbox.service.PersistentSandboxService;
 import com.agentsystem.sandbox.service.SandboxService;
 import com.agentsystem.skill.service.SkillService;
 import com.agentsystem.user.entity.User;
@@ -88,6 +90,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
     private final WorkflowEdgeRepository   edgeRepo;
     private final WorkflowService          workflowService;
     private final SandboxService           sandboxService;
+    private final PersistentSandboxService persistentSandboxService;
     private final SkillService             skillService;
     private final ChatClient               chatClient;
     private final ChatModelFactory         chatModelFactory;
@@ -327,8 +330,14 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         if (future != null) future.cancel(true);
 
         // Killing the sandbox now breaks any in-flight `sandboxService.exec` call, which lets
-        // the executeRun worker thread unwind through its catch/finally blocks promptly.
-        sandboxService.destroySandbox(run.getSandboxContainer());
+        // the executeRun worker thread unwind through its catch/finally blocks promptly. Skipped
+        // for a run attached to a persistent sandbox — that container must survive the run being
+        // cancelled; the future.cancel(true) above still interrupts the worker thread.
+        boolean persistentSandbox = workflowService.findById(run.getWorkflowId())
+                .map(Workflow::getAttachedSandboxId).isPresent();
+        if (!persistentSandbox) {
+            sandboxService.destroySandbox(run.getSandboxContainer());
+        }
 
         run.setStatus(WorkflowRun.RunStatus.CANCELLED);
         run.setFinishedAt(Instant.now());
@@ -377,16 +386,32 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         // containerId must be declared before the try so the finally block can always call destroySandbox.
         // It is assigned inside the try — if sandbox creation throws, it stays null and destroySandbox is a no-op.
         String containerId = null;
+        // Set when this run reuses a user's persistent sandbox instead of an ephemeral one — the
+        // finally block must never destroy that sandbox just because this run finished.
+        boolean usingPersistentSandbox = false;
         try {
-            emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM,
-                    "Initializing sandbox" + (needsNetwork ? " (network enabled)…" : "…"));
-
             java.util.function.Consumer<String> sandboxLog = msg ->
                     emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "[Sandbox] " + msg);
 
-            containerId = needsNetwork
-                    ? sandboxService.createSandboxWithNetwork(run.getId(), sandboxLog)
-                    : sandboxService.createSandbox(run.getId(), sandboxLog);
+            String attachedSandboxId = workflow.getAttachedSandboxId();
+            if (attachedSandboxId != null) {
+                emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "Attaching persistent sandbox…");
+                PersistentSandbox sandbox = persistentSandboxService.acquireForRun(
+                        attachedSandboxId, run.getOwnerUuid(), sandboxLog);
+                containerId = sandbox.getContainerId();
+                usingPersistentSandbox = true;
+                if (needsNetwork && !sandbox.isNetworkEnabled()) {
+                    sandboxLog.accept("Warning: this workflow needs network access, but the attached "
+                            + "sandbox was launched without it.");
+                }
+                sandboxLog.accept("Using persistent sandbox: " + sandbox.getName());
+            } else {
+                emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM,
+                        "Initializing sandbox" + (needsNetwork ? " (network enabled)…" : "…"));
+                containerId = needsNetwork
+                        ? sandboxService.createSandboxWithNetwork(run.getId(), sandboxLog)
+                        : sandboxService.createSandbox(run.getId(), sandboxLog);
+            }
             run.setSandboxContainer(containerId);
             runRepo.save(run);
 
@@ -456,7 +481,9 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
         } finally {
             runningFutures.remove(run.getId());
             suspendedRuns.remove(run.getId());
-            sandboxService.destroySandbox(containerId);
+            if (!usingPersistentSandbox) {
+                sandboxService.destroySandbox(containerId);
+            }
             maybeSendCompletionEmail(run, workflow.getName());
         }
     }

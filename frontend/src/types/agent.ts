@@ -238,8 +238,27 @@ export interface Workflow {
   agentPattern: AgentPattern;
   teamExecMode: TeamExecMode | null;
   selectedModel: string | null;
+  attachedSandboxId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type SandboxStatus = "RUNNING" | "STOPPED";
+
+export interface PersistentSandbox {
+  id: string;
+  ownerUuid: string | null;
+  name: string;
+  containerId: string | null;
+  networkEnabled: boolean;
+  status: SandboxStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SandboxQuota {
+  used: number;
+  max: number;
 }
 
 export interface WorkflowAgent {

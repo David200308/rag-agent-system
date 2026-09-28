@@ -23,6 +23,8 @@ import type {
   IngestionResult,
   KnowledgeSourceEntry,
   ModelConfig,
+  PersistentSandbox,
+  SandboxQuota,
   ScheduledMessage,
   ShareMetaResponse,
   ShareMode,
@@ -356,6 +358,8 @@ export async function updateWorkflow(id: string, patch: Partial<{
   description: string;
   agentPattern: AgentPattern;
   teamExecMode: TeamExecMode | null;
+  selectedModel: string | null;
+  attachedSandboxId: string | null;
 }>): Promise<Workflow> {
   const res = await fetch(`/api/workflow/${id}`, {
     method: "PATCH",
@@ -549,6 +553,46 @@ export async function fetchSkillVersionContent(id: string, versionNumber: number
   const res = await fetch(`/api/skills/${id}/versions/${versionNumber}`);
   if (!res.ok) return "";
   return res.text();
+}
+
+// ── Sandbox Management API ──────────────────────────────────────────────────────
+
+export async function fetchSandboxes(): Promise<PersistentSandbox[]> {
+  const res = await fetch("/api/sandboxes");
+  if (!res.ok) return [];
+  return res.json() as Promise<PersistentSandbox[]>;
+}
+
+export async function fetchSandboxQuota(): Promise<SandboxQuota> {
+  const res = await fetch("/api/sandboxes/quota");
+  if (!res.ok) return { used: 0, max: 1 };
+  return res.json() as Promise<SandboxQuota>;
+}
+
+export async function createSandbox(name: string, network: boolean): Promise<PersistentSandbox> {
+  return postJson<PersistentSandbox>("/api/sandboxes", { name, network });
+}
+
+export async function stopSandbox(id: string): Promise<PersistentSandbox> {
+  const res = await fetch(`/api/sandboxes/${id}/stop`, { method: "POST" });
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+  return res.json() as Promise<PersistentSandbox>;
+}
+
+export async function restartSandbox(id: string): Promise<PersistentSandbox> {
+  const res = await fetch(`/api/sandboxes/${id}/restart`, { method: "POST" });
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+  return res.json() as Promise<PersistentSandbox>;
+}
+
+export async function clearSandbox(id: string): Promise<void> {
+  const res = await fetch(`/api/sandboxes/${id}/clear`, { method: "POST" });
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+}
+
+export async function removeSandbox(id: string): Promise<void> {
+  const res = await fetch(`/api/sandboxes/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
 }
 
 // ── TanStack Query option factories ───────────────────────────────────────────

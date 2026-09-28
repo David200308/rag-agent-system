@@ -5,6 +5,8 @@ import com.agentsystem.workflow.service.WorkflowService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.agentsystem.org.OrgContext;
+import com.agentsystem.sandbox.entity.PersistentSandbox;
+import com.agentsystem.sandbox.repository.PersistentSandboxRepository;
 import com.agentsystem.user.entity.User;
 import com.agentsystem.user.service.UserAccountService;
 import com.agentsystem.workflow.entity.Workflow;
@@ -38,6 +40,7 @@ public class WorkflowServiceImpl implements WorkflowService {
     private final WorkflowVersionRepository versionRepo;
     private final ObjectMapper             objectMapper;
     private final UserAccountService       userAccountService;
+    private final PersistentSandboxRepository sandboxRepo;
 
     // ── Workflow CRUD ─────────────────────────────────────────────────────────
 
@@ -97,6 +100,19 @@ public class WorkflowServiceImpl implements WorkflowService {
         if (patch.containsKey("selectedModel")) {
             String m = (String) patch.get("selectedModel");
             wf.setSelectedModel(m == null || m.isBlank() ? null : m);
+        }
+        if (patch.containsKey("attachedSandboxId")) {
+            String sandboxId = (String) patch.get("attachedSandboxId");
+            if (sandboxId == null || sandboxId.isBlank()) {
+                wf.setAttachedSandboxId(null);
+            } else {
+                PersistentSandbox sandbox = sandboxRepo.findById(sandboxId)
+                        .orElseThrow(() -> new IllegalArgumentException("Sandbox not found: " + sandboxId));
+                if (!sandbox.getOwnerUuid().equals(ctx.userUuid())) {
+                    throw new SecurityException("Not the owner of this sandbox.");
+                }
+                wf.setAttachedSandboxId(sandboxId);
+            }
         }
         return workflowRepo.save(wf);
     }

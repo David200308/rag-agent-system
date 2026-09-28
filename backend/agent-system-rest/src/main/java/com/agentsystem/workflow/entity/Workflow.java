@@ -46,6 +46,10 @@ public class Workflow {
     @Column(name = "selected_model", length = 100)
     private String selectedModel;
 
+    /** Persistent sandbox this workflow's runs should reuse instead of creating an ephemeral one; null = ephemeral (default). */
+    @Column(name = "attached_sandbox_id", length = 36)
+    private String attachedSandboxId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 

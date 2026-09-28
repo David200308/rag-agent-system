@@ -103,6 +103,23 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
 
 -- ── Workflow engine ──────────────────────────────────────────────────────────
 
+-- Permanent, user-launched sandboxes managed from the Sandbox Management page. Unlike the
+-- ephemeral per-run containers workflows normally get, these are only started/stopped/
+-- restarted/cleared/removed by their owning user, and can be attached to a workflow (see
+-- workflows.attached_sandbox_id below) so its runs reuse the container instead of creating
+-- a new one each time.
+CREATE TABLE IF NOT EXISTS persistent_sandboxes (
+    id              VARCHAR(36)  PRIMARY KEY,
+    owner_uuid      VARCHAR(36)  NOT NULL,
+    name            VARCHAR(255) NOT NULL,
+    container_id    VARCHAR(128),
+    network_enabled BOOLEAN      NOT NULL DEFAULT FALSE,
+    status          VARCHAR(20)  NOT NULL DEFAULT 'RUNNING',  -- RUNNING | STOPPED
+    created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_ps_owner (owner_uuid)
+);
+
 CREATE TABLE IF NOT EXISTS workflows (
     id             VARCHAR(36)   PRIMARY KEY,
     name           VARCHAR(255)  NOT NULL,
@@ -111,10 +128,14 @@ CREATE TABLE IF NOT EXISTS workflows (
     agent_pattern  VARCHAR(20)   NOT NULL,   -- ORCHESTRATOR | TEAM | GRAPH
     team_exec_mode VARCHAR(20),               -- PARALLEL | SEQUENTIAL (TEAM only)
     selected_model VARCHAR(100),
+    attached_sandbox_id VARCHAR(36),          -- persistent_sandboxes.id this workflow's runs should reuse; NULL = ephemeral (default)
     org_id         VARCHAR(100),              -- NULL = personal mode; non-null = org-scoped (team mode)
     created_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_wf_owner (owner_uuid)
+    INDEX idx_wf_owner (owner_uuid),
+    INDEX idx_wf_sandbox (attached_sandbox_id),
+    CONSTRAINT fk_wf_sandbox FOREIGN KEY (attached_sandbox_id)
+        REFERENCES persistent_sandboxes(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS workflow_agents (

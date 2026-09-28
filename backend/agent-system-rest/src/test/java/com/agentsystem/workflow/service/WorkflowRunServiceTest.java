@@ -11,6 +11,7 @@ import com.agentsystem.connector.service.TelegramService;
 import com.agentsystem.model.service.ModelConfigService;
 import com.agentsystem.notification.NotificationClient;
 import com.agentsystem.org.OrgContext;
+import com.agentsystem.sandbox.service.PersistentSandboxService;
 import com.agentsystem.sandbox.service.SandboxService;
 import com.agentsystem.skill.service.SkillService;
 import com.agentsystem.user.entity.User;
@@ -56,6 +57,7 @@ class WorkflowRunServiceTest {
     @Mock WorkflowEdgeRepository   edgeRepo;
     @Mock WorkflowService          workflowService;
     @Mock SandboxService           sandboxService;
+    @Mock PersistentSandboxService persistentSandboxService;
     @Mock SkillService             skillService;
     @Mock ChatClient               chatClient;
     @Mock ChatModelFactory         chatModelFactory;
@@ -75,6 +77,7 @@ class WorkflowRunServiceTest {
     void setUp() {
         service = new WorkflowRunServiceImpl(
                 runRepo, logRepo, agentRepo, edgeRepo, workflowService, sandboxService,
+                persistentSandboxService,
                 skillService, chatClient, chatModelFactory,
                 modelConfigService, llmProperties, notificationClient,
                 workflowScheduleClient,

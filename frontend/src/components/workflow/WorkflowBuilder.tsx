@@ -23,6 +23,7 @@ import "@xyflow/react/dist/style.css";
 import { Plus, Play, Save, History, Download, Upload, FileJson, CalendarClock, Bot, GitBranch, FlagOff, GitCommitHorizontal, RotateCcw, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { PatternSelector } from "./PatternSelector";
+import { SandboxAttachSelector } from "./SandboxAttachSelector";
 import { AgentConfigPanel } from "./AgentConfigPanel";
 import { WorkflowRunsPanel } from "./WorkflowRunsPanel";
 import { WorkflowScheduleModal } from "./WorkflowScheduleModal";
@@ -40,8 +41,9 @@ import {
   fetchWorkflowVersions,
   saveWorkflowVersion,
   restoreWorkflowVersion,
+  fetchSandboxes,
 } from "@/lib/api";
-import type { AgentPattern, AgentRole, NodeKind, RunStatus, TeamExecMode, Workflow, WorkflowAgent, WorkflowEdgeDto, WorkflowVersion, Skill } from "@/types/agent";
+import type { AgentPattern, AgentRole, NodeKind, RunStatus, TeamExecMode, Workflow, WorkflowAgent, WorkflowEdgeDto, WorkflowVersion, Skill, PersistentSandbox } from "@/types/agent";
 import { cn } from "@/lib/utils";
 
 // ── Flow JSON schema ──────────────────────────────────────────────────────────
@@ -221,6 +223,8 @@ export function WorkflowBuilder({ workflow }: Props) {
   const [selectedId,   setSelectedId]   = useState<number | null>(null);
   const [pattern,      setPattern]      = useState<AgentPattern>(workflow.agentPattern);
   const [teamExecMode, setTeamExecMode] = useState<TeamExecMode | null>(workflow.teamExecMode);
+  const [attachedSandboxId, setAttachedSandboxId] = useState<string | null>(workflow.attachedSandboxId);
+  const [sandboxes,    setSandboxes]    = useState<PersistentSandbox[]>([]);
   const [runId,          setRunId]          = useState<string | null>(null);
   const [runInput,       setRunInput]       = useState("");
   const [runFiles,       setRunFiles]       = useState<File[]>([]);
@@ -345,6 +349,20 @@ export function WorkflowBuilder({ workflow }: Props) {
       syncNodes(a, s, e);
     });
   }, [workflow.id, syncNodes]);
+
+  // Load the user's persistent sandboxes for the attach-sandbox selector
+  useEffect(() => {
+    fetchSandboxes().then(setSandboxes);
+  }, []);
+
+  async function handleSandboxChange(id: string | null) {
+    setAttachedSandboxId(id);
+    try {
+      await updateWorkflow(workflow.id, { attachedSandboxId: id });
+    } catch {
+      setAttachedSandboxId(workflow.attachedSandboxId);
+    }
+  }
 
   // Sync nodes data when selection changes
   useEffect(() => {
@@ -805,6 +823,11 @@ export function WorkflowBuilder({ workflow }: Props) {
             pattern={pattern}
             teamExecMode={teamExecMode}
             onChange={handlePatternChange}
+          />
+          <SandboxAttachSelector
+            attachedSandboxId={attachedSandboxId}
+            sandboxes={sandboxes}
+            onChange={handleSandboxChange}
           />
           <div className="ml-auto flex items-center gap-2 pl-2">
             <div ref={addMenuButtonRef}>
