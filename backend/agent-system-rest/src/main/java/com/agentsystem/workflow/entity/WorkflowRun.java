@@ -42,6 +42,10 @@ public class WorkflowRun {
     @Column(name = "sandbox_container", length = 128)
     private String sandboxContainer;
 
+    /** True if this run reused an attached persistent sandbox instead of an ephemeral one — see PersistentSandboxService. */
+    @Column(name = "sandbox_persistent", nullable = false)
+    private boolean sandboxPersistent = false;
+
     @Column(name = "final_output", columnDefinition = "LONGTEXT")
     private String finalOutput;
 

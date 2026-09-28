@@ -23,4 +23,8 @@ public interface WorkflowRunRepository extends JpaRepository<WorkflowRun, String
 
     /** Team mode runs: owner + org (still private per user). */
     List<WorkflowRun> findByOwnerUuidAndOrgIdOrderByStartedAtDesc(String ownerUuid, String orgId);
+
+    /** Runs currently occupying an ephemeral (non-persistent) sandbox, for this owner — used by the Sandbox Management page. */
+    List<WorkflowRun> findByOwnerUuidAndStatusInAndSandboxPersistentFalseAndSandboxContainerIsNotNull(
+            String ownerUuid, List<WorkflowRun.RunStatus> statuses);
 }

@@ -303,6 +303,27 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                 workflowId, PageRequest.of(page, Math.min(size, 50)));
     }
 
+    private static final List<WorkflowRun.RunStatus> ACTIVE_STATUSES = List.of(
+            WorkflowRun.RunStatus.PENDING, WorkflowRun.RunStatus.RUNNING,
+            WorkflowRun.RunStatus.AWAITING_INPUT, WorkflowRun.RunStatus.SUSPENDED);
+
+    @Override
+    public List<ActiveEphemeralSandbox> listActiveEphemeralSandboxes(String ownerUuid) {
+        List<WorkflowRun> runs = runRepo
+                .findByOwnerUuidAndStatusInAndSandboxPersistentFalseAndSandboxContainerIsNotNull(
+                        ownerUuid, ACTIVE_STATUSES);
+
+        Map<String, String> workflowNames = new java.util.HashMap<>();
+        List<ActiveEphemeralSandbox> result = new ArrayList<>();
+        for (WorkflowRun run : runs) {
+            String workflowName = workflowNames.computeIfAbsent(run.getWorkflowId(),
+                    id -> workflowService.findById(id).map(Workflow::getName).orElse("(deleted workflow)"));
+            result.add(new ActiveEphemeralSandbox(run.getId(), run.getWorkflowId(), workflowName,
+                    run.getStatus(), run.getSandboxContainer(), run.getStartedAt()));
+        }
+        return result;
+    }
+
     @Transactional
     @Override
     public void cancelRun(String runId, String callerUuid) {
@@ -413,6 +434,7 @@ public class WorkflowRunServiceImpl implements WorkflowRunService {
                         : sandboxService.createSandbox(run.getId(), sandboxLog);
             }
             run.setSandboxContainer(containerId);
+            run.setSandboxPersistent(usingPersistentSandbox);
             runRepo.save(run);
 
             emit(run.getId(), null, null, WorkflowRunLog.LogType.SYSTEM, "Sandbox ready.");

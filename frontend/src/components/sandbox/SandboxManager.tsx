@@ -1,16 +1,31 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Box, Play, Square, RotateCcw, Eraser, Trash2, RefreshCw, Network, ShieldOff,
+  Workflow as WorkflowIcon, ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   fetchSandboxes, fetchSandboxQuota, createSandbox,
   stopSandbox, restartSandbox, clearSandbox, removeSandbox,
+  fetchSandboxPoolStatus, fetchActiveEphemeralSandboxes,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
-import type { PersistentSandbox, SandboxQuota } from "@/types/agent";
+import type {
+  PersistentSandbox, SandboxQuota, SandboxPoolStatus, ActiveEphemeralSandbox, RunStatus,
+} from "@/types/agent";
+
+const RUN_STATUS_LABEL: Record<RunStatus, string> = {
+  PENDING: "Pending",
+  RUNNING: "Running",
+  AWAITING_INPUT: "Awaiting input",
+  SUSPENDED: "Suspended",
+  DONE: "Done",
+  FAILED: "Failed",
+  CANCELLED: "Cancelled",
+};
 
 function StatusBadge({ status }: { status: PersistentSandbox["status"] }) {
   const running = status === "RUNNING";
@@ -178,17 +193,51 @@ function SandboxCard({ sandbox, onChanged }: { sandbox: PersistentSandbox; onCha
   );
 }
 
+function ActiveEphemeralCard({ sandbox }: { sandbox: ActiveEphemeralSandbox }) {
+  return (
+    <div className="rounded-md border border-dashed border-[--color-border] px-3 py-2.5">
+      <div className="flex items-center gap-3">
+        <WorkflowIcon className="h-4 w-4 shrink-0 text-[--color-muted]" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-medium">{sandbox.workflowName}</p>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+              {RUN_STATUS_LABEL[sandbox.status]}
+            </span>
+          </div>
+          <p className="text-[10px] text-[--color-muted]">
+            {sandbox.containerId.slice(0, 12)} · started {new Date(sandbox.startedAt).toLocaleString()}
+          </p>
+        </div>
+        <Link
+          href={`/workflow/${sandbox.workflowId}`}
+          className="flex shrink-0 items-center gap-1 text-xs text-[--color-muted] hover:text-[--color-fg]"
+          title="Open workflow to stop this run"
+        >
+          View workflow <ExternalLink className="h-3 w-3" />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function SandboxManager() {
   const [sandboxes, setSandboxes] = useState<PersistentSandbox[]>([]);
   const [quota, setQuota] = useState<SandboxQuota>({ used: 0, max: 1 });
+  const [poolStatus, setPoolStatus] = useState<SandboxPoolStatus | null>(null);
+  const [activeEphemeral, setActiveEphemeral] = useState<ActiveEphemeralSandbox[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, q] = await Promise.all([fetchSandboxes(), fetchSandboxQuota()]);
+      const [s, q, p, e] = await Promise.all([
+        fetchSandboxes(), fetchSandboxQuota(), fetchSandboxPoolStatus(), fetchActiveEphemeralSandboxes(),
+      ]);
       setSandboxes(s);
       setQuota(q);
+      setPoolStatus(p);
+      setActiveEphemeral(e);
     } finally {
       setLoading(false);
     }
@@ -214,7 +263,12 @@ export function SandboxManager() {
 
       <div className="mb-4 flex items-center justify-between">
         <p className="text-xs font-medium text-[--color-muted]">
-          {quota.used} / {quota.max} sandbox{quota.max === 1 ? "" : "es"} used
+          {quota.used} / {quota.max} personal sandbox{quota.max === 1 ? "" : "es"}
+          {poolStatus && (
+            <span className="ml-2 text-[--color-muted]/70">
+              · {poolStatus.active} / {poolStatus.maxConcurrent} host containers in use (shared across all users)
+            </span>
+          )}
         </p>
         {!loading && (
           <button
@@ -248,6 +302,19 @@ export function SandboxManager() {
           {sandboxes.map((s) => (
             <SandboxCard key={s.id} sandbox={s} onChanged={load} />
           ))}
+        </div>
+      )}
+
+      {!loading && activeEphemeral.length > 0 && (
+        <div className="mt-8">
+          <p className="mb-2 text-xs font-medium text-[--color-muted]">
+            Active workflow sandboxes (ephemeral — created and destroyed automatically per run)
+          </p>
+          <div className="space-y-2">
+            {activeEphemeral.map((s) => (
+              <ActiveEphemeralCard key={s.runId} sandbox={s} />
+            ))}
+          </div>
         </div>
       )}
     </div>

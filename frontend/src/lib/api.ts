@@ -25,6 +25,8 @@ import type {
   ModelConfig,
   PersistentSandbox,
   SandboxQuota,
+  SandboxPoolStatus,
+  ActiveEphemeralSandbox,
   ScheduledMessage,
   ShareMetaResponse,
   ShareMode,
@@ -593,6 +595,20 @@ export async function clearSandbox(id: string): Promise<void> {
 export async function removeSandbox(id: string): Promise<void> {
   const res = await fetch(`/api/sandboxes/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+}
+
+/** Global concurrency pool (ephemeral + persistent sandboxes share it) — distinct from fetchSandboxQuota's per-user limit. */
+export async function fetchSandboxPoolStatus(): Promise<SandboxPoolStatus | null> {
+  const res = await fetch("/api/workflow/sandbox/status");
+  if (!res.ok) return null;
+  return res.json() as Promise<SandboxPoolStatus>;
+}
+
+/** Ephemeral sandboxes currently in use by the caller's own active workflow runs (read-only). */
+export async function fetchActiveEphemeralSandboxes(): Promise<ActiveEphemeralSandbox[]> {
+  const res = await fetch("/api/workflow/runs/active-sandboxes");
+  if (!res.ok) return [];
+  return res.json() as Promise<ActiveEphemeralSandbox[]>;
 }
 
 // ── TanStack Query option factories ───────────────────────────────────────────

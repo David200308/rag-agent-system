@@ -318,6 +318,12 @@ public class WorkflowController {
         }
     }
 
+    @GetMapping("/runs/active-sandboxes")
+    @Operation(summary = "Ephemeral sandboxes currently in use by the caller's active runs (Sandbox Management page)")
+    public ResponseEntity<List<WorkflowRunService.ActiveEphemeralSandbox>> activeSandboxes(HttpServletRequest req) {
+        return ResponseEntity.ok(runService.listActiveEphemeralSandboxes(OrgContext.from(req).userUuid()));
+    }
+
     @GetMapping(value = "/runs/{runId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "SSE stream of log events for a run")
     public SseEmitter streamLogs(@PathVariable String runId) {

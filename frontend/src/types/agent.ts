@@ -261,6 +261,24 @@ export interface SandboxQuota {
   max: number;
 }
 
+/** Global concurrency pool shared by every ephemeral + persistent sandbox on the host — distinct from SandboxQuota, which is a per-user limit on permanent sandboxes. */
+export interface SandboxPoolStatus {
+  maxConcurrent: number;
+  active: number;
+  queued: number;
+  queueCapacity: number;
+}
+
+/** A run currently occupying an ephemeral (non-persistent) sandbox — read-only, shown on the Sandboxes page. */
+export interface ActiveEphemeralSandbox {
+  runId: string;
+  workflowId: string;
+  workflowName: string;
+  status: RunStatus;
+  containerId: string;
+  startedAt: string;
+}
+
 export interface WorkflowAgent {
   id: number;
   workflowId: string;

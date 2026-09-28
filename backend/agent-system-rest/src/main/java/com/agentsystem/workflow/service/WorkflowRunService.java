@@ -6,9 +6,18 @@ import org.springframework.data.domain.Page;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.time.Instant;
 import java.util.List;
 
 public interface WorkflowRunService {
+
+    /** A run currently occupying an ephemeral sandbox — shown (read-only) on the Sandbox Management page. */
+    record ActiveEphemeralSandbox(
+            String runId, String workflowId, String workflowName,
+            WorkflowRun.RunStatus status, String containerId, Instant startedAt) {}
+
+    /** Ephemeral (non-persistent) sandboxes currently in use by this user's active runs. */
+    List<ActiveEphemeralSandbox> listActiveEphemeralSandboxes(String ownerUuid);
 
     /**
      * Creates a WorkflowRun record and starts async execution. Returns the runId.

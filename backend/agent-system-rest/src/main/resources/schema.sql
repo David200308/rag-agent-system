@@ -186,6 +186,7 @@ CREATE TABLE IF NOT EXISTS workflow_runs (
     user_input        TEXT         NOT NULL,
     status            VARCHAR(20)  NOT NULL DEFAULT 'PENDING',  -- PENDING | RUNNING | AWAITING_INPUT | SUSPENDED | DONE | FAILED | CANCELLED
     sandbox_container VARCHAR(128),
+    sandbox_persistent BOOLEAN     NOT NULL DEFAULT FALSE,      -- true if this run reused an attached persistent sandbox instead of an ephemeral one
     final_output      LONGTEXT,
     workflow_version  INT,                                   -- workflow_versions.version_number active at run start; NULL if never saved
     pending_question  TEXT,                                  -- set while status=AWAITING_INPUT — the ASK_USER tool's question
