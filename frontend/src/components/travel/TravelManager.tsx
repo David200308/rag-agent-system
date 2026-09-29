@@ -12,7 +12,7 @@ import {
   parseTripExpenseData, buildDateGroups, newExpenseEntry,
 } from "@/types/travel";
 
-const TravelMap = dynamic(() => import("./TravelMap"), { ssr: false });
+const TravelMap = dynamic(() => import("./TravelMapView"), { ssr: false });
 
 // ── API helpers ────────────────────────────────────────────────────────────────
 

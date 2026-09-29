@@ -469,6 +469,9 @@ services:
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
       CLIENT_WEB_SECRET: ${CLIENT_WEB_SECRET:-changeme-web-shared-secret}
+      # Optional — when set, the Travel map uses Google Maps instead of free Esri tiles
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      GOOGLE_MAPS_MAP_ID: ${GOOGLE_MAPS_MAP_ID:-}
 
   # ── Prometheus (scrapes /actuator/prometheus every 15s) ──────────────────────
   prometheus:

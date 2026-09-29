@@ -317,6 +317,17 @@ if [ "$MODE" = "local" ]; then
   TRAVEL_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
   echo -e "  ${DIM}Travel-inner service key auto-generated.${NC}"
 
+  # ── Travel map (Google Maps) ──────────────────────────────────────────────
+  header "Travel map — Google Maps (optional)"
+  echo -e "  ${DIM}Leave blank to use the free Esri map (no account needed).${NC}"
+  echo -e "  ${DIM}Key → https://console.cloud.google.com/google/maps-apis/credentials (enable Maps JavaScript API)${NC}"
+  echo -e "  ${DIM}Restrict it by HTTP referrer (http://localhost:3000/*) — the browser can see this key.${NC}"
+  GOOGLE_MAPS_API_KEY=""; GOOGLE_MAPS_MAP_ID=""
+  prompt GOOGLE_MAPS_API_KEY "Google Maps API key" "" true
+  if [ -n "$GOOGLE_MAPS_API_KEY" ]; then
+    prompt GOOGLE_MAPS_MAP_ID "Map ID (optional, for cloud styling)" ""
+  fi
+
   # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ──────────────
   header "Connectors (optional)"
   echo -e "  ${DIM}Connect Google Workspace (Docs, Sheets, Slides), Figma, and Telegram to the agent.${NC}"
@@ -434,8 +445,10 @@ FINNHUB_API_KEY=$FINNHUB_API_KEY
 FINANCE_SERVICE_KEY=$FINANCE_SERVICE_KEY
 
 # ── Travel ────────────────────────────────────────────────────────────────────
-# No API keys required — map tiles served by CartoDB (free, no account needed).
 TRAVEL_SERVICE_KEY=$TRAVEL_SERVICE_KEY
+# Optional — blank uses the free Esri map. Browser-visible; restrict by HTTP referrer.
+GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY
+GOOGLE_MAPS_MAP_ID=$GOOGLE_MAPS_MAP_ID
 
 # ── Weaviate ──────────────────────────────────────────────────────────────────
 WEAVIATE_API_KEY=$WEAVIATE_API_KEY
@@ -938,6 +951,30 @@ else
     echo -e "  ${DIM}Travel-inner service key auto-generated.${NC}"
   fi
 
+  # ── Travel map (Google Maps) ──────────────────────────────────────────────
+  # The Maps JS API key is sent to the browser anyway, so it's plain config in
+  # .env.prod rather than a Docker secret — protect it with a referrer restriction.
+  header "Travel map — Google Maps (optional)"
+  UPDATE_GMAPS=true
+  if [ -n "$(read_prod GOOGLE_MAPS_API_KEY "")" ]; then
+    echo -e "  ${DIM}Google Maps already configured.${NC}"
+    if ! confirm "Update Google Maps API key?"; then UPDATE_GMAPS=false; fi
+  fi
+  if $UPDATE_GMAPS; then
+    echo -e "  ${DIM}Leave blank to use the free Esri map (no account needed).${NC}"
+    echo -e "  ${DIM}Key → https://console.cloud.google.com/google/maps-apis/credentials (enable Maps JavaScript API)${NC}"
+    echo -e "  ${DIM}Restrict it by HTTP referrer (https://<your-domain>/*) — the browser can see this key.${NC}"
+    GOOGLE_MAPS_API_KEY=""; GOOGLE_MAPS_MAP_ID=""
+    prompt GOOGLE_MAPS_API_KEY "Google Maps API key" "" true
+    if [ -n "$GOOGLE_MAPS_API_KEY" ]; then
+      prompt GOOGLE_MAPS_MAP_ID "Map ID (optional, for cloud styling)" ""
+    fi
+  else
+    GOOGLE_MAPS_API_KEY="$(read_prod GOOGLE_MAPS_API_KEY "")"
+    GOOGLE_MAPS_MAP_ID="$(read_prod GOOGLE_MAPS_MAP_ID "")"
+    echo -e "  ${DIM}Keeping existing Google Maps config.${NC}"
+  fi
+
   # ── Connectors (Google Workspace + Figma OAuth + Telegram Bot) ──────────────
   header "Connectors (optional)"
   echo -e "  ${DIM}Connect Google Workspace (Docs, Sheets, Slides), Figma, and Telegram to the agent.${NC}"
@@ -1114,6 +1151,11 @@ WEB_FETCH_MAX_CHARS=50000
 WEB_SEARCH_ENABLED=true
 WEB_SEARCH_TIMEOUT=10
 WEB_SEARCH_MAX_RESULTS=5
+
+# ── Travel map (optional — blank uses the free Esri map; key is browser-visible,
+#    restrict it by HTTP referrer in Google Cloud Console)
+GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
+GOOGLE_MAPS_MAP_ID=${GOOGLE_MAPS_MAP_ID:-}
 
 # ── Connectors (credentials come from secrets; TELEGRAM_BOT_USERNAME is non-secret)
 # Telegram webhook registration: POST https://api.telegram.org/bot<TOKEN>/setWebhook?url=<BACKEND_URL>/api/v1/connectors/telegram/webhook

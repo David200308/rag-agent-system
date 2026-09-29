@@ -617,8 +617,8 @@ services:
       start_period: 60s
 
   # ── Next.js frontend ──────────────────────────────────────────────────────────
-  # No secrets needed — the frontend only talks to the backend/scheduler, never
-  # directly to any external API.
+  # No secrets needed — the frontend only talks to the backend/scheduler (plus the
+  # optional browser-side Google Maps key, which is public by design).
   frontend:
     image: rag-agent-system-frontend:${IMAGE_TAG:-latest}
     build:
@@ -643,6 +643,9 @@ services:
       AUTH_ENABLED: ${AUTH_ENABLED:-true}
       AUTH_JWT_EXPIRY_HOURS: ${AUTH_JWT_EXPIRY_HOURS:-24}
       CLIENT_WEB_SECRET: ${CLIENT_WEB_SECRET:-}
+      # Optional — when set, the Travel map uses Google Maps instead of free Esri tiles
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      GOOGLE_MAPS_MAP_ID: ${GOOGLE_MAPS_MAP_ID:-}
 
   # ── Prometheus ────────────────────────────────────────────────────────────────
   prometheus:
