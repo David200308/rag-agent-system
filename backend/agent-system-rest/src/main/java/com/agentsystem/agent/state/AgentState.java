@@ -98,4 +98,9 @@ public class AgentState extends org.bsc.langgraph4j.state.AgentState {
     public Optional<String> selectedSandboxId() {
         return value("selectedSandboxId");
     }
+
+    /** True when the caller attached one of their persistent sandboxes to this turn. */
+    public boolean hasSandbox() {
+        return selectedSandboxId().filter(id -> !id.isBlank()).isPresent();
+    }
 }

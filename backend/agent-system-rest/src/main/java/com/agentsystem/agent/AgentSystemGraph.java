@@ -24,8 +24,8 @@ import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
  * <pre>
  *   START
  *     └─► analyzeQuery
- *               ├─[RETRIEVE]─► retrieve ─[docs found]──► generate
- *               │                        └[no docs]───► fallback ─► END
+ *               ├─[RETRIEVE]─► retrieve ─[docs found / sandbox]──► generate
+ *               │                        └[no docs]──────────────► fallback ─► END
  *               ├─[DIRECT]───────────────────────────► generate
  *               └─[FALLBACK]──────────────────────────► fallback ─► END
  *
@@ -74,10 +74,13 @@ public class AgentSystemGraph {
                 )
             )
 
-            // After retrieval: check if documents were found
+            // After retrieval: check if documents were found. With a sandbox attached, an empty
+            // KB result still goes to generate — FallbackNode has no tools, so routing there would
+            // make execInSandbox unreachable for "run/install X" requests the KB knows nothing about.
             .addConditionalEdges(
                 NODE_RETRIEVE,
-                state -> CompletableFuture.completedFuture(state.documents().isEmpty() ? "noDocuments" : "found"),
+                state -> CompletableFuture.completedFuture(
+                        state.documents().isEmpty() && !state.hasSandbox() ? "noDocuments" : "found"),
                 java.util.Map.of(
                     "found",       NODE_GENERATE,
                     "noDocuments", NODE_FALLBACK

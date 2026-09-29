@@ -63,6 +63,10 @@ public class RetrievalNode {
         log.info("[RetrievalNode] Retrieved {} documents", docs.size());
 
         if (docs.isEmpty()) {
+            if (state.hasSandbox()) {
+                log.info("[RetrievalNode] No documents, but a sandbox is attached — continuing to generate");
+                return Map.of();
+            }
             return Map.of(
                     "route",         "FALLBACK",
                     "fallbackReason", "No relevant documents found in the knowledge base"

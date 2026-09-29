@@ -54,6 +54,14 @@ public class QueryAnalyzerNode {
             Respond ONLY with valid JSON matching the provided schema.
             """;
 
+    /** Appended to {@link #SYSTEM_PROMPT} only when the caller attached a persistent sandbox for this request. */
+    private static final String SANDBOX_ADDENDUM = """
+
+            The user has attached a shell sandbox to this conversation. Route requests to run,
+            execute, install, check, or inspect something in that sandbox (by any name the user
+            gives it) as DIRECT — they need the sandbox tool, not the knowledge base.
+            """;
+
     /**
      * Called by the LangGraph compiled graph.
      *
@@ -77,8 +85,12 @@ public class QueryAnalyzerNode {
         // appends the format instructions to the prompt automatically.
         var converter = new BeanOutputConverter<>(QueryAnalysis.class);
 
+        // Tell the analyser a sandbox is attached so "run/install/check X" requests go DIRECT to the
+        // tool-enabled generator instead of a pointless KB lookup (or FALLBACK, which has no tools).
+        String systemPrompt = state.hasSandbox() ? SYSTEM_PROMPT + SANDBOX_ADDENDUM : SYSTEM_PROMPT;
+
         String rawResponse = effectiveClient.prompt()
-                .system(SYSTEM_PROMPT)
+                .system(systemPrompt)
                 .user(u -> u.text("""
                         User query: {query}
 
