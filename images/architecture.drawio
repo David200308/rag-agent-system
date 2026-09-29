@@ -1,247 +1,239 @@
 <mxfile host="65bd71144e">
-    <diagram id="jPP4zuPJdfmPFuOaT2UN" name="Page-1">
-        <mxGraphModel dx="2212" dy="1476" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1050" math="0" shadow="0">
+    <diagram id="architecture" name="Architecture">
+        <mxGraphModel dx="2170" dy="828" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="850" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
-                <mxCell id="fe" value="Frontend (Next.js)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="40" y="40" width="220" height="60" as="geometry"/>
+                <mxCell id="obs" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;dashed=1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;fontStyle=1;arcSize=4;" value="Observability" vertex="1">
+                    <mxGeometry height="140" width="330" x="20" y="10" as="geometry"/>
                 </mxCell>
-                <mxCell id="cli" value="agent-cli (Go)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="300" y="40" width="220" height="60" as="geometry"/>
+                <mxCell id="grafana" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" value="Grafana :3001" vertex="1">
+                    <mxGeometry height="40" width="140" x="35" y="45" as="geometry"/>
                 </mxCell>
-                <mxCell id="backend" value="Spring Boot Backend — agent-system-rest" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=top;align=left;spacingLeft=12;spacingTop=8;fontStyle=1;fontSize=14;fillColor=none;strokeColor=#666666;" parent="1" vertex="1">
-                    <mxGeometry x="40" y="140" width="1380" height="440" as="geometry"/>
+                <mxCell id="prometheus" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" value="Prometheus :9090" vertex="1">
+                    <mxGeometry height="40" width="140" x="195" y="45" as="geometry"/>
                 </mxCell>
-                <mxCell id="authf" value="AuthFilter" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="590" y="185" width="280" height="65" as="geometry"/>
+                <mxCell id="loki" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" value="Loki :3100" vertex="1">
+                    <mxGeometry height="40" width="140" x="35" y="100" as="geometry"/>
                 </mxCell>
-                <mxCell id="agc" value="Agent / Conversation&lt;br&gt;Controller" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="70" y="270" width="138" height="60" as="geometry"/>
+                <mxCell id="promtail" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" value="Promtail" vertex="1">
+                    <mxGeometry height="40" width="140" x="195" y="100" as="geometry"/>
                 </mxCell>
-                <mxCell id="org" value="Organization / Team&lt;br&gt;Controller" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="214" y="270" width="138" height="60" as="geometry"/>
+                <mxCell id="web" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;Frontend&lt;/b&gt;&lt;br&gt;Next.js :3000" vertex="1">
+                    <mxGeometry height="56" width="180" x="380" y="40" as="geometry"/>
                 </mxCell>
-                <mxCell id="conn" value="Connector Controller&lt;div&gt;&lt;br/&gt;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="358" y="270" width="138" height="60" as="geometry"/>
+                <mxCell id="cli" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;agent-cli&lt;/b&gt;&lt;br&gt;Go · Ed25519" vertex="1">
+                    <mxGeometry height="56" width="180" x="600" y="40" as="geometry"/>
                 </mxCell>
-                <mxCell id="wf" value="Workflow&lt;br&gt;Controller" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="502" y="270" width="138" height="60" as="geometry"/>
+                <mxCell id="ios" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;iOS app&lt;/b&gt;&lt;br&gt;SwiftUI" vertex="1">
+                    <mxGeometry height="56" width="180" x="820" y="40" as="geometry"/>
                 </mxCell>
-                <mxCell id="authc" value="Auth Controller&lt;br&gt;(thin proxy)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="646" y="270" width="138" height="60" as="geometry"/>
+                <mxCell id="backend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;backend — agent-system-rest :8081&lt;/b&gt;&lt;br&gt;Spring Boot · Spring AI · LangGraph4j agents&lt;br&gt;MCP server · workflow sandbox · connectors" vertex="1">
+                    <mxGeometry height="100" width="720" x="340" y="170" as="geometry"/>
                 </mxCell>
-                <mxCell id="financialc" value="Financial&lt;br&gt;Controller" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="790" y="270" width="138" height="60" as="geometry"/>
+                <mxCell id="scheduler" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;scheduler :8082&lt;/b&gt;&lt;br&gt;Go · Asynq scheduler + worker" vertex="1">
+                    <mxGeometry height="100" width="200" x="60" y="170" as="geometry"/>
                 </mxCell>
-                <mxCell id="travelc" value="Travel Controller /&lt;br&gt;TravelAgentTool" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="934" y="270" width="138" height="60" as="geometry"/>
+                <mxCell id="weaviate" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#f8cecc;strokeColor=#b85450;" value="Weaviate&lt;br&gt;(vectors)" vertex="1">
+                    <mxGeometry height="90" width="130" x="1110" y="175" as="geometry"/>
                 </mxCell>
-                <mxCell id="alertc" value="Alert Controller /&lt;br&gt;AlertAgentTool" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="1078" y="270" width="138" height="60" as="geometry"/>
+                <mxCell id="connapi" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Google Workspace · Figma&lt;br&gt;Telegram Bot API" vertex="1">
+                    <mxGeometry height="56" width="250" x="1420" y="40" as="geometry"/>
                 </mxCell>
-                <mxCell id="schedc" value="Scheduler Trigger&lt;br&gt;Controller" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="1222" y="270" width="138" height="60" as="geometry"/>
+                <mxCell id="llm" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="LLM providers&lt;br&gt;OpenAI · Anthropic · OpenRouter · DeepSeek · Local" vertex="1">
+                    <mxGeometry height="56" width="250" x="1420" y="120" as="geometry"/>
                 </mxCell>
-                <mxCell id="graph" value="AgentSystemGraph (LangGraph4j)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="70" y="370" width="320" height="60" as="geometry"/>
+                <mxCell id="search" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Public search engines" vertex="1">
+                    <mxGeometry height="60" width="250" x="1420" y="382" as="geometry"/>
                 </mxCell>
-                <mxCell id="modules" value="Supporting modules&lt;br&gt;• MCP Server (SSE)&lt;br&gt;• Workflow Sandbox (ephemeral Docker, resource limits)&lt;br&gt;• Model Selection (per-user + per-conversation)&lt;br&gt;• Team/Org management (OWNER / MEMBER)&lt;br&gt;• Connectors: Google Docs/Sheets/Slides/Calendar, Figma, Telegram" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="430" y="370" width="950" height="150" as="geometry"/>
+                <mxCell id="market" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Market data&lt;br&gt;Finnhub · Pyth Hermes · Yahoo · Hyperliquid" vertex="1">
+                    <mxGeometry height="60" width="250" x="1420" y="470" as="geometry"/>
                 </mxCell>
-                <mxCell id="weaviate" value="Weaviate&lt;br&gt;(vectors)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="70" y="620" width="170" height="80" as="geometry"/>
+                <mxCell id="resend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Resend&lt;br&gt;(email delivery)" vertex="1">
+                    <mxGeometry height="60" width="250" x="1420" y="570" as="geometry"/>
                 </mxCell>
-                <mxCell id="llm" value="LLM Providers&lt;br&gt;OpenAI · OpenRouter · Anthropic · DeepSeek · Local" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="280" y="620" width="230" height="80" as="geometry"/>
+                <mxCell id="inner" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;dashed=1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;fontStyle=1;arcSize=4;" value="Internal microservices (-inner, private network)" vertex="1">
+                    <mxGeometry height="140" width="1190" x="160" y="330" as="geometry"/>
                 </mxCell>
-                <mxCell id="workspace" value="Google Workspace APIs&lt;br&gt;Telegram Bot API" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="550" y="620" width="260" height="80" as="geometry"/>
+                <mxCell id="auth" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;auth-inner&lt;/b&gt; :8086&lt;br&gt;JWT · OTP · passkeys" vertex="1">
+                    <mxGeometry height="64" width="160" x="180" y="380" as="geometry"/>
                 </mxCell>
-                <mxCell id="mysql" value="MySQL" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="850" y="620" width="210" height="90" as="geometry"/>
+                <mxCell id="travel" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;travel-inner&lt;/b&gt; :8088&lt;br&gt;trips · stops · expenses" vertex="1">
+                    <mxGeometry height="64" width="160" x="380" y="380" as="geometry"/>
                 </mxCell>
-                <mxCell id="redis" value="Redis" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="1100" y="620" width="210" height="90" as="geometry"/>
+                <mxCell id="storage" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;storage-inner&lt;/b&gt; :8083&lt;br&gt;image/object storage" vertex="1">
+                    <mxGeometry height="64" width="160" x="580" y="380" as="geometry"/>
                 </mxCell>
-                <mxCell id="sched" value="Go Scheduler&lt;br&gt;Asynq Scheduler + Worker" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="70" y="770" width="270" height="90" as="geometry"/>
+                <mxCell id="finance" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;finance-inner&lt;/b&gt; :8087&lt;br&gt;portfolio · market data" vertex="1">
+                    <mxGeometry height="64" width="160" x="780" y="380" as="geometry"/>
                 </mxCell>
-                <mxCell id="alertsvc" value="investment-alert-task" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="380" y="770" width="270" height="90" as="geometry"/>
+                <mxCell id="alert" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;investment-alert-task&lt;/b&gt; :8085&lt;br&gt;Go · price alerts" vertex="1">
+                    <mxGeometry height="64" width="160" x="980" y="380" as="geometry"/>
                 </mxCell>
-                <mxCell id="pyth" value="Pyth Hermes API&lt;br&gt;(price oracle)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="690" y="770" width="210" height="70" as="geometry"/>
+                <mxCell id="searxng" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;SearXNG&lt;/b&gt; :8090&lt;br&gt;web search" vertex="1">
+                    <mxGeometry height="64" width="160" x="1180" y="380" as="geometry"/>
                 </mxCell>
-                <mxCell id="storage" value="storage-inner" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="940" y="770" width="270" height="90" as="geometry"/>
+                <mxCell id="redis" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#f8cecc;strokeColor=#b85450;" value="Redis" vertex="1">
+                    <mxGeometry height="80" width="120" x="500" y="560" as="geometry"/>
                 </mxCell>
-                <mxCell id="garage" value="Garage&lt;br&gt;(S3-compatible storage)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="1250" y="770" width="180" height="90" as="geometry"/>
+                <mxCell id="garage" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#f8cecc;strokeColor=#b85450;" value="Garage&lt;br&gt;(S3-compatible)" vertex="1">
+                    <mxGeometry height="80" width="120" x="700" y="560" as="geometry"/>
                 </mxCell>
-                <mxCell id="authinner" value="auth-inner" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="1470" y="770" width="220" height="90" as="geometry"/>
+                <mxCell id="kafka" parent="1" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;size=0.15;fillColor=#ffe6cc;strokeColor=#d79b00;" value="Kafka :9092" vertex="1">
+                    <mxGeometry height="70" width="130" x="900" y="565" as="geometry"/>
                 </mxCell>
-                <mxCell id="financeinner" value="finance-inner" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="1710" y="770" width="220" height="90" as="geometry"/>
+                <mxCell id="notif" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;notification-consumer&lt;/b&gt; :8084" vertex="1">
+                    <mxGeometry height="60" width="170" x="1100" y="570" as="geometry"/>
                 </mxCell>
-                <mxCell id="travelinner" value="travel-inner" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="1950" y="770" width="220" height="90" as="geometry"/>
+                <mxCell id="mysql" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#f8cecc;strokeColor=#b85450;" value="MySQL — shared app DB (each service owns its tables)" vertex="1">
+                    <mxGeometry height="70" width="1040" x="60" y="720" as="geometry"/>
                 </mxCell>
-                <mxCell id="kafka" value="Kafka" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="380" y="920" width="190" height="80" as="geometry"/>
+                <mxCell id="legend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;" value="" vertex="1">
+                    <mxGeometry height="110" width="520" x="1150" y="690" as="geometry"/>
                 </mxCell>
-                <mxCell id="notif" value="notification-consumer" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="620" y="920" width="310" height="80" as="geometry"/>
+                <mxCell id="lg" parent="1" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=11;" value="&lt;b&gt;Legend&lt;/b&gt;&lt;br&gt;&lt;span style=&#39;color:#333&#39;&gt;━━&lt;/span&gt; sync HTTP / REST (service calls use X-*-Key headers)&lt;br&gt;&lt;span style=&#39;color:#b85450&#39;&gt;━━&lt;/span&gt; data store access&lt;br&gt;&lt;span style=&#39;color:#d79b00&#39;&gt;╍╍&lt;/span&gt; Kafka events (notifications.otp / .workflow-complete / .alert-triggered)&lt;br&gt;&lt;span style=&#39;color:#0e8088&#39;&gt;┈┈&lt;/span&gt; observability" vertex="1">
+                    <mxGeometry height="100" width="500" x="1160" y="695" as="geometry"/>
                 </mxCell>
-                <mxCell id="resend" value="Resend&lt;br&gt;(email delivery)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="980" y="920" width="200" height="80" as="geometry"/>
-                </mxCell>
-                <mxCell id="obs" value="Observability Stack&lt;br&gt;Prometheus · Promtail · Loki · Grafana" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#b0e3e6;strokeColor=#0b8299;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="1480" y="185" width="280" height="110" as="geometry"/>
-                </mxCell>
-                <mxCell id="e1" value="HTTP / SSE" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="fe" target="authf" edge="1">
+                <mxCell id="e1" edge="1" parent="1" source="web" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.1806;entryY=0;entryDx=0;entryDy=0;" target="backend" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e2" value="HTTP + JWT" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="cli" target="authf" edge="1">
+                <mxCell id="e2" edge="1" parent="1" source="cli" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.4861;entryY=0;entryDx=0;entryDy=0;" target="backend" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="authf" target="agc" edge="1">
+                <mxCell id="e3" edge="1" parent="1" source="ios" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.7917;entryY=0;entryDx=0;entryDy=0;" target="backend" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="authf" target="org" edge="1">
+                <mxCell id="e4" edge="1" parent="1" source="web" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.1111;exitY=1;exitDx=0;exitDy=0;entryX=0.85;entryY=0;entryDx=0;entryDy=0;" target="scheduler" value="schedules API">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="400" y="158"/>
+                            <mxPoint x="230" y="158"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e5" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0;exitY=0.3;exitDx=0;exitDy=0;entryX=1;entryY=0.3;entryDx=0;entryDy=0;" target="scheduler" value="manage">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="authf" target="conn" edge="1">
+                <mxCell id="e6" edge="1" parent="1" source="scheduler" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=1;exitY=0.7;exitDx=0;exitDy=0;entryX=0;entryY=0.7;entryDx=0;entryDy=0;" target="backend" value="trigger">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="authf" target="wf" edge="1">
+                <mxCell id="e7" edge="1" parent="1" source="scheduler" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.85;exitY=1;exitDx=0;exitDy=0;entryX=0.3125;entryY=0;entryDx=0;entryDy=0;" target="auth" value="validate">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="authf" target="authc" edge="1">
+                <mxCell id="e8" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.9375;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="connapi" value="connectors">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1015" y="68"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e9" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.9583;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="llm" value="chat / embeddings">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1030" y="148"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e10" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="weaviate" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e7b" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="authf" target="financialc" edge="1">
+                <mxCell id="e11" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.4538;entryY=0;entryDx=0;entryDy=0;" target="inner" value="REST + X-*-Key">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e7c" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="authf" target="travelc" edge="1">
+                <mxCell id="e12" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.0278;exitY=1;exitDx=0;exitDy=0;entryX=0.2885;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="authf" target="alertc" edge="1">
+                <mxCell id="e13" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.3056;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="redis" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="authf" target="schedc" edge="1">
+                <mxCell id="e14" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#d79b00;strokeWidth=1.5;dashed=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.8611;exitY=1;exitDx=0;exitDy=0;entryX=0.4615;entryY=0;entryDx=0;entryDy=0;" target="kafka" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="agc" target="graph" edge="1">
+                <mxCell id="e15" edge="1" parent="1" source="scheduler" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.1;exitY=1;exitDx=0;exitDy=0;entryX=0.0192;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="graph" target="weaviate" edge="1">
+                <mxCell id="e16" edge="1" parent="1" source="scheduler" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.2;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="redis" value="Asynq queue">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="100" y="670"/>
+                            <mxPoint x="560" y="670"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e17" edge="1" parent="1" source="auth" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.1923;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="graph" target="llm" edge="1">
+                <mxCell id="e18" edge="1" parent="1" source="travel" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.3846;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e13" value="agent tools" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;dashed=1;strokeColor=#666666;" parent="1" source="graph" target="conn" edge="1">
+                <mxCell id="e19" edge="1" parent="1" source="storage" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5769;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e14" value="agent tools" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;dashed=1;strokeColor=#666666;" parent="1" source="graph" target="alertc" edge="1">
+                <mxCell id="e20" edge="1" parent="1" source="finance" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.7692;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e14b" value="agent tools" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;dashed=1;strokeColor=#666666;" parent="1" source="graph" target="travelc" edge="1">
+                <mxCell id="e21" edge="1" parent="1" source="alert" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.9615;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="conn" target="workspace" edge="1">
+                <mxCell id="e22" edge="1" parent="1" source="auth" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.3333;entryY=0;entryDx=0;entryDy=0;" target="redis" value="">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="300" y="510"/>
+                            <mxPoint x="540" y="510"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e23" edge="1" parent="1" source="auth" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#d79b00;strokeWidth=1.5;dashed=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.875;exitY=1;exitDx=0;exitDy=0;entryX=0.2308;entryY=0;entryDx=0;entryDy=0;" target="kafka" value="OTP event">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="320" y="535"/>
+                            <mxPoint x="930" y="535"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e24" edge="1" parent="1" source="storage" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.875;exitY=1;exitDx=0;exitDy=0;entryX=0.1667;entryY=0;entryDx=0;entryDy=0;" target="garage" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="conn" target="storage" edge="1">
+                <mxCell id="e25" edge="1" parent="1" source="finance" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="market" value="">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="900" y="500"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e26" edge="1" parent="1" source="alert" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="market" value="">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1100" y="500"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e27" edge="1" parent="1" source="alert" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#d79b00;strokeWidth=1.5;dashed=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.125;exitY=1;exitDx=0;exitDy=0;entryX=0.7692;entryY=0;entryDx=0;entryDy=0;" target="kafka" value="alert event">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="agc" target="mysql" edge="1">
+                <mxCell id="e28" edge="1" parent="1" source="searxng" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="search" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="org" target="mysql" edge="1">
+                <mxCell id="e29" edge="1" parent="1" source="kafka" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#d79b00;strokeWidth=1.5;dashed=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="notif" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="wf" target="mysql" edge="1">
+                <mxCell id="e30" edge="1" parent="1" source="notif" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="resend" value="email">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="alertc" target="mysql" edge="1">
+                <mxCell id="e31" edge="1" parent="1" source="prometheus" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#0e8088;strokeWidth=1;dashed=1;dashPattern=1 3;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.0139;entryY=0;entryDx=0;entryDy=0;" target="backend" value="scrape">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="350" y="65"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e32" edge="1" parent="1" source="grafana" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#0e8088;strokeWidth=1;dashed=1;dashPattern=1 3;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="prometheus" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="authf" target="redis" edge="1">
+                <mxCell id="e33" edge="1" parent="1" source="grafana" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#0e8088;strokeWidth=1;dashed=1;dashPattern=1 3;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="loki" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="wf" target="sched" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="sched" target="mysql" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="sched" target="redis" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e26" value="trigger callback" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;dashed=1;strokeColor=#666666;" parent="1" source="schedc" target="sched" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e27" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="alertc" target="alertsvc" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e28" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="alertsvc" target="mysql" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="alertsvc" target="pyth" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e30" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="storage" target="garage" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e31" value="OTP event" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;dashed=1;strokeColor=#666666;" parent="1" source="authinner" target="kafka" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e32" value="workflow-complete event" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;dashed=1;strokeColor=#666666;" parent="1" source="wf" target="kafka" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e33" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="kafka" target="notif" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e34" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="notif" target="resend" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e35" value="metrics" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;dashed=1;strokeColor=#0b8299;" parent="1" source="authf" target="obs" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e36" value="metrics" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;dashed=1;strokeColor=#0b8299;" parent="1" source="sched" target="obs" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e37" value="metrics" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;dashed=1;strokeColor=#0b8299;" parent="1" source="alertsvc" target="obs" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e40" value="validate (every request)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;dashed=1;strokeColor=#666666;" parent="1" source="authf" target="authinner" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e41" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="authc" target="authinner" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e42" value="validate (bypasses backend)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;dashed=1;strokeColor=#666666;" parent="1" source="sched" target="authinner" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e43" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="authinner" target="mysql" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e44" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="authinner" target="redis" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e45" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="financialc" target="financeinner" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e46" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="financeinner" target="mysql" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e47" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="travelc" target="travelinner" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e48" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;endArrow=block;strokeColor=#666666;" parent="1" source="travelinner" target="mysql" edge="1">
+                <mxCell id="e34" edge="1" parent="1" source="promtail" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#0e8088;strokeWidth=1;dashed=1;dashPattern=1 3;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="loki" value="logs">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
             </root>
