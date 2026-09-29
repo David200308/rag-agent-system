@@ -28,7 +28,20 @@ public class PersistentSandboxServiceImpl implements PersistentSandboxService {
 
     @Override
     public List<PersistentSandbox> list(String ownerUuid) {
-        return sandboxRepo.findByOwnerUuidOrderByCreatedAtDesc(ownerUuid);
+        List<PersistentSandbox> sandboxes = sandboxRepo.findByOwnerUuidOrderByCreatedAtDesc(ownerUuid);
+        // The watchdog can remove a container out from under us (resource limit exceeded), which
+        // otherwise leaves the row claiming RUNNING forever. Surface it as STOPPED so the UI offers
+        // Start, which recreates the container.
+        for (PersistentSandbox sandbox : sandboxes) {
+            if (sandbox.getStatus() == PersistentSandbox.Status.RUNNING
+                    && !sandboxService.containerExists(sandbox.getContainerId())) {
+                log.warn("[PersistentSandbox {}] Container {} is gone — marking STOPPED",
+                        shortId(sandbox.getId()), sandbox.getContainerId());
+                sandbox.setStatus(PersistentSandbox.Status.STOPPED);
+                sandboxRepo.save(sandbox);
+            }
+        }
+        return sandboxes;
     }
 
     @Override
@@ -71,6 +84,10 @@ public class PersistentSandboxServiceImpl implements PersistentSandboxService {
     @Override
     public PersistentSandbox restart(String id, String ownerUuid) {
         PersistentSandbox sandbox = require(id, ownerUuid);
+        if (!sandboxService.containerExists(sandbox.getContainerId())) {
+            recreateContainer(sandbox);
+            return sandboxRepo.save(sandbox);
+        }
         if (sandbox.getStatus() == PersistentSandbox.Status.RUNNING) {
             sandboxService.suspend(sandbox.getContainerId());
         }
@@ -104,6 +121,13 @@ public class PersistentSandboxServiceImpl implements PersistentSandboxService {
         if (!sandbox.getOwnerUuid().equals(ownerUuid)) {
             throw new SecurityException("Not the owner of the attached sandbox.");
         }
+        if (!sandboxService.containerExists(sandbox.getContainerId())) {
+            sandbox.setStatus(PersistentSandbox.Status.STOPPED);
+            sandboxRepo.save(sandbox);
+            throw new IllegalStateException("Sandbox " + sandbox.getName() + " was terminated (its container "
+                    + "no longer exists, e.g. killed for exceeding resource limits). Start it again from "
+                    + "Sandbox Management — that creates a fresh container with an empty /workspace.");
+        }
         if (sandbox.getStatus() == PersistentSandbox.Status.STOPPED) {
             logger.accept("Resuming attached persistent sandbox " + sandbox.getName() + "…");
             sandboxService.resume(id, sandbox.getContainerId());
@@ -111,6 +135,22 @@ public class PersistentSandboxServiceImpl implements PersistentSandboxService {
             sandbox = sandboxRepo.save(sandbox);
         }
         return sandbox;
+    }
+
+    /**
+     * Replaces a vanished container with a fresh one. destroySandbox() on the dead id clears its
+     * watchdog/suspend markers and releases the slot it still held, so create can re-acquire one.
+     */
+    private void recreateContainer(PersistentSandbox sandbox) {
+        String id = sandbox.getId();
+        Consumer<String> logger = msg -> log.info("[PersistentSandbox {}] {}", shortId(id), msg);
+        logger.accept("Container " + sandbox.getContainerId() + " is gone — recreating");
+        sandboxService.destroySandbox(sandbox.getContainerId());
+        String containerId = sandbox.isNetworkEnabled()
+                ? sandboxService.createSandboxWithNetwork(id, logger)
+                : sandboxService.createSandbox(id, logger);
+        sandbox.setContainerId(containerId);
+        sandbox.setStatus(PersistentSandbox.Status.RUNNING);
     }
 
     private PersistentSandbox require(String id, String ownerUuid) {

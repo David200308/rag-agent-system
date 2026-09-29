@@ -38,6 +38,7 @@ class SandboxServiceTest {
         redisson = mock(RedissonClient.class);
         RSemaphore semaphore = mock(RSemaphore.class);
         when(semaphore.trySetPermits(anyInt())).thenReturn(true);
+        when(semaphore.availablePermits()).thenReturn(3); // idle pool — status().active() reads held permits
         when(redisson.getSemaphore(anyString())).thenReturn(semaphore);
 
         hashesByKey = new ConcurrentHashMap<>();

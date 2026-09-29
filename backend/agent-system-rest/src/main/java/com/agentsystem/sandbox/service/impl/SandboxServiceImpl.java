@@ -107,7 +107,6 @@ public class SandboxServiceImpl implements SandboxService {
     /** Cluster-wide concurrency cap — every backend instance shares the same Redis-backed permit pool. */
     private RSemaphore             slots;
     private BlockingQueue<String>  waitQueue;
-    private final AtomicInteger    active  = new AtomicInteger(0);
     private final AtomicInteger    queued  = new AtomicInteger(0);
 
     /**
@@ -115,7 +114,7 @@ public class SandboxServiceImpl implements SandboxService {
      * for the same container (cancelRun() calls it directly, then the interrupted worker
      * thread's own finally block calls it again once it unwinds), which would otherwise
      * double-release its concurrency slot. In-process only, matching this run's other
-     * per-container coordination (active/queued counters) rather than the cluster-wide slots.
+     * per-container coordination (the queued counter) rather than the cluster-wide slots.
      */
     private final Set<String> destroyedContainers = ConcurrentHashMap.newKeySet();
 
@@ -179,11 +178,11 @@ public class SandboxServiceImpl implements SandboxService {
         }
         queued.incrementAndGet();
 
-        if (active.get() >= maxConcurrent) {
-            logger.accept("Waiting for a free sandbox slot (active=" + active.get()
+        if (activeCount() >= maxConcurrent) {
+            logger.accept("Waiting for a free sandbox slot (active=" + activeCount()
                     + "/" + maxConcurrent + ", queued=" + queued.get() + ")…");
         }
-        log.info("[Sandbox] run {} queued — active={} queued={}", runId, active.get(), queued.get());
+        log.info("[Sandbox] run {} queued — active={} queued={}", runId, activeCount(), queued.get());
 
         try {
             slots.acquire();
@@ -196,9 +195,8 @@ public class SandboxServiceImpl implements SandboxService {
 
         waitQueue.remove(runId);
         queued.decrementAndGet();
-        active.incrementAndGet();
-        log.info("[Sandbox] Slot acquired for run {} — active={} queued={}", runId, active.get(), queued.get());
-        logger.accept("Slot acquired (active=" + active.get() + "/" + maxConcurrent + "). Spawning container…");
+        log.info("[Sandbox] Slot acquired for run {} — active={} queued={}", runId, activeCount(), queued.get());
+        logger.accept("Slot acquired (active=" + activeCount() + "/" + maxConcurrent + "). Spawning container…");
 
         try {
             String containerId = spawnContainer(runId, withNetwork, logger);
@@ -206,7 +204,6 @@ public class SandboxServiceImpl implements SandboxService {
             return containerId;
         } catch (Exception e) {
             slots.release();
-            active.decrementAndGet();
             log.error("[Sandbox] Container creation failed for run {}: {}", runId, e.getMessage());
             throw new SandboxStartupException("Sandbox failed to start: " + e.getMessage());
         }
@@ -327,8 +324,7 @@ public class SandboxServiceImpl implements SandboxService {
             return;
         }
         slots.release();
-        active.decrementAndGet();
-        log.info("[Sandbox] Slot released — active={} queued={}", active.get(), queued.get());
+        log.info("[Sandbox] Slot released — active={} queued={}", activeCount(), queued.get());
     }
 
     /**
@@ -348,9 +344,8 @@ public class SandboxServiceImpl implements SandboxService {
         redisTemplate.opsForHash().delete(ACTIVE_CONTAINERS_KEY, containerId);
         redisTemplate.<String, String>opsForHash().put(SUSPENDED_CONTAINERS_KEY, containerId, "1");
         slots.release();
-        active.decrementAndGet();
         log.info("[Sandbox] Slot released for suspended container {} — active={} queued={}",
-                shortId(containerId), active.get(), queued.get());
+                shortId(containerId), activeCount(), queued.get());
     }
 
     /**
@@ -373,17 +368,34 @@ public class SandboxServiceImpl implements SandboxService {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Interrupted while waiting for a sandbox slot to resume", e);
         }
-        active.incrementAndGet();
         try {
             runProcess(List.of("docker", "start", containerId), 30);
             redisTemplate.<String, String>opsForHash().put(ACTIVE_CONTAINERS_KEY, containerId, runId);
             log.info("[Sandbox] Resumed container {} for run {} — active={} queued={}",
-                    shortId(containerId), runId, active.get(), queued.get());
+                    shortId(containerId), runId, activeCount(), queued.get());
         } catch (Exception e) {
             slots.release();
-            active.decrementAndGet();
             redisTemplate.<String, String>opsForHash().put(SUSPENDED_CONTAINERS_KEY, containerId, "1");
             throw new RuntimeException("Failed to resume sandbox: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * True while the container still exists on the host (running or stopped). False once the
+     * watchdog has killed it or it has otherwise vanished. Errs on the side of "exists" if
+     * docker itself can't be reached, so a transient daemon hiccup never marks a sandbox dead.
+     */
+    @Override
+    public boolean containerExists(String containerId) {
+        if (containerId == null || containerId.isBlank()) return false;
+        if (redisTemplate.opsForHash().hasKey(KILLED_CONTAINERS_KEY, containerId)) return false;
+        try {
+            String state = runProcess(
+                    List.of("docker", "inspect", "-f", "{{.State.Status}}", containerId), 10).strip();
+            return state.matches("created|running|paused|restarting|removing|exited|dead");
+        } catch (Exception e) {
+            log.debug("[Sandbox] Could not inspect container {}: {}", shortId(containerId), e.getMessage());
+            return true;
         }
     }
 
@@ -439,7 +451,16 @@ public class SandboxServiceImpl implements SandboxService {
 
     @Override
     public SandboxStatus status() {
-        return new SandboxStatus(maxConcurrent, active.get(), queued.get(), queueCapacity);
+        return new SandboxStatus(maxConcurrent, activeCount(), queued.get(), queueCapacity);
+    }
+
+    /**
+     * Slots currently held cluster-wide, read from the Redis semaphore itself — the same state
+     * admission uses, so it stays correct across backend restarts and multiple instances
+     * (an in-process counter reset to 0 on every restart while containers kept running).
+     */
+    private int activeCount() {
+        return Math.max(0, maxConcurrent - slots.availablePermits());
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
@@ -502,14 +523,17 @@ public class SandboxServiceImpl implements SandboxService {
             throws IOException, InterruptedException {
         String shortRun = runId.substring(0, 8);
         String name = withNetwork ? "ragagent-net-" + shortRun : "ragagent-sandbox-" + shortRun;
+        // No --rm: suspend() docker-stops the container and resume() starts it again, and with
+        // --rm that stop would delete the container (and its /workspace) outright. Removal is
+        // always explicit instead — destroySandbox() or the watchdog both `docker rm -f`.
         List<String> cmd = withNetwork
-                ? List.of("docker", "run", "-d", "--rm",
+                ? List.of("docker", "run", "-d",
                           "--name", name,
                           "--memory", memoryLimit,
                           "--cpu-quota", cpuQuota,
                           "--workdir", "/workspace",
                           sandboxImage, "tail", "-f", "/dev/null")
-                : List.of("docker", "run", "-d", "--rm",
+                : List.of("docker", "run", "-d",
                           "--name", name,
                           "--memory", memoryLimit,
                           "--cpu-quota", cpuQuota,

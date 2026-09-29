@@ -51,6 +51,12 @@ public interface SandboxService {
      */
     void resume(String runId, String containerId);
 
+    /**
+     * True while the container still exists on the host (running or stopped); false once
+     * the watchdog has killed it or it has otherwise disappeared.
+     */
+    boolean containerExists(String containerId);
+
     SandboxStatus status();
 
     record SandboxStatus(int maxConcurrent, int active, int queued, int queueCapacity) {

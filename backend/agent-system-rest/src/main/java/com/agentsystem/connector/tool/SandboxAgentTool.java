@@ -61,6 +61,8 @@ public class SandboxAgentTool {
             return "You don't have access to this sandbox.";
         } catch (IllegalArgumentException e) {
             return "The attached sandbox no longer exists — it may have been removed.";
+        } catch (IllegalStateException e) {
+            return e.getMessage();
         } catch (SandboxService.SandboxKilledException e) {
             return "Sandbox was terminated: " + e.getMessage();
         }
