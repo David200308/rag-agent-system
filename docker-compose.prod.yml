@@ -65,6 +65,8 @@ secrets:
     file: ./secrets/resend_from_email
   finnhub_api_key:
     file: ./secrets/finnhub_api_key
+  coingecko_api_key:
+    file: ./secrets/coingecko_api_key
   finance_service_key:
     file: ./secrets/finance_service_key
   travel_service_key:
@@ -292,7 +294,7 @@ services:
 
   # ── Financial portfolio microservice (finance-inner module) ──────────────────
   # Cash/stocks/crypto/futures/cards/salary + live market data (Finnhub, Pyth,
-  # Hyperliquid, Jupiter, Lighter). Called by backend (FinanceInnerClient).
+  # CoinGecko, Hyperliquid, Jupiter, Lighter). Called by backend (FinanceInnerClient).
   finance-inner:
     image: rag-agent-system-finance:${IMAGE_TAG:-latest}
     build:
@@ -308,6 +310,7 @@ services:
     secrets:
       - mysql_password
       - finnhub_api_key
+      - coingecko_api_key
       - finance_service_key
     environment:
       MYSQL_HOST: mysql
@@ -557,7 +560,7 @@ services:
       STORAGE_URL: http://storage:8083
       # ── Auth (JWT mint/validate, OTP, passkeys, CLI key auth all live in auth-inner)
       AUTH_INNER_URL: http://auth-inner:8086
-      # ── Financial portfolio (finance-inner, Finnhub/Pyth/Hyperliquid/Jupiter/Lighter-backed)
+      # ── Financial portfolio (finance-inner, Finnhub/Pyth/CoinGecko/Hyperliquid/Jupiter/Lighter-backed)
       FINANCE_INNER_URL: http://finance-inner:8087
       # ── Travel (travel-inner, map tiles via CartoDB)
       TRAVEL_INNER_URL: http://travel-inner:8088

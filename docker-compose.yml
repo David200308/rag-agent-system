@@ -143,7 +143,7 @@ services:
       # ── Image storage (storage-inner, Garage-backed)
       STORAGE_URL: http://storage:8083
       STORAGE_SERVICE_KEY: ${STORAGE_SERVICE_KEY:-storage-secret-key}
-      # ── Financial portfolio (finance-inner, Finnhub/Pyth/Hyperliquid/Jupiter/Lighter-backed)
+      # ── Financial portfolio (finance-inner, Finnhub/Pyth/CoinGecko/Hyperliquid/Jupiter/Lighter-backed)
       FINANCE_INNER_URL: http://finance-inner:8087
       FINANCE_SERVICE_KEY: ${FINANCE_SERVICE_KEY:-finance-secret-key}
       # ── Investment alerts (crypto/stock price, DeFi, prediction-market)
@@ -295,7 +295,7 @@ services:
 
   # ── Financial portfolio microservice (finance-inner module) ──────────────────
   # Cash/stocks/crypto/futures/cards/salary + live market data (Finnhub, Pyth,
-  # Hyperliquid, Jupiter, Lighter). Called by backend (FinanceInnerClient).
+  # CoinGecko, Hyperliquid, Jupiter, Lighter). Called by backend (FinanceInnerClient).
   finance-inner:
     build:
       context: ./backend
@@ -314,6 +314,7 @@ services:
       MYSQL_USER: ${MYSQL_USER:-ragagent}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ragagent}
       FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
+      COINGECKO_API_KEY: ${COINGECKO_API_KEY:-}
       FINANCE_SERVICE_KEY: ${FINANCE_SERVICE_KEY:-finance-secret-key}
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8087/actuator/health || exit 1"]

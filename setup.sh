@@ -310,6 +310,12 @@ if [ "$MODE" = "local" ]; then
   echo -e "  ${DIM}Leave blank to skip — stock prices will not be fetched.${NC}"
   FINNHUB_API_KEY=""
   prompt FINNHUB_API_KEY "Finnhub API key" "" true
+
+  header "Financial — CoinGecko (optional)"
+  echo -e "  ${DIM}Used for live crypto prices. Get a free Demo key at https://www.coingecko.com/en/api/pricing${NC}"
+  echo -e "  ${DIM}Leave blank to use the keyless public tier (works, but more rate-limited).${NC}"
+  COINGECKO_API_KEY=""
+  prompt COINGECKO_API_KEY "CoinGecko API key" "" true
   FINANCE_SERVICE_KEY="$(openssl rand -base64 32 | tr -d '\n')"
   echo -e "  ${DIM}Finance-inner service key auto-generated.${NC}"
 
@@ -442,6 +448,7 @@ RESEND_FROM_EMAIL=$RESEND_FROM_EMAIL
 
 # ── Financial / Market data ───────────────────────────────────────────────────
 FINNHUB_API_KEY=$FINNHUB_API_KEY
+COINGECKO_API_KEY=$COINGECKO_API_KEY
 FINANCE_SERVICE_KEY=$FINANCE_SERVICE_KEY
 
 # ── Travel ────────────────────────────────────────────────────────────────────
@@ -929,6 +936,22 @@ else
     write_secret finnhub_api_key "$FINNHUB_API_KEY"
   else
     echo -e "  ${DIM}Keeping existing Finnhub secret.${NC}"
+  fi
+
+  header "Financial — CoinGecko (optional)"
+  UPDATE_CG=true
+  if has_secret coingecko_api_key; then
+    echo -e "  ${DIM}CoinGecko already configured.${NC}"
+    if ! confirm "Update CoinGecko API key?"; then UPDATE_CG=false; fi
+  fi
+  if $UPDATE_CG; then
+    echo -e "  ${DIM}Get a free Demo key at https://www.coingecko.com/en/api/pricing${NC}"
+    echo -e "  ${DIM}Leave blank to use the keyless public tier (works, but more rate-limited).${NC}"
+    COINGECKO_API_KEY=""
+    prompt COINGECKO_API_KEY "CoinGecko API key" "" true
+    write_secret coingecko_api_key "$COINGECKO_API_KEY"
+  else
+    echo -e "  ${DIM}Keeping existing CoinGecko secret.${NC}"
   fi
 
   # ── Finance-inner ────────────────────────────────────────────────────────

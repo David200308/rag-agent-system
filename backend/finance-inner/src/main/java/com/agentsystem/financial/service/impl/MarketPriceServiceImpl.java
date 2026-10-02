@@ -46,8 +46,9 @@ import java.util.stream.Collectors;
  *           same ".PA" suffix already stored — no symbol conversion needed. It needs no API key,
  *           but isn't an official/supported API (Yahoo shut the real one down in 2017): no SLA,
  *           and it 429s without a browser-like User-Agent header (which is why one is set below).
- * Crypto  — Hyperliquid REST (POST /info {"type":"allMids"}; public, no key needed)
- *           Returns USD mid prices for all perp assets in one request.
+ * Crypto  — CoinGecko markets endpoint (GET /coins/markets; COINGECKO_API_KEY is an optional
+ *           Demo-plan key — sent as x-cg-demo-api-key for a steadier rate limit; keyless works too)
+ *           Returns USD prices + logos for all requested symbols in one request.
  *
  * Prices are shared across all users (they are the same for everyone).
  * Auto-refresh triggers when the cache is older than 1 hour.
@@ -60,6 +61,9 @@ public class MarketPriceServiceImpl implements MarketPriceService {
 
     @Value("${financial.finnhub.api-key:}")
     private String finnhubApiKey;
+
+    @Value("${financial.coingecko.api-key:}")
+    private String coingeckoApiKey;
 
     private static final Duration CACHE_TTL = Duration.ofHours(1);
 
@@ -82,7 +86,7 @@ public class MarketPriceServiceImpl implements MarketPriceService {
     // IDs don't change), so we search Pyth's price_feeds endpoint only once per symbol ever.
     private final Map<String, String> pythFeedIds      = new ConcurrentHashMap<>();
 
-    // crypto base symbol (e.g. "BTC", "ETH") -> USDT price
+    // crypto base symbol (e.g. "BTC", "ETH") -> USD price (from CoinGecko)
     private final Map<String, Double> cryptoPrices     = new ConcurrentHashMap<>();
     // crypto base symbol -> coin logo URL (from CoinGecko); cached indefinitely like stockLogos.
     private final Map<String, String> cryptoLogos      = new ConcurrentHashMap<>();
@@ -415,102 +419,63 @@ public class MarketPriceServiceImpl implements MarketPriceService {
     }
 
     /**
-     * Fetches all mid prices from Hyperliquid in one POST request, then stores
-     * prices for the requested symbols.
+     * Fetches USD prices (and, as a side effect, logos) for the requested symbols from
+     * CoinGecko's markets endpoint in a single batched request. The Demo API key is optional:
+     * without it the keyless public tier is used, which works but is more aggressively rate-limited.
      *
-     * Endpoint: POST https://api.hyperliquid.xyz/info
-     * Body:     {"type":"allMids"}
-     * Response: {"BTC":"65000.0","ETH":"3500.0", ...}  (USD mid prices)
+     * Endpoint: GET https://api.coingecko.com/api/v3/coins/markets
+     *                ?vs_currency=usd&symbols=btc,eth&per_page=250
+     * Response: [{ "symbol": "btc", "current_price": 65000.0, "image": "https://...png",
+     *              "market_cap_rank": 1, ... }, ...]
+     *
+     * Results are ordered by market cap descending by default, and a ticker symbol can be
+     * shared by multiple coins — we keep only the first (highest market-cap) match per symbol.
+     * Logos are cached indefinitely once fetched — they don't change like prices do.
      */
     @Override
     public synchronized void refreshCryptoPrices(List<String> symbols) {
         if (symbols.isEmpty()) return;
         try {
-            String body = "{\"type\":\"allMids\"}";
-
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create("https://api.hyperliquid.xyz/info"))
-                    .timeout(Duration.ofSeconds(15))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
-                    .build();
-
-            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-            JsonNode root = objectMapper.readTree(resp.body());
-
-            // root is a flat object: { "BTC": "65000.0", "ETH": "3500.0", ... }
-            Set<String> wanted = symbols.stream()
-                    .map(String::toUpperCase)
-                    .collect(Collectors.toSet());
-
-            int updated = 0;
-            var fields = root.fields();
-            while (fields.hasNext()) {
-                var entry = fields.next();
-                String sym = entry.getKey().toUpperCase();
-                if (wanted.contains(sym)) {
-                    double price = entry.getValue().asDouble(0);
-                    if (price > 0) {
-                        cryptoPrices.put(sym, price);
-                        updated++;
-                    }
-                }
-            }
-            cryptoLastFetched = Instant.now();
-            log.info("[MarketPriceService] Crypto prices refreshed via Hyperliquid: {} symbols", updated);
-        } catch (Exception e) {
-            log.error("[MarketPriceService] Crypto price fetch failed: {}", e.getMessage());
-        }
-
-        List<String> uncachedLogos = symbols.stream()
-                .map(String::toUpperCase).distinct()
-                .filter(sym -> !cryptoLogos.containsKey(sym))
-                .collect(Collectors.toList());
-        if (!uncachedLogos.isEmpty()) {
-            fetchCryptoLogos(uncachedLogos);
-        }
-    }
-
-    /**
-     * Fetches coin logos for the given symbols from CoinGecko's public markets endpoint
-     * in a single batched request (no API key required for the public tier).
-     *
-     * Endpoint: GET https://api.coingecko.com/api/v3/coins/markets
-     *                ?vs_currency=usd&symbols=btc,eth&per_page=250
-     * Response: [{ "symbol": "btc", "image": "https://...png", "market_cap_rank": 1, ... }, ...]
-     *
-     * Results are ordered by market cap descending by default, and a ticker symbol can be
-     * shared by multiple coins — we keep only the first (highest market-cap) match per symbol.
-     * Cached indefinitely once fetched — logos don't change like prices do.
-     */
-    private void fetchCryptoLogos(List<String> symbols) {
-        try {
             String symbolParam = symbols.stream()
                     .map(s -> s.toLowerCase(java.util.Locale.ROOT))
+                    .distinct()
                     .collect(Collectors.joining(","));
             String url = "https://api.coingecko.com/api/v3/coins/markets"
                     + "?vs_currency=usd&per_page=250&symbols=" + symbolParam;
 
-            HttpRequest req = HttpRequest.newBuilder()
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofSeconds(15))
                     .header("Accept", "application/json")
-                    .GET()
-                    .build();
+                    .GET();
+            if (coingeckoApiKey != null && !coingeckoApiKey.isBlank()) {
+                builder.header("x-cg-demo-api-key", coingeckoApiKey);
+            }
 
-            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> resp = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() != 200) {
+                log.error("[MarketPriceService] CoinGecko returned HTTP {}: {}", resp.statusCode(), resp.body());
+                return;
+            }
             JsonNode root = objectMapper.readTree(resp.body());
             if (!root.isArray()) return;
 
+            Set<String> seen = new java.util.HashSet<>();
             for (JsonNode coin : root) {
                 String sym = coin.path("symbol").asText("").toUpperCase();
+                if (sym.isBlank() || !seen.add(sym)) continue;
+
+                double price = coin.path("current_price").asDouble(0);
+                if (price > 0) cryptoPrices.put(sym, price);
+
                 String image = coin.path("image").asText("");
-                if (!sym.isBlank() && !image.isBlank()) {
-                    cryptoLogos.putIfAbsent(sym, image);
-                }
+                if (!image.isBlank()) cryptoLogos.putIfAbsent(sym, image);
             }
+            cryptoLastFetched = Instant.now();
+            log.info("[MarketPriceService] Crypto prices refreshed via CoinGecko: {}/{} symbols",
+                    seen.size(), symbols.stream().map(String::toUpperCase).distinct().count());
         } catch (Exception e) {
-            log.warn("[MarketPriceService] Crypto logo fetch failed for {}: {}", symbols, e.getMessage());
+            log.error("[MarketPriceService] Crypto price fetch failed: {}", e.getMessage());
         }
     }
 }
