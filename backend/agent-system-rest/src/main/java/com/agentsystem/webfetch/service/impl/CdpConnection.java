@@ -60,8 +60,13 @@ final class CdpConnection implements WebSocket.Listener, AutoCloseable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new WebFetchException("Interrupted while connecting to the browser", e);
-        } catch (ExecutionException | TimeoutException e) {
-            throw new WebFetchException("Browser service is unreachable", e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            throw new WebFetchException("Browser service is unreachable at " + endpoint + ": "
+                    + cause.getClass().getSimpleName()
+                    + (cause.getMessage() != null ? " " + cause.getMessage() : ""), cause);
+        } catch (TimeoutException e) {
+            throw new WebFetchException("Browser service is unreachable at " + endpoint + ": connect timed out", e);
         }
     }
 

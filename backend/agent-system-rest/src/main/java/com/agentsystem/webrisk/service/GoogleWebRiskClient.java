@@ -59,9 +59,27 @@ public class GoogleWebRiskClient {
         HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
         if (resp.statusCode() != 200) {
             // Never include the request URI here — it carries the API key.
-            throw new IOException("Web Risk API returned HTTP " + resp.statusCode());
+            throw new IOException("Web Risk API returned HTTP " + resp.statusCode() + errorDetail(resp.body()));
         }
         return parse(mapper.readTree(resp.body()));
+    }
+
+    /**
+     * Google's error body, e.g. {"error":{"status":"PERMISSION_DENIED","message":"..."}} —
+     * the message names the actual cause (billing disabled, key restricted to another API,
+     * IP not allowed, API not enabled in the key's project). Never contains the key.
+     */
+    String errorDetail(String body) {
+        try {
+            JsonNode error = mapper.readTree(body).path("error");
+            String status  = error.path("status").asText("");
+            String message = error.path("message").asText("");
+            if (status.isBlank() && message.isBlank()) return "";
+            String detail = (status + " " + message).strip();
+            return ": " + (detail.length() > 300 ? detail.substring(0, 300) + "…" : detail);
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     static LookupResult parse(JsonNode root) {

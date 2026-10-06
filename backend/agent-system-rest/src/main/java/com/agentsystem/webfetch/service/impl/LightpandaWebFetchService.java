@@ -9,7 +9,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Map;
@@ -29,6 +33,11 @@ import java.util.concurrent.TimeoutException;
  * private/loopback/link-local IPs when each socket opens — covering redirects, JS
  * sub-requests and DNS rebinding, none of which a URL pre-check here could see.
  * This service therefore only validates the URL's shape.
+ *
+ * Lightpanda rejects WebSocket handshakes whose Host header isn't localhost, an IP
+ * literal, or its --advertise-host name (DNS-rebinding guard). Releases before the
+ * advertise-host fix reject the compose service name outright, so the CDP host is
+ * resolved here and dialed as an IP literal — accepted by every version.
  */
 @Slf4j
 @Service
@@ -65,10 +74,29 @@ public class LightpandaWebFetchService implements WebFetchService {
 
         log.info("[WebFetchService] Fetching {}", target);
         try (CdpConnection cdp = CdpConnection.open(
-                httpClient, URI.create(props.cdpUrl()), mapper, remaining(deadline))) {
+                httpClient, toIpLiteralEndpoint(props.cdpUrl()), mapper, remaining(deadline))) {
             return load(cdp, target, deadline);
         } finally {
             permits.release();
+        }
+    }
+
+    /** {@code ws://lightpanda:9222} → {@code ws://172.18.0.5:9222}; resolved per fetch so container restarts are picked up. */
+    static URI toIpLiteralEndpoint(String cdpUrl) {
+        URI configured = URI.create(cdpUrl);
+        try {
+            InetAddress addr = InetAddress.getByName(configured.getHost());
+            String ip = addr.getHostAddress();
+            if (addr instanceof Inet6Address) {
+                int zone = ip.indexOf('%');
+                ip = "[" + (zone >= 0 ? ip.substring(0, zone) : ip) + "]";
+            }
+            return new URI(configured.getScheme(), null, ip, configured.getPort(),
+                    configured.getPath(), configured.getQuery(), null);
+        } catch (UnknownHostException e) {
+            throw new WebFetchException("Browser service host '" + configured.getHost() + "' does not resolve", e);
+        } catch (URISyntaxException e) {
+            throw new WebFetchException("Invalid web-fetch.cdp-url: " + cdpUrl, e);
         }
     }
 

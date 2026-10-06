@@ -215,6 +215,11 @@ services:
       - 0.0.0.0
       - --port
       - "9222"
+      # Lightpanda only accepts WebSocket Host headers that are localhost, an IP
+      # literal, or this advertised name (DNS-rebinding guard) — the backend
+      # connects as ws://lightpanda:9222, so the service name must be advertised.
+      - --advertise-host
+      - lightpanda
       - --log-level
       - info
       - --block-private-networks
