@@ -6,6 +6,7 @@ import { MapContainer, TileLayer, CircleMarker, Polyline, Tooltip, useMap, Attri
 import L from "leaflet";
 import type { TravelRecord, TravelStop } from "@/types/travel";
 import { TRIP_COLORS, TRANSPORT_EMOJI } from "@/types/travel";
+import { corePoints } from "./mapFocus";
 
 interface Props {
   records: TravelRecord[];
@@ -16,9 +17,9 @@ interface Props {
 function FitBounds({ records }: { records: TravelRecord[] }) {
   const map = useMap();
   useEffect(() => {
-    const allCities = records.flatMap((r) => r.stops).filter((s) => s.lat && s.lon);
-    if (allCities.length === 0) return;
-    const bounds = L.latLngBounds(allCities.map((s) => [s.lat, s.lon]));
+    const points = corePoints(records);
+    if (points.length === 0) return;
+    const bounds = L.latLngBounds(points.map((p) => [p.lat, p.lon]));
     map.fitBounds(bounds, { padding: [50, 50], maxZoom: 8 });
   // run once on mount + when records change significantly
   // eslint-disable-next-line react-hooks/exhaustive-deps

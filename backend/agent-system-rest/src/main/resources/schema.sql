@@ -293,6 +293,19 @@ CREATE TABLE IF NOT EXISTS connector_oauth_states (
     INDEX idx_cos_state (state)
 );
 
+-- ── Google Web Risk verdict cache (L3, behind Caffeine and Redis) ─────────────
+-- Keyed by SHA-256 of the normalized URL; the raw URL isn't stored (query strings
+-- can carry tokens/PII). Expired rows are purged hourly by WebRiskServiceImpl.
+CREATE TABLE IF NOT EXISTS web_risk_url_verdicts (
+    url_hash      CHAR(64)     NOT NULL PRIMARY KEY,
+    host          VARCHAR(255) NULL,
+    safe          BOOLEAN      NOT NULL,
+    threat_types  VARCHAR(255) NULL,                 -- comma-separated, e.g. MALWARE,SOCIAL_ENGINEERING
+    expires_at    DATETIME(6)  NOT NULL,
+    checked_at    DATETIME(6)  NOT NULL,
+    INDEX idx_wrv_expires (expires_at)
+);
+
 -- ── Model configurations ─────────────────────────────────────────────────────
 -- Admin-managed list of selectable LLM models.
 -- display_name is the primary key and user-facing identifier.

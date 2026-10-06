@@ -366,6 +366,15 @@ if [ "$MODE" = "local" ]; then
     prompt TELEGRAM_BOT_TOKEN    "Bot token (from BotFather)" "" true
     prompt TELEGRAM_BOT_USERNAME "Bot username (without @)"   ""
   fi
+  echo ""
+  echo -e "  Google Web Risk (optional) → blocks known phishing/malware URLs in the web-fetch tool"
+  echo -e "  ${DIM}Needs a Cloud project with billing + the Web Risk API enabled, and an API key"
+  echo -e "  restricted to that API. Free up to 100k lookups/month — set a ~3000/day quota cap.${NC}"
+  echo ""
+  WEB_RISK_API_KEY=""
+  if confirm "Configure Google Web Risk?"; then
+    prompt WEB_RISK_API_KEY "Web Risk API key" "" true
+  fi
   CONNECTOR_CALLBACK_BASE_URL="http://localhost:3000"
 
   # ── Observability ─────────────────────────────────────────────────────────
@@ -469,10 +478,10 @@ GARAGE_ACCESS_KEY=$GARAGE_ACCESS_KEY
 GARAGE_SECRET_KEY=$GARAGE_SECRET_KEY
 GARAGE_BUCKET=$GARAGE_BUCKET
 
-# ── Web fetch ─────────────────────────────────────────────────────────────────
+# ── Web fetch (self-hosted Lightpanda headless browser) ──────────────────────
 WEB_FETCH_ENABLED=true
-WEB_FETCH_TIMEOUT=10
-WEB_FETCH_MAX_CHARS=50000
+WEB_FETCH_TIMEOUT=20
+WEB_FETCH_MAX_CONTENT_CHARS=20000
 
 # ── Web search (self-hosted SearXNG — free, no API key, no query cap) ────────
 WEB_SEARCH_ENABLED=true
@@ -491,6 +500,9 @@ FIGMA_CLIENT_SECRET=$FIGMA_CLIENT_SECRET
 TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
 TELEGRAM_BOT_USERNAME=$TELEGRAM_BOT_USERNAME
 CONNECTOR_CALLBACK_BASE_URL=$CONNECTOR_CALLBACK_BASE_URL
+
+# ── Google Web Risk (optional — blank = URL reputation checks off) ───────────
+WEB_RISK_API_KEY=$WEB_RISK_API_KEY
 
 # ── Observability ─────────────────────────────────────────────────────────────
 # Grafana UI: http://localhost:3001  Prometheus: http://localhost:9090
@@ -1075,6 +1087,26 @@ else
     echo -e "  ${DIM}Keeping existing Telegram secrets.${NC}"
   fi
 
+  # ── Google Web Risk ─────────────────────────────────────────────────────────
+  UPDATE_WEB_RISK=true
+  if $CONNECTORS_ALREADY_SET && has_secret web_risk_api_key; then
+    if ! confirm "Update Google Web Risk API key?"; then UPDATE_WEB_RISK=false; fi
+  fi
+  if $UPDATE_WEB_RISK; then
+    echo ""
+    echo -e "  Google Web Risk (optional) → blocks known phishing/malware URLs in the web-fetch tool"
+    echo -e "  ${DIM}Needs a Cloud project with billing + the Web Risk API enabled, and an API key"
+    echo -e "  restricted to that API. Free up to 100k lookups/month — set a ~3000/day quota cap.${NC}"
+    echo ""
+    WEB_RISK_API_KEY=""
+    if confirm "Configure Google Web Risk?"; then
+      prompt WEB_RISK_API_KEY "Web Risk API key" "" true
+    fi
+    write_secret web_risk_api_key "$WEB_RISK_API_KEY"
+  else
+    echo -e "  ${DIM}Keeping existing Google Web Risk key.${NC}"
+  fi
+
   # ── Observability ─────────────────────────────────────────────────────────
   header "Observability (Prometheus + Grafana)"
   echo -e "  Prometheus scrapes ${BOLD}/actuator/prometheus${NC} every 15s."
@@ -1165,10 +1197,10 @@ AUTH_PASSKEY_ORIGIN=$AUTH_PASSKEY_ORIGIN
 # ── Image storage (Garage-backed, storage-inner) ────────────────
 GARAGE_BUCKET=$GARAGE_BUCKET
 
-# ── Web fetch ─────────────────────────────────────────────────────────────────
+# ── Web fetch (self-hosted Lightpanda headless browser) ──────────────────────
 WEB_FETCH_ENABLED=true
-WEB_FETCH_TIMEOUT=10
-WEB_FETCH_MAX_CHARS=50000
+WEB_FETCH_TIMEOUT=20
+WEB_FETCH_MAX_CONTENT_CHARS=20000
 
 # ── Web search (self-hosted SearXNG — free, no API key, no query cap) ────────
 WEB_SEARCH_ENABLED=true

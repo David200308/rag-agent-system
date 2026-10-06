@@ -5,6 +5,7 @@ import com.agentsystem.fallback.service.impl.FallbackServiceImpl;
 import com.agentsystem.config.ChatModelFactory;
 import com.agentsystem.config.FallbackProperties;
 import com.agentsystem.model.service.ModelConfigService;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,7 +50,7 @@ class FallbackServiceTest {
                 .when(valueOperations).set(anyString(), anyString(), any(Duration.class));
 
         fallbackService = new FallbackServiceImpl(chatClient, modelConfigService, chatModelFactory, redisTemplate,
-                new FallbackProperties(60));
+                new FallbackProperties(60), CircuitBreakerRegistry.ofDefaults());
     }
 
     // ── cacheAnswer & cache-hit path ───────────────────────────────────────────
@@ -124,6 +125,15 @@ class FallbackServiceTest {
         String result = fallbackService.staticFallback(
                 "any query", "timeout", Optional.of("gpt-4"), List.of(),
                 new RuntimeException("connection refused"));
+
+        assertThat(result).contains("unable to answer");
+    }
+
+    @Test
+    void resolveFallback_llmThrows_returnsStaticMessage() {
+        when(chatClient.prompt()).thenThrow(new RuntimeException("connection refused"));
+
+        String result = fallbackService.resolveFallback("llm down query", "no cache", Optional.empty(), List.of());
 
         assertThat(result).contains("unable to answer");
     }

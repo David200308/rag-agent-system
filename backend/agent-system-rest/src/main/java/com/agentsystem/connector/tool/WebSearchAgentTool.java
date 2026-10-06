@@ -1,6 +1,7 @@
 package com.agentsystem.connector.tool;
 
 import com.agentsystem.agent.ToolCallBudget;
+import com.agentsystem.webfetch.service.WebFetchUrlAllowlist;
 import com.agentsystem.websearch.service.WebSearchResult;
 import com.agentsystem.websearch.service.WebSearchService;
 import lombok.RequiredArgsConstructor;
@@ -21,8 +22,9 @@ import java.util.stream.IntStream;
 @RequiredArgsConstructor
 public class WebSearchAgentTool {
 
-    private final WebSearchService webSearchService;
-    private final ToolCallBudget   toolCallBudget;
+    private final WebSearchService     webSearchService;
+    private final ToolCallBudget       toolCallBudget;
+    private final WebFetchUrlAllowlist fetchAllowlist;
 
     @Tool(description = """
             Searches the live web for current information and returns the top results
@@ -42,6 +44,8 @@ public class WebSearchAgentTool {
             if (results.isEmpty()) {
                 return "No web search results found for: " + query;
             }
+            // Result URLs become fetchable for the rest of this request (see WebFetchUrlAllowlist).
+            results.forEach(r -> fetchAllowlist.allow(r.url()));
             log.info("[WebSearchAgentTool] {} result(s) for '{}'", results.size(), query);
             return IntStream.range(0, results.size())
                     .mapToObj(i -> formatResult(i + 1, results.get(i)))

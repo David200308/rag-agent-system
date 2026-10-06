@@ -193,6 +193,30 @@ web-search:
   timeout-seconds: ${WEB_SEARCH_TIMEOUT:10}
   max-results: ${WEB_SEARCH_MAX_RESULTS:5}
 
+# ── Web-fetch feature ────────────────────────────────────────────────────────
+# Reads a URL's full rendered content (JS executed) via a self-hosted Lightpanda
+# headless browser over CDP. See docker-compose.yml's `lightpanda` service.
+# Offered to the LLM alongside searchWeb whenever web search is enabled.
+web-fetch:
+  enabled: ${WEB_FETCH_ENABLED:true}
+  cdp-url: ${WEB_FETCH_CDP_URL:ws://lightpanda:9222}
+  timeout-seconds: ${WEB_FETCH_TIMEOUT:20}
+  network-idle-wait-ms: ${WEB_FETCH_NETWORK_IDLE_WAIT_MS:3000}
+  max-content-chars: ${WEB_FETCH_MAX_CONTENT_CHARS:20000}
+  max-concurrent: ${WEB_FETCH_MAX_CONCURRENT:4}
+
+# ── Google Web Risk (URL reputation for fetchWebPage) ────────────────────────
+# Blocks known phishing/malware/unwanted-software URLs before and after redirects.
+# Inactive until WEB_RISK_API_KEY is set. Verdicts cached Caffeine → Redis → MySQL
+# (web_risk_url_verdicts) so the 100k/month free Lookup API quota goes a long way.
+web-risk:
+  enabled: ${WEB_RISK_ENABLED:true}
+  api-key: ${WEB_RISK_API_KEY:}
+  timeout-ms: ${WEB_RISK_TIMEOUT_MS:2000}
+  safe-ttl-minutes: ${WEB_RISK_SAFE_TTL_MINUTES:60}
+  unsafe-ttl-hours: ${WEB_RISK_UNSAFE_TTL_HOURS:24}
+  local-cache-max-size: ${WEB_RISK_LOCAL_CACHE_MAX_SIZE:10000}
+
 server:
   port: 8081
 
@@ -234,11 +258,11 @@ resilience4j:
     instances:
       retrieval:
         timeout-duration: 5s
-      # 60s (was 30s) — generation can now chain multiple searchWeb tool calls
-      # (SearXNG round-trip + another LLM turn each) before the final answer,
-      # which routinely takes longer than a single completion did.
+      # 90s (was 60s, before that 30s) — generation can chain searchWeb and then
+      # fetchWebPage calls (SearXNG / Lightpanda round-trip + another LLM turn each)
+      # before the final answer; a single page fetch alone may take up to 20s.
       llm:
-        timeout-duration: 60s
+        timeout-duration: 90s
 
 management:
   endpoints:

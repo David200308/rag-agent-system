@@ -7,7 +7,7 @@ import com.agentsystem.config.FallbackProperties;
 import com.agentsystem.model.entity.ModelConfig;
 import com.agentsystem.model.service.ModelConfigService;
 import com.agentsystem.schema.AgentRequest;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -37,6 +37,7 @@ public class FallbackServiceImpl implements FallbackService {
     private final ChatModelFactory    chatModelFactory;
     private final StringRedisTemplate redisTemplate;
     private final FallbackProperties  fallbackProperties;
+    private final CircuitBreakerRegistry circuitBreakerRegistry;
 
     private static final String CACHE_KEY_PREFIX = "fallback:answer-cache:";
 
@@ -63,11 +64,16 @@ public class FallbackServiceImpl implements FallbackService {
             }
         }
 
-        // 2. Try LLM direct answer with circuit-breaker
-        return tryDirectAnswer(query, reason, selectedModelDisplayName, history);
+        // 2. Try LLM direct answer with circuit-breaker. Applied programmatically rather than
+        // via @CircuitBreaker: this is a self-invocation, which bypasses the Spring AOP proxy.
+        try {
+            return circuitBreakerRegistry.circuitBreaker("llm")
+                    .executeSupplier(() -> tryDirectAnswer(query, reason, selectedModelDisplayName, history));
+        } catch (Exception ex) {
+            return staticFallback(query, reason, selectedModelDisplayName, history, ex);
+        }
     }
 
-    @CircuitBreaker(name = "llm", fallbackMethod = "staticFallback")
     public String tryDirectAnswer(String query, String reason, Optional<String> selectedModelDisplayName,
                                    List<AgentRequest.ConversationTurn> history) {
         log.info("[FallbackService] Attempting direct LLM answer");
@@ -98,7 +104,7 @@ public class FallbackServiceImpl implements FallbackService {
         return answer;
     }
 
-    /** Resilience4j fallback — LLM circuit-breaker is open. */
+    /** Last resort — LLM call failed or the "llm" circuit-breaker is open. */
     public String staticFallback(String query, String reason, Optional<String> selectedModelDisplayName,
                                   List<AgentRequest.ConversationTurn> history, Throwable ex) {
         log.error("[FallbackService] LLM unavailable, serving static fallback: {}", ex.getMessage());

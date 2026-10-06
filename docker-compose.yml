@@ -137,6 +137,13 @@ services:
       WEB_SEARCH_URL: http://searxng:8080
       WEB_SEARCH_TIMEOUT: ${WEB_SEARCH_TIMEOUT:-10}
       WEB_SEARCH_MAX_RESULTS: ${WEB_SEARCH_MAX_RESULTS:-5}
+      # ── Web fetch (self-hosted Lightpanda headless browser)
+      WEB_FETCH_ENABLED: ${WEB_FETCH_ENABLED:-true}
+      WEB_FETCH_TIMEOUT: ${WEB_FETCH_TIMEOUT:-20}
+      WEB_FETCH_MAX_CONTENT_CHARS: ${WEB_FETCH_MAX_CONTENT_CHARS:-20000}
+      WEB_FETCH_CDP_URL: ws://lightpanda:9222
+      # ── Google Web Risk (optional — blank key = checks off)
+      WEB_RISK_API_KEY: ${WEB_RISK_API_KEY:-}
       # ── Scheduler
       SCHEDULER_URL: http://scheduler:8082
       SCHEDULER_SERVICE_KEY: ${SCHEDULER_SERVICE_KEY:-scheduler-secret-key}
@@ -194,6 +201,31 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  # ── Lightpanda (headless browser for the fetchWebPage tool) ────────────────────
+  # Driven over CDP by LightpandaWebFetchService. --block-private-networks rejects
+  # private/loopback/link-local IPs at socket-open time (incl. redirects, JS
+  # sub-requests, DNS rebinding), so pages can't reach other services on this
+  # network; 100.64.0.0/10 (CGNAT/Tailscale) is blocked too. No published port —
+  # internal use only. AGPL-3.0, run unmodified as a separate service.
+  lightpanda:
+    image: lightpanda/browser:nightly
+    container_name: agent-system-lightpanda
+    restart: unless-stopped
+    command:
+      - /bin/lightpanda
+      - serve
+      - --host
+      - 0.0.0.0
+      - --port
+      - "9222"
+      - --log-level
+      - info
+      - --block-private-networks
+      - --block-cidrs
+      - 100.64.0.0/10
+    environment:
+      LIGHTPANDA_DISABLE_TELEMETRY: "true"
 
   # ── Garage (S3-compatible object storage for images) ──────────────────────────
   # garage.toml is rendered from observability/garage/garage.toml.template by

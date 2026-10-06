@@ -39,3 +39,11 @@ engines:
     disabled: true
   - name: startpage
     disabled: true
+
+# Google is disabled in SearXNG's defaults — enable it as the preferred engine.
+# weight 2 ranks its results above the others' when merged (default weight is 1),
+# but duckduckgo/brave/wikipedia stay enabled as backups: Google CAPTCHA-blocks
+# datacenter IPs from time to time, and SearXNG then just drops it for that query.
+  - name: google
+    disabled: false
+    weight: 2

@@ -1,10 +1,11 @@
 /// <reference types="google.maps" />
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { APIProvider, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import type { TravelRecord, TravelStop } from "@/types/travel";
 import { TRIP_COLORS, TRANSPORT_EMOJI } from "@/types/travel";
+import { corePoints } from "./mapFocus";
 
 interface Props {
   apiKey: string;
@@ -45,11 +46,13 @@ function Overlays({ records, selectedId, onSelectRecord }: Omit<Props, "apiKey" 
   const core = useMapsLibrary("core");
   const cities = useMemo(() => collectCities(records), [records]);
 
-  // Fit to all stops once the map is ready / when trips are added or removed
+  // Fit to the user's most-visited region once the map is ready / when trips are added or removed
   useEffect(() => {
-    if (!map || !core || cities.length === 0) return;
+    if (!map || !core) return;
+    const points = corePoints(records);
+    if (points.length === 0) return;
     const bounds = new google.maps.LatLngBounds();
-    cities.forEach((c) => bounds.extend({ lat: c.lat, lng: c.lon }));
+    points.forEach((p) => bounds.extend({ lat: p.lat, lng: p.lon }));
     map.fitBounds(bounds, 50);
     const once = map.addListener("idle", () => {
       if ((map.getZoom() ?? 0) > 8) map.setZoom(8);
@@ -133,21 +136,45 @@ function Overlays({ records, selectedId, onSelectRecord }: Omit<Props, "apiKey" 
   return null;
 }
 
+// A full -180..180 span is treated as "no restriction" by Google and the world repeats
+// horizontally; stopping just short of the antimeridian makes strictBounds actually clamp.
+const WORLD_RESTRICTION = {
+  latLngBounds: { north: 85, south: -85, west: -179.999, east: 179.999 },
+  strictBounds: true,
+};
+
 export default function GoogleTravelMap({ apiKey, mapId, ...rest }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [minZoom, setMinZoom] = useState(2);
+
+  // The world is 256px * 2^zoom wide; never let it get narrower than the container
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = entry?.contentRect.width ?? 0;
+      if (width > 0) setMinZoom(Math.max(1, Math.ceil(Math.log2(width / 256))));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <APIProvider apiKey={apiKey}>
-      <Map
-        style={{ height: "100%", width: "100%" }}
-        defaultCenter={{ lat: 20, lng: 10 }}
-        defaultZoom={2}
-        minZoom={2}
-        mapId={mapId ?? undefined}
-        gestureHandling="greedy"
-        disableDefaultUI
-        zoomControl
-        restriction={{ latLngBounds: { north: 85, south: -85, west: -180, east: 180 }, strictBounds: true }}
-      />
-      <Overlays {...rest} />
-    </APIProvider>
+    <div ref={containerRef} style={{ height: "100%", width: "100%" }}>
+      <APIProvider apiKey={apiKey}>
+        <Map
+          style={{ height: "100%", width: "100%" }}
+          defaultCenter={{ lat: 20, lng: 10 }}
+          defaultZoom={minZoom}
+          minZoom={minZoom}
+          mapId={mapId ?? undefined}
+          gestureHandling="greedy"
+          disableDefaultUI
+          zoomControl
+          restriction={WORLD_RESTRICTION}
+        />
+        <Overlays {...rest} />
+      </APIProvider>
+    </div>
   );
 }

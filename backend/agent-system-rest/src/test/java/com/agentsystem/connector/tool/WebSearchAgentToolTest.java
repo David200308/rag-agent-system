@@ -1,6 +1,7 @@
 package com.agentsystem.connector.tool;
 
 import com.agentsystem.agent.ToolCallBudget;
+import com.agentsystem.webfetch.service.WebFetchUrlAllowlist;
 import com.agentsystem.websearch.service.WebSearchResult;
 import com.agentsystem.websearch.service.WebSearchService;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +23,7 @@ class WebSearchAgentToolTest {
 
     @Mock WebSearchService     webSearchService;
     @Mock ToolCallBudget       toolCallBudget;
+    @Mock WebFetchUrlAllowlist fetchAllowlist;
     @InjectMocks WebSearchAgentTool tool;
 
     @BeforeEach
@@ -64,6 +66,8 @@ class WebSearchAgentToolTest {
                 .contains("High uric acid levels can cause gout.")
                 .contains("2. Uric Acid Test")
                 .contains("https://medlineplus.gov/uric-acid");
+        verify(fetchAllowlist).allow("https://mayoclinic.org/uric-acid");
+        verify(fetchAllowlist).allow("https://medlineplus.gov/uric-acid");
     }
 
     @Test
