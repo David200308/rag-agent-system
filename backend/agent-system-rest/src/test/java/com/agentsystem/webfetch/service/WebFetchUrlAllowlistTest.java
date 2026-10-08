@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -60,6 +61,30 @@ class WebFetchUrlAllowlistTest {
         allowlist.allow("https://result.example/article");
 
         assertThat(allowlist.isAllowed("https://result.example/article")).isFalse();
+    }
+
+    @Test
+    void priorSearchHashes_allowEarlierTurnsResults_exactlyAsNormalized() {
+        String prior = UrlNormalizer.hash(UrlNormalizer.normalize("https://www.theindependenthotel.it/"));
+        allowlist.reset(List.of("no urls here"), Set.of(prior));
+
+        assertThat(allowlist.isAllowed("https://WWW.theindependenthotel.it")).isTrue();
+        assertThat(allowlist.isAllowed("https://www.theindependenthotel.it/?d=secret")).isFalse();
+        assertThat(allowlist.isAllowed("https://www.theindependenthotel.it/rooms")).isFalse();
+    }
+
+    @Test
+    void searchResultUrls_returnsOnlyThisRequestsSearchResults() {
+        allowlist.reset(List.of("see https://user.example/page"),
+                Set.of(UrlNormalizer.hash("https://prior.example/")));
+        allowlist.allow("https://Result.example/article/");
+
+        assertThat(allowlist.searchResultUrls()).containsExactly("https://result.example/article");
+    }
+
+    @Test
+    void searchResultUrls_outsideRequestScope_isEmpty() {
+        assertThat(allowlist.searchResultUrls()).isEmpty();
     }
 
     @Test

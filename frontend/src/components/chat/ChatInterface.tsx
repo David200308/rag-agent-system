@@ -133,6 +133,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
         routeDecision: response.routeDecision,
         fallbackActivated: response.fallbackActivated,
         metadata: response.metadata,
+        toolActivity: response.toolActivity,
       });
     },
     onError: (err: Error, variables) => {

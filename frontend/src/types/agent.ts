@@ -54,6 +54,14 @@ export interface RunMetadata {
   conversationId?: string;
 }
 
+/** A tool call made while generating an answer — label/detail only, never the raw tool output. */
+export interface ToolActivity {
+  tool: string;
+  label: string;
+  detail: string | null;
+  status: "OK" | "FAILED" | "BLOCKED";
+}
+
 export interface AgentResponse {
   answer: string;
   sources: SourceDocument[];
@@ -61,6 +69,7 @@ export interface AgentResponse {
   fallbackActivated: boolean;
   fallbackReason: string | null;
   metadata: RunMetadata;
+  toolActivity?: ToolActivity[];
 }
 
 // ── UI-only types ──────────────────────────────────────────────────────────
@@ -75,6 +84,7 @@ export interface ChatMessage {
   routeDecision?: RouteDecision;
   fallbackActivated?: boolean;
   metadata?: RunMetadata;
+  toolActivity?: ToolActivity[];
   timestamp: Date;
 }
 
@@ -119,6 +129,7 @@ export interface BackendMessage {
   role: "user" | "assistant";
   content: string;
   runId: string | null;
+  toolActivity?: ToolActivity[] | null;
   createdAt: string;
 }
 

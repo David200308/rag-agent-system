@@ -12,6 +12,7 @@ import com.agentsystem.org.OrgContext;
 import com.agentsystem.sandbox.entity.PersistentSandbox;
 import com.agentsystem.sandbox.repository.PersistentSandboxRepository;
 import com.agentsystem.schema.AgentRequest;
+import com.agentsystem.schema.ToolActivity;
 import com.agentsystem.user.entity.User;
 import com.agentsystem.user.service.UserAccountService;
 import lombok.RequiredArgsConstructor;
@@ -79,8 +80,11 @@ public class ConversationServiceImpl implements ConversationService {
     /** Save the assistant's answer, linked to the agent runId. */
     @Transactional
     @Override
-    public void saveAssistantMessage(String conversationId, String content, String runId) {
-        messageRepo.save(new ConversationMessage(conversationId, "assistant", content, runId));
+    public void saveAssistantMessage(String conversationId, String content, String runId,
+                                     List<ToolActivity> toolActivity) {
+        ConversationMessage message = new ConversationMessage(conversationId, "assistant", content, runId);
+        message.setToolActivity(toolActivity == null ? List.of() : toolActivity);
+        messageRepo.save(message);
     }
 
     /**

@@ -117,9 +117,32 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
     role            VARCHAR(16) NOT NULL,           -- user | assistant
     content         TEXT        NOT NULL,
     run_id          VARCHAR(36),                    -- links to AgentResponse.RunMetadata.runId
+    tool_activity   TEXT        NULL,               -- JSON array of ToolActivity for assistant turns; NULL = no tool calls
     created_at      TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_conv_msg_conv (conversation_id),
     CONSTRAINT fk_conv_msg_conv FOREIGN KEY (conversation_id)
+        REFERENCES conversations(id) ON DELETE CASCADE
+);
+
+-- Adds tool_activity to databases created before the column existed. MySQL has no
+-- ADD COLUMN IF NOT EXISTS, so check information_schema and only ALTER when it's missing.
+SET @cm_tool_activity_missing := (SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'conversation_messages' AND COLUMN_NAME = 'tool_activity');
+SET @cm_tool_activity_sql := IF(@cm_tool_activity_missing,
+    'ALTER TABLE conversation_messages ADD COLUMN tool_activity TEXT NULL AFTER run_id', 'SELECT 1');
+PREPARE cm_tool_activity_stmt FROM @cm_tool_activity_sql;
+EXECUTE cm_tool_activity_stmt;
+DEALLOCATE PREPARE cm_tool_activity_stmt;
+
+-- searchWeb result URLs per conversation, so fetchWebPage may open a link a previous turn's
+-- search returned (see WebFetchUrlAllowlist). Only the SHA-256 of the normalized URL is kept.
+CREATE TABLE IF NOT EXISTS conversation_fetch_urls (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    conversation_id VARCHAR(36) NOT NULL,
+    url_hash        CHAR(64)    NOT NULL,
+    created_at      DATETIME(6) NOT NULL,
+    UNIQUE KEY uk_cfu_conv_hash (conversation_id, url_hash),
+    CONSTRAINT fk_cfu_conv FOREIGN KEY (conversation_id)
         REFERENCES conversations(id) ON DELETE CASCADE
 );
 

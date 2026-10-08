@@ -19,6 +19,7 @@ import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.AgentResponse;
 import com.agentsystem.schema.DocumentResult;
 import com.agentsystem.schema.QueryAnalysis;
+import com.agentsystem.webfetch.service.ConversationFetchUrlService;
 import com.agentsystem.webfetch.service.WebFetchUrlAllowlist;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,10 +32,12 @@ import org.springframework.ai.chat.client.ChatClient;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,6 +60,7 @@ class GeneratorNodeTest {
     @Mock WebFetchAgentTool        webFetchTool;
     @Mock SandboxAgentTool         sandboxTool;
     @Mock WebFetchUrlAllowlist     fetchAllowlist;
+    @Mock ConversationFetchUrlService fetchUrlService;
 
     GeneratorNode node;
 
@@ -65,7 +69,7 @@ class GeneratorNodeTest {
         node = new GeneratorNode(chatClient, llmProperties, modelConfigService, chatModelFactory,
                 generationService, toolCallBudget,
                 googleDocsTool, googleSheetsTool, googleSlidesTool, googleCalendarTool, telegramTool,
-                travelTool, webSearchTool, webFetchTool, sandboxTool, fetchAllowlist);
+                travelTool, webSearchTool, webFetchTool, sandboxTool, fetchAllowlist, fetchUrlService);
     }
 
     private static AgentRequest request() {
@@ -228,9 +232,87 @@ class GeneratorNodeTest {
         setupCaptor.getValue().run();
 
         ArgumentCaptor<Iterable<String>> textsCaptor = ArgumentCaptor.forClass(Iterable.class);
-        verify(fetchAllowlist).reset(textsCaptor.capture());
+        verify(fetchAllowlist).reset(textsCaptor.capture(), any());
         assertThat(textsCaptor.getValue())
                 .containsExactly("summarize https://a.example/x", "see https://b.example");
+    }
+
+    @Test
+    void process_webSearch_seedsPriorSearchUrlsAndPersistsThisRequestsResults() {
+        when(generationService.generate(any(), any(), any(), any(), any(), any()))
+                .thenAnswer(inv -> {
+                    inv.<Runnable>getArgument(4).run();
+                    inv.<Runnable>getArgument(5).run();
+                    return CompletableFuture.completedFuture("The answer.");
+                });
+        when(llmProperties.getProvider()).thenReturn("openai");
+        LlmProperties.OpenAiProps openAiProps = new LlmProperties.OpenAiProps();
+        openAiProps.setModel("gpt-4o-mini");
+        when(llmProperties.getOpenai()).thenReturn(openAiProps);
+        when(fetchUrlService.loadHashes("conv-1")).thenReturn(Set.of("prior-hash"));
+        when(fetchAllowlist.searchResultUrls()).thenReturn(Set.of("https://hotel.example/"));
+
+        AgentRequest webRequest = new AgentRequest("find hotels", null, 5, null,
+                false, "conv-1", true, true, null, null);
+        AgentState state = new AgentState(Map.of(
+                "request",        webRequest,
+                "queryAnalysis",  analysis(),
+                "conversationId", "conv-1"
+        ));
+
+        node.process(state);
+
+        verify(fetchAllowlist).reset(any(), eq(Set.of("prior-hash")));
+        verify(fetchUrlService).save("conv-1", Set.of("prior-hash"), Set.of("https://hotel.example/"));
+    }
+
+    @Test
+    void process_toolCallsDuringGeneration_areReturnedAsToolActivity() {
+        when(generationService.generate(any(), any(), any(), any(), any(), any()))
+                .thenAnswer(inv -> {
+                    inv.<Runnable>getArgument(4).run();
+                    org.springframework.ai.tool.ToolCallbackProvider tools = inv.getArgument(3);
+                    java.util.Arrays.stream(tools.getToolCallbacks())
+                            .filter(cb -> cb.getToolDefinition().name().equals("getTravelRecords"))
+                            .findFirst().orElseThrow()
+                            .call("{}");
+                    return CompletableFuture.completedFuture("The answer.");
+                });
+        when(llmProperties.getProvider()).thenReturn("openai");
+        LlmProperties.OpenAiProps openAiProps = new LlmProperties.OpenAiProps();
+        openAiProps.setModel("gpt-4o-mini");
+        when(llmProperties.getOpenai()).thenReturn(openAiProps);
+        when(travelTool.getTravelRecords()).thenReturn("Trip: Rome");
+
+        AgentState state = new AgentState(Map.of(
+                "request",       request(),
+                "queryAnalysis", analysis()
+        ));
+
+        AgentResponse response = (AgentResponse) node.process(state).get("response");
+
+        assertThat(response.toolActivity()).containsExactly(new com.agentsystem.schema.ToolActivity(
+                "getTravelRecords", "Looked up trips", null, com.agentsystem.schema.ToolActivity.Status.OK));
+    }
+
+    @Test
+    void process_webSearchDisabled_skipsLoadingPriorSearchUrls() {
+        when(generationService.generate(any(), any(), any(), any(), any(), any()))
+                .thenReturn(CompletableFuture.completedFuture("The answer."));
+        when(llmProperties.getProvider()).thenReturn("openai");
+        LlmProperties.OpenAiProps openAiProps = new LlmProperties.OpenAiProps();
+        openAiProps.setModel("gpt-4o-mini");
+        when(llmProperties.getOpenai()).thenReturn(openAiProps);
+
+        AgentState state = new AgentState(Map.of(
+                "request",        request(),
+                "queryAnalysis",  analysis(),
+                "conversationId", "conv-1"
+        ));
+
+        node.process(state);
+
+        verify(fetchUrlService, org.mockito.Mockito.never()).loadHashes(any());
     }
 
     // ── process — LLM circuit-breaker/retry exhaustion ────────────────────────

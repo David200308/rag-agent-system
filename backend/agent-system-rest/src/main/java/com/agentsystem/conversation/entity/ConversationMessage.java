@@ -5,7 +5,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import com.agentsystem.schema.ToolActivity;
+
 import java.time.Instant;
+import java.util.List;
 
 @Entity
 @Table(name = "conversation_messages")
@@ -31,6 +34,11 @@ public class ConversationMessage {
     /** Links back to AgentResponse.RunMetadata.runId — nullable for user turns. */
     @Column(name = "run_id", length = 36)
     private String runId;
+
+    /** Tool calls behind an assistant answer, for the collapsed activity summary; empty for user turns. */
+    @Convert(converter = ToolActivityListConverter.class)
+    @Column(name = "tool_activity", columnDefinition = "TEXT")
+    private List<ToolActivity> toolActivity = List.of();
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

@@ -153,6 +153,7 @@ public class AgentController {
             Map<String, Object> initData = new HashMap<>();
             initData.put("request", request);
             initData.put("runId", runId);
+            initData.put("conversationId", conversationId);
             if (!attachments.isEmpty()) {
                 initData.put("documents", attachments);
             }
@@ -223,7 +224,7 @@ public class AgentController {
                     () -> new RuntimeException("No response in final state"));
 
             // Persist assistant answer and inject conversationId into metadata
-            conversationService.saveAssistantMessage(conversationId, raw.answer(), runId);
+            conversationService.saveAssistantMessage(conversationId, raw.answer(), runId, raw.toolActivity());
             AgentResponse response = withConversationId(raw, conversationId);
 
             agentMetrics.recordQuery(response.fallbackActivated(), System.currentTimeMillis() - startMs);
@@ -608,7 +609,8 @@ public class AgentController {
                         meta.documentsRetrieved(),
                         meta.modelUsed(),
                         conversationId
-                )
+                ),
+                raw.toolActivity()
         );
     }
 

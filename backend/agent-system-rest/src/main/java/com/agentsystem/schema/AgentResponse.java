@@ -34,11 +34,25 @@ public record AgentResponse(
         String fallbackReason,
 
         @Schema(description = "Metadata about this agent run")
-        RunMetadata metadata
+        RunMetadata metadata,
+
+        @Schema(description = "Tool calls made while generating the answer, in call order — "
+                + "rendered as a collapsed summary above the answer")
+        List<ToolActivity> toolActivity
 
 ) implements Serializable {
 
     @Serial private static final long serialVersionUID = 1L;
+
+    public AgentResponse {
+        toolActivity = toolActivity == null ? List.of() : List.copyOf(toolActivity);
+    }
+
+    /** For responses produced without any tool calls (fallbacks, errors, scheduler runs). */
+    public AgentResponse(String answer, List<SourceDocument> sources, RouteDecision routeDecision,
+                         boolean fallbackActivated, String fallbackReason, RunMetadata metadata) {
+        this(answer, sources, routeDecision, fallbackActivated, fallbackReason, metadata, List.of());
+    }
 
     @Schema(description = "A source document retrieved from the vector store")
     @JsonClassDescription("Source document retrieved during RAG")

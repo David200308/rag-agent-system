@@ -1,6 +1,10 @@
 package com.agentsystem.webfetch.service;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -46,6 +50,16 @@ public final class UrlNormalizer {
         sb.append(path);
         if (uri.getRawQuery() != null) sb.append('?').append(uri.getRawQuery());
         return sb.toString();
+    }
+
+    /** SHA-256 (hex) of an already-normalized URL — for storing URL keys without the raw URL. */
+    public static String hash(String normalizedUrl) {
+        try {
+            return HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(normalizedUrl.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** Extracts every http(s) URL appearing in free text (trailing sentence punctuation stripped). */

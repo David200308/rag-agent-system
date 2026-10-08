@@ -3,6 +3,7 @@ import { cn, formatTime, formatDuration } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
 import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import { SourceCard } from "./SourceCard";
+import { ToolActivitySummary } from "./ToolActivitySummary";
 import { useTimezone } from "@/hooks/useTimezone";
 import type { ChatMessage } from "@/types/agent";
 
@@ -60,6 +61,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
       {/* Bubble + metadata */}
       <div className={cn("flex max-w-[85%] sm:max-w-[75%] flex-col gap-2", isUser && "items-end")}>
+        {/* Tool calls behind this answer — collapsed by default */}
+        {!isUser && message.toolActivity && message.toolActivity.length > 0 && (
+          <ToolActivitySummary activity={message.toolActivity} />
+        )}
+
         {/* Text */}
         <div
           className={cn(

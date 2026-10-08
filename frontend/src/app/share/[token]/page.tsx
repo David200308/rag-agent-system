@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { fetchSharedConversation } from "@/lib/api";
+import { ToolActivitySummary } from "@/components/chat/ToolActivitySummary";
 import type { BackendMessage, ShareMetaResponse } from "@/types/agent";
 
 type Status = "loading" | "ok" | "expired" | "error";
@@ -97,15 +98,20 @@ export default function SharedConversationPage() {
                 msg.role === "user" ? "justify-end" : "justify-start",
               ].join(" ")}
             >
-              <div
-                className={[
-                  "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap",
-                  msg.role === "user"
-                    ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-black rounded-br-sm"
-                    : "bg-[--color-surface-raised] border border-[--color-border] rounded-bl-sm",
-                ].join(" ")}
-              >
-                {msg.content}
+              <div className={["flex max-w-[80%] flex-col gap-2", msg.role === "user" ? "items-end" : ""].join(" ")}>
+                {msg.role === "assistant" && msg.toolActivity && msg.toolActivity.length > 0 && (
+                  <ToolActivitySummary activity={msg.toolActivity} />
+                )}
+                <div
+                  className={[
+                    "rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap",
+                    msg.role === "user"
+                      ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-black rounded-br-sm"
+                      : "bg-[--color-surface-raised] border border-[--color-border] rounded-bl-sm",
+                  ].join(" ")}
+                >
+                  {msg.content}
+                </div>
               </div>
             </div>
           ))}

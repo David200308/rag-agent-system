@@ -5,6 +5,7 @@ import com.agentsystem.conversation.entity.ConversationMessage;
 import com.agentsystem.conversation.entity.ConversationShare;
 import com.agentsystem.org.OrgContext;
 import com.agentsystem.schema.AgentRequest;
+import com.agentsystem.schema.ToolActivity;
 
 import java.util.List;
 
@@ -23,7 +24,13 @@ public interface ConversationService {
     void saveUserMessage(String conversationId, String content);
 
     /** Save the assistant's answer, linked to the agent runId. */
-    void saveAssistantMessage(String conversationId, String content, String runId);
+    default void saveAssistantMessage(String conversationId, String content, String runId) {
+        saveAssistantMessage(conversationId, content, runId, List.of());
+    }
+
+    /** Save the assistant's answer with the tool calls made while generating it. */
+    void saveAssistantMessage(String conversationId, String content, String runId,
+                              List<ToolActivity> toolActivity);
 
     /**
      * Load all messages for a conversation as {@link AgentRequest.ConversationTurn} objects
