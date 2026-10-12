@@ -3,60 +3,67 @@ import MapKit
 
 struct TravelDetailView: View {
     let trip: TravelRecord
-    @State private var expenseData: TripExpenseData?
-    @State private var expensesLoaded = false
+    @StateObject private var expenses: TripExpensesStore
+    @State private var editorTarget: ExpenseEditorTarget?
+
+    init(trip: TravelRecord) {
+        self.trip = trip
+        _expenses = StateObject(wrappedValue: TripExpensesStore(trip: trip))
+    }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(trip.title).font(Theme.serif(24, weight: .semibold)).foregroundStyle(Theme.ink)
-                    Text(trip.dateRangeLabel).font(.subheadline).foregroundStyle(Theme.inkFaint)
-                }
-
-                if !trip.stops.isEmpty {
-                    RouteMapView(stops: trip.stops, trip: trip)
-                        .frame(height: 190)
-                        .background(Theme.chipFill)
-                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                }
-
-                if !trip.stops.isEmpty {
-                    SectionLabel(text: "Itinerary")
-                    itineraryCard
-                }
-
-                if let data = expenseData, !(data.itemExpenses.isEmpty && data.dateExpenses.isEmpty) {
-                    HStack {
-                        SectionLabel(text: "Expenses")
-                        Spacer()
-                        Text(expenseTotalLabel(data))
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.ink)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(trip.title).font(Theme.serif(24, weight: .semibold)).foregroundStyle(Theme.ink)
+                        Text(trip.dateRangeLabel).font(.subheadline).foregroundStyle(Theme.inkFaint)
                     }
-                    expensesCard(data)
+
+                    if !trip.stops.isEmpty {
+                        RouteMapView(stops: trip.stops, trip: trip)
+                            .frame(height: 190)
+                            .background(Theme.chipFill)
+                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    }
+
+                    if !trip.stops.isEmpty {
+                        SectionLabel(text: "Itinerary")
+                        itineraryCard
+                    }
+
+                    TripExpensesSection(
+                        store: expenses,
+                        scrollTo: { id in withAnimation(.easeInOut) { proxy.scrollTo(id, anchor: .top) } },
+                        editorTarget: $editorTarget
+                    )
                 }
+                .padding(20)
+                // Room for the floating add button above the tab bar.
+                .padding(.bottom, expenses.state == .ready && !expenses.data.isEmpty ? 56 : 0)
             }
-            .padding(20)
         }
         .background(Theme.background)
         .tabBarSafeArea()
+        .overlay(alignment: .bottomTrailing) {
+            if expenses.state == .ready && !expenses.data.isEmpty {
+                AddExpenseButton {
+                    editorTarget = ExpenseEditorTarget(entry: nil, date: expenses.suggestedDate)
+                }
+                .padding(.trailing, 20)
+                .padding(.bottom, 92)
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .sheet(item: $editorTarget) { target in
+            ExpenseEditSheet(store: expenses, target: target)
+        }
         .navigationTitle("Trip")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await loadExpenses() }
-    }
-
-    /// The trip list omits expenses (see `TravelRecord`), so fetch this trip's expenses
-    /// separately the first time its detail view appears.
-    private func loadExpenses() async {
-        guard !expensesLoaded else { return }
-        expensesLoaded = true
-        do {
-            let raw = try await AgentService.shared.getTravelExpenses(id: trip.id)
-            expenseData = TripExpenseData.from(raw)
-        } catch {
-            // Best-effort — leave the expenses section hidden on failure.
+        .task {
+            // The trip list omits expenses (see `TravelRecord`), so fetch them on first appearance.
+            if expenses.state == .loading { await expenses.load() }
         }
     }
 
@@ -99,137 +106,6 @@ struct TravelDetailView: View {
         if let seat = stop.seatNumber, !seat.isEmpty { parts.append("Seat \(seat)") }
         return parts.joined(separator: " · ")
     }
-
-    private func expensesCard(_ data: TripExpenseData) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if !data.itemExpenses.isEmpty {
-                itemExpensesCard(data.itemExpenses, currency: data.defaultCurrency)
-            }
-            ForEach(Array(data.dateExpenses.enumerated()), id: \.offset) { index, group in
-                if !group.entries.isEmpty {
-                    dateGroupCard(group, currency: data.defaultCurrency)
-                }
-            }
-        }
-    }
-
-    private func itemExpensesCard(_ entries: [RichExpenseEntry], currency: String) -> some View {
-        let subtotal = entries.reduce(0.0) { $0 + ($1.amounts[currency] ?? 0) }
-        return ThemeCard(padding: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text("Pre-trip / Fixed")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Theme.inkSoft)
-                    Spacer()
-                    Text(formatAmount(subtotal, currency: currency))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Theme.inkFaint)
-                        .monospacedDigit()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Theme.chipFill)
-
-                ForEach(Array(entries.enumerated()), id: \.offset) { idx, entry in
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(entry.name).font(.subheadline).foregroundStyle(Theme.ink)
-                            if entry.cashback > 0 {
-                                tag("Cashback \(formatAmount(entry.cashback, currency: currency))", tint: Theme.positive)
-                            }
-                        }
-                        Spacer(minLength: 12)
-                        Text(formatAmount(entry.amounts[currency] ?? entry.amounts.values.first ?? 0, currency: currency))
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.ink)
-                            .monospacedDigit()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    if idx < entries.count - 1 {
-                        Divider().overlay(Theme.hairline).padding(.leading, 16)
-                    }
-                }
-            }
-        }
-    }
-
-    private func dateGroupCard(_ group: DateExpenseGroup, currency: String) -> some View {
-        let subtotal = group.entries.reduce(0.0) { $0 + ($1.amounts[currency] ?? 0) }
-        return ThemeCard(padding: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text(formattedGroupDate(group.date))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Theme.inkSoft)
-                    Spacer()
-                    Text(formatAmount(subtotal, currency: currency))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Theme.inkFaint)
-                        .monospacedDigit()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Theme.chipFill)
-
-                ForEach(Array(group.entries.enumerated()), id: \.offset) { idx, entry in
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(entry.name).font(.subheadline).foregroundStyle(Theme.ink)
-                            if entry.cashback > 0 {
-                                tag("Cashback \(formatAmount(entry.cashback, currency: currency))", tint: Theme.positive)
-                            }
-                        }
-                        Spacer(minLength: 12)
-                        Text(formatAmount(entry.amounts[currency] ?? entry.amounts.values.first ?? 0, currency: currency))
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.ink)
-                            .monospacedDigit()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    if idx < group.entries.count - 1 {
-                        Divider().overlay(Theme.hairline).padding(.leading, 16)
-                    }
-                }
-            }
-        }
-    }
-
-    private func tag(_ text: String, tint: Color) -> some View {
-        Text(text)
-            .font(.caption2.weight(.medium))
-            .padding(.horizontal, 7).padding(.vertical, 2)
-            .background(tint.opacity(0.12))
-            .foregroundStyle(tint)
-            .clipShape(Capsule())
-    }
-
-    private func formattedGroupDate(_ raw: String) -> String {
-        let inFmt = DateFormatter()
-        inFmt.dateFormat = "yyyy-MM-dd"
-        inFmt.timeZone = TimeZone(identifier: "UTC")
-        guard let date = inFmt.date(from: raw) else { return raw }
-        let outFmt = DateFormatter()
-        outFmt.dateFormat = "EEE, MMM d"
-        return outFmt.string(from: date)
-    }
-
-    private func expenseTotalLabel(_ data: TripExpenseData) -> String {
-        let total = (data.itemExpenses + data.dateExpenses.flatMap(\.entries))
-            .reduce(0.0) { $0 + ($1.amounts[data.defaultCurrency] ?? 0) }
-        return formatAmount(total, currency: data.defaultCurrency)
-    }
-
-    private func formatAmount(_ value: Double, currency: String) -> String {
-        let f = NumberFormatter()
-        f.numberStyle = .currency
-        f.currencyCode = currency
-        f.maximumFractionDigits = 0
-        return f.string(from: NSNumber(value: value)) ?? "\(currency) \(Int(value))"
-    }
-
 }
 
 private extension TransportType {

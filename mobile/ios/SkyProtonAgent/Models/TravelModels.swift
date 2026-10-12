@@ -71,12 +71,24 @@ enum JSONValue: Codable {
     var arrayValue: [JSONValue]? { if case .array(let v) = self { return v }; return nil }
 }
 
-struct RichExpenseEntry: Identifiable {
+struct RichExpenseEntry: Identifiable, Equatable {
     let id: String
-    let name: String
-    let amounts: [String: Double]
-    let cashback: Double
-    let creditCards: [String]
+    var name: String
+    /// Amount per tracked currency, e.g. `["HKD": 198, "JPY": 3800]` — a currency may be absent.
+    var amounts: [String: Double]
+    /// Always in the trip's default currency (matches the web app).
+    var cashback: Double
+    /// `FinancialCard.id`s, not names — the web app stores ids too.
+    var creditCards: [String]
+
+    init(id: String = UUID().uuidString.lowercased(), name: String = "", amounts: [String: Double] = [:],
+         cashback: Double = 0, creditCards: [String] = []) {
+        self.id = id
+        self.name = name
+        self.amounts = amounts
+        self.cashback = cashback
+        self.creditCards = creditCards
+    }
 
     init?(json: JSONValue) {
         guard let id = json["id"]?.stringValue, let name = json["name"]?.stringValue else { return nil }
@@ -90,27 +102,48 @@ struct RichExpenseEntry: Identifiable {
         self.cashback = json["cashback"]?.doubleValue ?? 0
         self.creditCards = json["creditCards"]?.arrayValue?.compactMap { $0.stringValue } ?? []
     }
+
+    var jsonObject: [String: Any] {
+        ["id": id, "name": name, "amounts": amounts, "cashback": cashback, "creditCards": creditCards]
+    }
 }
 
-struct DateExpenseGroup: Identifiable {
+struct DateExpenseGroup: Identifiable, Equatable {
     var id: String { date }
     let date: String
-    let entries: [RichExpenseEntry]
+    var entries: [RichExpenseEntry]
+
+    init(date: String, entries: [RichExpenseEntry] = []) {
+        self.date = date
+        self.entries = entries
+    }
 
     init?(json: JSONValue) {
         guard let date = json["date"]?.stringValue else { return nil }
         self.date = date
         self.entries = json["entries"]?.arrayValue?.compactMap { RichExpenseEntry(json: $0) } ?? []
     }
+
+    var jsonObject: [String: Any] {
+        ["date": date, "entries": entries.map(\.jsonObject)]
+    }
 }
 
 /// Only recognizes the current `__v: 2` expense shape; anything else (missing, legacy format) is nil.
-struct TripExpenseData {
-    let currencies: [String]
-    let defaultCurrency: String
+struct TripExpenseData: Equatable {
+    var currencies: [String]
+    var defaultCurrency: String
     /// One-off items (e.g. flight tickets) — the web app's "PRE-TRIP / FIXED" section.
-    let itemExpenses: [RichExpenseEntry]
-    let dateExpenses: [DateExpenseGroup]
+    var itemExpenses: [RichExpenseEntry]
+    var dateExpenses: [DateExpenseGroup]
+
+    init(currencies: [String] = [], defaultCurrency: String = "",
+         itemExpenses: [RichExpenseEntry] = [], dateExpenses: [DateExpenseGroup] = []) {
+        self.currencies = currencies
+        self.defaultCurrency = defaultCurrency
+        self.itemExpenses = itemExpenses
+        self.dateExpenses = dateExpenses
+    }
 
     init?(json: JSONValue) {
         guard json["__v"]?.doubleValue == 2, let defaultCurrency = json["defaultCurrency"]?.stringValue else {
@@ -126,6 +159,70 @@ struct TripExpenseData {
     /// current format wraps its one `TripExpenseData` object as that list's first element.
     static func from(_ raw: [JSONValue]) -> TripExpenseData? {
         raw.first.flatMap { TripExpenseData(json: $0) }
+    }
+
+    /// The element stored as the trip's `expenses: [ ... ]` list — same shape the web app writes.
+    var jsonObject: [String: Any] {
+        [
+            "__v": 2,
+            "currencies": currencies,
+            "defaultCurrency": defaultCurrency,
+            "itemExpenses": itemExpenses.map(\.jsonObject),
+            "dateExpenses": dateExpenses.map(\.jsonObject),
+        ]
+    }
+
+    var allEntries: [RichExpenseEntry] { itemExpenses + dateExpenses.flatMap(\.entries) }
+    var isEmpty: Bool { allEntries.isEmpty }
+
+    func total(in currency: String) -> Double {
+        allEntries.reduce(0) { $0 + ($1.amounts[currency] ?? 0) }
+    }
+    var totalCashback: Double { allEntries.reduce(0) { $0 + $1.cashback } }
+
+    /// One group per trip day (mirrors the web's `buildDateGroups`), keeping existing entries.
+    /// Groups outside the trip's dates are kept only if they still hold entries, so editing
+    /// trip dates elsewhere never silently drops spending.
+    mutating func normalizeDays(for trip: TravelRecord) {
+        let existing = Dictionary(dateExpenses.map { ($0.date, $0) }, uniquingKeysWith: { a, _ in a })
+        let days = trip.dayKeys
+        var groups = days.map { existing[$0] ?? DateExpenseGroup(date: $0) }
+        groups += dateExpenses.filter { !days.contains($0.date) && !$0.entries.isEmpty }
+        dateExpenses = groups.sorted { $0.date < $1.date }
+    }
+
+    /// Location of an entry: `nil` date means the pre-trip / fixed list.
+    func location(of entryId: String) -> String?? {
+        if itemExpenses.contains(where: { $0.id == entryId }) { return .some(nil) }
+        if let g = dateExpenses.first(where: { $0.entries.contains { $0.id == entryId } }) { return .some(g.date) }
+        return nil
+    }
+
+    mutating func remove(entryId: String) {
+        itemExpenses.removeAll { $0.id == entryId }
+        for i in dateExpenses.indices { dateExpenses[i].entries.removeAll { $0.id == entryId } }
+    }
+
+    /// Insert or replace `entry`, placing it under `date` (nil = pre-trip). Moving between
+    /// days keeps the entry's id.
+    mutating func upsert(_ entry: RichExpenseEntry, date: String?) {
+        if location(of: entry.id) == .some(date) {
+            if date == nil {
+                if let i = itemExpenses.firstIndex(where: { $0.id == entry.id }) { itemExpenses[i] = entry }
+            } else if let g = dateExpenses.firstIndex(where: { $0.date == date }),
+                      let i = dateExpenses[g].entries.firstIndex(where: { $0.id == entry.id }) {
+                dateExpenses[g].entries[i] = entry
+            }
+            return
+        }
+        remove(entryId: entry.id)
+        guard let date else { itemExpenses.append(entry); return }
+        if let g = dateExpenses.firstIndex(where: { $0.date == date }) {
+            dateExpenses[g].entries.append(entry)
+        } else {
+            dateExpenses.append(DateExpenseGroup(date: date, entries: [entry]))
+            dateExpenses.sort { $0.date < $1.date }
+        }
     }
 }
 
@@ -157,6 +254,21 @@ struct TravelRecord: Codable, Identifiable {
               let e = Self.dayFormatter.date(from: endDate) else { return 1 }
         let days = Calendar(identifier: .gregorian).dateComponents([.day], from: s, to: e).day ?? 0
         return max(1, days + 1)
+    }
+
+    /// Every trip day as `yyyy-MM-dd`, start through end inclusive.
+    var dayKeys: [String] {
+        guard let s = Self.dayFormatter.date(from: startDate),
+              let e = Self.dayFormatter.date(from: endDate), s <= e else { return [] }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        var keys: [String] = []
+        var d = s
+        while d <= e && keys.count < 366 {
+            keys.append(Self.dayFormatter.string(from: d))
+            d = cal.date(byAdding: .day, value: 1, to: d)!
+        }
+        return keys
     }
 
     var isUpcoming: Bool {

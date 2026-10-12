@@ -34,6 +34,7 @@
 		AA0001000000000000000028 /* ComboField.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000028 /* ComboField.swift */; };
 		AA0001000000000000000029 /* SymbolIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000029 /* SymbolIcon.swift */; };
 		AA000100000000000000002A /* TravelMapKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000002A /* TravelMapKit.swift */; };
+		AA000100000000000000002F /* TripExpensesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000002F /* TripExpensesView.swift */; };
 		AA000100000000000000002B /* AlertModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000002B /* AlertModels.swift */; };
 		AA000100000000000000002C /* PriceAlertSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000002C /* PriceAlertSheet.swift */; };
 		AA000100000000000000002D /* TravelAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000200000000000000002D /* TravelAnalysisView.swift */; };
@@ -70,6 +71,7 @@
 		AA0002000000000000000028 /* ComboField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComboField.swift; sourceTree = "<group>"; };
 		AA0002000000000000000029 /* SymbolIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymbolIcon.swift; sourceTree = "<group>"; };
 		AA000200000000000000002A /* TravelMapKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TravelMapKit.swift; sourceTree = "<group>"; };
+		AA000200000000000000002F /* TripExpensesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripExpensesView.swift; sourceTree = "<group>"; };
 		AA000200000000000000002B /* AlertModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertModels.swift; sourceTree = "<group>"; };
 		AA000200000000000000002C /* PriceAlertSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceAlertSheet.swift; sourceTree = "<group>"; };
 		AA000200000000000000002D /* TravelAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TravelAnalysisView.swift; sourceTree = "<group>"; };
@@ -196,6 +198,7 @@
 				AA000200000000000000001E /* TravelListView.swift */,
 				AA000200000000000000001F /* TravelDetailView.swift */,
 				AA000200000000000000002A /* TravelMapKit.swift */,
+				AA000200000000000000002F /* TripExpensesView.swift */,
 				AA000200000000000000002D /* TravelAnalysisView.swift */,
 			);
 			path = Travel;
@@ -306,6 +309,7 @@
 				AA000100000000000000002E /* FormKit.swift in Sources */,
 				AA0001000000000000000029 /* SymbolIcon.swift in Sources */,
 				AA000100000000000000002A /* TravelMapKit.swift in Sources */,
+				AA000100000000000000002F /* TripExpensesView.swift in Sources */,
 				AA000100000000000000002B /* AlertModels.swift in Sources */,
 				AA000100000000000000002C /* PriceAlertSheet.swift in Sources */,
 				AA000100000000000000002D /* TravelAnalysisView.swift in Sources */,

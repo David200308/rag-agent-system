@@ -81,6 +81,12 @@ final class AgentService {
     func getTravelExpenses(id: String) async throws -> [JSONValue] {
         try await client.get("/api/v1/travel/\(id)/expenses")
     }
+
+    /// Partial update — the server only touches the fields present, so this replaces the
+    /// trip's whole expense list without affecting its stops/notes (same call the web app makes).
+    func updateTravelExpenses(id: String, _ data: TripExpenseData) async throws {
+        try await client.putRaw("/api/v1/travel/\(id)", body: ["expenses": [data.jsonObject]])
+    }
 }
 
 private struct _EmptyBody: Encodable {}
