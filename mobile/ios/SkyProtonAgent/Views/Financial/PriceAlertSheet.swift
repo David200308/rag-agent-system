@@ -99,10 +99,9 @@ struct PriceAlertSheet: View {
         }
         .animation(.easeOut(duration: 0.2), value: showForm)
         .animation(.easeOut(duration: 0.2), value: needsFreqNumber)
-        .confirmationDialog(
+        .alert(
             "Delete this alert?",
-            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-            titleVisibility: .visible
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })
         ) {
             Button("Delete", role: .destructive) {
                 if let a = pendingDelete { Task { await delete(a) } }

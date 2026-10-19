@@ -55,10 +55,9 @@ struct FinanceFuturesView: View {
         }
         .sheet(isPresented: $showAddSheet) { FutureFormView(store: store, editing: nil) }
         .sheet(item: $editingFuture) { f in FutureFormView(store: store, editing: f) }
-        .confirmationDialog(
+        .alert(
             "Delete this position?",
-            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-            titleVisibility: .visible
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })
         ) {
             Button("Delete", role: .destructive) {
                 if let f = pendingDelete { Task { try? await store.removeFuture(id: f.id) } }

@@ -76,10 +76,9 @@ struct FinanceDepositsView: View {
         }
         .sheet(isPresented: $showAddSheet) { DepositFormView(store: store, editing: nil) }
         .sheet(item: $editingDeposit) { d in DepositFormView(store: store, editing: d) }
-        .confirmationDialog(
+        .alert(
             "Delete this deposit?",
-            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-            titleVisibility: .visible
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })
         ) {
             Button("Delete", role: .destructive) {
                 if let d = pendingDelete { Task { try? await store.removeDeposit(id: d.id) } }

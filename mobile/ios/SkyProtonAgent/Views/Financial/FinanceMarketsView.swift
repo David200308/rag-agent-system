@@ -174,10 +174,9 @@ struct FinanceMarketsView: View {
                 PriceAlertSheet(symbol: target.symbol, assetType: target.assetType)
             }
         }
-        .confirmationDialog(
+        .alert(
             "Delete this position?",
-            isPresented: Binding(get: { pendingDeleteStock != nil }, set: { if !$0 { pendingDeleteStock = nil } }),
-            titleVisibility: .visible
+            isPresented: Binding(get: { pendingDeleteStock != nil }, set: { if !$0 { pendingDeleteStock = nil } })
         ) {
             Button("Delete", role: .destructive) {
                 if let s = pendingDeleteStock { Task { try? await store.removeStock(id: s.id) } }
@@ -185,10 +184,9 @@ struct FinanceMarketsView: View {
             }
             Button("Cancel", role: .cancel) { pendingDeleteStock = nil }
         }
-        .confirmationDialog(
+        .alert(
             "Delete this position?",
-            isPresented: Binding(get: { pendingDeleteCrypto != nil }, set: { if !$0 { pendingDeleteCrypto = nil } }),
-            titleVisibility: .visible
+            isPresented: Binding(get: { pendingDeleteCrypto != nil }, set: { if !$0 { pendingDeleteCrypto = nil } })
         ) {
             Button("Delete", role: .destructive) {
                 if let c = pendingDeleteCrypto { Task { try? await store.removeCrypto(id: c.id) } }

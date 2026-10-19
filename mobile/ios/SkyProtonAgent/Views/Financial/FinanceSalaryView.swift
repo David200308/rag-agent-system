@@ -336,7 +336,7 @@ private struct SalaryFormView: View {
                 FormDestructiveButton(label: "Delete record") { showDeleteConfirm = true }
             }
         }
-        .confirmationDialog("Delete this salary record?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+        .alert("Delete this salary record?", isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) { Task { await delete() } }
             Button("Cancel", role: .cancel) {}
         }

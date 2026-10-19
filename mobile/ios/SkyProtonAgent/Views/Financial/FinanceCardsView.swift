@@ -81,10 +81,9 @@ struct FinanceCardsView: View {
         .task { await store.loadCardsIfNeeded() }
         .sheet(isPresented: $showAddSheet) { CardFormView(store: store, editing: nil) }
         .sheet(item: $editingCard) { c in CardFormView(store: store, editing: c) }
-        .confirmationDialog(
+        .alert(
             "Delete this card?",
-            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-            titleVisibility: .visible
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })
         ) {
             Button("Delete", role: .destructive) {
                 if let c = pendingDelete { Task { try? await store.removeCard(id: c.id) } }

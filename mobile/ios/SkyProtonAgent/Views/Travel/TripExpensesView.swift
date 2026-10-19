@@ -113,10 +113,9 @@ struct TripExpensesSection: View {
             }
         }
         .sheet(isPresented: $showCurrencies) { TripCurrenciesSheet(store: store) }
-        .confirmationDialog(
+        .alert(
             "Delete \(pendingDelete?.name.isEmpty == false ? "“\(pendingDelete!.name)”" : "this expense")?",
-            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-            titleVisibility: .visible
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })
         ) {
             Button("Delete", role: .destructive) {
                 if let entry = pendingDelete { delete(entry) }
@@ -578,7 +577,7 @@ struct ExpenseEditSheet: View {
                     .disabled(isSaving)
             }
         }
-        .confirmationDialog("Delete this expense?", isPresented: $confirmDelete, titleVisibility: .visible) {
+        .alert("Delete this expense?", isPresented: $confirmDelete) {
             Button("Delete", role: .destructive, action: delete)
             Button("Cancel", role: .cancel) {}
         }
