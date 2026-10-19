@@ -46,7 +46,7 @@
                 <mxCell id="search" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Public search engines" vertex="1">
                     <mxGeometry height="60" width="250" x="1420" y="382" as="geometry"/>
                 </mxCell>
-                <mxCell id="market" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Market data&lt;br&gt;Finnhub · Pyth Hermes · Yahoo · Hyperliquid" vertex="1">
+                <mxCell id="market" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Market data&lt;br&gt;Finnhub · Pyth Hermes · Yahoo · CoinGecko · Hyperliquid" vertex="1">
                     <mxGeometry height="60" width="250" x="1420" y="470" as="geometry"/>
                 </mxCell>
                 <mxCell id="resend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Resend&lt;br&gt;(email delivery)" vertex="1">
@@ -56,22 +56,46 @@
                     <mxGeometry height="140" width="1190" x="160" y="330" as="geometry"/>
                 </mxCell>
                 <mxCell id="auth" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;auth-inner&lt;/b&gt; :8086&lt;br&gt;JWT · OTP · passkeys" vertex="1">
-                    <mxGeometry height="64" width="160" x="180" y="380" as="geometry"/>
+                    <mxGeometry height="64" width="140" x="180" y="380" as="geometry"/>
                 </mxCell>
                 <mxCell id="travel" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;travel-inner&lt;/b&gt; :8088&lt;br&gt;trips · stops · expenses" vertex="1">
-                    <mxGeometry height="64" width="160" x="380" y="380" as="geometry"/>
+                    <mxGeometry height="64" width="140" x="350" y="380" as="geometry"/>
                 </mxCell>
                 <mxCell id="storage" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;storage-inner&lt;/b&gt; :8083&lt;br&gt;image/object storage" vertex="1">
-                    <mxGeometry height="64" width="160" x="580" y="380" as="geometry"/>
+                    <mxGeometry height="64" width="140" x="520" y="380" as="geometry"/>
                 </mxCell>
                 <mxCell id="finance" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;finance-inner&lt;/b&gt; :8087&lt;br&gt;portfolio · market data" vertex="1">
-                    <mxGeometry height="64" width="160" x="780" y="380" as="geometry"/>
+                    <mxGeometry height="64" width="140" x="690" y="380" as="geometry"/>
                 </mxCell>
                 <mxCell id="alert" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;investment-alert-task&lt;/b&gt; :8085&lt;br&gt;Go · price alerts" vertex="1">
-                    <mxGeometry height="64" width="160" x="980" y="380" as="geometry"/>
+                    <mxGeometry height="64" width="140" x="860" y="380" as="geometry"/>
                 </mxCell>
                 <mxCell id="searxng" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;SearXNG&lt;/b&gt; :8090&lt;br&gt;web search" vertex="1">
-                    <mxGeometry height="64" width="160" x="1180" y="380" as="geometry"/>
+                    <mxGeometry height="64" width="140" x="1200" y="380" as="geometry"/>
+                </mxCell>
+<mxCell id="lightpanda" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Lightpanda&lt;/b&gt; :9222&lt;br&gt;headless browser · web fetch" vertex="1">
+                    <mxGeometry height="64" width="140" x="1030" y="380" as="geometry"/>
+                </mxCell>
+                <mxCell id="webrisk" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Google Web Risk&lt;br&gt;(URL reputation)" vertex="1">
+                    <mxGeometry height="56" width="250" x="1420" y="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="websites" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Public websites&lt;br&gt;(private networks blocked)" vertex="1">
+                    <mxGeometry height="56" width="250" x="1420" y="292" as="geometry"/>
+                </mxCell>
+                <mxCell id="e35" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.9694;exitY=1;exitDx=0;exitDy=0;entryX=0.0571;entryY=0;entryDx=0;entryDy=0;" target="lightpanda" value="CDP">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e36" edge="1" parent="1" source="lightpanda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="websites" value="fetch">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e37" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.9917;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="webrisk" value="URL check">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1054" y="160"/>
+                            <mxPoint x="1300" y="160"/>
+                            <mxPoint x="1300" y="228"/>
+                        </Array>
+                    </mxGeometry>
                 </mxCell>
                 <mxCell id="redis" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#f8cecc;strokeColor=#b85450;" value="Redis" vertex="1">
                     <mxGeometry height="80" width="120" x="500" y="560" as="geometry"/>
@@ -117,7 +141,7 @@
                 <mxCell id="e6" edge="1" parent="1" source="scheduler" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=1;exitY=0.7;exitDx=0;exitDy=0;entryX=0;entryY=0.7;entryDx=0;entryDy=0;" target="backend" value="trigger">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e7" edge="1" parent="1" source="scheduler" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.85;exitY=1;exitDx=0;exitDy=0;entryX=0.3125;entryY=0;entryDx=0;entryDy=0;" target="auth" value="validate">
+                <mxCell id="e7" edge="1" parent="1" source="scheduler" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.85;exitY=1;exitDx=0;exitDy=0;entryX=0.3571;entryY=0;entryDx=0;entryDy=0;" target="auth" value="validate">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="e8" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.9375;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="connapi" value="connectors">
@@ -146,7 +170,7 @@
                 <mxCell id="e13" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.3056;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="redis" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e14" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#d79b00;strokeWidth=1.5;dashed=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.8611;exitY=1;exitDx=0;exitDy=0;entryX=0.4615;entryY=0;entryDx=0;entryDy=0;" target="kafka" value="">
+                <mxCell id="e14" edge="1" parent="1" source="backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#d79b00;strokeWidth=1.5;dashed=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.9375;exitY=1;exitDx=0;exitDy=0;entryX=0.8846;entryY=0;entryDx=0;entryDy=0;" target="kafka" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="e15" edge="1" parent="1" source="scheduler" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.1;exitY=1;exitDx=0;exitDy=0;entryX=0.0192;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
@@ -160,25 +184,25 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="e17" edge="1" parent="1" source="auth" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.1923;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
+                <mxCell id="e17" edge="1" parent="1" source="auth" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.1827;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e18" edge="1" parent="1" source="travel" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.3846;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
+                <mxCell id="e18" edge="1" parent="1" source="travel" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.3462;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e19" edge="1" parent="1" source="storage" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5769;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
+                <mxCell id="e19" edge="1" parent="1" source="storage" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5096;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e20" edge="1" parent="1" source="finance" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.7692;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
+                <mxCell id="e20" edge="1" parent="1" source="finance" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.6731;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e21" edge="1" parent="1" source="alert" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.9615;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
+                <mxCell id="e21" edge="1" parent="1" source="alert" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.8365;entryY=0;entryDx=0;entryDy=0;" target="mysql" value="">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="e22" edge="1" parent="1" source="auth" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#b85450;strokeWidth=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.3333;entryY=0;entryDx=0;entryDy=0;" target="redis" value="">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="300" y="510"/>
+                            <mxPoint x="285" y="510"/>
                             <mxPoint x="540" y="510"/>
                         </Array>
                     </mxGeometry>
@@ -186,7 +210,7 @@
                 <mxCell id="e23" edge="1" parent="1" source="auth" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#d79b00;strokeWidth=1.5;dashed=1;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.875;exitY=1;exitDx=0;exitDy=0;entryX=0.2308;entryY=0;entryDx=0;entryDy=0;" target="kafka" value="OTP event">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="320" y="535"/>
+                            <mxPoint x="302" y="535"/>
                             <mxPoint x="930" y="535"/>
                         </Array>
                     </mxGeometry>
@@ -197,14 +221,14 @@
                 <mxCell id="e25" edge="1" parent="1" source="finance" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="market" value="">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="900" y="500"/>
+                            <mxPoint x="795" y="500"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
                 <mxCell id="e26" edge="1" parent="1" source="alert" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#333333;strokeWidth=1.5;jumpStyle=arc;jumpSize=8;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="market" value="">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="1100" y="500"/>
+                            <mxPoint x="965" y="500"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>

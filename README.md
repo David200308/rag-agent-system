@@ -18,7 +18,7 @@
 | Auth          | JJWT · WebAuthn (passkeys) · OTP email via Resend · Ed25519 CLI keys                                    |
 | Data          | MySQL 8 · Weaviate (vectors) · Redis 7 (Lettuce, Redisson, Bucket4j) · Garage (S3-compatible storage)   |
 | Messaging     | Apache Kafka (KRaft, single node)                                                                          |
-| Web search    | SearXNG (self-hosted)                                                                                      |
+| Web search    | SearXNG (self-hosted) · Lightpanda headless browser (CDP) · Google Web Risk                             |
 | Observability | Prometheus · Grafana · Loki · Promtail                                                                  |
 | Deployment    | Docker Compose · GitHub Actions (CLI cross-compile releases)                                              |
 
