@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import com.agentsystem.schema.ChoicePrompt;
 import com.agentsystem.schema.ToolActivity;
 
 import java.time.Instant;
@@ -39,6 +40,11 @@ public class ConversationMessage {
     @Convert(converter = ToolActivityListConverter.class)
     @Column(name = "tool_activity", columnDefinition = "TEXT")
     private List<ToolActivity> toolActivity = List.of();
+
+    /** Options the assistant offered the user to pick from; null when it asked nothing. */
+    @Convert(converter = ChoicePromptConverter.class)
+    @Column(name = "choice_prompt", columnDefinition = "TEXT")
+    private ChoicePrompt choicePrompt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

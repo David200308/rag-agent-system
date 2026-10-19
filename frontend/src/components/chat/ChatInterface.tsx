@@ -10,7 +10,8 @@ import {
 } from "@/lib/api";
 import { useChatStore } from "@/store/chatStore";
 import { MessageBubble } from "./MessageBubble";
-import { MessageInput } from "./MessageInput";
+import { MessageInput, type MessageInputHandle } from "./MessageInput";
+import { withChoiceNote } from "./ChoicePromptCard";
 import { ShareModal } from "./ShareModal";
 import { ScheduleModal } from "./ScheduleModal";
 import { ModelSelector } from "@/components/ui/ModelSelector";
@@ -38,6 +39,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
   const router = useRouter();
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const inputRef = useRef<MessageInputHandle>(null);
   const [showShare, setShowShare] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const { conversations, addMessage, setBackendConversationId } = useChatStore();
@@ -134,6 +136,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
         fallbackActivated: response.fallbackActivated,
         metadata: response.metadata,
         toolActivity: response.toolActivity,
+        choicePrompt: response.choicePrompt ?? undefined,
       });
     },
     onError: (err: Error, variables) => {
@@ -202,7 +205,10 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
 
     const history = (conversation?.messages ?? [])
       .filter((m) => m.role !== "error")
-      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.role === "assistant" ? withChoiceNote(m.content, m.choicePrompt) : m.content,
+      }));
 
     const attachmentNote = files.length > 0
       ? `\n\n📎 ${files.map((f) => f.name).join(", ")}`
@@ -305,9 +311,18 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
           <EmptyState />
         ) : (
           <div className="mx-auto max-w-3xl space-y-6">
-            {conversation.messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
-            ))}
+            {conversation.messages.map((msg, i, all) => {
+              const next = all[i + 1];
+              return (
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  choiceActive={!next && !isPendingHere}
+                  choiceAnswer={next?.role === "user" ? next.content : undefined}
+                  onChoiceSelect={(text) => inputRef.current?.sendText(text)}
+                />
+              );
+            })}
 
             {isPendingHere && (
               <div className="flex items-center gap-2 text-sm text-[--color-muted]">
@@ -321,7 +336,7 @@ export function ChatInterface({ conversationId, onMenuOpen }: ChatInterfaceProps
       </div>
 
       {/* Input */}
-      <MessageInput onSend={handleSend} disabled={isPendingHere} onStop={handleStop} />
+      <MessageInput ref={inputRef} onSend={handleSend} disabled={isPendingHere} onStop={handleStop} />
     </div>
   );
 }

@@ -154,6 +154,7 @@ public class AgentController {
             initData.put("request", request);
             initData.put("runId", runId);
             initData.put("conversationId", conversationId);
+            initData.put("interactive", true);
             if (!attachments.isEmpty()) {
                 initData.put("documents", attachments);
             }
@@ -224,7 +225,8 @@ public class AgentController {
                     () -> new RuntimeException("No response in final state"));
 
             // Persist assistant answer and inject conversationId into metadata
-            conversationService.saveAssistantMessage(conversationId, raw.answer(), runId, raw.toolActivity());
+            conversationService.saveAssistantMessage(conversationId, raw.answer(), runId,
+                    raw.toolActivity(), raw.choicePrompt());
             AgentResponse response = withConversationId(raw, conversationId);
 
             agentMetrics.recordQuery(response.fallbackActivated(), System.currentTimeMillis() - startMs);
@@ -610,7 +612,8 @@ public class AgentController {
                         meta.modelUsed(),
                         conversationId
                 ),
-                raw.toolActivity()
+                raw.toolActivity(),
+                raw.choicePrompt()
         );
     }
 

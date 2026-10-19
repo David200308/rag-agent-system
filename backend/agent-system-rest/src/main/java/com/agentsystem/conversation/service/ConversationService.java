@@ -5,6 +5,7 @@ import com.agentsystem.conversation.entity.ConversationMessage;
 import com.agentsystem.conversation.entity.ConversationShare;
 import com.agentsystem.org.OrgContext;
 import com.agentsystem.schema.AgentRequest;
+import com.agentsystem.schema.ChoicePrompt;
 import com.agentsystem.schema.ToolActivity;
 
 import java.util.List;
@@ -29,8 +30,14 @@ public interface ConversationService {
     }
 
     /** Save the assistant's answer with the tool calls made while generating it. */
+    default void saveAssistantMessage(String conversationId, String content, String runId,
+                                      List<ToolActivity> toolActivity) {
+        saveAssistantMessage(conversationId, content, runId, toolActivity, null);
+    }
+
+    /** Save the assistant's answer with its tool calls and any options it offered the user. */
     void saveAssistantMessage(String conversationId, String content, String runId,
-                              List<ToolActivity> toolActivity);
+                              List<ToolActivity> toolActivity, ChoicePrompt choicePrompt);
 
     /**
      * Load all messages for a conversation as {@link AgentRequest.ConversationTurn} objects

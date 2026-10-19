@@ -38,7 +38,8 @@ public class AgentState extends org.bsc.langgraph4j.state.AgentState {
         Map.entry("shareOwnerEmail",          Channels.<String>base((cur, upd) -> upd)),
         Map.entry("selectedModelDisplayName", Channels.<String>base((cur, upd) -> upd)),
         Map.entry("selectedSandboxId",        Channels.<String>base((cur, upd) -> upd)),
-        Map.entry("conversationId",           Channels.<String>base((cur, upd) -> upd))
+        Map.entry("conversationId",           Channels.<String>base((cur, upd) -> upd)),
+        Map.entry("interactive",              Channels.<Boolean>base((cur, upd) -> upd))
     );
 
     public AgentState(Map<String, Object> initData) {
@@ -102,6 +103,14 @@ public class AgentState extends org.bsc.langgraph4j.state.AgentState {
 
     public Optional<String> conversationId() {
         return value("conversationId");
+    }
+
+    /**
+     * True when a user is waiting on this answer in a chat client (not a scheduled run), so the
+     * assistant may offer clickable options and wait for a pick.
+     */
+    public boolean interactive() {
+        return Boolean.TRUE.equals(value("interactive").orElse(false));
     }
 
     /** True when the caller attached one of their persistent sandboxes to this turn. */

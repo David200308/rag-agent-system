@@ -6,6 +6,7 @@ import com.agentsystem.agent.ToolCallBudget;
 import com.agentsystem.agent.state.AgentState;
 import com.agentsystem.config.ChatModelFactory;
 import com.agentsystem.config.LlmProperties;
+import com.agentsystem.connector.tool.ChoicePromptAgentTool;
 import com.agentsystem.connector.tool.GoogleCalendarAgentTool;
 import com.agentsystem.connector.tool.GoogleDocsAgentTool;
 import com.agentsystem.connector.tool.GoogleSheetsAgentTool;
@@ -19,6 +20,7 @@ import com.agentsystem.model.entity.ModelConfig;
 import com.agentsystem.model.service.ModelConfigService;
 import com.agentsystem.schema.AgentRequest;
 import com.agentsystem.schema.AgentResponse;
+import com.agentsystem.schema.ChoicePrompt;
 import com.agentsystem.schema.DocumentResult;
 import com.agentsystem.schema.QueryAnalysis;
 import com.agentsystem.schema.ToolActivity;
@@ -38,6 +40,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
@@ -66,6 +69,7 @@ public class GeneratorNode {
     private final WebSearchAgentTool       webSearchTool;
     private final WebFetchAgentTool        webFetchTool;
     private final SandboxAgentTool         sandboxTool;
+    private final ChoicePromptAgentTool    choicePromptTool;
     private final WebFetchUrlAllowlist     fetchAllowlist;
     private final ConversationFetchUrlService fetchUrlService;
 
@@ -166,6 +170,22 @@ public class GeneratorNode {
               that don't require actually running something.
             """;
 
+    /** Appended to {@link #SYSTEM_PROMPT} only when a user is waiting in a chat client (not a scheduled run). */
+    private static final String CHOICE_ADDENDUM = """
+
+            ASKING THE USER TO CHOOSE:
+            - askUserChoice: when you genuinely need the user to decide something before you can
+              give a good answer, and the reasonable answers form a short fixed list (2-6 items),
+              call this instead of writing the options as a list in your reply. They appear as
+              buttons under your reply. Examples: the request is ambiguous between a few distinct
+              meanings; several valid approaches differ in a way only the user can judge; you are
+              about to do something with side effects and there are distinct ways to do it.
+            - Don't use it when you can reasonably infer the answer, for open-ended questions, or
+              just to offer follow-up suggestions after a complete answer. Call it at most once
+              per reply, and after calling it end your reply with a short lead-in — never repeat
+              the options or answer on the user's behalf.
+            """;
+
     public Map<String, Object> process(AgentState state) {
         long start = System.currentTimeMillis();
 
@@ -212,6 +232,9 @@ public class GeneratorNode {
         // Filled by ToolActivityRecorder on the worker thread; reset per attempt so a retried
         // generation doesn't show the abandoned attempt's calls twice.
         List<ToolActivity> toolActivity = new CopyOnWriteArrayList<>();
+        // Set by askUserChoice on the worker thread; reset per attempt like toolActivity.
+        AtomicReference<ChoicePrompt> choicePrompt = new AtomicReference<>();
+        boolean offerChoices = state.interactive();
 
         Runnable primeToolContext = () -> {
             googleDocsTool.setCurrentUserUuid(userUuid);
@@ -230,6 +253,8 @@ public class GeneratorNode {
             sandboxTool.setCurrentSandboxId(sandboxId);
             fetchAllowlist.reset(userTexts, priorSearchHashes);
             toolActivity.clear();
+            choicePrompt.set(null);
+            if (offerChoices) choicePromptTool.setCurrentSink(choicePrompt);
         };
         Runnable clearToolContext = () -> {
             googleDocsTool.clearCurrentUserUuid();
@@ -246,6 +271,7 @@ public class GeneratorNode {
             travelTool.clearCurrentUserUuid();
             sandboxTool.clearCurrentUserUuid();
             sandboxTool.clearCurrentSandboxId();
+            choicePromptTool.clearCurrentSink();
             searchedUrls.addAll(fetchAllowlist.searchResultUrls());
             fetchAllowlist.clear();
         };
@@ -266,6 +292,10 @@ public class GeneratorNode {
                 toolObjects.add(sandboxTool);
                 systemPrompt = systemPrompt + SANDBOX_ADDENDUM;
             }
+            if (offerChoices) {
+                toolObjects.add(choicePromptTool);
+                systemPrompt = systemPrompt + CHOICE_ADDENDUM;
+            }
             ToolCallbackProvider tools = ToolActivityRecorder.recording(
                     MethodToolCallbackProvider.builder()
                             .toolObjects(toolObjects.toArray())
@@ -279,6 +309,11 @@ public class GeneratorNode {
             toolCallBudget.clear();
         }
 
+        // A model may end its turn with just the askUserChoice call and no text — that's a
+        // complete reply (the options are the answer), not a failed generation.
+        if (answer == null && choicePrompt.get() != null) {
+            answer = "";
+        }
         if (answer == null) {
             log.warn("[GeneratorNode] LLM generation failed after retries — routing to fallback");
             return Map.of(
@@ -305,7 +340,8 @@ public class GeneratorNode {
                         selectedConfig != null ? selectedConfig.getModelId() : resolveModelName(),
                         null   // conversationId injected by AgentController after persistence
                 ),
-                List.copyOf(toolActivity)
+                List.copyOf(toolActivity),
+                choicePrompt.get()
         );
 
         log.info("[GeneratorNode] Answer generated ({} chars)", answer.length());

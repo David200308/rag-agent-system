@@ -62,6 +62,13 @@ export interface ToolActivity {
   status: "OK" | "FAILED" | "BLOCKED";
 }
 
+/** A question the assistant asked with a fixed set of answers, shown as clickable options. */
+export interface ChoicePrompt {
+  question: string;
+  options: string[];
+  multiSelect: boolean;
+}
+
 export interface AgentResponse {
   answer: string;
   sources: SourceDocument[];
@@ -70,6 +77,7 @@ export interface AgentResponse {
   fallbackReason: string | null;
   metadata: RunMetadata;
   toolActivity?: ToolActivity[];
+  choicePrompt?: ChoicePrompt | null;
 }
 
 // ── UI-only types ──────────────────────────────────────────────────────────
@@ -85,6 +93,7 @@ export interface ChatMessage {
   fallbackActivated?: boolean;
   metadata?: RunMetadata;
   toolActivity?: ToolActivity[];
+  choicePrompt?: ChoicePrompt;
   timestamp: Date;
 }
 
@@ -130,6 +139,7 @@ export interface BackendMessage {
   content: string;
   runId: string | null;
   toolActivity?: ToolActivity[] | null;
+  choicePrompt?: ChoicePrompt | null;
   createdAt: string;
 }
 

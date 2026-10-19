@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/Badge";
 import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import { SourceCard } from "./SourceCard";
 import { ToolActivitySummary } from "./ToolActivitySummary";
+import { ChoicePromptCard } from "./ChoicePromptCard";
 import { useTimezone } from "@/hooks/useTimezone";
 import type { ChatMessage } from "@/types/agent";
 
@@ -23,6 +24,11 @@ function extractWorkspaceLinks(content: string): WorkspaceLink[] {
 
 interface MessageBubbleProps {
   message: ChatMessage;
+  /** Whether this message's offered options can still be picked. */
+  choiceActive?: boolean;
+  /** The user's reply after this message, to highlight the option they picked. */
+  choiceAnswer?: string;
+  onChoiceSelect?: (text: string) => void;
 }
 
 const routeIcon = {
@@ -39,7 +45,7 @@ const routeVariant = {
   ERROR:    "danger",
 } as const;
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, choiceActive = false, choiceAnswer, onChoiceSelect }: MessageBubbleProps) {
   const { timezone } = useTimezone();
   const isUser = message.role === "user";
   const isError = message.role === "error";
@@ -66,23 +72,35 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           <ToolActivitySummary activity={message.toolActivity} />
         )}
 
-        {/* Text */}
-        <div
-          className={cn(
-            "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
-            isUser
-              ? "rounded-tr-sm bg-black text-white dark:bg-white dark:text-black whitespace-pre-wrap"
-              : isError
-              ? "rounded-tl-sm bg-gray-100 text-gray-700 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 whitespace-pre-wrap"
-              : "rounded-tl-sm bg-[--color-surface-raised] text-inherit border border-[--color-border]",
-          )}
-        >
-          {isUser || isError ? (
-            message.content
-          ) : (
-            <MarkdownContent content={message.content} />
-          )}
-        </div>
+        {/* Text — skipped when the model ended its turn with only the options */}
+        {(isUser || isError || message.content.trim() || !message.choicePrompt) && (
+          <div
+            className={cn(
+              "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+              isUser
+                ? "rounded-tr-sm bg-black text-white dark:bg-white dark:text-black whitespace-pre-wrap"
+                : isError
+                ? "rounded-tl-sm bg-gray-100 text-gray-700 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 whitespace-pre-wrap"
+                : "rounded-tl-sm bg-[--color-surface-raised] text-inherit border border-[--color-border]",
+            )}
+          >
+            {isUser || isError ? (
+              message.content
+            ) : (
+              <MarkdownContent content={message.content} />
+            )}
+          </div>
+        )}
+
+        {/* Options the assistant offered — picking one sends it as the next message */}
+        {!isUser && !isError && message.choicePrompt && (
+          <ChoicePromptCard
+            prompt={message.choicePrompt}
+            active={choiceActive}
+            answer={choiceAnswer}
+            onSelect={onChoiceSelect}
+          />
+        )}
 
         {/* Google Workspace tool-call cards */}
         {workspaceLinks.length > 0 && (

@@ -137,6 +137,7 @@ export const useChatStore = create<ChatState>()(
             role: m.role,
             content: m.content,
             toolActivity: m.toolActivity ?? undefined,
+            choicePrompt: m.choicePrompt ?? undefined,
             timestamp: new Date(m.createdAt),
           }));
           const firstUserMsg = chatMessages.find((m) => m.role === "user");

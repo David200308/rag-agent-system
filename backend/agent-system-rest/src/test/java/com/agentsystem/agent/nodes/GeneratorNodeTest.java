@@ -5,6 +5,7 @@ import com.agentsystem.agent.ToolCallBudget;
 import com.agentsystem.agent.state.AgentState;
 import com.agentsystem.config.ChatModelFactory;
 import com.agentsystem.config.LlmProperties;
+import com.agentsystem.connector.tool.ChoicePromptAgentTool;
 import com.agentsystem.connector.tool.GoogleCalendarAgentTool;
 import com.agentsystem.connector.tool.GoogleDocsAgentTool;
 import com.agentsystem.connector.tool.GoogleSheetsAgentTool;
@@ -59,6 +60,7 @@ class GeneratorNodeTest {
     @Mock WebSearchAgentTool       webSearchTool;
     @Mock WebFetchAgentTool        webFetchTool;
     @Mock SandboxAgentTool         sandboxTool;
+    ChoicePromptAgentTool          choicePromptTool = new ChoicePromptAgentTool();
     @Mock WebFetchUrlAllowlist     fetchAllowlist;
     @Mock ConversationFetchUrlService fetchUrlService;
 
@@ -69,7 +71,7 @@ class GeneratorNodeTest {
         node = new GeneratorNode(chatClient, llmProperties, modelConfigService, chatModelFactory,
                 generationService, toolCallBudget,
                 googleDocsTool, googleSheetsTool, googleSlidesTool, googleCalendarTool, telegramTool,
-                travelTool, webSearchTool, webFetchTool, sandboxTool, fetchAllowlist, fetchUrlService);
+                travelTool, webSearchTool, webFetchTool, sandboxTool, choicePromptTool, fetchAllowlist, fetchUrlService);
     }
 
     private static AgentRequest request() {
@@ -104,6 +106,60 @@ class GeneratorNodeTest {
         assertThat(response.answer()).isEqualTo("The answer.");
         verify(toolCallBudget).reset();
         verify(toolCallBudget).clear();
+    }
+
+    // ── process — askUserChoice is offered only to interactive chats ──────────
+
+    @Test
+    void process_interactive_returnsChoicePromptOfferedByTool() {
+        ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
+        when(generationService.generate(any(), systemPromptCaptor.capture(), any(), any(), any(), any()))
+                .thenAnswer(inv -> {
+                    Runnable setup   = inv.getArgument(4);
+                    Runnable cleanup = inv.getArgument(5);
+                    setup.run();
+                    choicePromptTool.askUserChoice("Which city?", List.of("Paris", "Lyon"), null);
+                    cleanup.run();
+                    return CompletableFuture.completedFuture("Which one did you mean?");
+                });
+        when(llmProperties.getProvider()).thenReturn("openai");
+        LlmProperties.OpenAiProps openAiProps = new LlmProperties.OpenAiProps();
+        openAiProps.setModel("gpt-4o-mini");
+        when(llmProperties.getOpenai()).thenReturn(openAiProps);
+
+        AgentState state = new AgentState(Map.of(
+                "request",       request(),
+                "queryAnalysis", analysis(),
+                "interactive",   true
+        ));
+
+        AgentResponse response = (AgentResponse) node.process(state).get("response");
+
+        assertThat(systemPromptCaptor.getValue()).contains("askUserChoice");
+        assertThat(response.choicePrompt()).isNotNull();
+        assertThat(response.choicePrompt().question()).isEqualTo("Which city?");
+        assertThat(response.choicePrompt().options()).containsExactly("Paris", "Lyon");
+    }
+
+    @Test
+    void process_notInteractive_doesNotOfferChoices() {
+        ArgumentCaptor<String> systemPromptCaptor = ArgumentCaptor.forClass(String.class);
+        when(generationService.generate(any(), systemPromptCaptor.capture(), any(), any(), any(), any()))
+                .thenReturn(CompletableFuture.completedFuture("The answer."));
+        when(llmProperties.getProvider()).thenReturn("openai");
+        LlmProperties.OpenAiProps openAiProps = new LlmProperties.OpenAiProps();
+        openAiProps.setModel("gpt-4o-mini");
+        when(llmProperties.getOpenai()).thenReturn(openAiProps);
+
+        AgentState state = new AgentState(Map.of(
+                "request",       request(),
+                "queryAnalysis", analysis()
+        ));
+
+        AgentResponse response = (AgentResponse) node.process(state).get("response");
+
+        assertThat(systemPromptCaptor.getValue()).doesNotContain("askUserChoice");
+        assertThat(response.choicePrompt()).isNull();
     }
 
     // ── process — web search is opt-in ────────────────────────────────────────

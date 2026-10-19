@@ -4,9 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { fetchSharedConversation } from "@/lib/api";
 import { ToolActivitySummary } from "@/components/chat/ToolActivitySummary";
+import { ChoicePromptCard } from "@/components/chat/ChoicePromptCard";
 import type { BackendMessage, ShareMetaResponse } from "@/types/agent";
 
 type Status = "loading" | "ok" | "expired" | "error";
+
+/** The user's reply right after message `i`, if any — highlights the option they picked. */
+function replyTo(messages: BackendMessage[], i: number): string | undefined {
+  const next = messages[i + 1];
+  return next?.role === "user" ? next.content : undefined;
+}
 
 export default function SharedConversationPage() {
   const { token } = useParams<{ token: string }>();
@@ -90,7 +97,7 @@ export default function SharedConversationPage() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
         <div className="mx-auto max-w-2xl space-y-4">
-          {messages.map((msg) => (
+          {messages.map((msg, i) => (
             <div
               key={msg.id}
               className={[
@@ -112,6 +119,13 @@ export default function SharedConversationPage() {
                 >
                   {msg.content}
                 </div>
+                {msg.role === "assistant" && msg.choicePrompt && (
+                  <ChoicePromptCard
+                    prompt={msg.choicePrompt}
+                    active={false}
+                    answer={replyTo(messages, i)}
+                  />
+                )}
               </div>
             </div>
           ))}

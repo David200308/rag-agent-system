@@ -38,7 +38,11 @@ public record AgentResponse(
 
         @Schema(description = "Tool calls made while generating the answer, in call order — "
                 + "rendered as a collapsed summary above the answer")
-        List<ToolActivity> toolActivity
+        List<ToolActivity> toolActivity,
+
+        @Schema(description = "Options the assistant offered the user to pick from, rendered as "
+                + "clickable buttons under the answer; null when it asked nothing")
+        ChoicePrompt choicePrompt
 
 ) implements Serializable {
 
@@ -51,7 +55,7 @@ public record AgentResponse(
     /** For responses produced without any tool calls (fallbacks, errors, scheduler runs). */
     public AgentResponse(String answer, List<SourceDocument> sources, RouteDecision routeDecision,
                          boolean fallbackActivated, String fallbackReason, RunMetadata metadata) {
-        this(answer, sources, routeDecision, fallbackActivated, fallbackReason, metadata, List.of());
+        this(answer, sources, routeDecision, fallbackActivated, fallbackReason, metadata, List.of(), null);
     }
 
     @Schema(description = "A source document retrieved from the vector store")

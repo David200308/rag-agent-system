@@ -6,7 +6,9 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useImperativeHandle,
   type KeyboardEvent,
+  type Ref,
 } from "react";
 import { Send, Square, Database, Globe, Zap, X, ChevronDown, Paperclip, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -33,6 +35,15 @@ interface MessageInputProps {
   disabled?: boolean;
   /** Called when the user clicks Stop while a request for this conversation is pending. */
   onStop?: () => void;
+  ref?: Ref<MessageInputHandle>;
+}
+
+export interface MessageInputHandle {
+  /**
+   * Sends `text` with the current knowledge-base / web-search / skill settings, leaving the
+   * draft and attachments untouched — used when the user picks an option the assistant offered.
+   */
+  sendText: (text: string) => void;
 }
 
 // ── AttachmentChip ────────────────────────────────────────────────────────────
@@ -223,7 +234,7 @@ function SkillPickerDropdown({
 
 // ── MessageInput (root) ───────────────────────────────────────────────────────
 
-export function MessageInput({ onSend, disabled = false, onStop }: MessageInputProps) {
+export function MessageInput({ onSend, disabled = false, onStop, ref }: MessageInputProps) {
   const [text, setText] = useState("");
   const [topK, setTopK] = useState(5);
   const [useKnowledgeBase, setUseKnowledgeBase] = useState(false);
@@ -366,6 +377,14 @@ export function MessageInput({ onSend, disabled = false, onStop }: MessageInputP
     setAttachments([]);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
+
+  useImperativeHandle(ref, () => ({
+    sendText: (value: string) => {
+      const trimmed = value.trim();
+      if (!trimmed || disabled) return;
+      onSend(trimmed, topK, useKnowledgeBase, useWebSearch, selectedSkills.map((s) => s.id), []);
+    },
+  }), [onSend, disabled, topK, useKnowledgeBase, useWebSearch, selectedSkills]);
 
   const onInput = () => {
     const el = textareaRef.current;

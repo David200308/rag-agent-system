@@ -12,6 +12,7 @@ import com.agentsystem.org.OrgContext;
 import com.agentsystem.sandbox.entity.PersistentSandbox;
 import com.agentsystem.sandbox.repository.PersistentSandboxRepository;
 import com.agentsystem.schema.AgentRequest;
+import com.agentsystem.schema.ChoicePrompt;
 import com.agentsystem.schema.ToolActivity;
 import com.agentsystem.user.entity.User;
 import com.agentsystem.user.service.UserAccountService;
@@ -81,9 +82,10 @@ public class ConversationServiceImpl implements ConversationService {
     @Transactional
     @Override
     public void saveAssistantMessage(String conversationId, String content, String runId,
-                                     List<ToolActivity> toolActivity) {
+                                     List<ToolActivity> toolActivity, ChoicePrompt choicePrompt) {
         ConversationMessage message = new ConversationMessage(conversationId, "assistant", content, runId);
         message.setToolActivity(toolActivity == null ? List.of() : toolActivity);
+        message.setChoicePrompt(choicePrompt);
         messageRepo.save(message);
     }
 
@@ -97,7 +99,8 @@ public class ConversationServiceImpl implements ConversationService {
         return messageRepo
                 .findByConversationIdOrderByCreatedAtAsc(conversationId)
                 .stream()
-                .map(m -> new AgentRequest.ConversationTurn(m.getRole(), m.getContent()))
+                .map(m -> new AgentRequest.ConversationTurn(m.getRole(),
+                        ChoicePrompt.withHistoryNote(m.getContent(), m.getChoicePrompt())))
                 .toList();
     }
 

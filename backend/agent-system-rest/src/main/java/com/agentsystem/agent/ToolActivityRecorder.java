@@ -1,5 +1,6 @@
 package com.agentsystem.agent;
 
+import com.agentsystem.connector.tool.ChoicePromptAgentTool;
 import com.agentsystem.connector.tool.WebFetchAgentTool;
 import com.agentsystem.schema.ToolActivity;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -61,6 +62,8 @@ public final class ToolActivityRecorder {
 
         private String record(String toolInput, java.util.function.Supplier<String> call) {
             String name = delegate.getToolDefinition().name();
+            // The offered options are shown as buttons under the answer, not as an activity line.
+            if (ChoicePromptAgentTool.TOOL_NAME.equals(name)) return call.get();
             try {
                 String result = call.get();
                 sink.add(describe(name, toolInput, statusOf(result)));
