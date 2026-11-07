@@ -282,7 +282,7 @@ function McpConnectorInner() {
       setShowTelegramWidget(true);
       return;
     }
-    window.location.href = `/api/connectors/${provider}/connect`;
+    window.location.assign(`/api/connectors/${provider}/connect`);
   };
 
   const handleDisconnect = async (provider: string) => {
