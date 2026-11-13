@@ -48,7 +48,7 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
         log.info("[DocumentIngestionService] Ingesting: {} replace={}", resource.getFilename(), replace);
 
         var reader   = new TikaDocumentReader(resource);
-        var splitter = new TokenTextSplitter(chunkSize, chunkOverlap, 5, 10000, true);
+        var splitter = newSplitter();
 
         List<Document> rawDocs  = reader.read();
         List<Document> chunks   = splitter.apply(rawDocs);
@@ -76,6 +76,18 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
                 resource.getFilename());
         return chunks.size();
     }
+    // Builder replaces the 5-arg ctor removed in Spring AI 1.1.x; argument mapping is unchanged
+    // (chunkOverlap was always passed in the minChunkSizeChars slot).
+    private TokenTextSplitter newSplitter() {
+        return TokenTextSplitter.builder()
+                .withChunkSize(chunkSize)
+                .withMinChunkSizeChars(chunkOverlap)
+                .withMinChunkLengthToEmbed(5)
+                .withMaxNumChunks(10000)
+                .withKeepSeparator(true)
+                .build();
+    }
+
 
     /**
      * Ingest plain text directly (e.g. from a web scrape or API response).
@@ -92,7 +104,7 @@ public class DocumentIngestionServiceImpl implements DocumentIngestionService {
         }
 
         var doc      = new Document(text, meta);
-        var splitter = new TokenTextSplitter(chunkSize, chunkOverlap, 5, 10000, true);
+        var splitter = newSplitter();
         var chunks   = splitter.apply(List.of(doc));
 
         vectorStore.add(chunks);
